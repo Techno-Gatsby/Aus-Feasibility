@@ -4,3 +4,5 @@ node_modules/
 .env.local
 *.tsbuildinfo
 next-env.d.ts
+# intermediate extraction artefacts — lib/engine/model.js is the source of truth
+lib/engine/*.raw.js
