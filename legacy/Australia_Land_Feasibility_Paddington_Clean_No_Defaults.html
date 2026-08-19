@@ -4358,7 +4358,7 @@ function portfolioSlimMain(m){
   return {eirr:m.eirr,irr:m.irr,moic:m.moic,epeak:m.epeak,peakdebt:m.peakdebt,npv:m.npv,
     revenue:m.revenue,gross:m.gross,npat:m.npat,margin:m.margin,einj:m.einj,eret:m.eret,
     land:m.land,finance:m.finance,tax:m.tax,NM:m.NM,
-    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net}};
+    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net,intr:m.R.intr,rep:m.R.rep,lf:m.R.lf,dr1:m.R.dr1,dr2:m.R.dr2,salescash:m.R.salescash,devc:m.R.devc}};
 }
 function cacheContextForPortfolio(key,A){
   if(!A)return;const old=_portfolioResults.get(key)||{};
@@ -4369,7 +4369,7 @@ function portfolioSlim(m){
   return {eirr:m.eirr,irr:m.irr,moic:m.moic,epeak:m.epeak,peakdebt:m.peakdebt,npv:m.npv,
     revenue:m.revenue,gross:m.gross,npat:m.npat,margin:m.margin,einj:m.einj,eret:m.eret,
     land:m.land,finance:m.finance,tax:m.tax,NM:m.NM,
-    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net}};
+    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net,intr:m.R.intr,rep:m.R.rep,lf:m.R.lf,dr1:m.R.dr1,dr2:m.R.dr2,salescash:m.R.salescash,devc:m.R.devc}};
 }
 onmessage=function(e){
   var q=e.data||{},jobs=q.jobs||[];
@@ -7400,6 +7400,623 @@ async function downloadRealPdf(){
 window.exportPdf=downloadRealPdf;
 const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)boardPdfButton.onclick=()=>exportPdf();
 </script>
+
+<!-- ===== GOOGLE IMAGERY + AU HAZARD (additive) ===== -->
+<style>
+/* ---- Google imagery + hazard ---- */
+#aug_run{margin-left:6px}
+#au_google .aug-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+#au_google .aug-sec{border:1px solid #e4e4e7;border-radius:10px;background:#fff;padding:10px 11px}
+#au_google .aug-t{font:600 11px/1 system-ui,sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:#71717a;margin-bottom:8px}
+#au_google .aug-embed{width:100%;height:220px;border:0;border-radius:8px;display:block}
+#au_google .aug-sv{width:100%;height:auto;border-radius:8px;display:block;margin-top:8px}
+#au_google .aug-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;
+  border-bottom:1px solid #f4f4f5;font:500 13px/1.35 system-ui,sans-serif;color:#3f3f46}
+#au_google .aug-row:last-of-type{border-bottom:0}
+#au_google .aug-row b{color:#18181b;font-weight:600;text-align:right}
+#au_google .aug-row.warn b{color:#991b1b}
+#au_google .aug-alert{margin-top:8px;padding:8px 10px;border-radius:8px;
+  background:#fef2f2;border:1px solid rgba(220,38,38,.2);color:#991b1b;
+  font:500 12px/1.45 system-ui,sans-serif}
+#au_google .aug-note{margin-top:8px;font:400 12px/1.45 system-ui,sans-serif;color:#71717a}
+#au_google .aug-keyrow{display:flex;gap:6px;margin-top:8px}
+#au_google .aug-keyrow input{flex:1;min-width:0;border:1px solid #e4e4e7;border-radius:8px;
+  padding:7px 9px;font:400 13px system-ui,sans-serif}
+#au_google .aug-earth{display:inline-block;margin-top:9px;font:500 13px system-ui,sans-serif;
+  color:#378ADD;text-decoration:none}
+#au_google .aug-earth:hover{text-decoration:underline}
+
+</style>
+<script>
+/* ================================================================
+   GOOGLE IMAGERY + AU HAZARD LAYERS   (additive)
+   Ports the land-intel Google pattern to the Australia tool:
+     · Maps Embed API      — satellite view of the tract
+     · Street View Static  — camera HEADING COMPUTED to face the site,
+                             not wherever the car happened to point
+     · Google Earth        — free deep link (photorealistic 3D tiles
+                             are a paid API and deliberately not wired)
+   Plus the two hazard layers the AU tool was missing entirely:
+     · NSW Flood Planning      (Hazard MapServer, layer 230)
+     · NSW Bush Fire Prone Land(Hazard MapServer, layer 229)
+   Layer ids are explicit because NSW ids are non-sequential: zoning
+   is 19, flood is 230. Guessing 0 returns an error, not a result.
+   ================================================================ */
+(function(){
+"use strict";
+var HAZ="https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePlanning/Planning_Portal_Hazard/MapServer";
+var BIO="https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePlanning/BiodiversityValuesMap/MapServer";
+var KEYSTORE="au_gmaps_key";
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function key(){try{return localStorage.getItem(KEYSTORE)||""}catch(e){return""}}
+function setKey(v){try{localStorage.setItem(KEYSTORE,v||"")}catch(e){}}
+
+/* ---- where is the site? polygon centroid if drawn, else map centre ---- */
+function site(){
+  var AM=window.__AU;
+  if(!AM||!AM.map)return null;
+  var pts=null;
+  if(AM.draft&&AM.draft.length>2)pts=AM.draft.slice();
+  if(!pts){
+    try{
+      var src=AM.map.getSource("drawings")||AM.map.getSource("sites");
+      var d=src&&(src._data||src._options&&src._options.data);
+      var f=d&&d.features&&d.features.filter(function(x){
+        return x.geometry&&x.geometry.type==="Polygon"})[0];
+      if(f)pts=f.geometry.coordinates[0].map(function(p){return {lng:p[0],lat:p[1]}});
+    }catch(e){}
+  }
+  if(pts&&pts.length>2){
+    var sx=0,sy=0,n=0;
+    pts.forEach(function(p){
+      var lng=p.lng!==undefined?p.lng:p[0], lat=p.lat!==undefined?p.lat:p[1];
+      if(isFinite(lng)&&isFinite(lat)){sx+=lng;sy+=lat;n++}
+    });
+    if(n)return {lng:sx/n,lat:sy/n,fromPolygon:true};
+  }
+  var c=AM.map.getCenter();
+  return {lng:c.lng,lat:c.lat,fromPolygon:false};
+}
+
+/* bearing from the camera to the tract, so the view faces the land */
+function bearing(from,to){
+  var r=Math.PI/180, y=Math.sin((to.lng-from.lng)*r)*Math.cos(to.lat*r),
+      x=Math.cos(from.lat*r)*Math.sin(to.lat*r)-
+        Math.sin(from.lat*r)*Math.cos(to.lat*r)*Math.cos((to.lng-from.lng)*r);
+  return (Math.atan2(y,x)/r+360)%360;
+}
+function metres(a,b){
+  var r=Math.PI/180,R=6371000,dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r;
+  var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*
+        Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+function post(url,params){
+  return fetch(url+"/query",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams(params).toString()})
+    .then(function(r){return r.json()}).catch(function(){return{features:[],error:true}});
+}
+function atPoint(url,lng,lat){
+  return post(url,{f:"json",outFields:"*",returnGeometry:"false",inSR:"4326",
+    geometry:JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}),
+    geometryType:"esriGeometryPoint",spatialRel:"esriSpatialRelIntersects"});
+}
+function inBox(url,b){
+  return post(url,{f:"json",outFields:"*",returnGeometry:"false",inSR:"4326",
+    geometry:JSON.stringify({xmin:b[0],ymin:b[1],xmax:b[2],ymax:b[3],
+      spatialReference:{wkid:4326}}),
+    geometryType:"esriGeometryEnvelope",spatialRel:"esriSpatialRelIntersects",
+    resultRecordCount:"6"});
+}
+
+function card(){
+  var el=document.getElementById("au_google");
+  if(el)return el;
+  var host=document.getElementById("aumap_site_intelligence");
+  if(!host)return null;
+  el=document.createElement("div");
+  el.id="au_google"; el.className="aumap-siteintel-card";
+  el.style.marginTop="10px";
+  host.parentNode.insertBefore(el,host.nextSibling);
+  return el;
+}
+function paint(html){var c=card(); if(c)c.innerHTML=html}
+function row(k,v,warn){return '<div class="aug-row'+(warn?" warn":"")+'"><span>'+
+  esc(k)+'</span><b>'+esc(v)+'</b></div>'}
+
+function run(){
+  var s=site();
+  if(!s){alert("Map is not ready yet.");return}
+  var k=key();
+  var box=[s.lng-0.004,s.lat-0.004,s.lng+0.004,s.lat+0.004];
+
+  var imagery = !k
+    ? '<div class="aug-note">Add a Google Maps API key to show satellite and '+
+      'Street View. Enable <b>Maps Embed API</b> and <b>Street View Static API</b>, '+
+      'then restrict the key by HTTP referrer — it is visible in the iframe URL '+
+      'by design.<div class="aug-keyrow"><input id="aug_key" placeholder="paste key">'+
+      '<button class="aumap-btn primary" id="aug_save">Save</button></div></div>'
+    : '<iframe class="aug-embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" '+
+      'src="https://www.google.com/maps/embed/v1/view?key='+encodeURIComponent(k)+
+      '&center='+s.lat+','+s.lng+'&zoom=17&maptype=satellite"></iframe>'+
+      '<div id="aug_sv"></div>';
+
+  paint('<div class="aumap-siteintel-head"><div><strong>Imagery and hazard</strong>'+
+    '<span>'+(s.fromPolygon?"Measured from the drawn site":"Map centre — draw a site for an exact reading")+
+    '</span></div><span class="aumap-siteintel-status loading">Working</span></div>'+
+    '<div class="aumap-siteintel-body"><div class="aug-grid">'+
+    '<section class="aug-sec"><div class="aug-t">Google imagery</div>'+imagery+
+    '<a class="aug-earth" target="_blank" rel="noopener" href="https://earth.google.com/web/@'+
+      s.lat+','+s.lng+',600a,1200d,35y,0h,45t,0r">Open in Google Earth 3D &#8599;</a></section>'+
+    '<section class="aug-sec"><div class="aug-t">Hazard (NSW)</div>'+
+    '<div id="aug_haz"><div class="aug-note">Querying flood, bushfire and biodiversity…</div></div>'+
+    '</section></div></div>');
+
+  var sv=document.getElementById("aug_key");
+  if(sv){
+    document.getElementById("aug_save").onclick=function(){
+      setKey(document.getElementById("aug_key").value.trim()); run();
+    };
+  }
+
+  /* Street View: find the nearest panorama, then face it at the tract */
+  if(k){
+    fetch("https://maps.googleapis.com/maps/api/streetview/metadata?location="+
+          s.lat+","+s.lng+"&radius=200&key="+encodeURIComponent(k))
+      .then(function(r){return r.json()})
+      .then(function(m){
+        var host=document.getElementById("aug_sv"); if(!host)return;
+        if(!m||m.status!=="OK"){
+          host.innerHTML='<div class="aug-note">No Street View panorama within 200 m.</div>';
+          return;
+        }
+        var cam={lat:m.location.lat,lng:m.location.lng};
+        var head=Math.round(bearing(cam,s)), dist=Math.round(metres(cam,s));
+        host.innerHTML='<img class="aug-sv" loading="lazy" alt="Street View facing the site" '+
+          'src="https://maps.googleapis.com/maps/api/streetview?size=640x320&location='+
+          cam.lat+','+cam.lng+'&heading='+head+'&pitch=0&fov=80&key='+encodeURIComponent(k)+'">'+
+          '<div class="aug-note">Camera '+dist+' m away, turned to '+head+'&deg; to face the site. '+
+          'The nearest road may not front the land.</div>';
+      }).catch(function(){});
+  }
+
+  /* hazard layers — explicit ids, never assumed */
+  Promise.all([
+    atPoint(HAZ+"/230",s.lng,s.lat),   // Flood Planning Map
+    atPoint(HAZ+"/229",s.lng,s.lat),   // Bush Fire Prone Land
+    inBox(HAZ+"/229",box),             // bushfire nearby (point can miss)
+    atPoint(HAZ+"/232",s.lng,s.lat),   // Landslide Risk
+    atPoint(BIO+"/1",s.lng,s.lat)      // Biodiversity Values
+  ]).then(function(r){
+    var flood=(r[0].features||[]).length, fire=(r[1].features||[]).length,
+        fireNear=(r[2].features||[]).length, slide=(r[3].features||[]).length,
+        bio=(r[4].features||[]).length;
+    var cat=((r[1].features||[])[0]||{attributes:{}}).attributes.Category;
+    var h="";
+    h+=row("Flood planning area",r[0].error?"query failed":(flood?"YES":"no"),flood>0);
+    h+=row("Bush fire prone land",r[1].error?"query failed":
+      (fire?("YES"+(cat!=null?" — category "+cat:"")):"no"),fire>0);
+    h+=row("Bushfire land within ~400 m",fireNear?fireNear+" polygon(s)":"none",
+      !fire&&fireNear>0);
+    h+=row("Landslide risk land",slide?"YES":"no",slide>0);
+    h+=row("Biodiversity values",bio?"YES":"no",bio>0);
+    var notes="";
+    if(fire)notes+='<div class="aug-alert"><b>Bush fire prone.</b> Triggers Planning for '+
+      'Bushfire Protection: asset protection zones, construction standards and a '+
+      'possible reduction in developable area. Price it before you bid.</div>';
+    if(bio)notes+='<div class="aug-alert"><b>On the Biodiversity Values Map.</b> The '+
+      'Biodiversity Offset Scheme applies — offset credits are frequently the single '+
+      'largest unbudgeted line on a NSW greenfield deal.</div>';
+    if(flood)notes+='<div class="aug-alert"><b>Flood planning area.</b> Council flood '+
+      'controls apply; filling and floor levels affect yield.</div>';
+    var el=document.getElementById("aug_haz");
+    if(el)el.innerHTML=h+notes+'<div class="aug-note">NSW layers only — this reads the '+
+      'ePlanning Hazard service. Other states publish hazard separately and are not '+
+      'wired yet. A nil result is not a clearance: it means no mapped polygon here.</div>';
+    var st=document.querySelector("#au_google .aumap-siteintel-status");
+    if(st){st.className="aumap-siteintel-status "+((fire||bio||flood)?"partial":"ready");
+      st.textContent=(fire||bio||flood)?"Action required":"Ready"}
+  });
+}
+
+function mount(){
+  var host=document.getElementById("aumap_site_intelligence");
+  if(!host)return false;
+  if(!document.getElementById("aug_run")){
+    var b=document.createElement("button");
+    b.id="aug_run"; b.type="button"; b.className="aumap-btn";
+    b.textContent="Imagery and hazard";
+    b.onclick=run;
+    var anchor=document.getElementById("aumap_terrain_stats");
+    if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(b,anchor.nextSibling);
+    else return false;
+  }
+  card();
+  return true;
+}
+function watch(){
+  if(mount())return;
+  var mo=new MutationObserver(function(){if(mount())mo.disconnect()});
+  mo.observe(document.body,{childList:true,subtree:true});
+  setTimeout(function(){mo.disconnect()},180000);
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",watch);
+else watch();
+})();
+
+</script>
+
+<!-- ===== GOOGLE GEOCODING + ELEVATION ===== -->
+<script>
+/* ================================================================
+   GOOGLE GEOCODING + ELEVATION   (additive)
+   Replaces the two weakest links in the AU tool:
+     · address search  — Photon (komoot) is thin on Australian
+       addresses; Google Geocoding is materially better, and is
+       biased to AU here so it cannot wander offshore.
+     · elevation       — terrarium tiles are ~30 m and noisy; the
+       Elevation API samples real points, which matters because
+       slope drives earthworks cost.
+   Both fall back to the existing behaviour when no key is set, so
+   nothing breaks for a user without Google configured.
+   ================================================================ */
+(function(){
+"use strict";
+var KEYSTORE="au_gmaps_key";
+function key(){try{return localStorage.getItem(KEYSTORE)||""}catch(e){return""}}
+
+/* ---------------- geocoding ---------------- */
+function geocode(q){
+  var k=key(); if(!k)return Promise.resolve(null);
+  var u="https://maps.googleapis.com/maps/api/geocode/json?address="+
+    encodeURIComponent(q)+"&region=au&components=country:AU&key="+encodeURIComponent(k);
+  return fetch(u).then(function(r){return r.json()}).then(function(d){
+    if(!d||d.status!=="OK"||!d.results||!d.results.length)return null;
+    return d.results.slice(0,8).map(function(r){
+      return {label:r.formatted_address,
+              lat:r.geometry.location.lat, lng:r.geometry.location.lng,
+              kind:(r.types||[])[0]||"", precision:r.geometry.location_type};
+    });
+  }).catch(function(){return null});
+}
+
+/* ---------------- elevation ---------------- */
+function elevation(points){          // [{lat,lng}, …] max 512
+  var k=key(); if(!k||!points||!points.length)return Promise.resolve(null);
+  var locs=points.map(function(p){return p.lat+","+p.lng}).join("|");
+  var u="https://maps.googleapis.com/maps/api/elevation/json?locations="+
+    encodeURIComponent(locs)+"&key="+encodeURIComponent(k);
+  return fetch(u).then(function(r){return r.json()}).then(function(d){
+    if(!d||d.status!=="OK")return null;
+    return d.results.map(function(r){return r.elevation});
+  }).catch(function(){return null});
+}
+
+/* sample a grid across the site and derive fall, slope and aspect */
+function terrain(bounds,n){
+  n=n||6;
+  var pts=[],i,j;
+  for(i=0;i<n;i++)for(j=0;j<n;j++)
+    pts.push({lat:bounds[1]+(bounds[3]-bounds[1])*(i+0.5)/n,
+              lng:bounds[0]+(bounds[2]-bounds[0])*(j+0.5)/n});
+  return elevation(pts).then(function(e){
+    if(!e)return null;
+    var lo=Math.min.apply(null,e), hi=Math.max.apply(null,e);
+    var mid=(bounds[1]+bounds[3])/2;
+    var wm=(bounds[2]-bounds[0])*111320*Math.cos(mid*Math.PI/180);
+    var hm=(bounds[3]-bounds[1])*110540;
+    var run=Math.max(1,Math.sqrt(wm*wm+hm*hm));
+    return {min:lo,max:hi,fall:hi-lo,
+            slopePct:(hi-lo)/run*100, samples:e.length, spanM:run};
+  });
+}
+
+window.__AUG={geocode:geocode,elevation:elevation,terrain:terrain,hasKey:function(){return !!key()}};
+
+/* ---- surface it in the imagery panel ---- */
+function addTerrain(){
+  var host=document.getElementById("aug_haz");
+  if(!host||document.getElementById("aug_terr"))return;
+  var AM=window.__AU; if(!AM||!AM.map)return;
+  var d=document.createElement("div");
+  d.id="aug_terr"; d.className="aug-note";
+  d.textContent=key()?"Sampling terrain…":"";
+  host.parentNode.appendChild(d);
+  if(!key())return;
+  var b=AM.map.getBounds();
+  terrain([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],6).then(function(t){
+    if(!t){d.textContent="Elevation unavailable.";return}
+    d.innerHTML='<b>Terrain</b> — fall '+t.fall.toFixed(1)+' m across '+
+      Math.round(t.spanM)+' m, average slope '+t.slopePct.toFixed(1)+'%'+
+      (t.slopePct>10?' — steep, earthworks will bite':
+       t.slopePct>5?' — moderate':' — gentle')+
+      '. <span style="opacity:.75">'+t.samples+' Google Elevation samples across the '+
+      'current view, not the parcel boundary.</span>';
+  });
+}
+document.addEventListener("click",function(e){
+  if(e.target&&e.target.id==="aug_run")setTimeout(addTerrain,3000);
+});
+})();
+
+</script>
+
+<!-- ===== NSW CADASTRE ===== -->
+<script>
+/* ================================================================
+   NSW CADASTRE — lot, plan, area, boundary   (additive, free, no key)
+   maps.six.nsw.gov.au gives Lot/DP, surveyed area and geometry for
+   all of NSW. Ownership is NOT free in Australia: a title search is
+   paid, per search, through NSW LRS. So this surfaces the legal
+   identifier and pre-fills it, turning the paid step into one
+   copy-paste instead of a hunt.
+   QUIRK: layer 9 answers POINT queries with outFields=* only.
+   Named field lists and envelope queries return "Failed to execute
+   query" — it looks broken when it is not.
+   ================================================================ */
+(function(){
+"use strict";
+var LOT="https://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Cadastre/MapServer/9";
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+
+function lotAt(lng,lat){
+  return fetch(LOT+"/query",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({f:"json",
+      geometry:JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}),
+      geometryType:"esriGeometryPoint",inSR:"4326",
+      spatialRel:"esriSpatialRelIntersects",
+      outFields:"*",              // named fields fail on this layer
+      returnGeometry:"true",outSR:"4326"}).toString()})
+    .then(function(r){return r.json()})
+    .then(function(d){return (d.features||[])[0]||null})
+    .catch(function(){return null});
+}
+
+function acres(m2){return (Number(m2)||0)/4046.8564224}
+function ha(m2){return (Number(m2)||0)/10000}
+
+window.__AUCAD={lotAt:lotAt};
+
+function render(){
+  var AM=window.__AU; if(!AM||!AM.map)return;
+  var host=document.getElementById("aug_haz");
+  if(!host||document.getElementById("aug_cad"))return;
+  var d=document.createElement("div");
+  d.id="aug_cad"; d.className="aug-note"; d.textContent="Looking up the parcel…";
+  host.parentNode.insertBefore(d,host.parentNode.firstChild);
+  var c=AM.map.getCenter();
+  lotAt(c.lng,c.lat).then(function(f){
+    if(!f){d.innerHTML='<b>Parcel</b> — no NSW lot at this point '+
+      '(outside NSW, or road/water reserve).';return}
+    var a=f.attributes, m2=Number(a.planlotarea)||0;
+    var units=String(a.planlotareaunits||"").toLowerCase();
+    if(units.indexOf("hect")>-1)m2=m2*10000;
+    d.innerHTML='<b>Parcel '+esc(a.lotidstring||"")+'</b> — '+
+      (m2?ha(m2).toFixed(3)+' ha / '+acres(m2).toFixed(2)+' ac surveyed':'area not stated')+
+      (a.urbanity?' · '+({U:"urban",S:"suburban",R:"rural",F:"fringe"}[a.urbanity]||a.urbanity):'')+
+      '<br><span style="opacity:.8">Ownership is not public in NSW. Order a title '+
+      'search on <b>'+esc(a.lotidstring||"this lot")+'</b> through NSW LRS when you '+
+      'are ready to approach the owner.</span>'+
+      (m2?'<br><button class="aumap-btn" id="aug_applylot" style="margin-top:6px">'+
+        'Apply '+ha(m2).toFixed(3)+' ha to the model</button>':'');
+    var b=document.getElementById("aug_applylot");
+    if(b)b.onclick=function(){
+      var inp=document.getElementById("i_areaGross")||
+              document.getElementById("i_siteArea")||
+              document.querySelector('.rail input');
+      if(!inp){alert("Enter "+ha(m2).toFixed(3)+" ha manually.");return}
+      inp.value=ha(m2).toFixed(3);
+      inp.dispatchEvent(new Event("input",{bubbles:true}));
+      inp.dispatchEvent(new Event("change",{bubbles:true}));
+      b.textContent="Applied "+ha(m2).toFixed(3)+" ha"; b.disabled=true;
+    };
+  });
+}
+document.addEventListener("click",function(e){
+  if(e.target&&e.target.id==="aug_run")setTimeout(render,2600);
+});
+})();
+
+</script>
+
+<!-- ===== SOURCES AND USES + DEBT COVER ===== -->
+<style>
+#au_fin{margin-top:22px}
+.aufin-wrap{margin-top:18px;overflow-x:auto}
+.aufin{width:100%;border-collapse:separate;border-spacing:0;font:400 13px/1.45 system-ui,sans-serif}
+.aufin caption{text-align:left;font:600 15px/1.3 system-ui,sans-serif;color:#18181b;padding:0 0 8px}
+.aufin th{font:500 11px/1.3 system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;
+  color:#71717a;border-bottom:1px solid #d4d4d8;padding:0 8px 7px;text-align:right}
+.aufin th.l,.aufin td.l{text-align:left}
+.aufin td{padding:6px 8px;border-bottom:1px solid #f4f4f5;color:#3f3f46;
+  text-align:right;font-variant-numeric:tabular-nums}
+.aufin tr.band td{background:#fafafa;font:600 11px/1.3 system-ui,sans-serif;
+  letter-spacing:.05em;text-transform:uppercase;color:#71717a;text-align:left}
+.aufin tr.sub td{font-weight:600;color:#18181b}
+.aufin tr.res td{font-weight:700;color:#18181b;border-top:1px solid #d4d4d8;background:#fafafa}
+.aufin-foot{margin-top:8px;font:400 12px/1.5 system-ui,sans-serif;color:#71717a;max-width:70ch}
+.aufin-ok{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0fdf4;
+  color:#166534;font:600 11px system-ui,sans-serif}
+.aufin-bad{display:inline-block;padding:2px 8px;border-radius:999px;background:#fef2f2;
+  color:#991b1b;font:600 11px system-ui,sans-serif}
+</style>
+<script>
+/* ================================================================
+   SOURCES AND USES  +  DEBT COVER   (Australia)
+   Ported from the US tool and re-cut for the AU model, which carries
+   two costs the US one does not: STAMP DUTY and FIRB (Foreign
+   Investment Review Board) — both material for a foreign investor
+   and both shown as their own lines rather than buried in "other".
+
+   Cover is measured over the REPAYMENT window only. A development
+   facility is not serviced from operations while it builds: interest
+   rolls up and is repaid from proceeds, so a construction-phase DSCR
+   is a large negative number that means nothing.
+   ================================================================ */
+(function(){
+"use strict";
+var DSCR_COV=1.25;
+function n(v){return Number(v)||0}
+function money(v){return "$"+Math.round(n(v)).toLocaleString("en-AU")}
+function pct(x){return (Math.round(x*1000)/10).toFixed(1)+"%"}
+function xr(x){return x===null?"n/a":(Math.round(x*100)/100).toFixed(2)+"x"}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+
+function table(cap,head,rows,foot,cls){
+  var h='<div class="aufin-wrap"><table class="aufin '+(cls||"")+'">'+
+    '<caption>'+esc(cap)+'</caption><thead><tr>'+
+    head.map(function(t,i){return '<th class="'+(i?"n":"l")+'">'+esc(t)+'</th>'}).join("")+
+    '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    if(r.band){h+='<tr class="band"><td colspan="'+head.length+'">'+esc(r.band)+'</td></tr>';return}
+    h+='<tr class="'+(r.cls||"")+'">'+r.c.map(function(v,i){
+      return '<td class="'+(i?"n":"l")+'">'+(v==null?"":v)+'</td>'}).join("")+'</tr>';
+  });
+  h+='</tbody></table>'+(foot?'<div class="aufin-foot">'+foot+'</div>':'')+'</div>';
+  return h;
+}
+
+function sourcesUses(A){
+  var land=n(A.pnlLandCost), infra=n(A.pnlInfraCost), design=n(A.pnlDesignCost),
+      auth=n(A.pnlAuthorityCost), constr=n(A.pnlConstructionCost),
+      other=n(A.pnlOtherDirectCost), broker=n(A.brokerCost),
+      prof=n(A.professionalTotal), cont=n(A.contTot);
+  var stamp=n(A.stampDuty), firb=n(A.firbCost);
+  var dev=land+infra+design+auth+constr+other+broker+prof+cont;
+  var oh=n(A.operatingOverhead), mkt=n(A.marketing), ret=n(A.realEstateTax),
+      fin=n(A.financeExpense), ctax=n(A.corporateTax);
+  var acq=stamp+firb;
+  var total=dev+acq+oh+mkt+ret+fin+ctax;
+  var equity=n(A.epeak), debt=n(A.peakdebt);
+  var recycled=Math.max(0,total-equity-debt);
+  var src=equity+debt+recycled;
+  var pu=function(x){return total?pct(x/total):""};
+  var ps=function(x){return src?pct(x/src):""};
+  var rows=[
+    {band:"USES OF FUNDS"},
+    {c:["1.1","Land acquisition",money(land),pu(land)]},
+    {c:["1.2","Infrastructure",money(infra),pu(infra)]},
+    {c:["1.3","Construction",money(constr),pu(constr)]},
+    {c:["1.4","Design and supervision",money(design),pu(design)]},
+    {c:["1.5","Authority and permitting",money(auth),pu(auth)]},
+    {c:["1.6","Professional fees",money(prof),pu(prof)]},
+    {c:["1.7","Contingency",money(cont),pu(cont)]},
+    {c:["1.8","Other direct cost",money(other),pu(other)]},
+    {c:["1.9","Selling and brokerage",money(broker),pu(broker)]},
+    {cls:"sub",c:["1","Development cost",money(dev),pu(dev)]},
+    {band:"ACQUISITION DUTIES AND APPROVALS"},
+    {c:["2.1","Stamp duty",money(stamp),pu(stamp)]},
+    {c:["2.2","FIRB application fee",money(firb),pu(firb)]},
+    {cls:"sub",c:["2","Duties and approvals",money(acq),pu(acq)]},
+    {band:"HOLDING AND FINANCE"},
+    {c:["3.1","Overheads",money(oh),pu(oh)]},
+    {c:["3.2","Marketing and selling",money(mkt),pu(mkt)]},
+    {c:["3.3","Land tax and rates",money(ret),pu(ret)]},
+    {c:["3.4","Finance cost",money(fin),pu(fin)]},
+    {c:["3.5","Company tax",money(ctax),pu(ctax)]},
+    {cls:"res",c:["","TOTAL USES",money(total),"100.0%"]},
+    {band:"SOURCES OF FUNDS"},
+    {c:["4.1","Equity (peak requirement)",money(equity),ps(equity)]},
+    {c:["4.2","Debt facility (peak drawn)",money(debt),ps(debt)]},
+    {c:["4.3","Sales receipts recycled into cost",money(recycled),ps(recycled)]},
+    {cls:"res",c:["","TOTAL SOURCES",money(src),"100.0%"]}
+  ];
+  var foot="Peak funding "+money(equity+debt)+" — the most this project is out of "+
+    "pocket at once, split "+(equity+debt?pct(equity/(equity+debt)):"—")+" equity / "+
+    (equity+debt?pct(debt/(equity+debt)):"—")+" debt. Sales receipts recycled is the "+
+    "balancing item, not an input: it is the part of cost funded by earlier settlements "+
+    "rather than by drawn capital. Stamp duty and FIRB are shown separately because for "+
+    "a foreign investor they are decision-grade numbers, not overheads.";
+  return table("Sources and Uses of Funds",
+    ["Sl. No.","Description","Amount","% of total"],rows,foot,"aufin-su");
+}
+
+function cover(A,d){
+  var R=A&&A.R;
+  if(!R||!R.lcl)return '<div class="aufin-foot">Debt cover needs the period arrays; '+
+    'reopen the cashflow to rebuild them.</div>';
+  var a=function(k){return Array.isArray(R[k])?R[k]:[]};
+  var N=a("lcl").length, g=function(k,i){return n(a(k)[i])};
+  var peakV=0,peakM=0;
+  for(var i=0;i<N;i++){var v=g("lcl",i); if(v>peakV){peakV=v;peakM=i}}
+  var minD=null,minDm=-1,breaches=0,periods=0;
+  for(i=0;i<N;i++){
+    var ds=g("intr",i)+g("rep",i)+g("lf",i), sales=g("salescash",i);
+    if(ds<=0.5||sales<=0.5)continue;
+    periods++;
+    var cfads=sales-g("devc",i)-g("ovh",i)-g("taxm",i);
+    var dscr=cfads/ds;
+    if(minD===null||dscr<minD){minD=dscr;minDm=i}
+    if(dscr<DSCR_COV)breaches++;
+  }
+  var future=0;
+  for(i=peakM;i<N;i++)future+=g("salescash",i)-g("devc",i)-g("ovh",i)-g("taxm",i);
+  var repay=peakV>0?future/peakV:null;
+  var gdv=n(A.revenue)+n(A.otherIncome);
+  var cost=Math.max(0,gdv-n(A.npat));
+  var ltgdv=gdv?peakV/gdv:0, ltc=cost?peakV/cost:0;
+  var limit=n(A.lim), head=limit-peakV;
+  var flag=function(ok,t){return '<span class="aufin-'+(ok?"ok":"bad")+'">'+esc(t)+'</span>'};
+  var ml=function(i){return i<0?"—":"month "+(i+1)};
+  var rows=[
+    {band:"DEBT SIZING"},
+    {c:["1.1","Peak debt drawn",money(peakV),ml(peakM)]},
+    {c:["1.2","Facility limit",money(limit),""]},
+    {c:["1.3","Headroom",money(head),flag(head>=0,head>=0?"within limit":"OVER LIMIT")]},
+    {c:["1.4","Loan to cost (LTC)",pct(ltc),flag(ltc<=0.65,"typical cap 65%")]},
+    {c:["1.5","Loan to gross realisation (LTGRV)",pct(ltgdv),flag(ltgdv<=0.6,"typical cap 60%")]},
+    {band:"COVER"},
+    {c:["2.1","Repayment cover at peak debt",xr(repay),
+       repay===null?"":flag(repay>=DSCR_COV,"covenant 1.25x")]},
+    {c:["2.2","Settlement periods with debt service",String(periods),""]},
+    {c:["2.3","Minimum DSCR in repayment window",xr(minD),
+       minD===null?flag(true,"no serviced period"):flag(minD>=DSCR_COV,"covenant 1.25x")]},
+    {c:["2.4","Occurs at",ml(minDm),""]},
+    {c:["2.5","Periods below covenant",String(breaches),
+       flag(breaches===0,breaches===0?"no breach":breaches+" below")]}
+  ];
+  var foot="Repayment cover is net cash still to be generated from the peak-debt month "+
+    "onward, over the balance outstanding then — the test an Australian construction "+
+    "lender underwrites. DSCR is measured only where BOTH debt service and settlement "+
+    "receipts occur; during construction interest rolls up and is repaid from proceeds, "+
+    "so a construction-phase DSCR is not meaningful. LTGRV uses this model's gross "+
+    "realisation, not a bank valuation. Caps shown are typical, not your lender's.";
+  return table("Debt Sizing and Cover",
+    ["Sl. No.","Description","Value","Test"],rows,foot,"aufin-cov");
+}
+
+function mount(){
+  var pane=document.getElementById("p_pl");
+  if(!pane)return false;
+  var host=document.getElementById("au_fin");
+  if(!host){
+    host=document.createElement("div"); host.id="au_fin";
+    pane.appendChild(host);
+  }
+  var A=window.__AUA;
+  if(!A){host.innerHTML='<div class="aufin-foot">Open the cashflow once to build the '+
+    'analysis, then return here.</div>';return true}
+  host.innerHTML=sourcesUses(A)+cover(A,{});
+  return true;
+}
+window.__AUFIN={mount:mount};
+document.addEventListener("click",function(e){
+  var b=e.target.closest&&e.target.closest("[data-nav],[data-sub]");
+  if(b)setTimeout(mount,900);
+});
+setTimeout(mount,4000);
+})();
+
+</script>
 </body>
 <style id="summary-dashboard-style">
 /* Summary UI copied from the attached US reference. */
@@ -8400,7 +9017,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
 <script id="site-intelligence-map-runtime">
 (()=>{
 "use strict";
-const AM={map:null,mapHost:null,ready:null,parcelId:null,mode:"select",draft:[],selectedId:null,editMarkers:[],edgeMarkers:[],popup:null,events:false,cache:new Map(),elevationCache:new Map(),runtime:{},controllers:{},timers:{},busy:0,pendingLngLat:null,refreshSeq:0,resizeObserver:null,contourDem:null,contourReady:null};
+const AM={map:null,mapHost:null,ready:null,parcelId:null,mode:"select",draft:[],selectedId:null,editMarkers:[],edgeMarkers:[],popup:null,events:false,cache:new Map(),elevationCache:new Map(),runtime:{},controllers:{},timers:{},busy:0,pendingLngLat:null,refreshSeq:0,resizeObserver:null,contourDem:null,contourReady:null};try{window.__AU=AM;}catch(e){}
 function resizeMapSoon(){if(!AM.map)return;const run=()=>{try{const h=document.getElementById("aumap_map");if(!h||h.offsetWidth<20||h.offsetHeight<20)return;AM.map.resize();if(typeof AM.map.triggerRepaint==="function")AM.map.triggerRepaint()}catch(_){}};requestAnimationFrame(run);clearTimeout(AM.timers.layoutResize);AM.timers.layoutResize=setTimeout(run,90);clearTimeout(AM.timers.layoutResizeLate);AM.timers.layoutResizeLate=setTimeout(run,320)}
 window.__aumapResize=resizeMapSoon;
 const AU={
@@ -9355,12 +9972,12 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
     }
     return result;
   };
-  PANE.pl=function(C){
+  PANE.pl=function(C){ try{window.__AUA=(C&&C.A)?C.A:C;}catch(e){} setTimeout(function(){try{window.__AUFIN&&window.__AUFIN.mount()}catch(e){}},80); 
     const r=window.renderProjectPl&&window.renderProjectPl(C);
     cleanStatementHost('o_pl');
     return r;
   };
-  PANE.cf=function(C){
+  PANE.cf=function(C){ try{window.__AUA=(C&&C.A)?C.A:C;}catch(e){} 
     const r=renderProjectCashflow(C);
     cleanStatementHost('o_cf');
     return r;
