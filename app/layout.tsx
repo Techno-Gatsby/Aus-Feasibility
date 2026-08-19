@@ -4,11 +4,11 @@ import 'leaflet/dist/leaflet.css';
 
 export const metadata: Metadata = {
   title: 'Land Feasibility — Australia',
-  description: 'Site intelligence and feasibility for Australian land',
+  description: 'Land, lots and apartment development appraisal',
   manifest: '/manifest.json',
 };
 export const viewport: Viewport = {
-  themeColor: '#18181b',
+  themeColor: '#082652',            // the masthead navy of the single-file build
   width: 'device-width',
   initialScale: 1,
 };

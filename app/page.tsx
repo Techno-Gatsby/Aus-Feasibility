@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import SitePanel from '@/components/SitePanel';
 import AreaPanel from '@/components/AreaPanel';
 import SiteIntel from '@/components/SiteIntel';
-import InputRail, { type Group } from '@/components/InputRail';
+import { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
 import Statements2 from '@/components/Statements2';
@@ -12,22 +12,41 @@ import Verdict from '@/components/Verdict';
 import ProjectBar from '@/components/ProjectBar';
 import ParcelTabs from '@/components/ParcelTabs';
 import InputRail2 from '@/components/InputRail2';
-import { Toaster } from '@/components/Toast';
+import Shell, { Route } from '@/components/Shell';
+import { NAV, type GroupId, type PaneId } from '@/components/Nav';
+import { Toaster, toast } from '@/components/Toast';
 import { useProject, noteActiveAnalysis } from '@/lib/project';
 
 const SiteMap = dynamic(() => import('@/components/SiteMap'), {
   ssr: false, loading: () => <div className="map-canvas skeleton" />,
 });
 
-type Tab = 'site' | 'feasibility';
+/* Which internal tab of a ported pane each shell pane corresponds to. The
+ * shell selects it through that component's own control; see Route. */
+const S1: Partial<Record<PaneId, string>> = {
+  pl: 'Profit and loss', cf: 'Cashflow', bs: 'Balance sheet',
+  su: 'Sources and uses', debt: 'Debt and cover',
+  sens: 'Sensitivity', two: 'Sensitivity', scn: 'Scenarios', opt: 'Optimiser',
+};
+const S2: Partial<Record<PaneId, string>> = {
+  monthly: 'Monthly engine', offer: 'Land value',
+  cpl: 'Consolidated P&L', ccf: 'Consolidated cashflow',
+  cbs: 'Consolidated balance sheet', port: 'Project comparison',
+};
 
 export default function Page() {
-  const [tab, setTab] = useState<Tab>('site');
+  const [group, setGroup] = useState<GroupId>('verdict');
+  const [sel, setSel] = useState<Record<GroupId, PaneId>>(
+    () => NAV.reduce((m, g) => { m[g.id] = g.panes[0][0]; return m; }, {} as Record<GroupId, PaneId>),
+  );
+  const pane = sel[group];
+  const pickPane = useCallback((p: PaneId) => setSel((s) => ({ ...s, [group]: p })), [group]);
+
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [shapes, setShapes] = useState<any>(null);
 
   const [groups, setGroups] = useState<Group[]>([]);
-  const { values, setValues, setField } = useProject();
+  const { values, setValues, setField, parcels, active } = useProject();
   const [baseline, setBaseline] = useState<Record<string, any>>({});
   const [summary, setSummary] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -37,6 +56,9 @@ export default function Page() {
 
   // schema drives the UI: the engine owns the field list, the UI does not
   // duplicate it. Add a field to the model and it appears here on its own.
+  // It must NOT re-seed `values` — the project store already seeded the
+  // parcels, and re-applying defaults on mount would wipe a restored session
+  // or a file the user has only just opened.
   useEffect(() => {
     fetch('/api/model')
       .then((r) => r.json())
@@ -80,7 +102,6 @@ export default function Page() {
 
   useEffect(() => { if (Object.keys(values).length) recompute(values); }, [values, recompute]);
 
-
   const dirty = new Set(
     Object.keys(values).filter((k) => baseline[k] !== values[k]),
   );
@@ -90,61 +111,131 @@ export default function Page() {
     if (!point) return;
     const j = await (await fetch(`/api/site?lat=${point.lat}&lng=${point.lng}`)).json();
     const m2 = j?.parcel?.areaM2;
-    if (!m2) return;
+    if (!m2) { toast.error('That lot has no measured area to apply.'); return; }
     setValues((v) => ({ ...v, acresGross: Math.round(m2), _acresNet: Math.round(m2) }));
-    setTab('feasibility');
-  }, [point]);
+    setGroup('verdict');
+  }, [point, setValues]);
+
+  /* ---- export buttons, in their legacy place at the right of the ribbon ---- */
+  const grab = useCallback(async (path: string, ext: string) => {
+    try {
+      const r = await fetch(path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: values, project: active?.name ?? 'Feasibility' }),
+      });
+      if (!r.ok) {
+        let msg = String(r.status);
+        try { msg = (await r.json()).error ?? msg; } catch { /* not JSON */ }
+        toast.error(`Export failed: ${msg}`);
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(active?.name ?? 'feasibility').replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(`Export failed: ${e?.message ?? e}`);
+    }
+  }, [values, active?.name]);
+
+  /* ---- the other parcels, for the consolidation only ---- */
+  const others = useMemo(
+    () => (group === 'port'
+      ? parcels.filter((p) => p.id !== active?.id).map((p) => ({ name: p.name, inputs: p.inputs }))
+      : []),
+    [group, parcels, active?.id],
+  );
+
+  const foot = `${active?.name || 'Untitled parcel'} · ${active?.loc || 'location not set'} · prepared ${
+    new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  } · all amounts A$ · unlevered figures pre-tax, equity figures after tax and debt service · not a valuation or investment advice`;
+
+  /* ---- the active pane. Statements and Statements2 keep stable keys so an
+         instance survives a move between top-level tabs and only its internal
+         selection changes. ---- */
+  let body: React.ReactNode;
+  if (pane === 'map') {
+    body = (
+      <>
+        <div className="map-act">
+          <button type="button" className="primary" onClick={applyArea} disabled={!point}>
+            Use this lot →
+          </button>
+          <span className="note" style={{ margin: 0 }}>
+            {point
+              ? 'Writes the measured area into the appraisal and opens the Summary.'
+              : 'Pick a lot on the map first.'}
+          </span>
+        </div>
+        <div className="map-pane">
+          <SiteMap onPick={setPoint} shapes={shapes} center={point} />
+          <div className="panel-stack">
+            <SitePanel point={point} />
+            <SiteIntel point={point} />
+            <AreaPanel point={point} />
+          </div>
+        </div>
+      </>
+    );
+  } else if (modelErr) {
+    body = (
+      <p className="note">
+        The model has not run, so this view has nothing to show. Nothing here has been
+        filled with a zero — the figures are absent, not nil. Fix the input named above
+        and the statements return.
+      </p>
+    );
+  } else if (pane === 'verdict') {
+    body = <Verdict analysis={analysis} inputs={values} fyOfMonth={resolved} error={modelErr} busy={busy} />;
+  } else if (S2[pane]) {
+    body = (
+      <Route key="s2" to={S2[pane]!}>
+        <Statements2
+          analysis={analysis} fyOfMonth={resolved} inputs={values}
+          parcels={others} parcelName={active?.name || 'Current scheme'}
+        />
+      </Route>
+    );
+  } else {
+    body = (
+      <Route key="s1" to={S1[pane]!} two={pane === 'two' ? true : pane === 'sens' ? false : undefined}>
+        <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />
+      </Route>
+    );
+  }
 
   return (
-    <main className="shell">
-      <header className="top">
-        <div>
-          <h1>Land Feasibility</h1>
-          <span className="sub">Australia — NSW</span>
-        </div>
-        <nav className="tabs">
-          <button onClick={() => setTab('site')} aria-pressed={tab === 'site'}>Site</button>
-          <button onClick={() => setTab('feasibility')} aria-pressed={tab === 'feasibility'}>Feasibility</button>
-        </nav>
-        {point && tab === 'site' && (
-          <button className="primary" onClick={applyArea}>Use this lot →</button>
-        )}
-      </header>
-
-      <ProjectBar />
-      <ParcelTabs />
-
-      {tab === 'feasibility' && <Kpis summary={summary} error={modelErr} busy={busy} inputs={values} />}
-
-      <div className={`work${tab === 'feasibility' ? ' feas' : ''}`}>
-        {tab === 'site' ? (
+    <>
+      <Shell
+        group={group} pane={pane} onGroup={setGroup} onPane={pickPane}
+        fields={<ProjectBar />}
+        actions={
           <>
-            <SiteMap onPick={setPoint} shapes={shapes} center={point} />
-            <div className="panel-stack">
-              <SitePanel point={point} />
-              <SiteIntel point={point} />
-              <AreaPanel point={point} />
-            </div>
+            <button type="button" className="hbtn" onClick={() => grab('/api/xlsx', 'xlsx')} disabled={!summary}>
+              Download Excel (.xlsx)
+            </button>
+            <button type="button" className="hbtn solid" onClick={() => grab('/api/pdf', 'pdf')} disabled={!summary}>
+              Download PDF
+            </button>
           </>
-        ) : (
-          <>
-            <InputRail2 groups={groups} values={values} onChange={setField} dirtyKeys={dirty}
-                        defaults={baseline} onReplaceValues={setValues} />
-            <section className="results">
-              {modelErr
-                ? <p className="note">Fix the input on the left and the statements return.</p>
-                : (
-                    <>
-                      <Verdict analysis={analysis} inputs={values} fyOfMonth={resolved} error={modelErr} busy={busy} />
-                      <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />
-                      <Statements2 analysis={analysis} fyOfMonth={resolved} inputs={values} />
-                    </>
-                  )}
-            </section>
-          </>
-        )}
-      </div>
+        }
+        parcels={<ParcelTabs />}
+        kpis={<Kpis summary={summary} error={modelErr} busy={busy} inputs={values} />}
+        rail={
+          <InputRail2
+            groups={groups} values={values} onChange={setField} dirtyKeys={dirty}
+            defaults={baseline} onReplaceValues={setValues}
+          />
+        }
+        error={modelErr}
+        foot={foot}
+      >
+        {body}
+      </Shell>
       <Toaster />
-    </main>
+    </>
   );
 }

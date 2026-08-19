@@ -150,5 +150,49 @@ if (A && C) {
         `gap ${Math.round(cfCont - num(C.contTot))}`);
 }
 
+// ---- reference cashflow completeness ----
+// The reference cashflow is the statement the project is funded from, so it has
+// to account for every dollar the engine spends: net cash out must equal the
+// project cashflow it is derived from, month by month. The rows that go missing
+// are always the conditional ones -- a cost that only exists when a particular
+// input is switched on, or that the code assumed belonged to the other
+// development mode. So each one is switched on here and the identity re-tested.
+// Each case also names the engine row it is meant to exercise: if that row is
+// empty the case proves nothing, and a silently vacuous test is worse than none.
+const refCases = [
+  ['builder-risk insurance', { insur: 1.5, ph1dellag: 30 }, ['insurance']],
+  ['a reimbursed fixed contingency',
+   { contfixed: 900000, pidel: 60, pidrt: 100, infrastructurecharge: 8000 }, ['pid']],
+  ['a display suite and depreciable capex',
+   { modelcost: 3000000, dacapex: 5000000, dalife: 5 }, ['model', 'capex']],
+  ['horizontal infrastructure inside a vertical scheme', { infl: 80000 }, ['infra']],
+];
+for (const [label, extra, drivers] of refCases) {
+  let X = null, xErr = null;
+  try { X = run({ ...scheme, ...extra }, {}); } catch (e) { xErr = e.message; }
+  check(`runs with ${label}`, !!X, xErr ?? '');
+  if (!X) continue;
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const R = X.R ?? {};
+  const rowTotal = (k) => (Array.isArray(R[k]) ? R[k] : []).reduce((a, b) => a + num(b), 0);
+
+  const empty = drivers.filter((k) => Math.abs(rowTotal(k)) < 1);
+  check(`${label} actually reaches the model`, empty.length === 0,
+        empty.length ? `empty: ${empty.join(', ')}` : drivers
+          .map((k) => `${k} ${Math.round(rowTotal(k))}`).join(', '));
+
+  // R.net is the project cashflow before funding; the reference statement shows
+  // the same thing sign-flipped, as a funding requirement, with tax added back
+  // because the layout has no separate tax line. Any cost the statement forgets
+  // shows up here as a month that does not tie.
+  let worst = 0, worstMonth = -1;
+  for (let i = 0; i < (R.cfrefnetcash?.length ?? 0); i++) {
+    const gap = Math.abs(num(R.cfrefnetcash[i]) - (-num(R.net?.[i]) + num(R.taxm?.[i])));
+    if (gap > worst) { worst = gap; worstMonth = i; }
+  }
+  check(`reference cashflow accounts for every dollar with ${label}`, worst < 1,
+        worst < 1 ? 'ties every month' : `off by ${Math.round(worst)} in month ${worstMonth}`);
+}
+
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

@@ -345,3 +345,226 @@ table.vd-snap tr:last-child th,table.vd-snap tr:last-child td{border-bottom:0}
 
 .map-msg.bad{background:var(--bad-bg);color:var(--bad)}
 .vd-ctl.busy{opacity:.6}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LEGACY SHELL
+   Header ribbon, parcel band, workspace frame, primary tabs and sub-tabs,
+   ported from Australia_Land_Feasibility_Paddington_Clean_No_Defaults.html.
+   Structure and values follow the single-file build; only the selectors that
+   name React components differ, and those are layered on top of each
+   component's own scoped CSS rather than replacing it.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.app{display:flex;flex-direction:column;min-height:100vh;background:var(--shell-bg)}
+
+/* ── masthead ───────────────────────────────────────────────────────────── */
+.au-header{position:relative;z-index:40;background:var(--shell-bg);color:#fff}
+.hrow{display:flex;align-items:center;min-height:58px;padding:0 20px;gap:12px;flex-wrap:wrap;
+  background:linear-gradient(100deg,var(--shell-navy) 0%,#071E42 100%);
+  border-bottom:1px solid rgba(255,255,255,.12);box-shadow:0 3px 12px rgba(5,25,58,.20)}
+.brand{display:flex;align-items:center;gap:0;min-width:max-content}
+.brand h1{margin:0;color:#fff;font-size:14px;font-weight:750;line-height:1;
+  letter-spacing:.055em;text-transform:uppercase}
+.brand .sub{margin-left:12px;color:#B9C8DF;font-size:11px;letter-spacing:.015em}
+.hrow .spacer{flex:1}
+.hacts{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+.header-separator{width:1px;height:28px;background:rgba(255,255,255,.22)}
+/* The standfirst is the first thing to go when the ribbon runs out of room —
+   the fields and the exports are what a person came for. */
+@media(max-width:1279px){.brand .sub{display:none}}
+
+.hbtn{height:34px;min-height:34px;padding:6px 12px;border-radius:5px;cursor:pointer;
+  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.25);color:#F2F6FD;
+  font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;
+  transition:background .12s,border-color .12s}
+.hbtn:hover:not(:disabled){background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.38);color:#fff}
+.hbtn:disabled{opacity:.45;cursor:not-allowed}
+.hbtn.solid{background:#fff;color:#123D77;border-color:#fff;font-weight:650;
+  box-shadow:0 2px 7px rgba(0,0,0,.12)}
+.hbtn.solid:hover:not(:disabled){background:#DDE7F6;color:#123D77}
+.hbtn:focus-visible{outline:2px solid #7FA8E6;outline-offset:2px}
+
+/* ProjectBar sits in the ribbon as the legacy Project / Location fields. */
+.au-header .pbar{flex:0 1 auto;min-width:0;gap:10px;padding:0;background:transparent;border-bottom:0;
+  flex-wrap:nowrap}
+.au-header .pbar-f{gap:8px}
+.au-header .pbar-f>span{color:#C7D6EC;opacity:.88;font:650 11px var(--sans);letter-spacing:.02em}
+.au-header .pbar-f input{min-height:30px;padding:5px 2px;border:0;border-radius:0;
+  border-bottom:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;
+  font:500 12.5px var(--sans)}
+.au-header .pbar-f input::placeholder{color:#7E90AE}
+.au-header .pbar-f input:focus{outline:0;border-bottom-color:#fff;box-shadow:none}
+.au-header .pbar-f.name input{width:clamp(110px,11vw,210px);font-weight:600}
+.au-header .pbar-f.loc input{width:clamp(110px,12vw,240px);font-weight:450}
+.au-header .pbar-io{margin-left:4px;gap:6px;flex:none}
+.au-header .pbar-io button{height:34px;min-height:34px;padding:6px 11px;border-radius:5px;
+  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.25);color:#F2F6FD;
+  font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase}
+.au-header .pbar-io button:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.38);color:#fff}
+.au-header .pbar-io button.warn:hover{background:rgba(179,44,59,.28);border-color:#B32C3B;color:#fff}
+.au-header .pbar-msg{margin-top:8px;border-radius:5px}
+
+/* Parcel switcher: the legacy white navigation band. */
+.au-header .ptabs{min-height:63px;padding:9px 20px 0;gap:0;align-items:stretch;
+  background:#F8FAFD;border-bottom:1px solid #D8E1EC;box-shadow:0 3px 12px rgba(17,42,79,.06)}
+.au-header .ptab{position:relative;min-height:54px;min-width:0;padding:9px 32px 10px 16px;gap:3px;
+  color:#3F5475;background:transparent;border:0;border-right:1px solid #DDE5EF;
+  border-bottom:3px solid transparent;border-radius:0;box-shadow:none}
+.au-header .ptab:first-child{border-left:1px solid #DDE5EF}
+.au-header .ptab:hover{color:#0E4E9D;background:#F2F6FC}
+.au-header .ptab[aria-current=true]{color:#0B4A98;background:#fff;border-bottom-color:#1766CB;
+  box-shadow:0 -1px 0 #fff,0 3px 10px rgba(23,67,125,.08)}
+.au-header .ptab .nm{font:720 11.5px var(--sans)}
+.au-header .ptab .kv{align-self:flex-start;display:inline-flex;align-items:center;padding:2px 6px;
+  border-radius:10px;color:#536987;background:#EEF3F9;font:600 9.5px var(--mono);letter-spacing:-.02em}
+.au-header .ptab[aria-current=true] .kv{color:#0B4A98;background:#EAF2FE}
+.au-header .ptab .x{color:#7A8CA5;opacity:.68;top:6px;right:6px}
+.au-header .ptab .x:hover{color:#B32C3B;opacity:1;background:transparent}
+.au-header .ptabs .act{min-height:54px;margin-left:8px;border-radius:0;border:0;
+  color:#4E6381;font:650 11px var(--sans);letter-spacing:.03em;text-transform:uppercase}
+.au-header .ptabs .act:hover{color:#0B4A98;background:#F2F6FC;border:0}
+
+.au-header .kpis{border-bottom:1px solid #D8E1EC}
+.au-header .kpis .k-l{font:650 10px var(--sans);letter-spacing:.09em}
+.au-header .kpis .k-v{font:680 21px/1.05 var(--mono);letter-spacing:-.03em;color:var(--ink)}
+.au-header .kpis .k-s{font-size:11px;color:var(--faint)}
+/* The exports live in the ribbon now; the strip must not offer them twice. */
+.au-header .kpis .k-act{display:none}
+
+/* ── workspace frame ────────────────────────────────────────────────────── */
+.shell{display:grid;grid-template-columns:minmax(280px,var(--input-rail-width)) 5px minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);column-gap:0;padding:10px 12px 14px;
+  background:var(--shell-bg);min-height:0}
+.shell.work,.shell.work.feas{grid-template-columns:minmax(280px,var(--input-rail-width)) 5px minmax(0,1fr)}
+body.rail-collapsed .shell.work.feas{grid-template-columns:44px 5px minmax(0,1fr)}
+
+.shell>.rail2{min-height:0;overflow:hidden;background:#fff;border:1px solid var(--shell-border);
+  border-right:0;border-radius:var(--shell-radius) 0 0 var(--shell-radius);
+  box-shadow:0 2px 6px rgba(17,42,79,.07),4px 12px 24px rgba(17,42,79,.06)}
+.shell>.rail2 .rail2-head{min-height:46px;padding:13px 18px 12px;color:#0D3C7D;
+  border-bottom:1px solid #DFE6EF}
+.shell>.rail2 .rail2-title{color:#0D3C7D;font:650 10.5px var(--sans);letter-spacing:.105em;
+  text-transform:uppercase}
+.shell>.rail2 .rail2-io{padding:10px 18px 12px;gap:8px;border-bottom:1px solid #DFE6EF}
+.shell>.rail2 .rail2-io button{min-height:31px;padding:6px 12px;color:#194D91;background:#fff;
+  border:1px solid #C8D7EA;border-radius:5px;font:600 10.5px var(--sans);letter-spacing:.05em;
+  text-transform:uppercase}
+.shell>.rail2 .rail2-io button:hover:not(:disabled){background:#EEF5FE;border-color:#5B8ED0;color:#0C4C9C}
+.shell>.rail2 .rail2-legend{font-size:11px;line-height:1.55;color:var(--mute)}
+.shell>.rail2 .rail{border-right:0}
+
+.grp-h{min-height:38px;padding:10px 17px;color:#154A8D;background:#F5F8FC;
+  border-bottom:1px solid #E4EAF2;font:650 10.5px var(--sans);letter-spacing:.1em;
+  text-transform:uppercase}
+.grp-h:hover{background:#EAF2FC;color:#0B4E9D}
+.grp-h em{font:600 10px var(--mono);letter-spacing:-.02em}
+.grp-b{padding:7px 17px 12px}
+.fld>span:first-child{font-size:12.2px}
+
+/* Drag handle between the two scroll regions. */
+.rail-resizer{display:block;position:relative;z-index:12;align-self:stretch;min-width:5px;width:5px;
+  cursor:col-resize;touch-action:none;background:#F2F5F8;border-top:1px solid var(--shell-border);
+  border-bottom:1px solid var(--shell-border);outline:0}
+.rail-resizer::before{content:"";position:absolute;top:0;bottom:0;left:2px;width:1px;background:#B8C7D9;
+  transition:width .12s,left .12s,background .12s}
+.rail-resizer:hover::before,.rail-resizer:focus-visible::before,
+body.rail-resizing .rail-resizer::before{left:1px;width:3px;background:#2E6FC2}
+.rail-resizer:focus-visible{box-shadow:0 0 0 2px rgba(46,111,194,.22)}
+body.rail-resizing,body.rail-resizing *{cursor:col-resize!important;user-select:none!important}
+
+.canvas{min-width:0;min-height:0;background:#fff;border:1px solid var(--shell-border);border-left:0;
+  border-radius:0 var(--shell-radius) var(--shell-radius) 0;box-shadow:var(--shell-shadow);
+  padding:0 0 40px}
+
+/* ── primary tabs ───────────────────────────────────────────────────────── */
+nav.tabs{display:flex;flex:0 0 auto;min-height:49px;padding:0 10px;overflow-x:auto;
+  background:#fff;border-bottom:1px solid #DCE4EE;
+  border-radius:var(--shell-radius) var(--shell-radius) 0 0;
+  box-shadow:0 2px 7px rgba(17,42,79,.045)}
+nav.tabs::-webkit-scrollbar{height:0}
+nav.tabs button{min-height:49px;padding:14px 13px 12px;background:transparent;border:0;
+  border-bottom:2px solid transparent;border-radius:0;color:#4E6381;
+  font:680 11px var(--sans);letter-spacing:.025em;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;transition:color .12s,border-color .12s}
+nav.tabs button:hover:not([aria-selected=true]){color:#0B4A98;background:#F7F9FC}
+nav.tabs button[aria-selected=true]{color:#0E58B7;border-bottom-color:#1766CB;background:#FBFDFF}
+nav.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* ── panes and sub-tabs ─────────────────────────────────────────────────── */
+.panes{min-height:0}
+.pane{display:none;max-width:1560px;padding:22px 24px 28px}
+.pane.on{display:block}
+.pane.map{padding:14px 14px 18px}
+h2.ph{margin:0 0 5px;font-size:19px;font-weight:680;color:var(--ink);letter-spacing:-.02em}
+p.pd{margin:0 0 20px;font-size:13px;color:var(--mute);max-width:104ch;line-height:1.6}
+.sub2{display:flex;gap:2px;margin:0 0 18px;border-bottom:1px solid var(--line-2);overflow-x:auto}
+.sub2::-webkit-scrollbar{height:0}
+.sub2 button{background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;
+  padding:8px 13px;min-height:34px;color:var(--mute);font:600 11.5px var(--sans);cursor:pointer;
+  white-space:nowrap;transition:all .12s}
+.sub2 button:hover{color:var(--ink);background:transparent}
+.sub2 button[aria-current=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+
+/* The ported panes carry their own tab strip; the shell drives it instead. */
+.pane .stmts>.seg.stmt-tabs{display:none}
+.pane>.verdict{padding:0}
+.pane>.stmts{min-width:0}
+
+/* Model error. The engine's own words, never flattened and never a zero. */
+.goal{margin:0 0 16px;padding:12px 14px;background:var(--paper);border:1px solid var(--line-2);
+  border-left:3px solid var(--accent);border-radius:var(--r-sm);box-shadow:var(--sh1);
+  font-size:13px;line-height:1.55;color:var(--ink-2)}
+.goal.miss{border-left-color:var(--bad);background:var(--bad-bg);color:var(--bad);font-weight:500}
+.canvas>.goal{margin:18px 24px 0}
+
+.foot{margin:8px 24px 0;padding-top:14px;border-top:1px solid var(--line);
+  color:var(--faint);font-size:11px;line-height:1.6}
+
+/* ── map pane ───────────────────────────────────────────────────────────── */
+/* No fixed height: the map controls reflow into as many rows as the width
+   forces, and a fixed frame would clip the map itself off the bottom. The
+   canvas scrolls instead, and the map keeps a guaranteed minimum. */
+.map-pane{display:grid;grid-template-columns:minmax(0,1fr) 372px;align-items:stretch;
+  border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--paper);
+  box-shadow:var(--sh1);overflow:hidden}
+.map-pane>.map-wrap{min-width:0}
+.map-pane .map-canvas{flex:1 1 auto;min-height:460px}
+.map-pane>.panel-stack{min-width:0;border-left:1px solid var(--line)}
+.map-act{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+@media(max-width:1000px){.map-pane{grid-template-columns:minmax(0,1fr)}
+  .map-pane>.panel-stack{border-left:0;border-top:1px solid var(--line)}}
+
+/* ── legacy table voice: mono figures, banded sections ──────────────────── */
+.stmt td{font-family:var(--mono);font-size:12px;letter-spacing:-.01em}
+.stmt td.l,.stmt td.no{font-family:var(--sans)}
+.stmt td.no{font-family:var(--mono)}
+.stmt th{background:var(--raised)}
+.stmt tr.band td{background:#E8EEF3;color:#5D718A;letter-spacing:.07em}
+.stmt tr.result td,.stmt tr.res td{background:var(--ok-bg);color:var(--ok)}
+.stmt-scroll{box-shadow:var(--sh1);border-color:var(--line-2)}
+
+/* ── two independent scroll regions on the desktop layout ───────────────── */
+@media screen and (min-width:1001px){
+  html,body{overflow:hidden}
+  .app{height:100vh;min-height:0}
+  .au-header{flex:0 0 auto}
+  .shell{flex:1 1 auto;min-height:0;overflow:hidden}
+  .canvas{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+  nav.tabs{position:sticky;top:0;z-index:30}
+}
+@media screen and (max-width:1000px){
+  .rail-resizer{display:none}
+  .shell,.shell.work,.shell.work.feas,
+  body.rail-collapsed .shell.work.feas{grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto;gap:8px;padding:9px 9px 15px}
+  .shell>.rail2,.canvas{border:1px solid var(--shell-border);border-radius:8px;overflow:visible}
+  .shell>.rail2{max-height:none}
+  .hrow{padding:8px 14px}
+  .au-header .ptabs{padding-left:12px;padding-right:12px}
+  .pane{padding:18px 17px 24px}
+}
+.canvas::-webkit-scrollbar{width:10px}
+.canvas::-webkit-scrollbar-track{background:#F2F5F9}
+.canvas::-webkit-scrollbar-thumb{background:#B8C5D6;border:2px solid #F2F5F9;border-radius:10px}
+.canvas::-webkit-scrollbar-thumb:hover{background:#8EA2BC}
