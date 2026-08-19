@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import SitePanel from '@/components/SitePanel';
 import AreaPanel from '@/components/AreaPanel';
 import SiteIntel from '@/components/SiteIntel';
+import Terrain3D from '@/components/Terrain3D';
 import { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
@@ -175,6 +176,7 @@ export default function Page() {
           <div className="panel-stack">
             <SitePanel point={point} />
             <SiteIntel point={point} />
+            <Terrain3D point={point} rings={shapes?.cadastre ?? null} />
             <AreaPanel point={point} />
           </div>
         </div>

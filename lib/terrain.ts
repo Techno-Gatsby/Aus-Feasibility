@@ -6,29 +6,88 @@
  *  resolution it was measured at. A slope number without a resolution is not
  *  information, it is decoration.
  *
- *  Two sources, in preference order:
- *    1. Google Elevation API — real point samples, returns its own per-point
+ *  Three sources, in preference order:
+ *    1. NSW 5 m DEM (Spatial Services SIX ImageServer) — 5 m posts, AHD,
+ *       photogrammetric. Inside NSW this is the best number available short of
+ *       ordering a survey. See lib/dem.ts. NSW ONLY: outside the state the
+ *       service returns an empty sample array, so we don't ask.
+ *    2. Google Elevation API — national coverage, returns its own per-point
  *       resolution. Requires GOOGLE_MAPS_API_KEY, which is SERVER-SIDE ONLY.
  *       This module is therefore server-only (it uses node:zlib as well).
- *    2. Terrarium tiles on elevation-tiles-prod — free, no key. Outside the
+ *    3. Terrarium tiles on elevation-tiles-prod — free, no key. Outside the
  *       United States the underlying DEM is SRTM 1-arcsec, ~30 m. The tile
  *       PIXEL is finer than that at zoom 15, which flatters the data: the
  *       pixel spacing is an interpolation grid, not the measurement.
  *
- *  Neither is a survey. Both are reported as screening.
+ *  These are NOT interchangeable and the response never lets them look it.
+ *  A 5 m photogrammetric surface and a 30 m radar surface that still has
+ *  buildings and canopy standing on it are different claims about the ground.
+ *  Every result carries `source`, `resolutionM` and a plain-language
+ *  `headline`; `attempts` records what was tried and why it was or wasn't
+ *  used, so a fallback is never silent; and when a second source can also see
+ *  the site, `crossCheck` reports the disagreement instead of hiding it.
+ *
+ *  None of them is a survey. All are reported as screening.
  */
 import zlib from 'node:zlib';
+import { nswDemElevations, nswDemCovers, NSW_DEM_URL } from '@/lib/dem';
 
 export type LatLng = { lat: number; lng: number };
 export type Box = [number, number, number, number]; // W,S,E,N
 
-export type TerrainSource = 'google' | 'terrarium';
+export type TerrainSource = 'nsw5m' | 'google' | 'terrarium';
+
+/** What happened to each source we could have used. Present on every result,
+ *  success or failure, so "which dataset is this number from and what else was
+ *  tried" is answerable without reading the server log. */
+export type SourceAttempt = {
+  source: TerrainSource;
+  label: string;
+  status: 'used' | 'cross-check' | 'failed' | 'unavailable' | 'out-of-area';
+  detail: string;
+};
+
+/** A second opinion on the same footprint. Only populated when a second source
+ *  actually returned elevations for points the primary also covered. */
+export type CrossCheck = {
+  source: TerrainSource;
+  sourceLabel: string;
+  resolutionM: number | null;
+  /** Points where BOTH sources returned a number. The diffs are over these. */
+  pairedSamples: number;
+  meanM: number | null;
+  slopePct: number | null;
+  /** primary − crosscheck, in metres. Positive = the primary reads higher. */
+  meanDiffM: number | null;
+  medianDiffM: number | null;
+  maxAbsDiffM: number | null;
+  /** primary − crosscheck, in percentage points of grade. */
+  slopeDiffPct: number | null;
+  /** false once the mean offset or any single point drifts past the threshold
+   *  below — at which point the difference is a finding, not noise. */
+  agrees: boolean;
+  note: string;
+};
+
+/** Above this mean vertical offset between two sources, the disagreement gets
+ *  escalated into `warnings` rather than left as a field nobody reads. Two
+ *  metres over a hectare is 20,000 m³ of notional cut. */
+export const CROSS_CHECK_TOLERANCE_M = 2;
 
 export type TerrainResult = {
   ok: boolean;
   /** Which elevation source actually produced the numbers. Never guessed. */
   source: TerrainSource | null;
   sourceLabel: string;
+  /** One sentence naming the source and its resolution alongside the grade,
+   *  so a 5 m figure can never be read as a 30 m one or the reverse. */
+  headline: string;
+  /** Vertical datum of `source`. AHD and EGM96 are not the same surface. */
+  datum: string | null;
+  /** Every source considered, in preference order, with its outcome. */
+  attempts: SourceAttempt[];
+  /** Second source over the same points, when one was available. */
+  crossCheck: CrossCheck | null;
   /** Populated when the preferred source failed and we fell back. */
   fallbackFrom?: string;
   reason?: string;               // why ok === false
@@ -268,6 +327,73 @@ function gradeOf(pct: number): TerrainResult['grade'] {
 }
 
 /* ------------------------------------------------------------------ *
+ * Plane fit — shared by the primary source and the cross-check so the two
+ * slope figures are computed identically and are actually comparable.
+ * ------------------------------------------------------------------ */
+type Fit = {
+  k: number;
+  minM: number; maxM: number; meanM: number; fallM: number;
+  slopePct: number; crossFallPct: number;
+  aspectDeg: number | null;
+  collinear: boolean;
+};
+
+/** Least-squares plane through the samples, in metres, origin at the SW
+ *  corner. The plane gradient is the average grade an earthworks estimator
+ *  would use; max−min over the diagonal is not the same thing. */
+function fitPlane(
+  good: { z: number; p: LatLng }[], bbox: Box, midLat: number, spanM: number,
+): Fit | null {
+  const k = good.length;
+  if (k < 4) return null;
+  const x0 = bbox[0], y0 = bbox[1], mLng = mPerLng(midLat);
+  const X = good.map((q) => (q.p.lng - x0) * mLng);
+  const Y = good.map((q) => (q.p.lat - y0) * M_PER_LAT);
+  const Z = good.map((q) => q.z);
+  const mx = X.reduce((a, b) => a + b, 0) / k;
+  const my = Y.reduce((a, b) => a + b, 0) / k;
+  const mz = Z.reduce((a, b) => a + b, 0) / k;
+  let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
+  for (let i = 0; i < k; i++) {
+    const dx = X[i] - mx, dy = Y[i] - my, dz = Z[i] - mz;
+    sxx += dx * dx; syy += dy * dy; sxy += dx * dy; sxz += dx * dz; syz += dy * dz;
+  }
+  const det = sxx * syy - sxy * sxy;
+  let gx = 0, gy = 0;
+  const collinear = Math.abs(det) <= 1e-9;
+  if (!collinear) {
+    gx = (sxz * syy - syz * sxy) / det;   // dz/d(east)
+    gy = (syz * sxx - sxz * sxy) / det;   // dz/d(north)
+  }
+  const minM = Math.min(...Z), maxM = Math.max(...Z);
+  const fallM = maxM - minM;
+  const gradient = Math.hypot(gx, gy);
+  const crossFallPct = (fallM / spanM) * 100;
+  return {
+    k, minM, maxM, meanM: mz, fallM,
+    slopePct: collinear ? crossFallPct : gradient * 100,
+    crossFallPct,
+    // Downhill bearing: negate the uphill gradient, then atan2(east, north).
+    aspectDeg: gradient > 1e-6
+      ? ((Math.atan2(-gx, -gy) * 180) / Math.PI + 360) % 360
+      : null,
+    collinear,
+  };
+}
+
+const pair = (values: (number | null)[], pts: LatLng[]) =>
+  values
+    .map((z, i) => ({ z, p: pts[i] }))
+    .filter((q): q is { z: number; p: LatLng } => Number.isFinite(q.z as number));
+
+const median = (xs: number[]) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/* ------------------------------------------------------------------ *
  * The analysis
  * ------------------------------------------------------------------ */
 export type TerrainOptions = {
@@ -276,14 +402,32 @@ export type TerrainOptions = {
   n?: number;
   googleKey?: string | null;
   timeoutMs?: number;
+  /** Set false to skip the second-source comparison (one fewer round trip).
+   *  Default true: a 5 m figure that silently disagrees with the 30 m one by
+   *  8 m is exactly the thing this module exists to surface. */
+  crossCheck?: boolean;
+};
+
+const SOURCE_LABEL: Record<TerrainSource, string> = {
+  nsw5m: 'NSW 5 m DEM (Spatial Services SIX, 5 m posts, AHD)',
+  google: 'Google Elevation API',
+  terrarium: 'Terrarium tiles (SRTM 1-arcsec, ~30 m)',
+};
+
+const SOURCE_DATUM: Record<TerrainSource, string> = {
+  nsw5m: 'AHD (Australian Height Datum), orthometric metres',
+  google: 'EGM96-family geoid, orthometric metres',
+  terrarium: 'EGM96 geoid, orthometric metres (SRTM)',
 };
 
 export async function analyseTerrain(opts: TerrainOptions): Promise<TerrainResult> {
   const bbox = opts.bbox;
   const n = Math.max(3, Math.min(16, Math.round(opts.n ?? 6)));
   const timeoutMs = opts.timeoutMs ?? 12000;
+  const wantCross = opts.crossCheck !== false;
   const pts = grid(bbox, n);
   const midLat = (bbox[1] + bbox[3]) / 2;
+  const midLng = (bbox[0] + bbox[2]) / 2;
 
   const widthM = (bbox[2] - bbox[0]) * mPerLng(midLat);
   const heightM = (bbox[3] - bbox[1]) * M_PER_LAT;
@@ -291,57 +435,146 @@ export async function analyseTerrain(opts: TerrainOptions): Promise<TerrainResul
   const sampleSpacingM = Math.max(1, Math.hypot(widthM / n, heightM / n));
 
   const warnings: string[] = [];
+  const attempts: SourceAttempt[] = [];
+
   let source: TerrainSource | null = null;
   let fallbackFrom: string | undefined;
   let resolutionM: number | null = null;
   let resolutionNote = '';
   let values: (number | null)[] | null = null;
 
-  if (opts.googleKey) {
-    const g = await googleElevations(pts, opts.googleKey, timeoutMs);
-    if (g) {
-      source = 'google';
-      values = g.values;
-      resolutionM = g.resolution;
-      resolutionNote = resolutionM
-        ? `Google Elevation API, ${resolutionM.toFixed(0)} m source resolution as reported by the service.`
-        : 'Google Elevation API; the service did not report a resolution for these points.';
+  /* -- Terrarium is computed as a closure so it can serve either as the
+        primary source or as the cross-check, at the same zoom either way. -- */
+  let terrariumZoom = TERRARIUM_MAX_ZOOM;
+  while (terrariumZoom > 10) {
+    const px = pixelMetres(midLat, terrariumZoom);
+    const tiles = Math.ceil(widthM / (px * TILE) + 1) * Math.ceil(heightM / (px * TILE) + 1);
+    if (tiles <= 12) break;
+    terrariumZoom--;
+  }
+  let terrariumCache: Promise<(number | null)[]> | null = null;
+  const getTerrarium = () => (terrariumCache ??= terrariumElevations(pts, terrariumZoom, timeoutMs));
+  const terrariumNote = () => {
+    const px = pixelMetres(midLat, terrariumZoom);
+    return `Terrarium tiles (elevation-tiles-prod) at zoom ${terrariumZoom}: ${px.toFixed(1)} m ` +
+      `per pixel, but outside the United States the underlying DEM is SRTM 1-arcsec, about 30 m. ` +
+      `The finer pixel spacing is interpolation, not measurement. SRTM is a radar surface: over ` +
+      `built-up or timbered ground it sits on rooftops and canopy rather than on the ground, ` +
+      `which reads HIGH. This is a screening figure and is NOT a survey — order a contour survey ` +
+      `before you commit earthworks money.`;
+  };
+
+  /* ---------------- 1. NSW 5 m DEM — the best number available ---------- */
+  const inNsw = nswDemCovers({ lng: midLng, lat: midLat });
+  if (!inNsw) {
+    attempts.push({
+      source: 'nsw5m', label: SOURCE_LABEL.nsw5m, status: 'out-of-area',
+      detail: 'Site is outside New South Wales, and this DEM is a NSW-only dataset. ' +
+        'Not queried — an out-of-state request returns an empty sample array that is ' +
+        'indistinguishable from an outage.',
+    });
+  } else {
+    const d = await nswDemElevations(pts, timeoutMs);
+    if (d && d.hits >= 4) {
+      source = 'nsw5m';
+      values = d.values;
+      resolutionM = d.resolutionM;
+      const from = d.rasterNames.length ? ` Mosaic item(s): ${d.rasterNames.join(', ')}.` : '';
+      resolutionNote =
+        `NSW ${d.resolutionM} m DEM via the Spatial Services (SIX) elevation ImageServer ` +
+        `(getSamples, ${d.hits} of ${pts.length} sample points on coverage). ${d.resolutionM} m ` +
+        `post spacing, derived from stereo imagery, heights in AHD.${from} This is a bare-earth ` +
+        `DEM at six times the linear resolution of the SRTM fallback, but it is still a DEM and ` +
+        `NOT a survey — order a contour survey before you commit earthworks money.`;
+      attempts.push({
+        source: 'nsw5m', label: SOURCE_LABEL.nsw5m, status: 'used',
+        detail: `getSamples returned ${d.hits} of ${pts.length} points at ${d.resolutionM} m ` +
+          `resolution.${from}`,
+      });
     } else {
-      fallbackFrom = 'Google Elevation API (no answer, quota, or key rejected)';
-      warnings.push('Google Elevation did not answer; fell back to terrarium tiles.');
+      const why = !d
+        ? 'the service did not answer, or answered with an error'
+        : `only ${d.hits} of ${pts.length} sample points were on coverage, too few to fit a plane`;
+      fallbackFrom = `NSW 5 m DEM (${why})`;
+      warnings.push(
+        `The NSW 5 m DEM was the preferred source here and it did not answer usably ` +
+        `(${why}). The figures below come from a coarser dataset — see \`source\`.`);
+      attempts.push({
+        source: 'nsw5m', label: SOURCE_LABEL.nsw5m, status: 'failed',
+        detail: `${NSW_DEM_URL}/getSamples — ${why}.`,
+      });
     }
   }
 
+  /* ---------------- 2. Google Elevation — national fallback ------------- */
   if (!values) {
-    // Finest tile zoom the dataset actually serves, stepped down if the box
-    // is large enough that finest zoom would mean fetching a wall of tiles.
-    let zoom = TERRARIUM_MAX_ZOOM;
-    while (zoom > 10) {
-      const px = pixelMetres(midLat, zoom);
-      const tiles = Math.ceil(widthM / (px * TILE) + 1) * Math.ceil(heightM / (px * TILE) + 1);
-      if (tiles <= 12) break;
-      zoom--;
+    if (!opts.googleKey) {
+      attempts.push({
+        source: 'google', label: SOURCE_LABEL.google, status: 'unavailable',
+        detail: 'No GOOGLE_MAPS_API_KEY on the server, so the API was not called.',
+      });
+    } else {
+      const g = await googleElevations(pts, opts.googleKey, timeoutMs);
+      if (g) {
+        source = 'google';
+        values = g.values;
+        resolutionM = g.resolution;
+        resolutionNote = (resolutionM
+          ? `Google Elevation API, ${resolutionM.toFixed(0)} m source resolution as reported by ` +
+            `the service for these points.`
+          : `Google Elevation API; the service did not report a resolution for these points, so ` +
+            `the accuracy of the figures below is unbounded and they should be treated as ` +
+            `indicative only.`) +
+          ` Not a survey — order a contour survey before you commit earthworks money.`;
+        attempts.push({
+          source: 'google', label: SOURCE_LABEL.google, status: 'used',
+          detail: `Returned ${g.values.filter((v) => v !== null).length} of ${pts.length} points` +
+            (resolutionM ? ` at ${resolutionM.toFixed(0)} m reported resolution.` : '.'),
+        });
+      } else {
+        const why = 'no answer, quota exhausted, or the key was rejected ' +
+          '(the Elevation API must be enabled on the key separately from Maps)';
+        fallbackFrom = fallbackFrom ?? `Google Elevation API (${why})`;
+        warnings.push('Google Elevation did not answer; fell back to terrarium tiles.');
+        attempts.push({
+          source: 'google', label: SOURCE_LABEL.google, status: 'failed',
+          detail: `Google Elevation API — ${why}.`,
+        });
+      }
     }
-    values = await terrariumElevations(pts, zoom, timeoutMs);
-    source = 'terrarium';
-    const px = pixelMetres(midLat, zoom);
-    // The honest number is the DEM behind the tile, not the tile pixel.
-    resolutionM = 30;
-    resolutionNote =
-      `Terrarium tiles (elevation-tiles-prod) at zoom ${zoom}: ${px.toFixed(1)} m per pixel, ` +
-      `but outside the United States the underlying DEM is SRTM 1-arcsec, about 30 m. ` +
-      `The finer pixel spacing is interpolation, not measurement. This is a screening ` +
-      `figure and is NOT a survey — order a contour survey before you commit earthworks money.`;
+  } else {
+    attempts.push({
+      source: 'google', label: SOURCE_LABEL.google, status: 'unavailable',
+      detail: 'Not needed — a higher-resolution source answered first.',
+    });
   }
 
-  const good = values
-    .map((z, i) => ({ z, p: pts[i] }))
-    .filter((q): q is { z: number; p: LatLng } => Number.isFinite(q.z as number));
+  /* ---------------- 3. Terrarium — last resort ------------------------- */
+  if (!values) {
+    values = await getTerrarium();
+    source = 'terrarium';
+    resolutionM = 30;   // the DEM behind the tile, not the tile pixel
+    resolutionNote = terrariumNote();
+    attempts.push({
+      source: 'terrarium', label: SOURCE_LABEL.terrarium, status: 'used',
+      detail: `Zoom ${terrariumZoom}; ${values.filter((v) => v !== null).length} of ` +
+        `${pts.length} points returned. Last-resort source.`,
+    });
+  }
+
+  const good = pair(values, pts);
 
   const base: TerrainResult = {
-    ok: false, source, sourceLabel: source === 'google' ? 'Google Elevation API'
-      : source === 'terrarium' ? 'Terrarium tiles (SRTM 1-arcsec)' : 'none',
-    fallbackFrom, samples: good.length, requested: pts.length,
+    ok: false,
+    source,
+    sourceLabel: source ? SOURCE_LABEL[source] : 'none',
+    headline: '',
+    datum: source ? SOURCE_DATUM[source] : null,
+    attempts,
+    crossCheck: null,
+    fallbackFrom,
+    samples: good.length,
+    requested: pts.length,
     minM: null, maxM: null, meanM: null, fallM: null, slopePct: null, crossFallPct: null,
     aspectDeg: null, aspect: null, grade: null,
     spanM, sampleSpacingM, resolutionM, resolutionNote, bbox, gridN: n, warnings,
@@ -350,6 +583,7 @@ export async function analyseTerrain(opts: TerrainOptions): Promise<TerrainResul
   if (good.length < 4)
     return {
       ...base, ok: false,
+      headline: `No slope figure: ${base.sourceLabel} returned too few elevations.`,
       reason: good.length === 0
         ? `No elevation returned for any of the ${pts.length} sample points. ` +
           `The elevation source did not answer, so there is no slope figure to give — ` +
@@ -363,57 +597,97 @@ export async function analyseTerrain(opts: TerrainOptions): Promise<TerrainResul
       `${pts.length - good.length} of ${pts.length} sample points returned no elevation; ` +
       `the figures below are from the ${good.length} that did.`);
 
-  // Least-squares plane through the samples, in metres, origin at the SW
-  // corner. The plane gradient is the average grade an earthworks estimator
-  // would use; max−min over the diagonal is not the same thing.
-  const x0 = bbox[0], y0 = bbox[1], mLng = mPerLng(midLat);
-  const X = good.map((q) => (q.p.lng - x0) * mLng);
-  const Y = good.map((q) => (q.p.lat - y0) * M_PER_LAT);
-  const Z = good.map((q) => q.z);
-  const k = Z.length;
-  const mx = X.reduce((a, b) => a + b, 0) / k;
-  const my = Y.reduce((a, b) => a + b, 0) / k;
-  const mz = Z.reduce((a, b) => a + b, 0) / k;
-  let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
-  for (let i = 0; i < k; i++) {
-    const dx = X[i] - mx, dy = Y[i] - my, dz = Z[i] - mz;
-    sxx += dx * dx; syy += dy * dy; sxy += dx * dy; sxz += dx * dz; syz += dy * dz;
-  }
-  const det = sxx * syy - sxy * sxy;
-  let gx = 0, gy = 0;
-  if (Math.abs(det) > 1e-9) {
-    gx = (sxz * syy - syz * sxy) / det;   // dz/d(east)
-    gy = (syz * sxx - sxz * sxy) / det;   // dz/d(north)
-  } else {
+  const fit = fitPlane(good, bbox, midLat, spanM)!;
+  if (fit.collinear)
     warnings.push('Samples were collinear; the average grade falls back to fall over span.');
-  }
-
-  const minM = Math.min(...Z), maxM = Math.max(...Z);
-  const fallM = maxM - minM;
 
   // A footprint that reads exactly 0.00 m everywhere is water or a DEM void,
   // not a perfectly level site. Saying "0% slope" there would be the most
   // confident wrong number this module could produce.
-  if (minM === 0 && maxM === 0)
+  if (fit.minM === 0 && fit.maxM === 0)
     warnings.push(
       'Every sample read exactly 0 m. That is what the DEM returns over water and ' +
       'over voids in the coverage — treat it as no data, not as a perfectly level site.');
-  const gradient = Math.hypot(gx, gy);
-  const slopePct = Math.abs(det) > 1e-9 ? gradient * 100 : (fallM / spanM) * 100;
-  // Downhill bearing: negate the uphill gradient, then atan2(east, north).
-  const aspectDeg = gradient > 1e-6
-    ? ((Math.atan2(-gx, -gy) * 180) / Math.PI + 360) % 360
-    : null;
+
+  /* ---------------- Second opinion ------------------------------------- *
+   * Two sources over the same ground disagreeing by metres is the finding,
+   * not an inconvenience. Terrarium is the comparator because it is free and
+   * needs no key, so the check costs nothing worth protecting.
+   * ------------------------------------------------------------------- */
+  let crossCheck: CrossCheck | null = null;
+  if (wantCross && source !== 'terrarium') {
+    const cv = await getTerrarium().catch(() => null);
+    if (cv) {
+      const diffs: number[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = values[i], b = cv[i];
+        if (Number.isFinite(a as number) && Number.isFinite(b as number))
+          diffs.push((a as number) - (b as number));
+      }
+      const cgood = pair(cv, pts);
+      const cfit = fitPlane(cgood, bbox, midLat, spanM);
+      if (diffs.length) {
+        const meanDiffM = diffs.reduce((x, y) => x + y, 0) / diffs.length;
+        const maxAbsDiffM = Math.max(...diffs.map(Math.abs));
+        const slopeDiffPct = cfit ? fit.slopePct - cfit.slopePct : null;
+        const agrees = Math.abs(meanDiffM) <= CROSS_CHECK_TOLERANCE_M;
+        crossCheck = {
+          source: 'terrarium',
+          sourceLabel: SOURCE_LABEL.terrarium,
+          resolutionM: 30,
+          pairedSamples: diffs.length,
+          meanM: cfit ? cfit.meanM : null,
+          slopePct: cfit ? cfit.slopePct : null,
+          meanDiffM,
+          medianDiffM: median(diffs),
+          maxAbsDiffM,
+          slopeDiffPct,
+          agrees,
+          note: agrees
+            ? `${base.sourceLabel} and ${SOURCE_LABEL.terrarium} agree to within ` +
+              `${CROSS_CHECK_TOLERANCE_M} m on average (mean offset ${meanDiffM.toFixed(2)} m ` +
+              `over ${diffs.length} shared points).`
+            : `DISAGREEMENT: ${base.sourceLabel} reads ${meanDiffM > 0 ? 'HIGHER' : 'LOWER'} than ` +
+              `${SOURCE_LABEL.terrarium} by ${Math.abs(meanDiffM).toFixed(2)} m on average ` +
+              `(worst point ${maxAbsDiffM.toFixed(2)} m) over ${diffs.length} shared points. ` +
+              `The ${resolutionM ?? '?'} m figure is the one to use; the 30 m SRTM surface is ` +
+              `radar-derived and sits on buildings and canopy. Reported because at ` +
+              `${Math.abs(meanDiffM).toFixed(1)} m over a hectare the two sources imply ` +
+              `earthworks volumes about ${Math.round(Math.abs(meanDiffM) * 10000).toLocaleString()} m³ apart.`,
+        };
+        if (!agrees)
+          warnings.push(
+            `Sources disagree: ${base.sourceLabel} vs ${SOURCE_LABEL.terrarium} differ by a mean ` +
+            `${meanDiffM.toFixed(2)} m (max ${maxAbsDiffM.toFixed(2)} m)` +
+            (slopeDiffPct != null ? ` and ${slopeDiffPct.toFixed(1)} percentage points of grade` : '') +
+            `. The reported figures are from ${base.sourceLabel}.`);
+        attempts.push({
+          source: 'terrarium', label: SOURCE_LABEL.terrarium, status: 'cross-check',
+          detail: `Sampled as a second opinion only, not used for the reported figures. ` +
+            `Mean offset ${meanDiffM.toFixed(2)} m over ${diffs.length} shared points.`,
+        });
+      }
+    }
+  }
+
+  const res = resolutionM;
+  const headline =
+    `Average grade ${fit.slopePct.toFixed(1)}% (${gradeOf(fit.slopePct)}), fall ` +
+    `${fit.fallM.toFixed(1)} m across ${spanM.toFixed(0)} m, from ${base.sourceLabel}` +
+    (res ? ` at ${res} m resolution` : ' at an unreported resolution') +
+    `, ${good.length} of ${pts.length} sample points. Screening figure, not a survey.`;
 
   return {
     ...base,
     ok: true,
-    minM, maxM, meanM: mz, fallM,
-    slopePct,
-    crossFallPct: (fallM / spanM) * 100,
-    aspectDeg,
-    aspect: aspectDeg == null ? null : cardinal(aspectDeg),
-    grade: gradeOf(slopePct),
+    headline,
+    crossCheck,
+    minM: fit.minM, maxM: fit.maxM, meanM: fit.meanM, fallM: fit.fallM,
+    slopePct: fit.slopePct,
+    crossFallPct: fit.crossFallPct,
+    aspectDeg: fit.aspectDeg,
+    aspect: fit.aspectDeg == null ? null : cardinal(fit.aspectDeg),
+    grade: gradeOf(fit.slopePct),
   };
 }
 

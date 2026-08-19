@@ -1,199 +1,245 @@
 'use client';
-import { useEffect, useState } from 'react';
 // Type-only imports: lib/terrain reaches for node:zlib and lib/poi does
 // network work, so neither may be bundled into the client. `import type` is
 // erased at compile time, which is the whole point of it here.
 import type { TerrainResult } from '@/lib/terrain';
 import type { PoiResult, PoiCategory } from '@/lib/poi';
+import {
+  Fact, Failed, Waiting, ShowAll, Detail, useJson, type Async,
+} from '@/components/SiteTabs';
 
-type Terrain = TerrainResult & { verdict?: string };
+export type Terrain = TerrainResult & { verdict?: string };
 
 /** SITE INTELLIGENCE — terrain and neighbourhood, ported from the single-file
  *  build's `analyzeSite` / `aumap_site_intelligence` panel.
  *
- *  Two independent readings that fail independently: terrain can be ready
- *  while Overpass is timing out, so the panel has a partial state rather than
- *  an all-or-nothing spinner. Nothing here is presented as survey-grade and
- *  no slope figure is ever printed without the resolution it was measured at.
+ *  This file no longer renders a panel of its own. Terrain and the OSM
+ *  neighbourhood search are now two tabs of the one site panel (see
+ *  SitePanel.tsx), because three stacked panels made the reader scroll several
+ *  screens past blocks that had nothing to do with each other. What lives here
+ *  is the data — two readings that fail independently — and the sections that
+ *  draw it.
+ *
+ *  Nothing here is presented as survey-grade and no slope figure is ever
+ *  printed without the sample count, spacing and source resolution beside it.
  */
-export default function SiteIntel({
-  point, halfM = 100, radiusM = 2000,
-}: {
-  point: { lat: number; lng: number } | null;
-  /** Half-width of the sampled square, metres. 100 → a 200 m footprint. */
-  halfM?: number;
-  radiusM?: number;
-}) {
-  const [terrain, setTerrain] = useState<Terrain | null>(null);
-  const [poi, setPoi] = useState<PoiResult | null>(null);
-  const [tBusy, setTBusy] = useState(false);
-  const [pBusy, setPBusy] = useState(false);
-  const [tErr, setTErr] = useState<string | null>(null);
-  const [pErr, setPErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!point) return;
-    let dead = false;
-    setTerrain(null); setPoi(null); setTErr(null); setPErr(null);
-    setTBusy(true); setPBusy(true);
+/* ------------------------------------------------------------------ data */
 
-    fetch(`/api/terrain?lat=${point.lat}&lng=${point.lng}&half=${halfM}&n=6`)
-      .then((r) => r.json())
-      .then((j) => { if (!dead) setTerrain(j); })
-      .catch((e) => { if (!dead) setTErr(String(e?.message ?? e)); })
-      .finally(() => { if (!dead) setTBusy(false); });
-
-    fetch(`/api/poi?lat=${point.lat}&lng=${point.lng}&radius=${radiusM}&limit=4`)
-      .then((r) => r.json())
-      .then((j) => { if (!dead) setPoi(j); })
-      .catch((e) => { if (!dead) setPErr(String(e?.message ?? e)); })
-      .finally(() => { if (!dead) setPBusy(false); });
-
-    return () => { dead = true; };
-  }, [point, halfM, radiusM]);
-
-  if (!point)
-    return (
-      <aside className="panel">
-        <h2>Site intelligence <span className="pill">Waiting</span></h2>
-        <p className="muted">Pick a point on the map to sample terrain and search
-          the surrounding neighbourhood.</p>
-      </aside>
-    );
-
-  const busy = tBusy || pBusy;
-  const terrainOk = !!terrain?.ok;
-  const poiOk = !!poi?.queried;
-  const status = busy ? 'Working'
-    : terrainOk && poiOk ? 'Ready'
-    : terrainOk || poiOk ? 'Partial'
-    : 'Unavailable';
-  const pill = status === 'Ready' ? 'pill ok'
-    : status === 'Unavailable' ? 'pill bad' : 'pill';
-
-  return (
-    <aside className="panel">
-      <h2>Site intelligence <span className={pill}>{status}</span></h2>
-      {busy && (
-        <p className="muted">
-          {tBusy && pBusy ? 'Sampling elevation and searching OpenStreetMap…'
-            : tBusy ? 'Sampling elevation…' : 'Searching OpenStreetMap…'}
-        </p>
-      )}
-
-      <h3>Terrain and slope</h3>
-      {tErr ? (
-        <p className="bad">Terrain request failed: {tErr}. No slope figure is shown —
-          an unmeasured site is not a flat one.</p>
-      ) : tBusy && !terrain ? (
-        <p className="muted">Sampling a 6 × 6 grid across the footprint…</p>
-      ) : !terrain ? null : !terrain.ok ? (
-        <>
-          <Row k="Elevation source" v={terrain.sourceLabel} />
-          <p className="alert"><b>No slope figure.</b> {terrain.reason}</p>
-          <p className="note">{terrain.resolutionNote}</p>
-        </>
-      ) : (
-        <>
-          <Row k="Fall across site"
-               v={`${terrain.fallM!.toFixed(1)} m over ${Math.round(terrain.spanM!)} m`} />
-          <Row k="Average slope"
-               v={`${terrain.slopePct!.toFixed(1)}%`}
-               cls={terrain.slopePct! >= 8 ? 'bad' : terrain.slopePct! < 3 ? 'ok' : undefined} />
-          <Row k="Grade" v={cap(terrain.grade!)} />
-          <Row k="Cross-fall (fall ÷ diagonal)" v={`${terrain.crossFallPct!.toFixed(1)}%`} />
-          <Row k="Falls toward"
-               v={terrain.aspect ? `${terrain.aspect} (${Math.round(terrain.aspectDeg!)}°)` : 'no consistent direction'} />
-          <Row k="Elevation range"
-               v={`${terrain.minM!.toFixed(0)} – ${terrain.maxM!.toFixed(0)} m AHD approx.`} />
-          <Row k="Mean elevation" v={`${terrain.meanM!.toFixed(1)} m`} />
-          <Row k="Samples"
-               v={`${terrain.samples} of ${terrain.requested} (${terrain.gridN} × ${terrain.gridN} grid)`} />
-          <Row k="Sample spacing" v={`${terrain.sampleSpacingM!.toFixed(0)} m`} />
-          <Row k="Source resolution"
-               v={terrain.resolutionM ? `~${terrain.resolutionM.toFixed(0)} m` : 'not reported'} />
-          <Row k="Elevation source" v={terrain.sourceLabel} />
-
-          {terrain.verdict && (
-            <p className={terrain.slopePct! >= 8 ? 'alert' : 'note'}>
-              <b>{cap(terrain.grade!)} — {terrain.slopePct!.toFixed(1)}%.</b> {terrain.verdict}
-            </p>
-          )}
-
-          {terrain.fallbackFrom && (
-            <p className="note"><b>Fell back.</b> {terrain.fallbackFrom}. The figures above come
-              from {terrain.sourceLabel} instead.</p>
-          )}
-          {terrain.warnings.map((w, i) => <p className="note" key={i}>{w}</p>)}
-
-          {/* Resolution is not a footnote. It is the bound on every number above. */}
-          <p className="note">
-            <b>Resolution bounds this.</b> {terrain.resolutionNote}
-            {' '}Sampled over a {Math.round(terrain.spanM!)} m diagonal at {terrain.sampleSpacingM!.toFixed(0)} m
-            spacing, so anything smaller than that — a batter, a gully, a cut driveway —
-            is invisible to it.
-          </p>
-        </>
-      )}
-
-      <h3>Nearby (OpenStreetMap, {poi ? fmtRadius(poi.radiusM) : fmtRadius(radiusM)})</h3>
-      {pErr ? (
-        <p className="bad">Overpass request failed: {pErr}. This is a service failure —
-          it says nothing about what is or is not nearby.</p>
-      ) : pBusy && !poi ? (
-        <p className="muted">Querying Overpass (up to 15 s, then it degrades rather than hangs)…</p>
-      ) : !poi ? null : !poi.queried ? (
-        <>
-          <p className="alert"><b>Overpass did not answer.</b> {poi.error}</p>
-          <p className="note">Overpass is rate-limited and frequently slow, and it was given
-            15 s across {poi.attempts.length} mirror{poi.attempts.length === 1 ? '' : 's'}.
-            <b> No result is not the same as nothing nearby</b> — try again in a minute.</p>
-        </>
-      ) : (
-        <>
-          {poi.categories.map((c) => <Category key={c.kind} c={c} radiusM={poi.radiusM} />)}
-          <p className="note">
-            Answered by {hostOf(poi.endpoint)} in {(poi.elapsedMs / 1000).toFixed(1)} s.
-            OpenStreetMap is contributor-maintained: coverage is dense in Australian cities
-            and patchy on the fringe, so a category with nothing in it means nothing is
-            <i> mapped</i> here, not that nothing is here. Distances are straight-line from
-            the sampled point, not walking or driving.
-          </p>
-        </>
-      )}
-    </aside>
+export function useTerrain(point: { lat: number; lng: number } | null, halfM = 100): Async<Terrain> {
+  return useJson<Terrain>(
+    point ? `/api/terrain?lat=${point.lat}&lng=${point.lng}&half=${halfM}&n=6` : null,
   );
 }
 
-function Category({ c, radiusM }: { c: PoiCategory; radiusM: number }) {
-  if (c.status === 'unavailable')
-    return <Row k={c.label} v="not returned" cls="bad" />;
+export function usePoi(point: { lat: number; lng: number } | null, radiusM = 2000): Async<PoiResult> {
+  return useJson<PoiResult>(
+    point ? `/api/poi?lat=${point.lat}&lng=${point.lng}&radius=${radiusM}&limit=8` : null,
+  );
+}
 
-  // "none mapped" — not "none here". Overpass answered; OSM simply has
-  // nothing of this kind recorded inside the radius.
-  if (c.status === 'empty')
-    return <Row k={c.label} v={`none mapped within ${fmtRadius(radiusM)}`} />;
+/** One word for the tab strip: the answer someone opens the tab to get. Words
+ *  first — the tone only ever reinforces what the badge already says. */
+export function terrainBadge(t: Async<Terrain>): { badge: string | null; tone: 'ok' | 'bad' | null } {
+  if (t.busy) return { badge: '…', tone: null };
+  if (t.err) return { badge: 'not returned', tone: 'bad' };
+  if (t.data && !t.data.ok) return { badge: 'no figure', tone: 'bad' };
+  if (!t.data?.ok || t.data.slopePct == null) return { badge: null, tone: null };
+  return {
+    badge: `${t.data.slopePct.toFixed(1)}%`,
+    tone: t.data.slopePct >= 8 ? 'bad' : t.data.slopePct < 3 ? 'ok' : null,
+  };
+}
+
+export function poiBadge(p: Async<PoiResult>): { badge: string | null; tone: 'ok' | 'bad' | null } {
+  if (p.busy) return { badge: '…', tone: null };
+  if (p.err || (p.data && !p.data.queried)) return { badge: 'not returned', tone: 'bad' };
+  return { badge: null, tone: null };
+}
+
+/* --------------------------------------------------------------- terrain */
+
+export function TerrainSection({ t, halfM = 100 }: { t: Async<Terrain>; halfM?: number }) {
+  const terrain = t.data;
+
+  if (t.err)
+    return (
+      <Failed what="The elevation service" why={t.err}>
+        No slope figure is shown, because an unmeasured site is not a flat one.
+      </Failed>
+    );
+
+  if (t.busy && !terrain)
+    return <Waiting what="the elevation service for a 6 × 6 grid across the footprint" />;
+  if (!terrain) return null;
+
+  if (!terrain.ok)
+    return (
+      <>
+        <p className="alert"><b>⚠ No slope figure.</b> {terrain.reason}</p>
+        <Fact k="Elevation source" v={terrain.sourceLabel} />
+        <p className="note">{terrain.resolutionNote}</p>
+      </>
+    );
+
+  const slope = terrain.slopePct!;
 
   return (
     <>
-      <Row k={c.label}
-           v={`${c.total} within ${fmtRadius(radiusM)}`} cls="ok" />
-      {c.items.map((p, i) => (
-        <div className="row" key={`${p.lat},${p.lng},${i}`}>
-          <span style={{ paddingLeft: 12, color: 'var(--mute)' }}>
-            {p.name}{p.type ? ` · ${p.type.replace(/_/g, ' ')}` : ''}
-          </span>
-          <b>{p.distanceM < 1000 ? `${p.distanceM} m` : `${(p.distanceM / 1000).toFixed(1)} km`}</b>
+      {/* The answer, first. */}
+      <div className="answer">
+        <div className="ans-k">Average slope</div>
+        <div className={`ans-v${slope >= 8 ? ' bad' : slope < 3 ? ' ok' : ''}`}>
+          {slope >= 8 ? '▲ ' : slope < 3 ? '▪ ' : '◣ '}{slope.toFixed(1)}%
         </div>
-      ))}
+        <div className="ans-s">
+          {cap(terrain.grade!)} · {terrain.fallM!.toFixed(1)} m of fall over{' '}
+          {Math.round(terrain.spanM!)} m
+          {terrain.aspect ? `, falling ${terrain.aspect}` : ''}
+        </div>
+      </div>
+
+      {terrain.verdict && (
+        <p className={slope >= 8 ? 'alert' : 'note'}>
+          <b>{cap(terrain.grade!)} — {slope.toFixed(1)}%.</b> {terrain.verdict}
+        </p>
+      )}
+
+      {/* Resolution is not a footnote. It is the bound on every number here,
+          so it sits with the headline and not at the foot of a long list. */}
+      <p className="note">
+        <b>A sampled reading, not a survey.</b> {terrain.samples} of{' '}
+        {terrain.requested} points on a {terrain.gridN} × {terrain.gridN} grid at{' '}
+        {terrain.sampleSpacingM!.toFixed(0)} m spacing, from {terrain.sourceLabel}
+        {terrain.resolutionM ? ` at ~${terrain.resolutionM.toFixed(0)} m resolution` : ''}.
+        Anything smaller than the spacing — a batter, a gully, a cut driveway — is
+        invisible to it.
+      </p>
+
+      <Detail label="Measurements">
+        <Fact k="Fall across site"
+              v={`${terrain.fallM!.toFixed(1)} m over ${Math.round(terrain.spanM!)} m`} />
+        <Fact k="Average slope (plane fit)" v={`${slope.toFixed(1)}%`}
+              tone={slope >= 8 ? 'bad' : slope < 3 ? 'ok' : undefined} />
+        <Fact k="Cross-fall (fall ÷ diagonal)" v={`${terrain.crossFallPct!.toFixed(1)}%`} />
+        <Fact k="Grade" v={cap(terrain.grade!)} />
+        <Fact k="Falls toward"
+              v={terrain.aspect ? `${terrain.aspect} (${Math.round(terrain.aspectDeg!)}°)` : undefined}
+              state={terrain.aspect ? 'ok' : 'empty'} />
+        <Fact k="Elevation range"
+              v={`${terrain.minM!.toFixed(0)} – ${terrain.maxM!.toFixed(0)} m AHD approx.`} />
+        <Fact k="Mean elevation" v={`${terrain.meanM!.toFixed(1)} m`} />
+        <Fact k="Sampled footprint" v={`${halfM * 2} m square`} />
+      </Detail>
+
+      <Detail label="Provenance and limits">
+        <Fact k="Samples returned"
+              v={`${terrain.samples} of ${terrain.requested} (${terrain.gridN} × ${terrain.gridN})`} />
+        <Fact k="Sample spacing" v={`${terrain.sampleSpacingM!.toFixed(0)} m`} />
+        <Fact k="Source resolution"
+              v={terrain.resolutionM ? `~${terrain.resolutionM.toFixed(0)} m` : undefined}
+              state={terrain.resolutionM ? 'ok' : 'unavailable'}
+              sub={terrain.resolutionM ? undefined : 'the source did not report one'} />
+        <Fact k="Elevation source" v={terrain.sourceLabel} />
+        <Fact k="Vertical datum" v={terrain.datum ?? undefined}
+              state={terrain.datum ? 'ok' : 'unavailable'} />
+        <p className="note">{terrain.resolutionNote}</p>
+        {terrain.fallbackFrom && (
+          <p className="note"><b>Fell back.</b> {terrain.fallbackFrom}. The figures above come
+            from {terrain.sourceLabel} instead.</p>
+        )}
+        {terrain.warnings.map((w, i) => <p className="note" key={i}>{w}</p>)}
+      </Detail>
     </>
   );
 }
 
-function Row({ k, v, cls }: { k: string; v: string; cls?: string }) {
-  return <div className="row"><span>{k}</span><b className={cls}>{v}</b></div>;
+/* ---------------------------------------------------------------- nearby */
+
+export function PoiSection({ p, radiusM = 2000 }: { p: Async<PoiResult>; radiusM?: number }) {
+  const poi = p.data;
+  const r = poi ? poi.radiusM : radiusM;
+
+  if (p.err)
+    return (
+      <Failed what="Overpass (OpenStreetMap)" why={p.err}>
+        This is a service failure. It says nothing about what is or is not nearby.
+      </Failed>
+    );
+
+  if (p.busy && !poi)
+    return <Waiting what="Overpass (up to 15 s, then it degrades rather than hangs)" />;
+  if (!poi) return null;
+
+  if (!poi.queried)
+    return (
+      <Failed what="Overpass (OpenStreetMap)" why={poi.error ?? 'no endpoint responded.'}>
+        It is rate-limited and frequently slow, and was given 15 s across{' '}
+        {poi.attempts.length} mirror{poi.attempts.length === 1 ? '' : 's'}. Try again in a
+        minute.
+      </Failed>
+    );
+
+  return (
+    <>
+      {poi.categories.map((c) => <Category key={c.kind} c={c} radiusM={r} />)}
+
+      <p className="note">
+        OpenStreetMap is contributor-maintained: coverage is dense in Australian cities
+        and patchy on the fringe. A category marked <b>○ none mapped</b> means nothing of
+        that kind is <i>recorded</i> here, not that nothing is here. Distances are
+        straight-line from the sampled point, not walking or driving.
+      </p>
+      <p className="note">
+        Answered by {hostOf(poi.endpoint)} in {(poi.elapsedMs / 1000).toFixed(1)} s,
+        within {fmtRadius(r)}.
+      </p>
+    </>
+  );
 }
 
+function Category({ c, radiusM }: { c: PoiCategory; radiusM: number }) {
+  // Three states, three renderings. `unavailable` is the query for this
+  // category failing; `empty` is Overpass answering with nothing mapped.
+  if (c.status === 'unavailable')
+    return <Fact k={c.label} state="unavailable" sub="this category was not returned" />;
+
+  if (c.status === 'empty')
+    return <Fact k={c.label} state="empty" v={`none mapped within ${fmtRadius(radiusM)}`} />;
+
+  return (
+    <>
+      <Fact k={c.label} v={`${c.total} within ${fmtRadius(radiusM)}`} tone="ok" glyph="● " />
+      {/* The count above IS the answer; the nearest one is the useful
+          example. Everything past it is supporting detail and folds. */}
+      <ShowAll
+        items={c.items}
+        initial={1}
+        noun={`${c.label.toLowerCase()} returned`}
+        render={(p, i) => (
+          <div className="row sub-row" key={`${p.lat},${p.lng},${i}`}>
+            <span>{p.name}{p.type ? ` · ${p.type.replace(/_/g, ' ')}` : ''}</span>
+            <b>{p.distanceM < 1000 ? `${p.distanceM} m` : `${(p.distanceM / 1000).toFixed(1)} km`}</b>
+          </div>
+        )}
+      />
+    </>
+  );
+}
+
+/* ----------------------------------------------------------------- atoms */
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const fmtRadius = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m % 1000 ? 1 : 0)} km`);
-const hostOf = (u: string | null) => { try { return u ? new URL(u).host : 'Overpass'; } catch { return 'Overpass'; } };
+export const fmtRadius = (m: number) =>
+  (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m % 1000 ? 1 : 0)} km`);
+const hostOf = (u: string | null) => {
+  try { return u ? new URL(u).host : 'Overpass'; } catch { return 'Overpass'; }
+};
+
+/** Kept so the page's existing three-panel markup still type-checks while the
+ *  content lives in the tabbed panel. It renders nothing on purpose: SitePanel
+ *  owns the whole side column now, and a second copy here would fetch
+ *  everything twice and put the reader back on the long scroll. */
+export default function SiteIntel(_props: { point: { lat: number; lng: number } | null }) {
+  return null;
+}
