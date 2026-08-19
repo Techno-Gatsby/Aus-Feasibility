@@ -77,13 +77,33 @@ export async function GET(req: NextRequest) {
     }),
   );
 
+  // A purpose can have SEVERAL layers — Queensland publishes zoning per
+  // council with no statewide service, so we query every wired council and
+  // keep the first that answers. Overwriting blindly would let a later
+  // council's empty result erase an earlier council's hit.
   const out: Record<string, any> = {};
+  const source: Record<string, string> = {};
+  // Remember WHICH layer answered, not just that one did. Queensland's
+  // councils use different field names for the zone — LVL1_ZONE in Brisbane
+  // and Gold Coast, DESCRIPT on the Sunshine Coast, TRPS_Zones in Toowoomba
+  // — so reading the field off the first layer in the list returns null for
+  // every council except that one.
+  const answered: Record<string, LayerDef> = {};
   results.forEach((r, i) => {
-    const key = layers[i].purpose;
-    out[key] = r.status === 'fulfilled' ? r.value[1] : { error: 'request failed' };
+    const L = layers[i];
+    const v = r.status === 'fulfilled' ? r.value[1] : { error: 'request failed' };
+    const held = out[L.purpose];
+    const hasData = (v as any)?.present || (v as any)?.attrs || (v as any)?.shapes?.length;
+    if (!held || (!held.present && !held.attrs && hasData)) {
+      out[L.purpose] = v;
+      if (hasData) {
+        answered[L.purpose] = L;
+        if (L.area) source[L.purpose] = L.area;
+      }
+    }
   });
 
-  const cadLayer = layers.find((l) => l.purpose === 'cadastre');
+  const cadLayer = answered.cadastre ?? layers.find((l) => l.purpose === 'cadastre');
   const cad = out.cadastre?.attrs;
   let areaM2: number | null = null;
   if (cad) {
@@ -93,7 +113,7 @@ export async function GET(req: NextRequest) {
       if (String(cad.planlotareaunits ?? '').toLowerCase().includes('hect')) areaM2 *= 10000;
     }
   }
-  const zoneLayer = layers.find((l) => l.purpose === 'zoning');
+  const zoneLayer = answered.zoning ?? layers.find((l) => l.purpose === 'zoning');
   const zoneVal = zoneLayer?.field ? out.zoning?.attrs?.[zoneLayer.field] ?? null : null;
 
   return NextResponse.json({
@@ -119,7 +139,10 @@ export async function GET(req: NextRequest) {
       landslide: !!out.landslide?.present,
       biodiversity: !!out.biodiversity?.present,
     },
-    available: layers.map((l) => l.purpose),
+    available: Array.from(new Set(layers.map((l) => l.purpose))),
+    // which council actually answered, where a state has no single service
+    source,
+    coverage: Array.from(new Set(layers.filter((l) => l.area).map((l) => l.area!))),
     shapes: Object.fromEntries(
       layers.map((l) => [l.purpose,
         l.purpose === 'cadastre' ? (out.cadastre?.rings ?? []) : (out[l.purpose]?.shapes ?? [])]),

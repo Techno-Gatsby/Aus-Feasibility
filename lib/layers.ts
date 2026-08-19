@@ -39,6 +39,10 @@ export type LayerDef = {
    *  false positive that would tell a buyer a CBD site is flood-affected.
    *  match is applied to `field` as a case-insensitive prefix/substring. */
   match?: string[];
+  /** Which council or region this layer covers, where a state publishes no
+   *  single service. Shown to the user so a nil result reads as "no council
+   *  wired at this point" rather than "this land is unzoned". */
+  area?: string;
   note?: string;
 };
 
@@ -53,6 +57,9 @@ const SLIP = 'https://public-services.slip.wa.gov.au/public/rest/services/SLIP_P
 const ACT = 'https://services1.arcgis.com/E5n4f1VY84i0xSjy/arcgis/rest/services';
 const QLD_STATE = 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services';
 const BNE = 'https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services';
+const GC  = 'https://maps1.goldcoast.qld.gov.au/arcgis/rest/services';
+const SCC = 'https://geoimage.scc.qld.gov.au/arcgis/rest/services/PlanningCadastre';
+const TWB = 'https://maps.tr.qld.gov.au/arcgis/rest/services/External';
 
 
 export const BY_STATE: Partial<Record<StateCode, LayerDef[]>> = {
@@ -168,12 +175,23 @@ export const BY_STATE: Partial<Record<StateCode, LayerDef[]>> = {
       minZoom: 14, cors: true,
       url: `${QLD_STATE}/PlanningCadastre/LandParcelPropertyFramework/MapServer/4`,
       note: 'STATEWIDE. lotplan is the Queensland legal identifier, e.g. 3RP119911.' },
-    { purpose: 'zoning', label: 'Zone (Brisbane City Plan)', field: 'ZONE_CODE',
-      minZoom: 12, cors: true,
-      url: `${BNE}/Zoning_opendata/FeatureServer/0`,
-      note: 'BRISBANE CITY ONLY — Queensland has no statewide zoning service. '
-          + 'Outside Brisbane this returns nothing, which means "not covered", '
-          + 'not "unzoned".' },
+    // Queensland zoning is council-level BY STATUTE — there is no singular
+    // API and no statewide layer. The only workable approach is to aggregate
+    // per-LGA services and take the first that answers, which is what the
+    // original single-file build did. Each entry below is one council; a
+    // point outside all of them means "no council wired here", NOT "unzoned".
+    { purpose: 'zoning', label: 'Zone (Brisbane City Plan)', field: 'LVL1_ZONE',
+      minZoom: 12, cors: true, area: 'Brisbane City',
+      url: `${BNE}/Zoning_opendata/FeatureServer/0` },
+    { purpose: 'zoning', label: 'Zone (Gold Coast City Plan v13)', field: 'LVL1_ZONE',
+      minZoom: 12, cors: true, area: 'Gold Coast City',
+      url: `${GC}/City_Plan_V13_Zone/MapServer/6` },
+    { purpose: 'zoning', label: 'Zone (Sunshine Coast)', field: 'DESCRIPT',
+      minZoom: 12, cors: true, area: 'Sunshine Coast',
+      url: `${SCC}/PlanningScheme_SunshineCoast_Zoning_SCC/MapServer/5` },
+    { purpose: 'zoning', label: 'Zone (Toowoomba Regional)', field: 'TRPS_Zones',
+      minZoom: 12, cors: true, area: 'Toowoomba Regional',
+      url: `${TWB}/External_PlanningScheme/MapServer/170` },
     { purpose: 'bushfire', label: 'Bushfire overlay (Brisbane)', field: 'OVL2_DESC',
       minZoom: 11, cors: true,
       url: `${BNE}/Bushfire_overlay/FeatureServer/0`,
