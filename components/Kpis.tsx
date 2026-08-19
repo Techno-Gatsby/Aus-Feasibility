@@ -36,17 +36,22 @@ export default function Kpis({
     ['FIRB', money(summary?.firb), 'foreign investor'],
   ];
 
-  const download = async () => {
-    const r = await fetch('/api/export', {
+  const grab = async (path: string, ext: string) => {
+    const r = await fetch(path, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inputs }),
     });
-    if (!r.ok) { alert('Export failed: ' + ((await r.json()).error ?? r.status)); return; }
+    if (!r.ok) {
+      let msg = String(r.status);
+      try { msg = (await r.json()).error ?? msg; } catch { /* not JSON */ }
+      alert(`Export failed: ${msg}`);
+      return;
+    }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `feasibility-${new Date().toISOString().slice(0, 10)}.xls`;
+    a.download = `feasibility-${new Date().toISOString().slice(0, 10)}.${ext}`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   };
@@ -61,7 +66,8 @@ export default function Kpis({
         </div>
       ))}
       <div className="k k-act">
-        <button onClick={download} disabled={!summary}>Export workbook</button>
+        <button onClick={() => grab('/api/pdf', 'pdf')} disabled={!summary}>PDF report</button>
+        <button onClick={() => grab('/api/export', 'xls')} disabled={!summary}>Workbook</button>
       </div>
     </div>
   );
