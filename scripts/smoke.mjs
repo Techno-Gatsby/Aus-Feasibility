@@ -102,5 +102,53 @@ if (A) {
   check('balance positions are FY-keyed', fyKeyed.length >= 5, `${fyKeyed.length} of 6`);
 }
 
+// ---- contingency recognition ----
+// A contingency is cost like any other: it has to reach the P&L and the equity
+// roll-forward, not just the cash outflow. Most real schemes carry one, so a
+// scheme that only reconciles at contpc:0 is a scheme that never gets used.
+// Running the same inputs with and without a contingency isolates its effect,
+// and every effect must be exactly the contingency -- no more, no less.
+const CONT_PC = 5;
+let C = null, cErr = null;
+try { C = run({ ...scheme, contpc: CONT_PC }, {}); } catch (e) { cErr = e.message; }
+check('runs a scheme carrying a contingency', !!C, cErr ?? '');
+if (A && C) {
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const totOf = (X, k) => (X.fys ?? []).reduce((a, y) => a + num(X.PL?.[y]?.[k]), 0);
+  const expected = (CONT_PC / 100) * scheme.buildbua * scheme.buildpsf;
+  const near = (a, b) => Math.abs(a - b) < Math.max(1, Math.abs(expected) * 1e-9);
+
+  check('contingency is priced off construction cost',
+        near(num(C.contTot), expected),
+        `${Math.round(num(C.contTot))} vs ${Math.round(expected)}`);
+
+  // The reported total is worthless if it never lands in a statement line.
+  check('contingency lands in the P&L contingency line',
+        near(totOf(C, 'contingencyCost'), num(C.contTot)),
+        `drift ${Math.round(totOf(C, 'contingencyCost') - num(C.contTot))}`);
+
+  // Direct cost -- and therefore gross profit -- must move by the contingency
+  // and by nothing else. This is what fails when the spend is booked to cash
+  // but never released out of inventory into cost of sales.
+  const dcDelta = totOf(C, 'dc') - totOf(A, 'dc');
+  check('contingency raises direct cost by its own amount', near(dcDelta, expected),
+        `delta ${Math.round(dcDelta)}`);
+  const gpDelta = totOf(A, 'gp') - totOf(C, 'gp');
+  check('contingency reduces gross profit by its own amount', near(gpDelta, expected),
+        `delta ${Math.round(gpDelta)}`);
+
+  // The equity roll-forward is the independent witness: profit earned must
+  // equal equity returned less equity injected.
+  const equityGap = Math.abs(num(C.egain) -
+    (totOf(C, 'npat') + totOf(C, 'da') - num(C.depreciableCapex)));
+  check('contingency scheme ties profit to equity', equityGap < 1,
+        `gap ${Math.round(equityGap)}`);
+
+  // Cash and accrual must see the same contingency.
+  const cfCont = (C.R?.cfrefcontingency ?? []).reduce((a, b) => a + num(b), 0);
+  check('cashflow contingency ties to the P&L', Math.abs(cfCont - num(C.contTot)) < 1,
+        `gap ${Math.round(cfCont - num(C.contTot))}`);
+}
+
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

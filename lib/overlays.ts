@@ -515,9 +515,16 @@ export type OverlayResult = {
   note: string;
 };
 
-/** Resolves which planning service answers for the current map centre. */
-export async function zoningProviderFor(lng: number, lat: number, known?: Jurisdiction | null) {
-  const j = known?.stateCode ? known : await jurisdictionAt(lng, lat);
+/** Resolves which planning service answers for the current map centre.
+ *
+ *  The jurisdiction is ALWAYS re-resolved here rather than read from the
+ *  label's cached value. Reusing the cache meant that jumping from Brisbane to
+ *  Cairns queried Brisbane City Council's dataset over a Cairns viewport and
+ *  reported "0 zoning areas" — a wrong jurisdiction returning nothing is
+ *  indistinguishable from a right one returning nothing, and the second reads
+ *  as a clearance. One extra point query is cheap; that failure mode is not. */
+export async function zoningProviderFor(lng: number, lat: number) {
+  const j = await jurisdictionAt(lng, lat);
   const sc = j?.stateCode ?? '';
   if (!sc) throw new Error('Planning jurisdiction could not be resolved for this location');
   const base = ZONING[sc];
@@ -538,8 +545,8 @@ export async function zoningProviderFor(lng: number, lat: number, known?: Jurisd
            zoneUrl: base.zoneUrl, kind: 'arcgis' as const, minZoom: base.minZoom, lga: j?.lga ?? '' };
 }
 
-export async function loadZoning(bbox: Box, z: number, centre: { lng: number; lat: number }, known?: Jurisdiction | null): Promise<OverlayResult> {
-  const p = await zoningProviderFor(centre.lng, centre.lat, known);
+export async function loadZoning(bbox: Box, z: number, centre: { lng: number; lat: number }): Promise<OverlayResult> {
+  const p = await zoningProviderFor(centre.lng, centre.lat);
   const data = p.kind === 'ods'
     ? await brisbaneZoning(bbox, 1200)
     : await arcGeojson(p.zoneUrl!, bbox, z, 1400, 'zoning');

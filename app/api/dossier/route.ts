@@ -111,12 +111,12 @@ function fromQuery(sp: URLSearchParams): DossierInput {
 }
 
 function validate(input: DossierInput): string | null {
+  if ((input.lat != null) !== (input.lng != null))
+    return 'lat and lng must be given together — one without the other cannot locate anything.';
   const hasPoint = input.lat != null && input.lng != null;
   if (!hasPoint && !input.lots?.length && !input.rings?.length)
     return 'Provide one of: lots (title references from the IM), rings (a drawn boundary), '
          + 'or lat and lng (a pin).';
-  if ((input.lat != null) !== (input.lng != null))
-    return 'lat and lng must be given together.';
   if (hasPoint && (Math.abs(input.lat!) > 90 || Math.abs(input.lng!) > 180))
     return 'lat must be within -90..90 and lng within -180..180.';
   if (input.nsaEfficiency != null && (input.nsaEfficiency <= 0 || input.nsaEfficiency > 1))

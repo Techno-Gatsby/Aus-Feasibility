@@ -34,7 +34,7 @@ import {
 import {
   amalgamate, arcQuery, lotAtPoint, lotsByIdentifier, lotsInPolygon,
   overlapFraction, polygonAreaM2, polygonQuery, ringsOf, splitAreaByControl,
-  withGeometry,
+  touches, withGeometry,
   type Amalgamation, type Lot, type Ring,
 } from '@/lib/amalgamate';
 
@@ -222,6 +222,10 @@ export type SiteResolution = {
   unresolvedLots: string[];
   rejected: { lotId: string; overlap: number }[];
   error: string | null;
+  /** 400 when the caller asked a question we cannot answer (wrong state, no
+   *  input); 502 when an upstream service failed. Conflating the two sends an
+   *  operator hunting a fault that is in the request. */
+  errorStatus?: 400 | 502;
   warnings: string[];
 };
 
@@ -258,6 +262,24 @@ export async function resolveSite(input: DossierInput): Promise<SiteResolution> 
   }
 
   if (input.lat != null && input.lng != null) {
+    // Check the jurisdiction BEFORE asking the NSW cadastre. It answers a
+    // point in Melbourne or London with an empty feature array, exactly as it
+    // answers a point in a Sydney road reserve — and "no lot here" would then
+    // be reported for a site that is simply in another state.
+    const st = stateOf({ lat: input.lat, lng: input.lng });
+    if (st !== 'NSW')
+      return {
+        method: 'point', amalgamation: null, unresolvedLots: [], rejected: [],
+        errorStatus: 400,
+        error: st
+          ? `That point is in ${st}, and this dossier queries the NSW cadastre and the NSW planning `
+            + 'portal only. Australia publishes no national planning dataset; each state runs its own '
+            + 'service with its own layer numbers and field names, and only NSW publishes heritage, '
+            + 'FSR and height as queryable feature layers.'
+          : 'That point is outside Australia.',
+        warnings,
+      };
+
     const { lot, error } = await lotAtPoint(input.lng, input.lat);
     if (error) return { method: 'point', amalgamation: null, unresolvedLots: [], rejected: [], error, warnings };
     if (!lot)
@@ -289,17 +311,23 @@ export async function resolveSite(input: DossierInput): Promise<SiteResolution> 
       [Math.min(...b.map((p) => p[0])) - pad, Math.max(...b.map((p) => p[1])) + pad],
     ]];
     const near = await lotsInPolygon(hull, 0.01);
-    const keep = near.lots.filter((l) => l.lotId === lot.lotId || overlapFraction(l.rings, hull) > 0.5);
+    // First-order adjacency only: lots that SHARE A BOUNDARY with the pinned
+    // lot. Taking everything inside the padded box instead returns the whole
+    // city block — 39 lots and 18,000 sqm at Bruce Street — which is not a
+    // site by any reading.
+    const keep = near.lots.filter((l) => l.lotId === lot.lotId || touches(l.rings, lot.rings));
     warnings.push(
-      `expandAdjacent returned every lot near ${lot.lotId}. These are NEIGHBOURS, not a `
-      + `confirmed assembly — nothing in the cadastre says which of them are for sale together. `
-      + `Confirm against the IM title schedule before quoting the total.`,
+      `expandAdjacent returned ${keep.length - 1} lot(s) sharing a boundary with ${lot.lotId}. `
+      + `These are NEIGHBOURS, not a confirmed assembly — nothing in the cadastre says which of `
+      + `them are for sale together, and it reaches only one lot deep, so a longer assembly is `
+      + `cut short. Confirm against the IM title schedule before quoting the total.`,
     );
     return { method: 'point+adjacent', amalgamation: amalgamate(keep.length ? keep : [lot]), unresolvedLots: [], rejected: near.rejected, error: null, warnings };
   }
 
   return {
     method: 'point', amalgamation: null, unresolvedLots: [], rejected: [],
+    errorStatus: 400,
     error: 'Provide lat and lng, a list of lots, or a polygon (rings).', warnings,
   };
 }
@@ -326,8 +354,10 @@ export type Controls = {
   lep: Field<string[]>;
   lga: Field<string>;
   suburb: Field<{ name: string; postcode: number | null }>;
-  /** Site area with no FSR polygon over it, per control. Real and reportable. */
-  unmapped: { fsrM2: number; heightM2: number; zoningM2: number };
+  /** Site area with NO polygon of that control over it. A real state — a gap
+   *  in the control layer — and reportable, not something to fold silently
+   *  into whichever band happens to be first. */
+  unmapped: { fsrM2: number; heightM2: number; zoningM2: number; minLotSizeM2: number };
 };
 
 type BandSpec = {
@@ -463,6 +493,7 @@ export async function fetchControls(rings: Ring[], at: Pt): Promise<Controls> {
       : unavailable(SRC.six, L.suburb.url, L.suburb.name, subR.error ?? 'No suburb polygon covers this point.'),
     unmapped: {
       fsrM2: fsr.unmappedM2, heightM2: height.unmappedM2, zoningM2: zoning.unmappedM2,
+      minLotSizeM2: lotSize.unmappedM2,
     },
   };
 }
@@ -1404,7 +1435,7 @@ export async function buildDossier(input: DossierInput): Promise<
   { ok: false; status: number; error: string; detail?: unknown } | { ok: true; dossier: Dossier }
 > {
   const site = await resolveSite(input);
-  if (site.error) return { ok: false, status: 502, error: site.error };
+  if (site.error) return { ok: false, status: site.errorStatus ?? 502, error: site.error };
   if (!site.amalgamation || !site.amalgamation.lots.length)
     return {
       ok: false, status: 404,

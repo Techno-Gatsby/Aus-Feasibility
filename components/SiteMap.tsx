@@ -121,7 +121,6 @@ export default function SiteMap({
    *  freeze the refresh list at "nothing is on". */
   const ovOnRef = useRef<Partial<Record<OverlayKey, boolean>>>({});
   const loadOneRef = useRef<(k: OverlayKey, force: boolean) => void>(() => {});
-  const jurisRef = useRef<Jurisdiction | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jurisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jurisSeq = useRef(0);
@@ -132,7 +131,6 @@ export default function SiteMap({
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { ringsRef.current = rings; }, [rings]);
   useEffect(() => { onPickRef.current = onPick; onShapeRef.current = onShape; });
-  useEffect(() => { jurisRef.current = juris; }, [juris]);
   useEffect(() => {
     ovOnRef.current = Object.fromEntries(
       OVERLAY_ORDER.map((k) => [k, !!ovStatus[k].on]),
@@ -290,7 +288,7 @@ export default function SiteMap({
         setOv(key, { busy: false, error: null, note });
       } else if (key === 'zoning') {
         const c = m.getCenter();
-        const res = await loadZoning(bbox, z, { lng: c.lng, lat: c.lat }, jurisRef.current);
+        const res = await loadZoning(bbox, z, { lng: c.lng, lat: c.lat });
         paintVector(key, res.geojson.features);
         ovView.current[key] = { bbox, zoom: z };
         setOv(key, { busy: false, error: null, note: res.note });
@@ -421,6 +419,12 @@ export default function SiteMap({
     jurisdictionAt(c.lng, c.lat).then((j) => { if (!dead && j) setJuris(j); });
     return () => { dead = true; };
   }, [ready]);
+
+  // crosshair only while placing points — in edit/delete the pointer is aimed
+  // at handles, and a map-wide crosshair would lie about that
+  useEffect(() => {
+    host.current?.classList.toggle('drawing', drafting);
+  }, [drafting]);
 
   // double-click must place-and-close, not zoom, while a shape is being drawn
   useEffect(() => {
@@ -865,9 +869,13 @@ export default function SiteMap({
         </div>
       )}
       {msg && <div className="map-msg">{msg}</div>}
-      {/* crosshair only while placing points — in edit/delete the pointer is
-          aimed at handles, and a map-wide crosshair would lie about that */}
-      <div ref={host} className={`map-canvas${drafting ? ' drawing' : ''}`} />
+      {/* The `drawing` class is toggled imperatively (see the effect above),
+          NOT through the className prop: Leaflet writes its own classes onto
+          this element (leaflet-container, leaflet-grab, the touch flags), and
+          re-rendering className strips every one of them the first time draw
+          mode is entered — which silently kills the container's positioning
+          and cursor rules. */}
+      <div ref={host} className="map-canvas" />
       <div className="map-foot">
         {mode === 'none'
           ? <>Click the map to analyse any point. A layer with no shapes is greyed out —
