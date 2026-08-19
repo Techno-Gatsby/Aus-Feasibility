@@ -105,7 +105,7 @@ export default function Page() {
         )}
       </header>
 
-      {tab === 'feasibility' && <Kpis summary={summary} error={modelErr} busy={busy} />}
+      {tab === 'feasibility' && <Kpis summary={summary} error={modelErr} busy={busy} inputs={values} />}
 
       <div className={`work${tab === 'feasibility' ? ' feas' : ''}`}>
         {tab === 'site' ? (
@@ -119,7 +119,7 @@ export default function Page() {
             <section className="results">
               {modelErr
                 ? <p className="note">Fix the input on the left and the statements return.</p>
-                : <Statements analysis={analysis} fyOfMonth={resolved} />}
+                : <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />}
             </section>
           </>
         )}

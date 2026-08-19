@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import Sensitivity from '@/components/Sensitivity';
 import { profitAndLoss, sourcesAndUses, debtCover, cashflow, balanceSheet, type Statement } from '@/lib/statements';
 
 const money = (v: number | null) =>
@@ -10,9 +11,9 @@ const money = (v: number | null) =>
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const xr = (v: number | null) => (v == null ? 'n/a' : `${v.toFixed(2)}x`);
 
-type Tab = 'pl' | 'cf' | 'bs' | 'su' | 'debt';
+type Tab = 'pl' | 'cf' | 'bs' | 'su' | 'debt' | 'sens';
 
-export default function Statements({ analysis, fyOfMonth }: { analysis: any; fyOfMonth: number[] | null }) {
+export default function Statements({ analysis, fyOfMonth, inputs }: { analysis: any; fyOfMonth: number[] | null; inputs: Record<string, any> }) {
   const [tab, setTab] = useState<Tab>('pl');
   const pl = useMemo(() => (analysis ? profitAndLoss(analysis) : null), [analysis]);
   const su = useMemo(() => (analysis ? sourcesAndUses(analysis) : null), [analysis]);
@@ -35,12 +36,14 @@ export default function Statements({ analysis, fyOfMonth }: { analysis: any; fyO
         <button onClick={() => setTab('bs')} aria-pressed={tab === 'bs'}>Balance sheet</button>
         <button onClick={() => setTab('su')} aria-pressed={tab === 'su'}>Sources and uses</button>
         <button onClick={() => setTab('debt')} aria-pressed={tab === 'debt'}>Debt and cover</button>
+        <button onClick={() => setTab('sens')} aria-pressed={tab === 'sens'}>Sensitivity</button>
       </div>
       {tab === 'pl' && pl && <Table s={pl} />}
       {tab === 'cf' && cf && <Table s={cf} />}
       {tab === 'bs' && bs && <Table s={bs} />}
       {tab === 'su' && su && <Table s={su} />}
       {tab === 'debt' && dc && <Debt d={dc} />}
+      {tab === 'sens' && <Sensitivity inputs={inputs} />}
     </div>
   );
 }

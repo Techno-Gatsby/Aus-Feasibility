@@ -136,3 +136,20 @@ button.primary:hover:not(:disabled){background:var(--accent-strong)}
 .pill.ok{background:var(--ok-bg);color:var(--ok)}
 .pill.bad{background:var(--bad-bg);color:var(--bad)}
 .stmt .note{max-width:78ch}
+.sens-ctl{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px;align-items:end}
+.sens-ctl label{display:flex;flex-direction:column;gap:4px;font-size:11px;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.sens-ctl label.off{opacity:.45}
+.sens-ctl select{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;
+  font:400 13px var(--sans);background:var(--paper);color:var(--ink);min-height:34px}
+.sens-ctl label.chk{flex-direction:row;align-items:center;gap:7px;text-transform:none;
+  font-size:12.5px;color:var(--ink-2);letter-spacing:0}
+.sens-ctl label.chk input{width:16px;height:16px;accent-color:var(--accent)}
+table.heat td{font-variant-numeric:tabular-nums;font-size:12px}
+table.heat td.better{background:var(--ok-bg);color:var(--ok)}
+table.heat td.worse{background:var(--bad-bg);color:var(--bad)}
+table.heat td.nul{background:var(--bg);color:var(--faint)}
+table.heat td.base{outline:2px solid var(--accent);outline-offset:-2px;font-weight:700}
+.stmt td.pos{color:var(--ok)} .stmt td.neg{color:var(--bad)}
+.k.k-act{justify-content:center;align-items:stretch}
+.k.k-act button{width:100%;min-height:38px}

@@ -13,8 +13,8 @@ const pc = (v: any) =>
  *  They are the model telling the user what is missing — burying them would
  *  leave the app looking broken when it is actually being precise. */
 export default function Kpis({
-  summary, error, busy,
-}: { summary: any; error: string | null; busy: boolean }) {
+  summary, error, busy, inputs,
+}: { summary: any; error: string | null; busy: boolean; inputs?: Record<string, any> }) {
   if (error)
     return (
       <div className="kpis error">
@@ -36,6 +36,21 @@ export default function Kpis({
     ['FIRB', money(summary?.firb), 'foreign investor'],
   ];
 
+  const download = async () => {
+    const r = await fetch('/api/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputs }),
+    });
+    if (!r.ok) { alert('Export failed: ' + ((await r.json()).error ?? r.status)); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `feasibility-${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`kpis${busy ? ' busy' : ''}`}>
       {cells.map(([k, v, sub]) => (
@@ -45,6 +60,9 @@ export default function Kpis({
           {sub && <span className="k-s">{sub}</span>}
         </div>
       ))}
+      <div className="k k-act">
+        <button onClick={download} disabled={!summary}>Export workbook</button>
+      </div>
     </div>
   );
 }
