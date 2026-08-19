@@ -115,3 +115,24 @@ button.primary:hover:not(:disabled){background:var(--accent-strong)}
 .fld.flag input{width:18px;height:18px;accent-color:var(--accent)}
 .results{padding:16px 20px;overflow-y:auto}
 .results h2{margin:0 0 10px;font:600 16px var(--sans)}
+.stmt-tabs{margin-bottom:14px;display:inline-flex}
+.stmt h3{margin:0 0 10px;font:600 15px var(--sans)}
+.stmt-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper)}
+.stmt table{width:100%;border-collapse:separate;border-spacing:0;font:400 13px var(--sans)}
+.stmt th{font:500 11px var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--mute);
+  padding:9px 10px;text-align:right;border-bottom:1px solid var(--line-2);white-space:nowrap;
+  position:sticky;top:0;background:var(--paper)}
+.stmt th.l,.stmt td.l{text-align:left}
+.stmt td{padding:6px 10px;text-align:right;border-bottom:1px solid #f4f4f5;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.stmt td.no{color:var(--faint);font-size:11px;width:44px}
+.stmt td.tot{font-weight:600;color:var(--ink);border-left:1px solid var(--line)}
+.stmt tr.band td{background:#fafafa;font:600 10.5px var(--sans);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute);text-align:left}
+.stmt tr.sub td{font-weight:600;color:var(--ink)}
+.stmt tr.result td{font-weight:700;color:var(--ink);background:#fafafa;
+  border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font:600 11px var(--sans)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.stmt .note{max-width:78ch}

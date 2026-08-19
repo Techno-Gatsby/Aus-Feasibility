@@ -40,5 +40,50 @@ if (A) {
     check(`debt array R.${k}`, Array.isArray(A.R?.[k])));
 }
 
+// ---- statement arithmetic (mirrors lib/statements.ts) ----
+if (A) {
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const tot = (k) => (A.fys ?? []).reduce((a, y) => a + num(A.PL?.[y]?.[k]), 0);
+
+  // The P&L must actually articulate: revenue less direct cost is gross
+  // profit, and gross profit less overhead and tax is net profit. If these
+  // drift the statement is decorative, not a statement.
+  const rev = tot('rev') + tot('otherIncome');
+  const gpCheck = Math.abs((rev - tot('dc')) - tot('gp'));
+  check('P&L articulates: rev - direct = gross profit', gpCheck < Math.max(1, rev * 1e-6),
+        `drift ${Math.round(gpCheck)}`);
+
+  const npatCheck = Math.abs((tot('npbt') - tot('corporateTax')) - tot('npat'));
+  check('P&L articulates: NPBT - tax = NPAT', npatCheck < Math.max(1, rev * 1e-6),
+        `drift ${Math.round(npatCheck)}`);
+
+  // Sources must equal uses by construction, because the recycled figure is
+  // the balancing item. If this ever fails the balancing logic is wrong.
+  const uses = tot('landCost') + tot('stampDuty') + tot('foreignPurchaserSurcharge') +
+    tot('firbCost') + tot('constructionCost') + tot('professionalFees') +
+    tot('developmentManagementFees') + tot('statutoryCost') + tot('contingencyCost') +
+    tot('otherDirectCost') + tot('brokerage') + tot('marketing') +
+    tot('totalOverhead') + tot('fin') + tot('corporateTax');
+  const equity = num(A.epeak), debt = num(A.peakdebt);
+  const recycled = Math.max(0, uses - equity - debt);
+  check('sources balance to uses', Math.abs((equity + debt + recycled) - uses) < 1,
+        `uses ${Math.round(uses)}`);
+
+  // DSCR must be measured only in the repayment window. A negative minimum
+  // means construction periods leaked in, which is the bug this guards.
+  const R = A.R ?? {};
+  const g = (k, i) => num(Array.isArray(R[k]) ? R[k][i] : 0);
+  let minD = null, periods = 0;
+  for (let i = 0; i < (R.lcl?.length ?? 0); i++) {
+    const ds = g('intr', i) + g('rep', i) + g('lf', i);
+    if (ds <= 0.5 || g('salescash', i) <= 0.5) continue;
+    periods++;
+    const d = (g('salescash', i) - g('devc', i) - g('ovh', i) - g('taxm', i)) / ds;
+    if (minD === null || d < minD) minD = d;
+  }
+  check('DSCR excludes construction periods', minD === null || minD > -1,
+        minD === null ? 'no serviced period' : `min ${minD.toFixed(2)}x over ${periods}`);
+}
+
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

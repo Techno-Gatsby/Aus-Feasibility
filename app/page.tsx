@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import SitePanel from '@/components/SitePanel';
 import InputRail, { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
+import Statements from '@/components/Statements';
 
 const SiteMap = dynamic(() => import('@/components/SiteMap'), {
   ssr: false, loading: () => <div className="map-canvas skeleton" />,
@@ -20,6 +21,7 @@ export default function Page() {
   const [values, setValues] = useState<Record<string, any>>({});
   const [baseline, setBaseline] = useState<Record<string, any>>({});
   const [summary, setSummary] = useState<any>(null);
+  const [analysis, setAnalysis] = useState<any>(null);
   const [modelErr, setModelErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -58,8 +60,8 @@ export default function Page() {
         });
         const j = await r.json();
         if (mine !== seq.current) return;          // a newer run has landed
-        if (j.ok) { setSummary(j.summary); setModelErr(null); }
-        else { setSummary(null); setModelErr(j.error ?? 'Model failed'); }
+        if (j.ok) { setSummary(j.summary); setAnalysis(j.analysis); setModelErr(null); }
+        else { setSummary(null); setAnalysis(null); setModelErr(j.error ?? 'Model failed'); }
       } catch (e: any) {
         if (mine === seq.current) setModelErr(String(e?.message ?? e));
       } finally { if (mine === seq.current) setBusy(false); }
@@ -114,17 +116,9 @@ export default function Page() {
           <>
             <InputRail groups={groups} values={values} onChange={setField} dirtyKeys={dirty} />
             <section className="results">
-              <h2>Result</h2>
-              {modelErr ? (
-                <p className="note">Fix the input above and the figures return.</p>
-              ) : summary ? (
-                <p className="note">
-                  Every figure comes from the same engine as the original workbook —
-                  extracted, not rewritten. Change any input and it recomputes.
-                </p>
-              ) : (
-                <p className="muted">Loading the model…</p>
-              )}
+              {modelErr
+                ? <p className="note">Fix the input on the left and the statements return.</p>
+                : <Statements analysis={analysis} />}
             </section>
           </>
         )}
