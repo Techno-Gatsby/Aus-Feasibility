@@ -7400,6 +7400,256 @@ async function downloadRealPdf(){
 window.exportPdf=downloadRealPdf;
 const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)boardPdfButton.onclick=()=>exportPdf();
 </script>
+
+<!-- ===== GOOGLE IMAGERY + AU HAZARD (additive) ===== -->
+<style>
+/* ---- Google imagery + hazard ---- */
+#aug_run{margin-left:6px}
+#au_google .aug-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+#au_google .aug-sec{border:1px solid #e4e4e7;border-radius:10px;background:#fff;padding:10px 11px}
+#au_google .aug-t{font:600 11px/1 system-ui,sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:#71717a;margin-bottom:8px}
+#au_google .aug-embed{width:100%;height:220px;border:0;border-radius:8px;display:block}
+#au_google .aug-sv{width:100%;height:auto;border-radius:8px;display:block;margin-top:8px}
+#au_google .aug-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;
+  border-bottom:1px solid #f4f4f5;font:500 13px/1.35 system-ui,sans-serif;color:#3f3f46}
+#au_google .aug-row:last-of-type{border-bottom:0}
+#au_google .aug-row b{color:#18181b;font-weight:600;text-align:right}
+#au_google .aug-row.warn b{color:#991b1b}
+#au_google .aug-alert{margin-top:8px;padding:8px 10px;border-radius:8px;
+  background:#fef2f2;border:1px solid rgba(220,38,38,.2);color:#991b1b;
+  font:500 12px/1.45 system-ui,sans-serif}
+#au_google .aug-note{margin-top:8px;font:400 12px/1.45 system-ui,sans-serif;color:#71717a}
+#au_google .aug-keyrow{display:flex;gap:6px;margin-top:8px}
+#au_google .aug-keyrow input{flex:1;min-width:0;border:1px solid #e4e4e7;border-radius:8px;
+  padding:7px 9px;font:400 13px system-ui,sans-serif}
+#au_google .aug-earth{display:inline-block;margin-top:9px;font:500 13px system-ui,sans-serif;
+  color:#378ADD;text-decoration:none}
+#au_google .aug-earth:hover{text-decoration:underline}
+
+</style>
+<script>
+/* ================================================================
+   GOOGLE IMAGERY + AU HAZARD LAYERS   (additive)
+   Ports the land-intel Google pattern to the Australia tool:
+     · Maps Embed API      — satellite view of the tract
+     · Street View Static  — camera HEADING COMPUTED to face the site,
+                             not wherever the car happened to point
+     · Google Earth        — free deep link (photorealistic 3D tiles
+                             are a paid API and deliberately not wired)
+   Plus the two hazard layers the AU tool was missing entirely:
+     · NSW Flood Planning      (Hazard MapServer, layer 230)
+     · NSW Bush Fire Prone Land(Hazard MapServer, layer 229)
+   Layer ids are explicit because NSW ids are non-sequential: zoning
+   is 19, flood is 230. Guessing 0 returns an error, not a result.
+   ================================================================ */
+(function(){
+"use strict";
+var HAZ="https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePlanning/Planning_Portal_Hazard/MapServer";
+var BIO="https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePlanning/BiodiversityValuesMap/MapServer";
+var KEYSTORE="au_gmaps_key";
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function key(){try{return localStorage.getItem(KEYSTORE)||""}catch(e){return""}}
+function setKey(v){try{localStorage.setItem(KEYSTORE,v||"")}catch(e){}}
+
+/* ---- where is the site? polygon centroid if drawn, else map centre ---- */
+function site(){
+  var AM=window.__AU;
+  if(!AM||!AM.map)return null;
+  var pts=null;
+  if(AM.draft&&AM.draft.length>2)pts=AM.draft.slice();
+  if(!pts){
+    try{
+      var src=AM.map.getSource("drawings")||AM.map.getSource("sites");
+      var d=src&&(src._data||src._options&&src._options.data);
+      var f=d&&d.features&&d.features.filter(function(x){
+        return x.geometry&&x.geometry.type==="Polygon"})[0];
+      if(f)pts=f.geometry.coordinates[0].map(function(p){return {lng:p[0],lat:p[1]}});
+    }catch(e){}
+  }
+  if(pts&&pts.length>2){
+    var sx=0,sy=0,n=0;
+    pts.forEach(function(p){
+      var lng=p.lng!==undefined?p.lng:p[0], lat=p.lat!==undefined?p.lat:p[1];
+      if(isFinite(lng)&&isFinite(lat)){sx+=lng;sy+=lat;n++}
+    });
+    if(n)return {lng:sx/n,lat:sy/n,fromPolygon:true};
+  }
+  var c=AM.map.getCenter();
+  return {lng:c.lng,lat:c.lat,fromPolygon:false};
+}
+
+/* bearing from the camera to the tract, so the view faces the land */
+function bearing(from,to){
+  var r=Math.PI/180, y=Math.sin((to.lng-from.lng)*r)*Math.cos(to.lat*r),
+      x=Math.cos(from.lat*r)*Math.sin(to.lat*r)-
+        Math.sin(from.lat*r)*Math.cos(to.lat*r)*Math.cos((to.lng-from.lng)*r);
+  return (Math.atan2(y,x)/r+360)%360;
+}
+function metres(a,b){
+  var r=Math.PI/180,R=6371000,dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r;
+  var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*
+        Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+function post(url,params){
+  return fetch(url+"/query",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams(params).toString()})
+    .then(function(r){return r.json()}).catch(function(){return{features:[],error:true}});
+}
+function atPoint(url,lng,lat){
+  return post(url,{f:"json",outFields:"*",returnGeometry:"false",inSR:"4326",
+    geometry:JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}),
+    geometryType:"esriGeometryPoint",spatialRel:"esriSpatialRelIntersects"});
+}
+function inBox(url,b){
+  return post(url,{f:"json",outFields:"*",returnGeometry:"false",inSR:"4326",
+    geometry:JSON.stringify({xmin:b[0],ymin:b[1],xmax:b[2],ymax:b[3],
+      spatialReference:{wkid:4326}}),
+    geometryType:"esriGeometryEnvelope",spatialRel:"esriSpatialRelIntersects",
+    resultRecordCount:"6"});
+}
+
+function card(){
+  var el=document.getElementById("au_google");
+  if(el)return el;
+  var host=document.getElementById("aumap_site_intelligence");
+  if(!host)return null;
+  el=document.createElement("div");
+  el.id="au_google"; el.className="aumap-siteintel-card";
+  el.style.marginTop="10px";
+  host.parentNode.insertBefore(el,host.nextSibling);
+  return el;
+}
+function paint(html){var c=card(); if(c)c.innerHTML=html}
+function row(k,v,warn){return '<div class="aug-row'+(warn?" warn":"")+'"><span>'+
+  esc(k)+'</span><b>'+esc(v)+'</b></div>'}
+
+function run(){
+  var s=site();
+  if(!s){alert("Map is not ready yet.");return}
+  var k=key();
+  var box=[s.lng-0.004,s.lat-0.004,s.lng+0.004,s.lat+0.004];
+
+  var imagery = !k
+    ? '<div class="aug-note">Add a Google Maps API key to show satellite and '+
+      'Street View. Enable <b>Maps Embed API</b> and <b>Street View Static API</b>, '+
+      'then restrict the key by HTTP referrer — it is visible in the iframe URL '+
+      'by design.<div class="aug-keyrow"><input id="aug_key" placeholder="paste key">'+
+      '<button class="aumap-btn primary" id="aug_save">Save</button></div></div>'
+    : '<iframe class="aug-embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" '+
+      'src="https://www.google.com/maps/embed/v1/view?key='+encodeURIComponent(k)+
+      '&center='+s.lat+','+s.lng+'&zoom=17&maptype=satellite"></iframe>'+
+      '<div id="aug_sv"></div>';
+
+  paint('<div class="aumap-siteintel-head"><div><strong>Imagery and hazard</strong>'+
+    '<span>'+(s.fromPolygon?"Measured from the drawn site":"Map centre — draw a site for an exact reading")+
+    '</span></div><span class="aumap-siteintel-status loading">Working</span></div>'+
+    '<div class="aumap-siteintel-body"><div class="aug-grid">'+
+    '<section class="aug-sec"><div class="aug-t">Google imagery</div>'+imagery+
+    '<a class="aug-earth" target="_blank" rel="noopener" href="https://earth.google.com/web/@'+
+      s.lat+','+s.lng+',600a,1200d,35y,0h,45t,0r">Open in Google Earth 3D &#8599;</a></section>'+
+    '<section class="aug-sec"><div class="aug-t">Hazard (NSW)</div>'+
+    '<div id="aug_haz"><div class="aug-note">Querying flood, bushfire and biodiversity…</div></div>'+
+    '</section></div></div>');
+
+  var sv=document.getElementById("aug_key");
+  if(sv){
+    document.getElementById("aug_save").onclick=function(){
+      setKey(document.getElementById("aug_key").value.trim()); run();
+    };
+  }
+
+  /* Street View: find the nearest panorama, then face it at the tract */
+  if(k){
+    fetch("https://maps.googleapis.com/maps/api/streetview/metadata?location="+
+          s.lat+","+s.lng+"&radius=200&key="+encodeURIComponent(k))
+      .then(function(r){return r.json()})
+      .then(function(m){
+        var host=document.getElementById("aug_sv"); if(!host)return;
+        if(!m||m.status!=="OK"){
+          host.innerHTML='<div class="aug-note">No Street View panorama within 200 m.</div>';
+          return;
+        }
+        var cam={lat:m.location.lat,lng:m.location.lng};
+        var head=Math.round(bearing(cam,s)), dist=Math.round(metres(cam,s));
+        host.innerHTML='<img class="aug-sv" loading="lazy" alt="Street View facing the site" '+
+          'src="https://maps.googleapis.com/maps/api/streetview?size=640x320&location='+
+          cam.lat+','+cam.lng+'&heading='+head+'&pitch=0&fov=80&key='+encodeURIComponent(k)+'">'+
+          '<div class="aug-note">Camera '+dist+' m away, turned to '+head+'&deg; to face the site. '+
+          'The nearest road may not front the land.</div>';
+      }).catch(function(){});
+  }
+
+  /* hazard layers — explicit ids, never assumed */
+  Promise.all([
+    atPoint(HAZ+"/230",s.lng,s.lat),   // Flood Planning Map
+    atPoint(HAZ+"/229",s.lng,s.lat),   // Bush Fire Prone Land
+    inBox(HAZ+"/229",box),             // bushfire nearby (point can miss)
+    atPoint(HAZ+"/232",s.lng,s.lat),   // Landslide Risk
+    atPoint(BIO+"/1",s.lng,s.lat)      // Biodiversity Values
+  ]).then(function(r){
+    var flood=(r[0].features||[]).length, fire=(r[1].features||[]).length,
+        fireNear=(r[2].features||[]).length, slide=(r[3].features||[]).length,
+        bio=(r[4].features||[]).length;
+    var cat=((r[1].features||[])[0]||{attributes:{}}).attributes.Category;
+    var h="";
+    h+=row("Flood planning area",r[0].error?"query failed":(flood?"YES":"no"),flood>0);
+    h+=row("Bush fire prone land",r[1].error?"query failed":
+      (fire?("YES"+(cat!=null?" — category "+cat:"")):"no"),fire>0);
+    h+=row("Bushfire land within ~400 m",fireNear?fireNear+" polygon(s)":"none",
+      !fire&&fireNear>0);
+    h+=row("Landslide risk land",slide?"YES":"no",slide>0);
+    h+=row("Biodiversity values",bio?"YES":"no",bio>0);
+    var notes="";
+    if(fire)notes+='<div class="aug-alert"><b>Bush fire prone.</b> Triggers Planning for '+
+      'Bushfire Protection: asset protection zones, construction standards and a '+
+      'possible reduction in developable area. Price it before you bid.</div>';
+    if(bio)notes+='<div class="aug-alert"><b>On the Biodiversity Values Map.</b> The '+
+      'Biodiversity Offset Scheme applies — offset credits are frequently the single '+
+      'largest unbudgeted line on a NSW greenfield deal.</div>';
+    if(flood)notes+='<div class="aug-alert"><b>Flood planning area.</b> Council flood '+
+      'controls apply; filling and floor levels affect yield.</div>';
+    var el=document.getElementById("aug_haz");
+    if(el)el.innerHTML=h+notes+'<div class="aug-note">NSW layers only — this reads the '+
+      'ePlanning Hazard service. Other states publish hazard separately and are not '+
+      'wired yet. A nil result is not a clearance: it means no mapped polygon here.</div>';
+    var st=document.querySelector("#au_google .aumap-siteintel-status");
+    if(st){st.className="aumap-siteintel-status "+((fire||bio||flood)?"partial":"ready");
+      st.textContent=(fire||bio||flood)?"Action required":"Ready"}
+  });
+}
+
+function mount(){
+  var host=document.getElementById("aumap_site_intelligence");
+  if(!host)return false;
+  if(!document.getElementById("aug_run")){
+    var b=document.createElement("button");
+    b.id="aug_run"; b.type="button"; b.className="aumap-btn";
+    b.textContent="Imagery and hazard";
+    b.onclick=run;
+    var anchor=document.getElementById("aumap_terrain_stats");
+    if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(b,anchor.nextSibling);
+    else return false;
+  }
+  card();
+  return true;
+}
+function watch(){
+  if(mount())return;
+  var mo=new MutationObserver(function(){if(mount())mo.disconnect()});
+  mo.observe(document.body,{childList:true,subtree:true});
+  setTimeout(function(){mo.disconnect()},180000);
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",watch);
+else watch();
+})();
+
+</script>
 </body>
 <style id="summary-dashboard-style">
 /* Summary UI copied from the attached US reference. */
@@ -8400,7 +8650,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
 <script id="site-intelligence-map-runtime">
 (()=>{
 "use strict";
-const AM={map:null,mapHost:null,ready:null,parcelId:null,mode:"select",draft:[],selectedId:null,editMarkers:[],edgeMarkers:[],popup:null,events:false,cache:new Map(),elevationCache:new Map(),runtime:{},controllers:{},timers:{},busy:0,pendingLngLat:null,refreshSeq:0,resizeObserver:null,contourDem:null,contourReady:null};
+const AM={map:null,mapHost:null,ready:null,parcelId:null,mode:"select",draft:[],selectedId:null,editMarkers:[],edgeMarkers:[],popup:null,events:false,cache:new Map(),elevationCache:new Map(),runtime:{},controllers:{},timers:{},busy:0,pendingLngLat:null,refreshSeq:0,resizeObserver:null,contourDem:null,contourReady:null};try{window.__AU=AM;}catch(e){}
 function resizeMapSoon(){if(!AM.map)return;const run=()=>{try{const h=document.getElementById("aumap_map");if(!h||h.offsetWidth<20||h.offsetHeight<20)return;AM.map.resize();if(typeof AM.map.triggerRepaint==="function")AM.map.triggerRepaint()}catch(_){}};requestAnimationFrame(run);clearTimeout(AM.timers.layoutResize);AM.timers.layoutResize=setTimeout(run,90);clearTimeout(AM.timers.layoutResizeLate);AM.timers.layoutResizeLate=setTimeout(run,320)}
 window.__aumapResize=resizeMapSoon;
 const AU={
