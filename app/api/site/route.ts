@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { layersFor, SUPPORTED, type LayerDef } from '@/lib/layers';
+import { layersFor, SUPPORTED, NOT_WIRED, type LayerDef } from '@/lib/layers';
 import { atPoint, presence, inBox, ringsToLatLng } from '@/lib/arcgis';
 import { stateOf, STATE_NAME, type StateCode } from '@/lib/geo';
 
@@ -33,10 +33,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       state, stateName: STATE_NAME[state], supported: false,
       supportedStates: SUPPORTED(),
-      message:
-        `${STATE_NAME[state]} is not wired yet. Australia has no national planning ` +
-        `dataset — each state publishes its own, and only ${SUPPORTED().join(', ')} ` +
-        `${SUPPORTED().length === 1 ? 'is' : 'are'} connected so far.`,
+      // Say WHY, not just "unsupported". These are researched conclusions,
+      // not gaps waiting to be filled by a guess.
+      message: NOT_WIRED[state]
+        ? `${STATE_NAME[state]}: ${NOT_WIRED[state]}`
+        : `${STATE_NAME[state]} is not wired yet. Australia has no national planning `
+          + `dataset — each state publishes its own. Connected so far: `
+          + `${SUPPORTED().join(', ')}.`,
     });
 
   const pad = 0.004;
@@ -51,13 +54,25 @@ export async function GET(req: NextRequest) {
         }] as const;
       }
       const pres = await presence(L.url, p);
+      // A layer shared between purposes must be filtered by its own code
+      // field, or an unrelated overlay reports as flood/bushfire.
+      const keep = (a: any) => {
+        if (!L.match?.length || !L.field) return true;
+        const v = String(a?.[L.field] ?? '').toUpperCase();
+        return L.match.some((m) => v.includes(m.toUpperCase()));
+      };
+      const matched = pres.present && keep(pres.attrs);
       const geo = await inBox(
         L.url, [p.lng - pad, p.lat - pad, p.lng + pad, p.lat + pad],
         L.starFieldsOnly ? '*' : '*', 12, true,
       );
       return [L.purpose, {
         ...pres,
-        shapes: (geo.features ?? []).map(ringsToLatLng).filter((x: unknown[]) => x.length),
+        present: matched,
+        attrs: matched ? pres.attrs : null,
+        shapes: (geo.features ?? [])
+          .filter((f: any) => keep(f?.attributes))
+          .map(ringsToLatLng).filter((x: unknown[]) => x.length),
       }] as const;
     }),
   );

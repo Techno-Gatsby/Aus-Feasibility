@@ -33,6 +33,11 @@ export type LayerDef = {
   cors: boolean;
   /** some layers reject named field lists; these must use outFields=* */
   starFieldsOnly?: boolean;
+  /** VIC packs every planning overlay into one layer and Tasmania packs every
+   *  hazard code into one. Without a filter ANY overlay reads as flood — a
+   *  false positive that would tell a buyer a CBD site is flood-affected.
+   *  match is applied to `field` as a case-insensitive prefix/substring. */
+  match?: string[];
   note?: string;
 };
 
@@ -40,6 +45,13 @@ const NSW_EP = 'https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePl
 const NSW_FIRE = 'https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/Fire';
 const NSW_EPA = 'https://mapprod2.environment.nsw.gov.au/arcgis/rest/services/EPA';
 const SIX = 'https://maps.six.nsw.gov.au/arcgis/rest/services/public';
+const VIC = 'https://plan-gis.mapshare.vic.gov.au/arcgis/rest/services/Planning';
+const TAS = 'https://services.thelist.tas.gov.au/arcgis/rest/services/Public';
+const SLIP = 'https://public-services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services';
+const ACT = 'https://services1.arcgis.com/E5n4f1VY84i0xSjy/arcgis/rest/services';
+const QLD_STATE = 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services';
+const BNE = 'https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services';
+
 
 export const BY_STATE: Partial<Record<StateCode, LayerDef[]>> = {
   // ---- New South Wales — verified 2026-08-19, the most complete set ----
@@ -73,6 +85,122 @@ export const BY_STATE: Partial<Record<StateCode, LayerDef[]>> = {
       url: `${NSW_EPA}/Contaminated_land_notified_sites/MapServer/0`,
       note: 'No CORS header — must go through /api/proxy.' },
   ],
+
+  // ---- Victoria — verified 2026-08-19 ----
+  VIC: [
+    { purpose: 'zoning', label: 'Planning scheme zone', field: 'ZONE_CODE', minZoom: 11, cors: true,
+      url: `${VIC}/Vicplan_PlanningSchemeZones/MapServer/0`,
+      note: 'Layer 0 is "All Zones". Layer 13 is Industrial 3 Zone specifically — the '
+          + 'service interleaves per-zone layers with group layers, and ids are '
+          + 'non-contiguous (32 jumps to 34).' },
+    { purpose: 'bushfire', label: 'Bushfire Management Overlay', field: 'ZONE_CODE',
+      minZoom: 10, cors: true,
+      url: `${VIC}/VicPlan_Bushfire/MapServer/0`,
+      note: 'BMO. The separate Bushfire Prone Area at layer 1 is a BUILDING control, '
+          + 'not a planning overlay, and is absent from the overlays service entirely.' },
+    { purpose: 'flood', label: 'Flood overlays', field: 'ZONE_CODE', minZoom: 11, cors: true,
+      url: `${VIC}/Vicplan_PlanningSchemeOverlays/MapServer/0`,
+      match: ['LSIO', 'FO', 'SBO', 'UFZ'],
+      note: 'All overlays live in this one layer, so it MUST be filtered: LSIO land '
+          + 'subject to inundation, FO floodway, SBO special building, UFZ urban '
+          + 'floodway. Unfiltered it reports a CBD site as flood-affected because '
+          + 'some unrelated overlay happens to sit there.' },
+    { purpose: 'cadastre', label: 'Parcel (SPI)', field: 'PARCEL_SPI', minZoom: 14, cors: true,
+      url: `${VIC}/VicPlan_PropertyAndParcel/MapServer/4`,
+      note: 'SPI is the Victorian legal identifier, e.g. 1\\TP803790.' },
+  ],
+
+  // ---- Tasmania — verified 2026-08-19 ----
+  TAS: [
+    { purpose: 'zoning', label: 'Planning scheme zone', field: 'ZONE', minZoom: 11, cors: true,
+      url: `${TAS}/PlanningOnline/MapServer/13`,
+      note: 'The same service also carries /24 Historical, /4 and /9 Kingborough Interim, '
+          + 'and /16 Zone BOUNDARIES (lines, not areas) — easy to grab the wrong one.' },
+    { purpose: 'bushfire', label: 'Bushfire-prone areas', field: 'CODE', minZoom: 10, cors: true,
+      url: `${TAS}/PlanningOnline/MapServer/14`,
+      match: ['Bushfire'],
+      note: 'Tasmania puts ALL hazard in one layer, so CODE must be filtered. The '
+          + 'same layer carries flood, landslip, coastal erosion and potentially '
+          + 'contaminated land — unfiltered they all read as bushfire.' },
+    { purpose: 'flood', label: 'Flood-prone hazard areas', field: 'CODE', minZoom: 11, cors: true,
+      url: `${TAS}/PlanningOnline/MapServer/14`,
+      match: ['Flood'],
+      note: 'Same layer as bushfire — CODE must be filtered or the two are '
+          + 'indistinguishable.' },
+    { purpose: 'cadastre', label: 'Parcel (PID)', field: 'PID', minZoom: 14, cors: true,
+      url: `${TAS}/PlanningOnline/MapServer/2`,
+      note: 'CAD_TYPE1 distinguishes Private Parcel from road and Crown casements — a '
+          + 'point on a road returns a valid record with null Volume/Folio.' },
+  ],
+
+  // ---- Queensland — verified 2026-08-19 ----
+  // Zoning is council-level BY STATUTE in Queensland; there is no statewide
+  // scheme-zone service. Cadastre IS statewide. Brisbane City is wired here
+  // as the largest LGA; other councils each need their own entry.
+  QLD: [
+    { purpose: 'cadastre', label: 'Land parcel (lot/plan)', field: 'lotplan',
+      minZoom: 14, cors: true,
+      url: `${QLD_STATE}/PlanningCadastre/LandParcelPropertyFramework/MapServer/4`,
+      note: 'STATEWIDE. lotplan is the Queensland legal identifier, e.g. 3RP119911.' },
+    { purpose: 'zoning', label: 'Zone (Brisbane City Plan)', field: 'ZONE_CODE',
+      minZoom: 12, cors: true,
+      url: `${BNE}/Zoning_opendata/FeatureServer/0`,
+      note: 'BRISBANE CITY ONLY — Queensland has no statewide zoning service. '
+          + 'Outside Brisbane this returns nothing, which means "not covered", '
+          + 'not "unzoned".' },
+    { purpose: 'bushfire', label: 'Bushfire overlay (Brisbane)', field: 'OVL2_DESC',
+      minZoom: 11, cors: true,
+      url: `${BNE}/Bushfire_overlay/FeatureServer/0`,
+      note: 'Brisbane City only. The QFES STATEWIDE bushfire layer is published as a '
+          + 'cached tile service (TilesOnly) with no /query, so it cannot be asked '
+          + 'about a point at all.' },
+    { purpose: 'flood', label: 'Brisbane River flood planning area', field: 'OVL2_DESC',
+      minZoom: 11, cors: true,
+      url: `${BNE}/Flood_overlay_Brisbane_River_flood_planning_area/FeatureServer/0`,
+      note: 'Brisbane City only, and RIVER flooding only — not creek or overland flow.' },
+  ],
+
+  // ---- Western Australia — verified 2026-08-19 ----
+  // SLIP is the CORS-enabled mirror; espatial.dplh.wa.gov.au carries richer
+  // cadastre but sends no Access-Control-Allow-Origin on GET, HEAD or even
+  // preflight, so it is server-side only.
+  WA: [
+    { purpose: 'zoning', label: 'Local planning scheme zone', field: 'zone',
+      minZoom: 11, cors: true,
+      url: `${SLIP}/Property_and_Planning/MapServer/112`,
+      note: 'Layer 112 on SLIP. On the espatial host the equivalent is layer 1, NOT 2 '
+          + '— 2 is R-Code density, and 7 and 40 are group layers that reject queries. '
+          + 'A WA site also carries a REGION scheme zone (layer 48) which prevails '
+          + 'over the local scheme.' },
+    { purpose: 'bushfire', label: 'Bushfire prone area', field: 'type',
+      minZoom: 10, cors: true,
+      url: `${SLIP}/Bush_Fire_Prone_Areas/MapServer/17` },
+    { purpose: 'flood', label: 'Floodway / flood fringe', field: 'ext_type',
+      minZoom: 11, cors: true,
+      url: `${SLIP}/Water/MapServer/23`,
+      note: 'Layer 21 carries the 1% AEP floodplain separately.' },
+    { purpose: 'cadastre', label: 'Lot', field: 'lot_number', minZoom: 14, cors: true,
+      url: `${SLIP}/Places_and_Addresses/MapServer/4`,
+      note: 'Thin but CORS-safe. The full cadastre with title identifier lives on '
+          + 'espatial PlanningAndCadastral_v06/11 and needs a server-side proxy.' },
+  ],
+
+  // ---- Australian Capital Territory — verified 2026-08-19 ----
+  ACT: [
+    { purpose: 'zoning', label: 'Territory Plan zone', field: 'LAND_USE_ZONE_CODE_ID',
+      minZoom: 12, cors: true,
+      url: `${ACT}/ACTGOV_TP_LAND_USE_ZONE/FeatureServer/1` },
+    { purpose: 'bushfire', label: 'Bushfire prone area', field: 'Hazard_Category',
+      minZoom: 10, cors: true,
+      url: `${ACT}/Bushfire_Prone_Area_Details_2026/FeatureServer/0`,
+      note: 'Hazard_Category is 1, 2, 3 or Buffer.' },
+    { purpose: 'flood', label: 'Flood extent (1% AEP)', field: null, minZoom: 11, cors: true,
+      url: `${ACT}/ACTGOV_FLOOD_EXTENT/FeatureServer/0` },
+    { purpose: 'cadastre', label: 'Block', field: 'BLOCK_KEY', minZoom: 14, cors: true,
+      url: `${ACT}/ACTGOV_BLOCKS/FeatureServer/0`,
+      note: 'Returns overlapping features including RETIRED historical parcels — a '
+          + 'point can resolve to a superseded block if not filtered.' },
+  ],
 };
 
 export const layersFor = (s: StateCode | null): LayerDef[] =>
@@ -80,6 +208,33 @@ export const layersFor = (s: StateCode | null): LayerDef[] =>
 export const layerFor = (s: StateCode | null, p: Purpose): LayerDef | null =>
   layersFor(s).find((l) => l.purpose === p) ?? null;
 export const SUPPORTED = () => Object.keys(BY_STATE) as StateCode[];
+
+/** Jurisdictions checked and deliberately NOT wired, with the reason. Stated
+ *  so nobody re-runs the search assuming it was an oversight.
+ *
+ *  SA  — the authoritative SAPPA service on lsa2.geohub.sa.gov.au is
+ *        CloudFront geo-blocked outside Australia; location.sa.gov.au replies
+ *        "configured to block access from your country". Every reachable SA
+ *        endpoint is a single council's clipped copy of the P&D Code, not the
+ *        statewide set. Worth retrying from an Australian IP.
+ *  NT  — a genuine absence, not a search failure. All 48 services on the NT
+ *        government AGOL org were enumerated: no zoning, cadastre, bushfire
+ *        or flood layer exists. nrmaps.nt.gov.au runs MapInfo SpatialSuite,
+ *        not ArcGIS, and exposes no OGC capabilities. data.nt.gov.au
+ *        publishes shapefiles only. NT needs ingesting, not querying.
+ *
+ *  Two URLs inherited from the single-file build pointed at the WRONG
+ *  JURISDICTION and had to be discarded: the one labelled "SA" is Logan City
+ *  QLD, and the one labelled "NT" is Rockhampton Regional Council QLD. Both
+ *  return data, which is why the error survived — it just isn't the data the
+ *  label claims. Check the layer `extent` before trusting a service name.
+ */
+export const NOT_WIRED: Record<string, string> = {
+  SA: 'The statewide SAPPA service is geo-blocked outside Australia; only single-council '
+    + 'clipped copies are reachable from here.',
+  NT: 'No live endpoint exists. The NT publishes spatial data as shapefile downloads '
+    + 'only — it would need ingesting rather than querying.',
+};
 
 /** Ownership is deliberately absent everywhere. There is no free owner data
  *  in Australia: a title search is paid, per search, through the state land
