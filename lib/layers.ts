@@ -17,7 +17,8 @@
 import type { StateCode } from './geo';
 
 export type Purpose = 'zoning' | 'bushfire' | 'flood' | 'landslide'
-                    | 'biodiversity' | 'cadastre' | 'contamination' | 'fsr' | 'height';
+                    | 'biodiversity' | 'cadastre' | 'contamination' | 'fsr' | 'height'
+                    | 'valuation' | 'sales' | 'propertyBoundary' | 'address';
 
 export type LayerDef = {
   purpose: Purpose;
@@ -45,6 +46,7 @@ const NSW_EP = 'https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/ePl
 const NSW_FIRE = 'https://mapprod3.environment.nsw.gov.au/arcgis/rest/services/Fire';
 const NSW_EPA = 'https://mapprod2.environment.nsw.gov.au/arcgis/rest/services/EPA';
 const SIX = 'https://maps.six.nsw.gov.au/arcgis/rest/services/public';
+const VAL = `${SIX}/Valuation/MapServer`;
 const VIC = 'https://plan-gis.mapshare.vic.gov.au/arcgis/rest/services/Planning';
 const TAS = 'https://services.thelist.tas.gov.au/arcgis/rest/services/Public';
 const SLIP = 'https://public-services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services';
@@ -80,6 +82,30 @@ export const BY_STATE: Partial<Record<StateCode, LayerDef[]>> = {
       url: `${SIX}/NSW_Cadastre/MapServer/9`,
       note: 'Answers POINT queries with outFields=* ONLY. Named field lists and '
           + 'envelope queries return "Failed to execute query".' },
+    // ---- valuation and sales: free, keyless, CORS. This is the answer to
+    // "why does the US tool have land values and Australia doesn't" — it can,
+    // and on sale prices NSW is BETTER than Texas, which is a non-disclosure
+    // state where transaction prices are never public.
+    // NOTE: layers 1-7 are POINT geometry. A point-intersects query returns
+    // zero every time; you must use an envelope. Layers 0, 4 and 8 are group
+    // layers and 400 on query — use the urbanity tiers (1/2/3, 5/6/7, 9/10/11).
+    { purpose: 'valuation', label: 'Land value (Valuer General, 5 yr)',
+      field: 'val1_lv', minZoom: 15, cors: true,
+      url: `${VAL}/5`,
+      note: 'Urban tier. Semi-rural is 6, rural is 7. Values are STRINGS with a '
+          + 'leading space and dollar sign (" $2,790,000") and prop_area mixes '
+          + 'units between square metres and hectares — parse, do not cast.' },
+    { purpose: 'sales', label: 'Sale price and date', field: 'price',
+      minZoom: 15, cors: true,
+      url: `${VAL}/1`,
+      note: 'Urban tier; 2 semi-rural, 3 rural. Individual addresses, prices and '
+          + 'dates, free. Texas has no equivalent at any price — it is a '
+          + 'non-disclosure state.' },
+    { purpose: 'propertyBoundary', label: 'Property boundary', field: 'propid',
+      minZoom: 15, cors: true,
+      url: `${VAL}/9`,
+      note: 'Polygon layer, so this one DOES answer point queries. Click a point '
+          + 'here to get propid, then filter the point layers by propid.' },
     { purpose: 'contamination', label: 'Contaminated land (notified)', field: null,
       minZoom: 11, cors: false,
       url: `${NSW_EPA}/Contaminated_land_notified_sites/MapServer/0`,
