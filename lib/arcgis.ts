@@ -32,7 +32,7 @@ async function post(url: string, body: Record<string, string>, ms = 20000) {
 
 /** Point query. outFields defaults to '*' because several NSW layers —
  *  cadastre especially — reject named field lists. */
-export const atPoint = (url: string, p: Pt, outFields = '*') =>
+export const atPoint = (url: string, p: Pt, outFields = '*', geom = false) =>
   post(url, {
     f: 'json',
     geometry: JSON.stringify({ x: p.lng, y: p.lat, spatialReference: { wkid: 4326 } }),
@@ -40,10 +40,17 @@ export const atPoint = (url: string, p: Pt, outFields = '*') =>
     inSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
     outFields,
-    returnGeometry: 'false',
+    returnGeometry: geom ? 'true' : 'false',
+    ...(geom ? { outSR: '4326' } : {}),
   });
 
-export const inBox = (url: string, b: Box, outFields = '*', limit = 20) =>
+/** maxAllowableOffset generalises geometry SERVER-SIDE, in degrees. A raw
+ *  NSW bushfire polygon came back with 101,013 vertices for one viewport —
+ *  enough to lock the browser. ~0.00004 deg is about 4 m, which is finer
+ *  than the layer's own accuracy and invisible at any planning zoom. */
+const DISPLAY_TOLERANCE = 0.00004;
+
+export const inBox = (url: string, b: Box, outFields = '*', limit = 20, geom = false) =>
   post(url, {
     f: 'json',
     geometry: JSON.stringify({
@@ -54,9 +61,21 @@ export const inBox = (url: string, b: Box, outFields = '*', limit = 20) =>
     inSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
     outFields,
-    returnGeometry: 'false',
+    returnGeometry: geom ? 'true' : 'false',
+    ...(geom
+      ? { outSR: '4326', maxAllowableOffset: String(DISPLAY_TOLERANCE), geometryPrecision: '6' }
+      : {}),
     resultRecordCount: String(limit),
   });
+
+/** ArcGIS polygons come back as {rings:[[ [x,y], ... ]]}. Leaflet wants
+ *  [lat,lng]. Convert once, here, so no component has to remember the swap —
+ *  getting it backwards silently places Sydney in the Indian Ocean. */
+export function ringsToLatLng(f: any): [number, number][][] {
+  const rings = f?.geometry?.rings;
+  if (!Array.isArray(rings)) return [];
+  return rings.map((r: any[]) => r.map((p: any[]) => [p[1], p[0]] as [number, number]));
+}
 
 /** A point can sit in a gap a polygon does not cover, so a nil point result
  *  is checked against a small envelope before being reported as absent. */

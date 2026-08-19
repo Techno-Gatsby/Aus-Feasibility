@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LAYERS, byId } from '@/lib/layers';
-import { atPoint, presence } from '@/lib/arcgis';
+import { atPoint, presence, inBox, ringsToLatLng } from '@/lib/arcgis';
 import { inNSW } from '@/lib/geo';
 export const runtime = 'nodejs';
 
@@ -30,11 +30,22 @@ export async function GET(req: NextRequest) {
       const L = byId(id)!;
       if (id === 'cadastre') {
         // outFields '*' only — named lists fail on this layer.
-        const r = await atPoint(L.url, p, '*');
-        return [id, { error: r.error, attrs: r.features[0]?.attributes ?? null }] as const;
+        const r = await atPoint(L.url, p, '*', true);
+        return [id, {
+          error: r.error,
+          attrs: r.features[0]?.attributes ?? null,
+          rings: r.features[0] ? ringsToLatLng(r.features[0]) : [],
+        }] as const;
       }
+      // Geometry as well as presence: the map has to DRAW these, not just
+      // report yes/no. A hazard you cannot see on the parcel is not useful.
       const r = await presence(L.url, p);
-      return [id, r] as const;
+      const geo = await inBox(
+        L.url,
+        [p.lng - 0.004, p.lat - 0.004, p.lng + 0.004, p.lat + 0.004],
+        '*', 12, true,
+      );
+      return [id, { ...r, shapes: (geo.features ?? []).map(ringsToLatLng).filter((x: unknown[]) => x.length) }] as const;
     }),
   );
 
@@ -74,6 +85,14 @@ export async function GET(req: NextRequest) {
       bushfireNearby: !!out.bushfire?.near && !out.bushfire?.present,
       landslide: !!out.landslide?.present,
       biodiversity: !!out.biodiversity?.present,
+    },
+    shapes: {
+      parcel: out.cadastre?.rings ?? [],
+      flood: out.flood?.shapes ?? [],
+      bushfire: out.bushfire?.shapes ?? [],
+      landslide: out.landslide?.shapes ?? [],
+      biodiversity: out.biodiversity?.shapes ?? [],
+      zoning: out.zoning?.shapes ?? [],
     },
     errors: Object.fromEntries(
       Object.entries(out).filter(([, v]: any) => v?.error).map(([k, v]: any) => [k, v.error]),
