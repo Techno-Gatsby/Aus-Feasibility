@@ -4358,7 +4358,7 @@ function portfolioSlimMain(m){
   return {eirr:m.eirr,irr:m.irr,moic:m.moic,epeak:m.epeak,peakdebt:m.peakdebt,npv:m.npv,
     revenue:m.revenue,gross:m.gross,npat:m.npat,margin:m.margin,einj:m.einj,eret:m.eret,
     land:m.land,finance:m.finance,tax:m.tax,NM:m.NM,
-    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net}};
+    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net,intr:m.R.intr,rep:m.R.rep,lf:m.R.lf,dr1:m.R.dr1,dr2:m.R.dr2,salescash:m.R.salescash,devc:m.R.devc}};
 }
 function cacheContextForPortfolio(key,A){
   if(!A)return;const old=_portfolioResults.get(key)||{};
@@ -4369,7 +4369,7 @@ function portfolioSlim(m){
   return {eirr:m.eirr,irr:m.irr,moic:m.moic,epeak:m.epeak,peakdebt:m.peakdebt,npv:m.npv,
     revenue:m.revenue,gross:m.gross,npat:m.npat,margin:m.margin,einj:m.einj,eret:m.eret,
     land:m.land,finance:m.finance,tax:m.tax,NM:m.NM,
-    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net}};
+    R:{eqin:m.R.eqin,eqout:m.R.eqout,lcl:m.R.lcl,net:m.R.net,intr:m.R.intr,rep:m.R.rep,lf:m.R.lf,dr1:m.R.dr1,dr2:m.R.dr2,salescash:m.R.salescash,devc:m.R.devc}};
 }
 onmessage=function(e){
   var q=e.data||{},jobs=q.jobs||[];
@@ -7826,6 +7826,197 @@ document.addEventListener("click",function(e){
 })();
 
 </script>
+
+<!-- ===== SOURCES AND USES + DEBT COVER ===== -->
+<style>
+#au_fin{margin-top:22px}
+.aufin-wrap{margin-top:18px;overflow-x:auto}
+.aufin{width:100%;border-collapse:separate;border-spacing:0;font:400 13px/1.45 system-ui,sans-serif}
+.aufin caption{text-align:left;font:600 15px/1.3 system-ui,sans-serif;color:#18181b;padding:0 0 8px}
+.aufin th{font:500 11px/1.3 system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;
+  color:#71717a;border-bottom:1px solid #d4d4d8;padding:0 8px 7px;text-align:right}
+.aufin th.l,.aufin td.l{text-align:left}
+.aufin td{padding:6px 8px;border-bottom:1px solid #f4f4f5;color:#3f3f46;
+  text-align:right;font-variant-numeric:tabular-nums}
+.aufin tr.band td{background:#fafafa;font:600 11px/1.3 system-ui,sans-serif;
+  letter-spacing:.05em;text-transform:uppercase;color:#71717a;text-align:left}
+.aufin tr.sub td{font-weight:600;color:#18181b}
+.aufin tr.res td{font-weight:700;color:#18181b;border-top:1px solid #d4d4d8;background:#fafafa}
+.aufin-foot{margin-top:8px;font:400 12px/1.5 system-ui,sans-serif;color:#71717a;max-width:70ch}
+.aufin-ok{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0fdf4;
+  color:#166534;font:600 11px system-ui,sans-serif}
+.aufin-bad{display:inline-block;padding:2px 8px;border-radius:999px;background:#fef2f2;
+  color:#991b1b;font:600 11px system-ui,sans-serif}
+</style>
+<script>
+/* ================================================================
+   SOURCES AND USES  +  DEBT COVER   (Australia)
+   Ported from the US tool and re-cut for the AU model, which carries
+   two costs the US one does not: STAMP DUTY and FIRB (Foreign
+   Investment Review Board) — both material for a foreign investor
+   and both shown as their own lines rather than buried in "other".
+
+   Cover is measured over the REPAYMENT window only. A development
+   facility is not serviced from operations while it builds: interest
+   rolls up and is repaid from proceeds, so a construction-phase DSCR
+   is a large negative number that means nothing.
+   ================================================================ */
+(function(){
+"use strict";
+var DSCR_COV=1.25;
+function n(v){return Number(v)||0}
+function money(v){return "$"+Math.round(n(v)).toLocaleString("en-AU")}
+function pct(x){return (Math.round(x*1000)/10).toFixed(1)+"%"}
+function xr(x){return x===null?"n/a":(Math.round(x*100)/100).toFixed(2)+"x"}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+
+function table(cap,head,rows,foot,cls){
+  var h='<div class="aufin-wrap"><table class="aufin '+(cls||"")+'">'+
+    '<caption>'+esc(cap)+'</caption><thead><tr>'+
+    head.map(function(t,i){return '<th class="'+(i?"n":"l")+'">'+esc(t)+'</th>'}).join("")+
+    '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    if(r.band){h+='<tr class="band"><td colspan="'+head.length+'">'+esc(r.band)+'</td></tr>';return}
+    h+='<tr class="'+(r.cls||"")+'">'+r.c.map(function(v,i){
+      return '<td class="'+(i?"n":"l")+'">'+(v==null?"":v)+'</td>'}).join("")+'</tr>';
+  });
+  h+='</tbody></table>'+(foot?'<div class="aufin-foot">'+foot+'</div>':'')+'</div>';
+  return h;
+}
+
+function sourcesUses(A){
+  var land=n(A.pnlLandCost), infra=n(A.pnlInfraCost), design=n(A.pnlDesignCost),
+      auth=n(A.pnlAuthorityCost), constr=n(A.pnlConstructionCost),
+      other=n(A.pnlOtherDirectCost), broker=n(A.brokerCost),
+      prof=n(A.professionalTotal), cont=n(A.contTot);
+  var stamp=n(A.stampDuty), firb=n(A.firbCost);
+  var dev=land+infra+design+auth+constr+other+broker+prof+cont;
+  var oh=n(A.operatingOverhead), mkt=n(A.marketing), ret=n(A.realEstateTax),
+      fin=n(A.financeExpense), ctax=n(A.corporateTax);
+  var acq=stamp+firb;
+  var total=dev+acq+oh+mkt+ret+fin+ctax;
+  var equity=n(A.epeak), debt=n(A.peakdebt);
+  var recycled=Math.max(0,total-equity-debt);
+  var src=equity+debt+recycled;
+  var pu=function(x){return total?pct(x/total):""};
+  var ps=function(x){return src?pct(x/src):""};
+  var rows=[
+    {band:"USES OF FUNDS"},
+    {c:["1.1","Land acquisition",money(land),pu(land)]},
+    {c:["1.2","Infrastructure",money(infra),pu(infra)]},
+    {c:["1.3","Construction",money(constr),pu(constr)]},
+    {c:["1.4","Design and supervision",money(design),pu(design)]},
+    {c:["1.5","Authority and permitting",money(auth),pu(auth)]},
+    {c:["1.6","Professional fees",money(prof),pu(prof)]},
+    {c:["1.7","Contingency",money(cont),pu(cont)]},
+    {c:["1.8","Other direct cost",money(other),pu(other)]},
+    {c:["1.9","Selling and brokerage",money(broker),pu(broker)]},
+    {cls:"sub",c:["1","Development cost",money(dev),pu(dev)]},
+    {band:"ACQUISITION DUTIES AND APPROVALS"},
+    {c:["2.1","Stamp duty",money(stamp),pu(stamp)]},
+    {c:["2.2","FIRB application fee",money(firb),pu(firb)]},
+    {cls:"sub",c:["2","Duties and approvals",money(acq),pu(acq)]},
+    {band:"HOLDING AND FINANCE"},
+    {c:["3.1","Overheads",money(oh),pu(oh)]},
+    {c:["3.2","Marketing and selling",money(mkt),pu(mkt)]},
+    {c:["3.3","Land tax and rates",money(ret),pu(ret)]},
+    {c:["3.4","Finance cost",money(fin),pu(fin)]},
+    {c:["3.5","Company tax",money(ctax),pu(ctax)]},
+    {cls:"res",c:["","TOTAL USES",money(total),"100.0%"]},
+    {band:"SOURCES OF FUNDS"},
+    {c:["4.1","Equity (peak requirement)",money(equity),ps(equity)]},
+    {c:["4.2","Debt facility (peak drawn)",money(debt),ps(debt)]},
+    {c:["4.3","Sales receipts recycled into cost",money(recycled),ps(recycled)]},
+    {cls:"res",c:["","TOTAL SOURCES",money(src),"100.0%"]}
+  ];
+  var foot="Peak funding "+money(equity+debt)+" — the most this project is out of "+
+    "pocket at once, split "+(equity+debt?pct(equity/(equity+debt)):"—")+" equity / "+
+    (equity+debt?pct(debt/(equity+debt)):"—")+" debt. Sales receipts recycled is the "+
+    "balancing item, not an input: it is the part of cost funded by earlier settlements "+
+    "rather than by drawn capital. Stamp duty and FIRB are shown separately because for "+
+    "a foreign investor they are decision-grade numbers, not overheads.";
+  return table("Sources and Uses of Funds",
+    ["Sl. No.","Description","Amount","% of total"],rows,foot,"aufin-su");
+}
+
+function cover(A,d){
+  var R=A&&A.R;
+  if(!R||!R.lcl)return '<div class="aufin-foot">Debt cover needs the period arrays; '+
+    'reopen the cashflow to rebuild them.</div>';
+  var a=function(k){return Array.isArray(R[k])?R[k]:[]};
+  var N=a("lcl").length, g=function(k,i){return n(a(k)[i])};
+  var peakV=0,peakM=0;
+  for(var i=0;i<N;i++){var v=g("lcl",i); if(v>peakV){peakV=v;peakM=i}}
+  var minD=null,minDm=-1,breaches=0,periods=0;
+  for(i=0;i<N;i++){
+    var ds=g("intr",i)+g("rep",i)+g("lf",i), sales=g("salescash",i);
+    if(ds<=0.5||sales<=0.5)continue;
+    periods++;
+    var cfads=sales-g("devc",i)-g("ovh",i)-g("taxm",i);
+    var dscr=cfads/ds;
+    if(minD===null||dscr<minD){minD=dscr;minDm=i}
+    if(dscr<DSCR_COV)breaches++;
+  }
+  var future=0;
+  for(i=peakM;i<N;i++)future+=g("salescash",i)-g("devc",i)-g("ovh",i)-g("taxm",i);
+  var repay=peakV>0?future/peakV:null;
+  var gdv=n(A.revenue)+n(A.otherIncome);
+  var cost=Math.max(0,gdv-n(A.npat));
+  var ltgdv=gdv?peakV/gdv:0, ltc=cost?peakV/cost:0;
+  var limit=n(A.lim), head=limit-peakV;
+  var flag=function(ok,t){return '<span class="aufin-'+(ok?"ok":"bad")+'">'+esc(t)+'</span>'};
+  var ml=function(i){return i<0?"—":"month "+(i+1)};
+  var rows=[
+    {band:"DEBT SIZING"},
+    {c:["1.1","Peak debt drawn",money(peakV),ml(peakM)]},
+    {c:["1.2","Facility limit",money(limit),""]},
+    {c:["1.3","Headroom",money(head),flag(head>=0,head>=0?"within limit":"OVER LIMIT")]},
+    {c:["1.4","Loan to cost (LTC)",pct(ltc),flag(ltc<=0.65,"typical cap 65%")]},
+    {c:["1.5","Loan to gross realisation (LTGRV)",pct(ltgdv),flag(ltgdv<=0.6,"typical cap 60%")]},
+    {band:"COVER"},
+    {c:["2.1","Repayment cover at peak debt",xr(repay),
+       repay===null?"":flag(repay>=DSCR_COV,"covenant 1.25x")]},
+    {c:["2.2","Settlement periods with debt service",String(periods),""]},
+    {c:["2.3","Minimum DSCR in repayment window",xr(minD),
+       minD===null?flag(true,"no serviced period"):flag(minD>=DSCR_COV,"covenant 1.25x")]},
+    {c:["2.4","Occurs at",ml(minDm),""]},
+    {c:["2.5","Periods below covenant",String(breaches),
+       flag(breaches===0,breaches===0?"no breach":breaches+" below")]}
+  ];
+  var foot="Repayment cover is net cash still to be generated from the peak-debt month "+
+    "onward, over the balance outstanding then — the test an Australian construction "+
+    "lender underwrites. DSCR is measured only where BOTH debt service and settlement "+
+    "receipts occur; during construction interest rolls up and is repaid from proceeds, "+
+    "so a construction-phase DSCR is not meaningful. LTGRV uses this model's gross "+
+    "realisation, not a bank valuation. Caps shown are typical, not your lender's.";
+  return table("Debt Sizing and Cover",
+    ["Sl. No.","Description","Value","Test"],rows,foot,"aufin-cov");
+}
+
+function mount(){
+  var pane=document.getElementById("p_pl");
+  if(!pane)return false;
+  var host=document.getElementById("au_fin");
+  if(!host){
+    host=document.createElement("div"); host.id="au_fin";
+    pane.appendChild(host);
+  }
+  var A=window.__AUA;
+  if(!A){host.innerHTML='<div class="aufin-foot">Open the cashflow once to build the '+
+    'analysis, then return here.</div>';return true}
+  host.innerHTML=sourcesUses(A)+cover(A,{});
+  return true;
+}
+window.__AUFIN={mount:mount};
+document.addEventListener("click",function(e){
+  var b=e.target.closest&&e.target.closest("[data-nav],[data-sub]");
+  if(b)setTimeout(mount,900);
+});
+setTimeout(mount,4000);
+})();
+
+</script>
 </body>
 <style id="summary-dashboard-style">
 /* Summary UI copied from the attached US reference. */
@@ -9781,12 +9972,12 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
     }
     return result;
   };
-  PANE.pl=function(C){
+  PANE.pl=function(C){ try{window.__AUA=(C&&C.A)?C.A:C;}catch(e){} setTimeout(function(){try{window.__AUFIN&&window.__AUFIN.mount()}catch(e){}},80); 
     const r=window.renderProjectPl&&window.renderProjectPl(C);
     cleanStatementHost('o_pl');
     return r;
   };
-  PANE.cf=function(C){
+  PANE.cf=function(C){ try{window.__AUA=(C&&C.A)?C.A:C;}catch(e){} 
     const r=renderProjectCashflow(C);
     cleanStatementHost('o_cf');
     return r;
