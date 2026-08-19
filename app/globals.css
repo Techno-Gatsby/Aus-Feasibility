@@ -163,3 +163,37 @@ table.heat td.base{outline:2px solid var(--accent);outline-offset:-2px;font-weig
 .opt-card.none{border-color:var(--line-2);background:var(--bg)}
 .opt-card b.pos{color:var(--ok)} .opt-card b.neg{color:var(--bad)}
 .sens-ctl button.primary{align-self:end}
+
+/* ── site drawing tools (SiteMap + DrawTools) ─────────────────────────────── */
+.draw{border-bottom:1px solid var(--line);background:var(--paper)}
+.draw.over{background:var(--accent-soft);outline:2px dashed var(--accent);outline-offset:-4px}
+.draw-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px}
+.draw-lbl{font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.draw-seg button{padding:6px 10px}
+.draw-io{margin-left:auto;display:flex;gap:6px}
+.draw-read{display:flex;align-items:baseline;gap:10px;padding:0 12px 8px;min-height:22px}
+.draw-read b{font:600 15px var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.draw-read span{font-size:12px;color:var(--mute)}
+.draw-hint{font-size:12px;color:var(--mute);line-height:1.45}
+.draw-err{margin:0 12px 8px;padding:8px 10px;border-radius:var(--r-sm);background:var(--bad-bg);
+  border:1px solid rgba(220,38,38,.22);color:var(--bad);font-size:12.5px;line-height:1.45}
+.draw-note{margin:0 12px 8px;padding:8px 10px;border-radius:var(--r-sm);background:var(--accent-soft);
+  color:var(--accent-strong);font-size:12.5px;line-height:1.45}
+.draw-import{padding:0 12px 10px;display:flex;flex-direction:column;gap:7px}
+.draw-import textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:8px 10px;background:var(--paper);color:var(--ink);
+  font:400 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.draw-import textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(55,138,221,.18)}
+.draw-import-act{display:flex;gap:6px;flex-wrap:wrap}
+.map-canvas.drawing .leaflet-container,.map-canvas.drawing{cursor:crosshair}
+/* vertex handles: white core, dark ring, so they hold up on aerial */
+.vtx{background:#fff;border:2px solid #1c1917;border-radius:50%;box-sizing:border-box;
+  box-shadow:0 0 0 1px rgba(255,255,255,.9);cursor:grab}
+.vtx:active{cursor:grabbing}
+.leaflet-container .vtx-close{cursor:pointer}
+.leaflet-container .vtx-del{cursor:pointer}
+.leaflet-tooltip.area-tip{background:rgba(24,24,27,.82);border:0;color:#fff;font:600 12px var(--sans);
+  font-variant-numeric:tabular-nums;box-shadow:none;padding:3px 7px;white-space:nowrap}
+.leaflet-tooltip.area-tip::before{display:none}
+.panel-stack{overflow-y:auto;min-width:0;display:flex;flex-direction:column}
+.panel-stack .panel{overflow:visible}

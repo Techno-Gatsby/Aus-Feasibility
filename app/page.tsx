@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import SitePanel from '@/components/SitePanel';
+import AreaPanel from '@/components/AreaPanel';
 import InputRail, { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
@@ -111,7 +112,10 @@ export default function Page() {
         {tab === 'site' ? (
           <>
             <SiteMap onPick={setPoint} shapes={shapes} center={point} />
-            <SitePanel point={point} />
+            <div className="panel-stack">
+              <SitePanel point={point} />
+              <AreaPanel point={point} />
+            </div>
           </>
         ) : (
           <>
