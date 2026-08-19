@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 // @ts-ignore — the engine is untyped by design; see lib/engine/model.js
-import { run, DEF, GROUPS, AUSTRALIA_MODEL_VERSION } from '@/lib/engine/model.js';
+import { run, DEF, GROUPS, AUSTRALIA_MODEL_VERSION, fyOf } from '@/lib/engine/model.js';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +25,14 @@ export async function GET() {
   });
 }
 
+/** month index -> financial year, using the engine's own boundary logic */
+function buildFyMap(A: any, inputs: any): number[] {
+  const months = Array.isArray(A?.R?.cfrefnetcash) ? A.R.cfrefnetcash.length : 0;
+  const out: number[] = [];
+  for (let m = 0; m < months; m++) out.push((fyOf as any)(m, inputs));
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); }
@@ -46,6 +54,11 @@ export async function POST(req: NextRequest) {
         margin: A.margin ?? null,
       },
       analysis: A,
+      // The cashflow has to split months into financial years. Rather than
+      // ship the formula to the client and risk two implementations
+      // disagreeing about when FY starts, the server computes the map once
+      // using the engine's OWN fyOf and sends the answer.
+      fyOfMonth: buildFyMap(A, inputs),
     });
   } catch (e: any) {
     return NextResponse.json(

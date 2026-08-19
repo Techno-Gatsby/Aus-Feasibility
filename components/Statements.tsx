@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { profitAndLoss, sourcesAndUses, debtCover, type Statement } from '@/lib/statements';
+import { profitAndLoss, sourcesAndUses, debtCover, cashflow, balanceSheet, type Statement } from '@/lib/statements';
 
 const money = (v: number | null) =>
   v == null ? '' :
@@ -10,13 +10,20 @@ const money = (v: number | null) =>
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const xr = (v: number | null) => (v == null ? 'n/a' : `${v.toFixed(2)}x`);
 
-type Tab = 'pl' | 'su' | 'debt';
+type Tab = 'pl' | 'cf' | 'bs' | 'su' | 'debt';
 
-export default function Statements({ analysis }: { analysis: any }) {
+export default function Statements({ analysis, fyOfMonth }: { analysis: any; fyOfMonth: number[] | null }) {
   const [tab, setTab] = useState<Tab>('pl');
   const pl = useMemo(() => (analysis ? profitAndLoss(analysis) : null), [analysis]);
   const su = useMemo(() => (analysis ? sourcesAndUses(analysis) : null), [analysis]);
   const dc = useMemo(() => (analysis ? debtCover(analysis) : null), [analysis]);
+  // fyOfMonth comes from the server, computed by the engine's own fyOf.
+  // Deriving it here would be a second implementation of the FY boundary.
+  const cf = useMemo(
+    () => (analysis && fyOfMonth?.length ? cashflow(analysis, fyOfMonth) : null),
+    [analysis, fyOfMonth],
+  );
+  const bs = useMemo(() => (analysis ? balanceSheet(analysis) : null), [analysis]);
 
   if (!analysis) return <p className="muted">Enter a scheme and the statements build themselves.</p>;
 
@@ -24,10 +31,14 @@ export default function Statements({ analysis }: { analysis: any }) {
     <div className="stmts">
       <div className="seg stmt-tabs">
         <button onClick={() => setTab('pl')} aria-pressed={tab === 'pl'}>Profit and loss</button>
+        <button onClick={() => setTab('cf')} aria-pressed={tab === 'cf'}>Cashflow</button>
+        <button onClick={() => setTab('bs')} aria-pressed={tab === 'bs'}>Balance sheet</button>
         <button onClick={() => setTab('su')} aria-pressed={tab === 'su'}>Sources and uses</button>
         <button onClick={() => setTab('debt')} aria-pressed={tab === 'debt'}>Debt and cover</button>
       </div>
       {tab === 'pl' && pl && <Table s={pl} />}
+      {tab === 'cf' && cf && <Table s={cf} />}
+      {tab === 'bs' && bs && <Table s={bs} />}
       {tab === 'su' && su && <Table s={su} />}
       {tab === 'debt' && dc && <Debt d={dc} />}
     </div>

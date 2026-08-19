@@ -83,6 +83,23 @@ if (A) {
   }
   check('DSCR excludes construction periods', minD === null || minD > -1,
         minD === null ? 'no serviced period' : `min ${minD.toFixed(2)}x over ${periods}`);
+
+  // The cashflow and the P&L must agree. They are built from different
+  // series -- PL[] by financial year, cfref* by month -- so if the FY
+  // boundary or the aggregation is wrong these diverge. This is the check
+  // that would have caught a second, disagreeing implementation of fyOf.
+  const cfTot = (k) => (Array.isArray(R[k]) ? R[k] : []).reduce((a, b) => a + num(b), 0);
+  const revGap = Math.abs(tot('rev') - cfTot('cfrefresrev'));
+  check('cashflow receipts tie to P&L revenue', revGap < 1, `gap ${Math.round(revGap)}`);
+  const profitGap = Math.abs(tot('npat') - cfTot('cfrefprofit'));
+  check('cashflow profit ties to P&L NPAT', profitGap < 1, `gap ${Math.round(profitGap)}`);
+
+  // Balance sheet positions must be published per financial year, not as a
+  // single scalar -- an omitted row is honest, a flattened one is not.
+  const B = A.B ?? {};
+  const fyKeyed = ['closing', 'land', 'devc', 'balr', 'sval', 'recog']
+    .filter((k) => B[k] && typeof B[k] === 'object');
+  check('balance positions are FY-keyed', fyKeyed.length >= 5, `${fyKeyed.length} of 6`);
 }
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

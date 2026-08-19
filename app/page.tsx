@@ -22,6 +22,7 @@ export default function Page() {
   const [baseline, setBaseline] = useState<Record<string, any>>({});
   const [summary, setSummary] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
+  const [resolved, setResolved] = useState<any>(null);
   const [modelErr, setModelErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -60,7 +61,7 @@ export default function Page() {
         });
         const j = await r.json();
         if (mine !== seq.current) return;          // a newer run has landed
-        if (j.ok) { setSummary(j.summary); setAnalysis(j.analysis); setModelErr(null); }
+        if (j.ok) { setSummary(j.summary); setAnalysis(j.analysis); setResolved(j.fyOfMonth ?? null); setModelErr(null); }
         else { setSummary(null); setAnalysis(null); setModelErr(j.error ?? 'Model failed'); }
       } catch (e: any) {
         if (mine === seq.current) setModelErr(String(e?.message ?? e));
@@ -118,7 +119,7 @@ export default function Page() {
             <section className="results">
               {modelErr
                 ? <p className="note">Fix the input on the left and the statements return.</p>
-                : <Statements analysis={analysis} />}
+                : <Statements analysis={analysis} fyOfMonth={resolved} />}
             </section>
           </>
         )}
