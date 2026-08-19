@@ -153,3 +153,13 @@ table.heat td.base{outline:2px solid var(--accent);outline-offset:-2px;font-weig
 .stmt td.pos{color:var(--ok)} .stmt td.neg{color:var(--bad)}
 .k.k-act{justify-content:center;align-items:stretch;gap:6px}
 .k.k-act button{width:100%;min-height:34px;font-size:12px}
+.opt-out{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:4px 0 14px}
+.opt-card{border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 13px;background:var(--paper)}
+.opt-card span{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.opt-card b{display:block;font:600 20px/1.2 var(--sans);letter-spacing:-.02em;margin-top:3px;
+  font-variant-numeric:tabular-nums}
+.opt-card em{display:block;font-style:normal;font-size:12px;color:var(--mute);margin-top:2px}
+.opt-card.hit{border-color:var(--ok);background:var(--ok-bg)}
+.opt-card.none{border-color:var(--line-2);background:var(--bg)}
+.opt-card b.pos{color:var(--ok)} .opt-card b.neg{color:var(--bad)}
+.sens-ctl button.primary{align-self:end}
