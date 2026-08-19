@@ -30,7 +30,7 @@ export default function Tornado({
   const [metricKey, setMetricKey] = useState<string>('npv');
   const [swing, setSwing] = useState(15);
   const [raw, setRaw] = useState<Raw[] | null>(null);
-  const [dropped, setDropped] = useState<string[]>([]);
+  const [failed, setFailed] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);
 
@@ -78,7 +78,7 @@ export default function Tornado({
         } catch { miss.push(dv.label); }
       }));
       if (mine !== seq.current) return;
-      setRaw(out); setDropped([...miss, ...unset.map((u) => u.label)]); setBusy(false);
+      setRaw(out); setFailed(miss); setBusy(false);
     })();
     return () => { ac.abort(); };
     // inputs is a fresh object on every keystroke upstream; the analysis it
@@ -193,10 +193,17 @@ export default function Tornado({
         </svg>
       )}
 
-      {!!dropped.length && (
+      {/* two different absences, kept apart: an input nobody set, and a run
+          that would not complete. Neither is a zero-length bar. */}
+      {!!unset.length && (
         <p className="vd-note">
           Not ranked, because the inputs behind them are unset in this scheme and a
-          percentage of nothing is nothing: {dropped.join(', ')}.
+          percentage of nothing is nothing: {unset.map((u) => u.label).join(', ')}.
+        </p>
+      )}
+      {!!failed.length && (
+        <p className="vd-note">
+          Not ranked, because the model would not run at the swung value: {failed.join(', ')}.
         </p>
       )}
     </figure>

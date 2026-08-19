@@ -8,6 +8,7 @@ import InputRail, { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
 import Statements2 from '@/components/Statements2';
+import Verdict from '@/components/Verdict';
 import ProjectBar from '@/components/ProjectBar';
 import ParcelTabs from '@/components/ParcelTabs';
 import InputRail2 from '@/components/InputRail2';
@@ -134,6 +135,7 @@ export default function Page() {
                 ? <p className="note">Fix the input on the left and the statements return.</p>
                 : (
                     <>
+                      <Verdict analysis={analysis} inputs={values} fyOfMonth={resolved} error={modelErr} busy={busy} />
                       <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />
                       <Statements2 analysis={analysis} fyOfMonth={resolved} inputs={values} />
                     </>

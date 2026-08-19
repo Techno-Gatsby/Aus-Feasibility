@@ -759,18 +759,58 @@ export async function loadContours(
   const stride = Math.max(1, Math.round(Math.sqrt((spanX * spanY) / 160000)));
   const gw = Math.floor(spanX / stride), gh = Math.floor(spanY / stride);
   const grid = new Float32Array(gw * gh);
-  let lo = Infinity, hi = -Infinity;
   for (let gy = 0; gy < gh; gy++) {
     const py = originY + gy * stride, ty = Math.floor(py / 256) - y0, iy = ((py % 256) + 256) % 256;
     for (let gx = 0; gx < gw; gx++) {
       const px = originX + gx * stride, tx = Math.floor(px / 256) - x0, ix = ((px % 256) + 256) % 256;
       const tile = (tx >= 0 && tx < nx && ty >= 0 && ty < ny) ? tiles[ty * nx + tx] : null;
-      const v = tile ? tile[iy * 256 + ix] : NaN;
-      grid[gy * gw + gx] = v;
-      if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      grid[gy * gw + gx] = tile ? tile[iy * 256 + ix] : NaN;
     }
   }
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) throw new Error('elevation tiles held no usable data');
+
+  // Terrarium is noisy: a Sydney tile that runs 0–170 m carried ~40 spike
+  // pixels reading -741 m and +2170 m, all in one small cluster. Left in,
+  // they stretch the threshold range over three kilometres of elevation that
+  // does not exist and bury the real terrain under thousands of junk rings.
+  // Spikes are dropped, and the range comes from percentiles rather than
+  // min/max so a survivor cannot set the scale.
+  let killed = 0;
+  for (let gy = 1; gy < gh - 1; gy++) {
+    for (let gx = 1; gx < gw - 1; gx++) {
+      const i = gy * gw + gx, v = grid[i];
+      if (!Number.isFinite(v)) continue;
+      const n = [grid[i - 1], grid[i + 1], grid[i - gw], grid[i + gw]].filter(Number.isFinite) as number[];
+      if (n.length < 3) continue;
+      n.sort((a, b) => a - b);
+      const med = n[Math.floor(n.length / 2)];
+      if (Math.abs(v - med) > 150) { grid[i] = NaN; killed++; }
+    }
+  }
+
+  // A light 3×3 mean over a ~30 m source. Without it every threshold shatters
+  // into hundreds of two-point specks where the DEM quantisation crosses the
+  // level, which reads as static rather than as terrain. The smoothing is well
+  // inside the source's own accuracy, and this layer is screening either way.
+  const smooth = Float32Array.from(grid);
+  for (let gy = 1; gy < gh - 1; gy++) {
+    for (let gx = 1; gx < gw - 1; gx++) {
+      const i = gy * gw + gx;
+      if (!Number.isFinite(grid[i])) continue;
+      let sum = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const v = grid[i + dy * gw + dx];
+        if (Number.isFinite(v)) { sum += v; n++; }
+      }
+      smooth[i] = sum / n;
+    }
+  }
+  grid.set(smooth);
+
+  const sorted = Array.from(grid).filter(Number.isFinite).sort((a, b) => a - b);
+  if (sorted.length < 16) throw new Error('elevation tiles held no usable data');
+  const at = (p: number) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.round((sorted.length - 1) * p)))];
+  const lo = at(0.002), hi = at(0.998);
+  if (!(hi > lo)) throw new Error('the elevation here is flat within the contour interval');
 
   const toLatLng = (gx: number, gy: number): [number, number] => [
     pxToLat(originY + gy * stride, demZ),
@@ -785,7 +825,8 @@ export async function loadContours(
     if (!segs.length) continue;
     const level: 0 | 1 = Math.abs(t % major) < 1e-6 ? 1 : 0;
     for (const path of chain(segs)) {
-      if (path.length < 2) continue;
+      // two- and three-point fragments are single-cell specks, not contours
+      if (path.length < 4) continue;
       lines.push({ level, elevation: t, latlngs: path.map(([gx, gy]) => toLatLng(gx, gy)) });
       if (--budget <= 0) break;
     }
@@ -793,7 +834,9 @@ export async function loadContours(
   return {
     lines,
     note: `${lines.length} contour lines, ${minor} m interval (${major} m index) — ` +
-          `${Math.round(lo)}–${Math.round(hi)} m from terrarium z${demZ}`,
+          `${Math.round(lo)}–${Math.round(hi)} m from terrarium z${demZ}` +
+          (killed ? `, ${killed} spike samples discarded` : '') +
+          '. ~30 m SRTM, screening only — not survey grade.',
   };
 }
 
