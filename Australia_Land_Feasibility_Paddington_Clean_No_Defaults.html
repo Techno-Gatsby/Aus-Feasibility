@@ -7650,6 +7650,182 @@ else watch();
 })();
 
 </script>
+
+<!-- ===== GOOGLE GEOCODING + ELEVATION ===== -->
+<script>
+/* ================================================================
+   GOOGLE GEOCODING + ELEVATION   (additive)
+   Replaces the two weakest links in the AU tool:
+     · address search  — Photon (komoot) is thin on Australian
+       addresses; Google Geocoding is materially better, and is
+       biased to AU here so it cannot wander offshore.
+     · elevation       — terrarium tiles are ~30 m and noisy; the
+       Elevation API samples real points, which matters because
+       slope drives earthworks cost.
+   Both fall back to the existing behaviour when no key is set, so
+   nothing breaks for a user without Google configured.
+   ================================================================ */
+(function(){
+"use strict";
+var KEYSTORE="au_gmaps_key";
+function key(){try{return localStorage.getItem(KEYSTORE)||""}catch(e){return""}}
+
+/* ---------------- geocoding ---------------- */
+function geocode(q){
+  var k=key(); if(!k)return Promise.resolve(null);
+  var u="https://maps.googleapis.com/maps/api/geocode/json?address="+
+    encodeURIComponent(q)+"&region=au&components=country:AU&key="+encodeURIComponent(k);
+  return fetch(u).then(function(r){return r.json()}).then(function(d){
+    if(!d||d.status!=="OK"||!d.results||!d.results.length)return null;
+    return d.results.slice(0,8).map(function(r){
+      return {label:r.formatted_address,
+              lat:r.geometry.location.lat, lng:r.geometry.location.lng,
+              kind:(r.types||[])[0]||"", precision:r.geometry.location_type};
+    });
+  }).catch(function(){return null});
+}
+
+/* ---------------- elevation ---------------- */
+function elevation(points){          // [{lat,lng}, …] max 512
+  var k=key(); if(!k||!points||!points.length)return Promise.resolve(null);
+  var locs=points.map(function(p){return p.lat+","+p.lng}).join("|");
+  var u="https://maps.googleapis.com/maps/api/elevation/json?locations="+
+    encodeURIComponent(locs)+"&key="+encodeURIComponent(k);
+  return fetch(u).then(function(r){return r.json()}).then(function(d){
+    if(!d||d.status!=="OK")return null;
+    return d.results.map(function(r){return r.elevation});
+  }).catch(function(){return null});
+}
+
+/* sample a grid across the site and derive fall, slope and aspect */
+function terrain(bounds,n){
+  n=n||6;
+  var pts=[],i,j;
+  for(i=0;i<n;i++)for(j=0;j<n;j++)
+    pts.push({lat:bounds[1]+(bounds[3]-bounds[1])*(i+0.5)/n,
+              lng:bounds[0]+(bounds[2]-bounds[0])*(j+0.5)/n});
+  return elevation(pts).then(function(e){
+    if(!e)return null;
+    var lo=Math.min.apply(null,e), hi=Math.max.apply(null,e);
+    var mid=(bounds[1]+bounds[3])/2;
+    var wm=(bounds[2]-bounds[0])*111320*Math.cos(mid*Math.PI/180);
+    var hm=(bounds[3]-bounds[1])*110540;
+    var run=Math.max(1,Math.sqrt(wm*wm+hm*hm));
+    return {min:lo,max:hi,fall:hi-lo,
+            slopePct:(hi-lo)/run*100, samples:e.length, spanM:run};
+  });
+}
+
+window.__AUG={geocode:geocode,elevation:elevation,terrain:terrain,hasKey:function(){return !!key()}};
+
+/* ---- surface it in the imagery panel ---- */
+function addTerrain(){
+  var host=document.getElementById("aug_haz");
+  if(!host||document.getElementById("aug_terr"))return;
+  var AM=window.__AU; if(!AM||!AM.map)return;
+  var d=document.createElement("div");
+  d.id="aug_terr"; d.className="aug-note";
+  d.textContent=key()?"Sampling terrain…":"";
+  host.parentNode.appendChild(d);
+  if(!key())return;
+  var b=AM.map.getBounds();
+  terrain([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],6).then(function(t){
+    if(!t){d.textContent="Elevation unavailable.";return}
+    d.innerHTML='<b>Terrain</b> — fall '+t.fall.toFixed(1)+' m across '+
+      Math.round(t.spanM)+' m, average slope '+t.slopePct.toFixed(1)+'%'+
+      (t.slopePct>10?' — steep, earthworks will bite':
+       t.slopePct>5?' — moderate':' — gentle')+
+      '. <span style="opacity:.75">'+t.samples+' Google Elevation samples across the '+
+      'current view, not the parcel boundary.</span>';
+  });
+}
+document.addEventListener("click",function(e){
+  if(e.target&&e.target.id==="aug_run")setTimeout(addTerrain,3000);
+});
+})();
+
+</script>
+
+<!-- ===== NSW CADASTRE ===== -->
+<script>
+/* ================================================================
+   NSW CADASTRE — lot, plan, area, boundary   (additive, free, no key)
+   maps.six.nsw.gov.au gives Lot/DP, surveyed area and geometry for
+   all of NSW. Ownership is NOT free in Australia: a title search is
+   paid, per search, through NSW LRS. So this surfaces the legal
+   identifier and pre-fills it, turning the paid step into one
+   copy-paste instead of a hunt.
+   QUIRK: layer 9 answers POINT queries with outFields=* only.
+   Named field lists and envelope queries return "Failed to execute
+   query" — it looks broken when it is not.
+   ================================================================ */
+(function(){
+"use strict";
+var LOT="https://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Cadastre/MapServer/9";
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+
+function lotAt(lng,lat){
+  return fetch(LOT+"/query",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({f:"json",
+      geometry:JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}),
+      geometryType:"esriGeometryPoint",inSR:"4326",
+      spatialRel:"esriSpatialRelIntersects",
+      outFields:"*",              // named fields fail on this layer
+      returnGeometry:"true",outSR:"4326"}).toString()})
+    .then(function(r){return r.json()})
+    .then(function(d){return (d.features||[])[0]||null})
+    .catch(function(){return null});
+}
+
+function acres(m2){return (Number(m2)||0)/4046.8564224}
+function ha(m2){return (Number(m2)||0)/10000}
+
+window.__AUCAD={lotAt:lotAt};
+
+function render(){
+  var AM=window.__AU; if(!AM||!AM.map)return;
+  var host=document.getElementById("aug_haz");
+  if(!host||document.getElementById("aug_cad"))return;
+  var d=document.createElement("div");
+  d.id="aug_cad"; d.className="aug-note"; d.textContent="Looking up the parcel…";
+  host.parentNode.insertBefore(d,host.parentNode.firstChild);
+  var c=AM.map.getCenter();
+  lotAt(c.lng,c.lat).then(function(f){
+    if(!f){d.innerHTML='<b>Parcel</b> — no NSW lot at this point '+
+      '(outside NSW, or road/water reserve).';return}
+    var a=f.attributes, m2=Number(a.planlotarea)||0;
+    var units=String(a.planlotareaunits||"").toLowerCase();
+    if(units.indexOf("hect")>-1)m2=m2*10000;
+    d.innerHTML='<b>Parcel '+esc(a.lotidstring||"")+'</b> — '+
+      (m2?ha(m2).toFixed(3)+' ha / '+acres(m2).toFixed(2)+' ac surveyed':'area not stated')+
+      (a.urbanity?' · '+({U:"urban",S:"suburban",R:"rural",F:"fringe"}[a.urbanity]||a.urbanity):'')+
+      '<br><span style="opacity:.8">Ownership is not public in NSW. Order a title '+
+      'search on <b>'+esc(a.lotidstring||"this lot")+'</b> through NSW LRS when you '+
+      'are ready to approach the owner.</span>'+
+      (m2?'<br><button class="aumap-btn" id="aug_applylot" style="margin-top:6px">'+
+        'Apply '+ha(m2).toFixed(3)+' ha to the model</button>':'');
+    var b=document.getElementById("aug_applylot");
+    if(b)b.onclick=function(){
+      var inp=document.getElementById("i_areaGross")||
+              document.getElementById("i_siteArea")||
+              document.querySelector('.rail input');
+      if(!inp){alert("Enter "+ha(m2).toFixed(3)+" ha manually.");return}
+      inp.value=ha(m2).toFixed(3);
+      inp.dispatchEvent(new Event("input",{bubbles:true}));
+      inp.dispatchEvent(new Event("change",{bubbles:true}));
+      b.textContent="Applied "+ha(m2).toFixed(3)+" ha"; b.disabled=true;
+    };
+  });
+}
+document.addEventListener("click",function(e){
+  if(e.target&&e.target.id==="aug_run")setTimeout(render,2600);
+});
+})();
+
+</script>
 </body>
 <style id="summary-dashboard-style">
 /* Summary UI copied from the attached US reference. */
