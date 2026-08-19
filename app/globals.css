@@ -1,21 +1,34 @@
+/* Palette and type are the single-file build's, token for token, so every
+   component already reading these names inherits the legacy look without
+   being edited. The names are unchanged; only the values move. */
 :root{
-  --ink:#18181b; --ink-2:#3f3f46; --mute:#71717a; --faint:#a1a1aa;
-  --line:#e4e4e7; --line-2:#d4d4d8; --bg:#f4f4f5; --paper:#fff;
-  --accent:#378ADD; --accent-strong:#1e40af; --accent-soft:#eff6ff;
-  --ok:#166534; --ok-bg:#f0fdf4; --bad:#991b1b; --bad-bg:#fef2f2;
-  --r:12px; --r-sm:8px;
-  --sans:'Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --ink:#16202F; --ink-2:#42506B; --mute:#6B7A94; --faint:#93A0B5;
+  --line:#E4E9F1; --line-2:#C9D2E1; --line-3:#A9B6CC;
+  --bg:#F3F6FA; --paper:#FFFFFF; --raised:#FBFCFE;
+  --accent:#1766CB; --accent-strong:#0B4A98; --accent-soft:#EAF2FE;
+  --ok:#2B6A52; --ok-bg:#EEF5F0; --bad:#8F3C3C; --bad-bg:#F8EEEE;
+  --warn:#7A6740; --warn-bg:#F7F1E7;
+  --r:9px; --r-sm:5px;
+  --sans:"Inter","Aptos Narrow","Segoe UI Variable","Segoe UI",-apple-system,system-ui,sans-serif;
+  --mono:"JetBrains Mono","Aptos Mono","SF Mono","Consolas",ui-monospace,monospace;
+  --sh1:0 1px 2px rgba(15,30,61,.05);
+  --sh2:0 1px 3px rgba(15,30,61,.06),0 4px 12px rgba(15,30,61,.05);
+  --shell-bg:#F3F6FA; --shell-navy:#082652; --shell-blue:#155EC4;
+  --shell-border:#D7E0EC;
+  --shell-shadow:0 2px 7px rgba(17,42,79,.08),0 12px 30px rgba(17,42,79,.07);
+  --shell-radius:9px;
+  --input-rail-width:334px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
-body{background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--sans);
-  -webkit-font-smoothing:antialiased}
-.shell{display:flex;flex-direction:column;height:100vh}
-.top{background:var(--paper);border-bottom:1px solid var(--line);
-  padding:12px 20px;display:flex;align-items:center;gap:16px}
-.top h1{margin:0;font:600 17px/1.2 var(--sans);letter-spacing:-.011em}
+body{background:var(--bg);color:var(--ink);font:400 13.5px/1.5 var(--sans);
+  letter-spacing:-.005em;-webkit-font-smoothing:antialiased}
+::selection{background:#CFE0F8}
 .sub{color:var(--mute);font-size:12px}
-.work{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:0}
+/* .shell / .top / .tabs are redefined by the legacy shell block at the foot
+   of this file. .work stays because InputRail2 keys its collapsed width off
+   `.work.feas`; the legacy grid is layered on top of it there. */
+.work{display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:0}
 @media(max-width:900px){.work{grid-template-columns:minmax(0,1fr);
   grid-template-rows:60vh auto}}
 .map-wrap{display:flex;flex-direction:column;min-width:0;min-height:0;
@@ -68,11 +81,6 @@ button.primary:hover:not(:disabled){background:var(--accent-strong)}
 .chip.on{border-color:var(--line-2);color:var(--ink);font-weight:600;background:var(--bg)}
 .chip.empty{opacity:.42;cursor:not-allowed}
 .leaflet-container{height:100%;width:100%;background:#e9e9ec}
-.tabs{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:var(--r-sm);margin-left:auto}
-.tabs button{border:0;background:transparent;padding:7px 14px;min-height:34px}
-.tabs button[aria-pressed=true]{background:var(--paper);font-weight:600;
-  box-shadow:0 1px 2px rgba(24,24,27,.06)}
-.top .primary{margin-left:12px}
 .work.feas{grid-template-columns:400px minmax(0,1fr)}
 @media(max-width:900px){.work.feas{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;

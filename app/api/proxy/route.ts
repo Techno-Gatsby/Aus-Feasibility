@@ -7,6 +7,15 @@ export const runtime = 'nodejs';
 const ALLOW = [
   'https://mapprod2.environment.nsw.gov.au/',
   'https://data.api.abs.gov.au/',
+  // WA's planning host returns data to a server but sends no
+  // Access-Control-Allow-Origin on GET, HEAD or even preflight, so the
+  // browser blocks it. The CORS-enabled SLIP mirror covers most of WA;
+  // this is for the richer espatial cadastre that SLIP does not carry.
+  'https://espatial.dplh.wa.gov.au/',
+  // SA's authoritative service is CloudFront geo-blocked outside Australia.
+  // Allow-listed so it works the moment this runs from an AU host.
+  'https://location.sa.gov.au/',
+  'https://lsa2.geohub.sa.gov.au/',
 ];
 
 export async function GET(req: NextRequest) {
