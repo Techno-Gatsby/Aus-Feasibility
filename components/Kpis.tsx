@@ -67,7 +67,7 @@ export default function Kpis({
       ))}
       <div className="k k-act">
         <button onClick={() => grab('/api/pdf', 'pdf')} disabled={!summary}>PDF report</button>
-        <button onClick={() => grab('/api/export', 'xls')} disabled={!summary}>Workbook</button>
+        <button onClick={() => grab('/api/xlsx', 'xlsx')} disabled={!summary}>Workbook</button>
       </div>
     </div>
   );

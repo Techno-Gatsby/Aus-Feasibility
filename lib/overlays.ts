@@ -728,16 +728,18 @@ export async function loadContours(
   const z = Math.max(9, Math.min(15, Math.round(mapZoom)));
   const [minor, major] = CONTOUR_STEPS[z] ?? CONTOUR_STEPS[12];
 
-  // Terrarium is published to z15; 13 is the practical detail ceiling for the
-  // source data (it is ~30 m SRTM) and keeps the tile count sane.
-  let demZ = Math.min(13, Math.max(8, z - 2));
+  // Terrarium is published to z15, but the underlying DEM is ~30 m SRTM, so
+  // 13 is where extra tiles stop buying extra detail. Step down until the
+  // requested window needs a sane number of tiles.
+  let demZ = Math.min(13, Math.max(8, z));
   let x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+  let west = 0, north = 0, east = 0, south = 0;
   for (;;) {
-    x0 = Math.floor(lngToPx(bounds.west, demZ) / 256);
-    x1 = Math.floor(lngToPx(bounds.east, demZ) / 256);
-    y0 = Math.floor(latToPx(bounds.north, demZ) / 256);
-    y1 = Math.floor(latToPx(bounds.south, demZ) / 256);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) <= 12 || demZ <= 8) break;
+    west = lngToPx(bounds.west, demZ); east = lngToPx(bounds.east, demZ);
+    north = latToPx(bounds.north, demZ); south = latToPx(bounds.south, demZ);
+    x0 = Math.floor(west / 256); x1 = Math.floor(east / 256);
+    y0 = Math.floor(north / 256); y1 = Math.floor(south / 256);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) <= 20 || demZ <= 8) break;
     demZ--;
   }
   const nx = x1 - x0 + 1, ny = y1 - y0 + 1;
@@ -748,16 +750,21 @@ export async function loadContours(
   );
   if (tiles.every((t) => !t)) throw new Error('no elevation tiles could be read');
 
-  // stride keeps the working grid near 400×400 whatever the tile count
-  const stride = Math.max(1, Math.round(Math.sqrt((nx * 256 * ny * 256) / 160000)));
-  const gw = Math.floor((nx * 256) / stride), gh = Math.floor((ny * 256) / stride);
+  // The grid is clipped to the REQUESTED WINDOW, not to whole tiles. Sampling
+  // whole tiles pulls in terrain — and ocean bathymetry — far outside the
+  // view, which both wastes the line budget and reports an elevation range
+  // that has nothing to do with what is on screen.
+  const originX = Math.floor(west), originY = Math.floor(north);
+  const spanX = Math.max(2, Math.ceil(east) - originX), spanY = Math.max(2, Math.ceil(south) - originY);
+  const stride = Math.max(1, Math.round(Math.sqrt((spanX * spanY) / 160000)));
+  const gw = Math.floor(spanX / stride), gh = Math.floor(spanY / stride);
   const grid = new Float32Array(gw * gh);
   let lo = Infinity, hi = -Infinity;
   for (let gy = 0; gy < gh; gy++) {
-    const py = gy * stride, ty = Math.floor(py / 256), iy = py % 256;
+    const py = originY + gy * stride, ty = Math.floor(py / 256) - y0, iy = ((py % 256) + 256) % 256;
     for (let gx = 0; gx < gw; gx++) {
-      const px = gx * stride, tx = Math.floor(px / 256), ix = px % 256;
-      const tile = tiles[ty * nx + tx];
+      const px = originX + gx * stride, tx = Math.floor(px / 256) - x0, ix = ((px % 256) + 256) % 256;
+      const tile = (tx >= 0 && tx < nx && ty >= 0 && ty < ny) ? tiles[ty * nx + tx] : null;
       const v = tile ? tile[iy * 256 + ix] : NaN;
       grid[gy * gw + gx] = v;
       if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
@@ -765,7 +772,6 @@ export async function loadContours(
   }
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) throw new Error('elevation tiles held no usable data');
 
-  const originX = x0 * 256, originY = y0 * 256;
   const toLatLng = (gx: number, gy: number): [number, number] => [
     pxToLat(originY + gy * stride, demZ),
     pxToLng(originX + gx * stride, demZ),

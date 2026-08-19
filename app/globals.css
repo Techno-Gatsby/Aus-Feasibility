@@ -211,6 +211,8 @@ table.heat td.base{outline:2px solid var(--accent);outline-offset:-2px;font-weig
 .vd-supports .vd-icon{background:var(--ok)}
 .vd-marginal{border-left-color:#b45309;background:#fffbeb}
 .vd-marginal .vd-icon{background:#b45309}
+.vd-unknown{border-left-color:var(--line-2);background:var(--bg)}
+.vd-unknown .vd-icon{background:var(--mute)}
 .vd-stop{border-left-color:var(--bad);background:var(--bad-bg)}
 .vd-stop .vd-icon{background:var(--bad)}
 .vd-reasons{margin:7px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px}
@@ -334,3 +336,4 @@ table.vd-snap tr:last-child th,table.vd-snap tr:last-child td{border-bottom:0}
 .sl-del:hover{background:var(--bad-bg);color:var(--bad)}
 
 .map-msg.bad{background:var(--bad-bg);color:var(--bad)}
+.vd-ctl.busy{opacity:.6}

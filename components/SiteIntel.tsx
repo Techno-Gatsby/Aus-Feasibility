@@ -169,12 +169,10 @@ function Category({ c, radiusM }: { c: PoiCategory; radiusM: number }) {
   if (c.status === 'unavailable')
     return <Row k={c.label} v="not returned" cls="bad" />;
 
+  // "none mapped" — not "none here". Overpass answered; OSM simply has
+  // nothing of this kind recorded inside the radius.
   if (c.status === 'empty')
-    return (
-      <>
-        <Row k={c.label} v={`none mapped within ${fmtRadius(radiusM)}`} />
-      </>
-    );
+    return <Row k={c.label} v={`none mapped within ${fmtRadius(radiusM)}`} />;
 
   return (
     <>

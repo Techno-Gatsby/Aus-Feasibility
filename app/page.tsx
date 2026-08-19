@@ -3,10 +3,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import SitePanel from '@/components/SitePanel';
 import AreaPanel from '@/components/AreaPanel';
+import SiteIntel from '@/components/SiteIntel';
 import InputRail, { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
 import Statements2 from '@/components/Statements2';
+import ProjectBar from '@/components/ProjectBar';
+import ParcelTabs from '@/components/ParcelTabs';
+import InputRail2 from '@/components/InputRail2';
+import { Toaster } from '@/components/Toast';
+import { useProject, noteActiveAnalysis } from '@/lib/project';
 
 const SiteMap = dynamic(() => import('@/components/SiteMap'), {
   ssr: false, loading: () => <div className="map-canvas skeleton" />,
@@ -20,7 +26,7 @@ export default function Page() {
   const [shapes, setShapes] = useState<any>(null);
 
   const [groups, setGroups] = useState<Group[]>([]);
-  const [values, setValues] = useState<Record<string, any>>({});
+  const { values, setValues, setField } = useProject();
   const [baseline, setBaseline] = useState<Record<string, any>>({});
   const [summary, setSummary] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -33,7 +39,7 @@ export default function Page() {
   useEffect(() => {
     fetch('/api/model')
       .then((r) => r.json())
-      .then((j) => { setGroups(j.groups ?? []); setValues(j.defaults ?? {}); setBaseline(j.defaults ?? {}); })
+      .then((j) => { setGroups(j.groups ?? []); setBaseline(j.defaults ?? {}); })
       .catch((e) => setModelErr(`Could not load the model schema: ${e?.message ?? e}`));
   }, []);
 
@@ -63,7 +69,7 @@ export default function Page() {
         });
         const j = await r.json();
         if (mine !== seq.current) return;          // a newer run has landed
-        if (j.ok) { setSummary(j.summary); setAnalysis(j.analysis); setResolved(j.fyOfMonth ?? null); setModelErr(null); }
+        if (j.ok) { setSummary(j.summary); setAnalysis(j.analysis); setResolved(j.fyOfMonth ?? null); setModelErr(null); noteActiveAnalysis(j.analysis); }
         else { setSummary(null); setAnalysis(null); setModelErr(j.error ?? 'Model failed'); }
       } catch (e: any) {
         if (mine === seq.current) setModelErr(String(e?.message ?? e));
@@ -73,9 +79,6 @@ export default function Page() {
 
   useEffect(() => { if (Object.keys(values).length) recompute(values); }, [values, recompute]);
 
-  const setField = useCallback((k: string, v: any) => {
-    setValues((old) => ({ ...old, [k]: v }));
-  }, []);
 
   const dirty = new Set(
     Object.keys(values).filter((k) => baseline[k] !== values[k]),
@@ -107,6 +110,9 @@ export default function Page() {
         )}
       </header>
 
+      <ProjectBar />
+      <ParcelTabs />
+
       {tab === 'feasibility' && <Kpis summary={summary} error={modelErr} busy={busy} inputs={values} />}
 
       <div className={`work${tab === 'feasibility' ? ' feas' : ''}`}>
@@ -115,12 +121,14 @@ export default function Page() {
             <SiteMap onPick={setPoint} shapes={shapes} center={point} />
             <div className="panel-stack">
               <SitePanel point={point} />
+              <SiteIntel point={point} />
               <AreaPanel point={point} />
             </div>
           </>
         ) : (
           <>
-            <InputRail groups={groups} values={values} onChange={setField} dirtyKeys={dirty} />
+            <InputRail2 groups={groups} values={values} onChange={setField} dirtyKeys={dirty}
+                        defaults={baseline} onReplaceValues={setValues} />
             <section className="results">
               {modelErr
                 ? <p className="note">Fix the input on the left and the statements return.</p>
@@ -134,6 +142,7 @@ export default function Page() {
           </>
         )}
       </div>
+      <Toaster />
     </main>
   );
 }

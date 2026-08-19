@@ -99,7 +99,7 @@ export function gridValues(dm: Domain, n = 4): number[] {
 
 export type VerdictReason = { label: string; state: 'pass' | 'fail' | 'info' };
 export type Verdict = {
-  level: 'supports' | 'marginal' | 'stop';
+  level: 'supports' | 'marginal' | 'stop' | 'unknown';
   icon: string;
   title: string;
   reasons: VerdictReason[];
@@ -128,14 +128,23 @@ export function verdict(A: Analysis): Verdict | null {
       ? { label: `Positive ${money(A.npv)} NPV`, state: 'pass' }
       : { label: `Negative ${money(Math.abs(A.npv))} NPV`, state: 'fail' };
 
+  // Neither test has a figure behind it. The legacy comparison would call
+  // that a failure, because null fails every comparison — but a judgement
+  // nobody computed is not a judgement, and printing one would be the same
+  // sin as printing a zero for a missing number. The thresholds above are
+  // untouched; this only declines to apply them to nothing.
+  const blind = !isNum(A.eirr) && !isNum(A.npv);
+
   return {
-    level: ok ? 'supports' : soft ? 'marginal' : 'stop',
-    icon: ok ? '✓' : soft ? '!' : '×',
-    title: ok
-      ? 'Project supports this price'
-      : soft
-        ? 'Project is marginal at this price'
-        : 'Project does not support this price',
+    level: blind ? 'unknown' : ok ? 'supports' : soft ? 'marginal' : 'stop',
+    icon: blind ? '?' : ok ? '✓' : soft ? '!' : '×',
+    title: blind
+      ? 'No verdict — the model has not returned a result'
+      : ok
+        ? 'Project supports this price'
+        : soft
+          ? 'Project is marginal at this price'
+          : 'Project does not support this price',
     reasons: [
       {
         label: `Equity IRR ${pct(A.eirr)} vs ${num(d.hurdle, 1)}% target`,

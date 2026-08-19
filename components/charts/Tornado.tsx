@@ -89,7 +89,7 @@ export default function Tornado({
   const rows = raw && isNum(base) ? tornadoRows(base, raw) : [];
 
   const controls = (
-    <div className="vd-ctl">
+    <div className={`vd-ctl${busy ? ' busy' : ''}`}>
       <label>Measure
         <select value={metricKey} onChange={(e) => setMetricKey(e.target.value)}>
           {TORNADO_METRICS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -129,9 +129,18 @@ export default function Tornado({
       </figcaption>
       {controls}
 
-      {busy && !rows.length && <p className="vd-empty">Running the model at each swung input…</p>}
-
-      {!busy && !rows.length && (
+      {/* "not run yet" and "run, and nothing moved" are different statements
+          and must not share a message: the first is the tool still working,
+          the second is a finding about the scheme. */}
+      {!candidates.length && (
+        <p className="vd-empty">
+          None of the ranked drivers is set in this scheme, so there is nothing to swing.
+        </p>
+      )}
+      {!!candidates.length && raw === null && (
+        <p className="vd-empty">Running the model at each swung input…</p>
+      )}
+      {!!candidates.length && raw !== null && !rows.length && (
         <p className="vd-empty">
           No driver moved {metric.label} at ±{swing}%. Either the inputs those drivers
           feed are unset, or this scheme is genuinely flat to them.
@@ -156,12 +165,17 @@ export default function Tornado({
               <g key={r.key}>
                 <text className="vd-axlab vd-driver" x={pl - 92} y={y + 13} textAnchor="end">{r.label}</text>
                 <text className="vd-axlab" x={pl - 14} y={y + 13} textAnchor="end">▼ {downLab}</text>
-                <rect x={x1} y={y + 3} width={Math.max(1.5, cx - x1)} height={14} rx={1.5}
-                  fill="#9CB6DA" stroke="#4A6B99" strokeWidth={0.8}>
+                {/* both ends are measured FROM the centre, and either end can
+                    land on either side of it — a driver whose whole range
+                    improves the metric has both bars to the right. Taking the
+                    span as an absolute keeps the bar on the correct side
+                    instead of collapsing to a stub. */}
+                <rect x={Math.min(cx, x1)} y={y + 3} width={Math.max(1.5, Math.abs(cx - x1))}
+                  height={14} rx={1.5} fill="#9CB6DA" stroke="#4A6B99" strokeWidth={0.8}>
                   <title>{`${r.label} ${downLab}: ${metric.fmt(r.downside + base)}`}</title>
                 </rect>
-                <rect x={cx} y={y + 3} width={Math.max(1.5, x2 - cx)} height={14} rx={1.5}
-                  fill="#0C356B" stroke="#0C356B" strokeWidth={0.8}>
+                <rect x={Math.min(cx, x2)} y={y + 3} width={Math.max(1.5, Math.abs(x2 - cx))}
+                  height={14} rx={1.5} fill="#0C356B" stroke="#0C356B" strokeWidth={0.8}>
                   <title>{`${r.label} ${upLab}: ${metric.fmt(r.upside + base)}`}</title>
                 </rect>
                 <text className="vd-axlab" x={W - pr + 12} y={y + 13}>▲ {upLab}</text>

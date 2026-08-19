@@ -292,6 +292,15 @@ export const projectStore = {
   },
 };
 
+/** Hand a finished model run to whichever parcel is on screen. One line for a
+ *  page that already runs the model for the active parcel — it is what puts
+ *  the equity IRR on the tab. Safe to call from a stale callback: it resolves
+ *  the active parcel at the moment it lands, not when it was queued. */
+export function noteActiveAnalysis(analysis: any) {
+  const p = projectStore.activeParcel();
+  if (p) projectStore.setStat(p.id, analysis);
+}
+
 export type ProjectFile = {
   app: string;
   v: number;

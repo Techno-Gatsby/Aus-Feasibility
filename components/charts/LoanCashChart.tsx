@@ -36,7 +36,7 @@ export default function LoanCashChart({
     </figure>
   );
 
-  const W = 1000, H = 250, pl = 70, pr = 150, pt = 20, pb = 34;
+  const W = 1000, H = 250, pl = 70, pr = 196, pt = 20, pb = 34;
   const n = c.months.length;
   const X = (i: number) => (n === 1 ? pl + (W - pl - pr) / 2 : pl + (W - pl - pr) * i / (n - 1));
   const Y = (v: number) => pt + (dm.max - v) / (dm.max - dm.min) * (H - pt - pb);
@@ -53,7 +53,7 @@ export default function LoanCashChart({
 
   const series = [
     { name: 'Loan balance', vals: c.loan, colour: '#B3261E', dash: '7 4', marker: 'square' },
-    { name: 'Cumulative equity cash', vals: c.cumulativeCash, colour: '#2E5496', dash: '', marker: 'circle' },
+    { name: 'Cumulative cash', vals: c.cumulativeCash, colour: '#2E5496', dash: '', marker: 'circle' },
   ];
 
   // month labels thin out to about fourteen, as the legacy chart did
