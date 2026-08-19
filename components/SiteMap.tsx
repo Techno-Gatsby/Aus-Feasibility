@@ -4,10 +4,20 @@ import type * as L from 'leaflet';
 import { BASEMAPS, LAYER_STYLE, DEFAULT_VIS, type LayerVis, type BasemapKey } from '@/lib/mapStyle';
 import { inAustralia } from '@/lib/geo';
 import DrawTools, { type DrawMode } from '@/components/DrawTools';
+import LiveOverlays, { type OverlayStatus } from '@/components/LiveOverlays';
+import MapControls from '@/components/MapControls';
 import {
   importGeoJSON, featureToString, polygonAreaM2, pathLengthM,
   formatArea, formatLength, type LatLng, type Ring, type Rings,
 } from '@/lib/geojson';
+import {
+  OVERLAY_ORDER, OVERLAY_META, ZONE_COLOR, CONTOUR_PAINT,
+  loadAbsOverlay, loadZoning, loadContours, buildRamp,
+  jurisdictionAt, jurisdictionLabel, clearOverlayCaches,
+  listSavedSites, saveSite as persistSite, deleteSavedSite, formatSiteDate,
+  type OverlayKey, type Box, type Jurisdiction, type SavedSite,
+  type GeoFeature, type ZoneCategory,
+} from '@/lib/overlays';
 
 /** Rebuilt on the architecture the US build proved out.
  *
@@ -62,6 +72,28 @@ export default function SiteMap({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // ── live overlays ────────────────────────────────────────────────────────
+  /** Overlay groups live OUTSIDE `groups` for the same reason the drawn site
+   *  does: the layer-draw effect calls clearLayers() on everything in `groups`
+   *  whenever `shapes` changes, and a live overlay must survive a re-query of
+   *  the parcel. They also get their own pane, so they always sit under the
+   *  cadastre and the drawn boundary no matter what order anything is added
+   *  in — an overlay painting over the subject lot would be the same failure
+   *  the casing exists to prevent. */
+  const ovGroups = useRef<Partial<Record<OverlayKey, L.LayerGroup>>>({});
+  /** Viewport each overlay was last fetched for, so a small pan does not
+   *  re-query a service that already covers the view. */
+  const ovView = useRef<Partial<Record<OverlayKey, { bbox: Box; zoom: number }>>>({});
+  const [ovStatus, setOvStatus] = useState<Record<OverlayKey, OverlayStatus>>(
+    () => Object.fromEntries(OVERLAY_ORDER.map((k) => [k, { on: false }])) as Record<OverlayKey, OverlayStatus>,
+  );
+  const [zoom, setZoom] = useState(12);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [juris, setJuris] = useState<Jurisdiction | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sites, setSites] = useState<SavedSite[]>([]);
+  const [activeSite, setActiveSite] = useState<string | null>(null);
+
   // ── drawing state ────────────────────────────────────────────────────────
   const draw = useRef<L.LayerGroup | null>(null);     // NOT part of `groups`
   const band = useRef<L.Polyline | null>(null);       // rubber band to cursor
@@ -84,10 +116,32 @@ export default function SiteMap({
    *  stamp this and the map handler ignores anything inside the window. */
   const swallow = useRef(0);
 
+  /** The map's own handlers are bound once, so everything they read has to
+   *  come through a ref — closing over the first render's overlay state would
+   *  freeze the refresh list at "nothing is on". */
+  const ovOnRef = useRef<Partial<Record<OverlayKey, boolean>>>({});
+  const loadOneRef = useRef<(k: OverlayKey, force: boolean) => void>(() => {});
+  const jurisRef = useRef<Jurisdiction | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jurisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jurisSeq = useRef(0);
+  const coordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingLatLng = useRef<{ lat: number; lng: number } | null>(null);
+
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { ringsRef.current = rings; }, [rings]);
   useEffect(() => { onPickRef.current = onPick; onShapeRef.current = onShape; });
+  useEffect(() => { jurisRef.current = juris; }, [juris]);
+  useEffect(() => {
+    ovOnRef.current = Object.fromEntries(
+      OVERLAY_ORDER.map((k) => [k, !!ovStatus[k].on]),
+    ) as Partial<Record<OverlayKey, boolean>>;
+  }, [ovStatus]);
+
+  const setOv = useCallback((k: OverlayKey, patch: Partial<OverlayStatus>) => {
+    setOvStatus((s) => ({ ...s, [k]: { ...s[k], ...patch } }));
+  }, []);
 
   const drafting = mode === 'polygon' || mode === 'line';
 
@@ -119,6 +173,154 @@ export default function SiteMap({
   }, []);
   useEffect(() => { finishRef.current = finish; });
 
+  // ── live overlays: paint ─────────────────────────────────────────────────
+  /** One styler per layer, matching the single-file build's paint. The fills
+   *  are deliberately weak: an overlay is context for the site, and if it
+   *  competes with the cadastre for attention it has stopped being context. */
+  const paintVector = useCallback((key: OverlayKey, features: GeoFeature[]) => {
+    const leaflet = Lref.current, g = ovGroups.current[key];
+    if (!leaflet || !g) return;
+    g.clearLayers();
+    if (!features.length) return;
+
+    const ramp = (key === 'population' || key === 'age' || key === 'income')
+      ? buildRamp(key, features) : null;
+
+    const style = (f: any) => {
+      const p = f?.properties ?? {};
+      if (ramp) {
+        return { color: ramp.stroke, weight: 0.55, opacity: 0.8,
+                 fillColor: ramp.color(p.__value), fillOpacity: 0.48 };
+      }
+      if (key === 'zoning') {
+        return { color: '#5D6D80', weight: 0.65, opacity: 0.8,
+                 fillColor: ZONE_COLOR[(p.__category as ZoneCategory) ?? 'other'] ?? ZONE_COLOR.other,
+                 fillOpacity: 0.36 };
+      }
+      if (key === 'poa') {
+        return { color: '#3974BA', weight: 0.8, opacity: 0.8, fillColor: '#5A8FD1', fillOpacity: 0.055 };
+      }
+      // states: a boundary, not a fill — the whole point is the line
+      return { color: '#315E92', weight: 1.6, opacity: 0.8, fillColor: '#ffffff', fillOpacity: 0.01 };
+    };
+
+    // Tooltips are worth their cost on a readable number of shapes and are a
+    // hit-test tax on a thousand of them.
+    const label = features.length <= 400;
+    const layer = leaflet.geoJSON({ type: 'FeatureCollection', features } as any, {
+      pane: 'ausfeas-overlays',
+      style: style as any,
+      onEachFeature: label ? (f: any, l: any) => {
+        const p = f?.properties ?? {};
+        const name = String(p.__label ?? '');
+        const v = p.__value;
+        const val = Number.isFinite(Number(v))
+          ? key === 'income' ? `A$${Number(v).toLocaleString('en-AU')} p.a.`
+            : key === 'age' ? `${Number(v)} years median`
+            : Number(v).toLocaleString('en-AU')
+          : null;
+        const text = [name, val, p.__sub].filter(Boolean).join(' · ');
+        if (text) l.bindTooltip(text, { sticky: true });
+      } : undefined,
+    });
+    layer.addTo(g);
+  }, []);
+
+  const paintContours = useCallback((lines: { level: 0 | 1; elevation: number; latlngs: [number, number][] }[]) => {
+    const leaflet = Lref.current, g = ovGroups.current.contours;
+    if (!leaflet || !g) return;
+    g.clearLayers();
+    for (const c of lines) {
+      const index = c.level === 1;
+      const pl = leaflet.polyline(c.latlngs as any, {
+        pane: 'ausfeas-overlays',
+        color: CONTOUR_PAINT.color,
+        weight: index ? CONTOUR_PAINT.major : CONTOUR_PAINT.minor,
+        opacity: CONTOUR_PAINT.opacity,
+        // only index contours carry a height label and earn a hit-test;
+        // making every minor line interactive makes the map feel sticky
+        interactive: index,
+      } as any).addTo(g);
+      if (index) pl.bindTooltip(`${c.elevation} m`, { sticky: true });
+    }
+  }, []);
+
+  // ── live overlays: load ──────────────────────────────────────────────────
+  const loadOne = useCallback(async (key: OverlayKey, force: boolean) => {
+    const m = map.current;
+    if (!m || !ovGroups.current[key]) return;
+    const meta = OVERLAY_META[key];
+    const z = m.getZoom();
+
+    // The floor. Below it the layer is NOT requested and NOT drawn: at
+    // national zoom the viewport bbox is the continent, the service answers
+    // with hundreds of kilometres of polygon per feature, and the map dies —
+    // which is exactly what the original build did before this existed.
+    if (z < meta.minZoom) {
+      ovGroups.current[key]!.clearLayers();
+      delete ovView.current[key];
+      setOv(key, { busy: false, error: null, withheld: true, note: null });
+      return;
+    }
+
+    const b = m.getBounds();
+    const view: Box = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    const prev = ovView.current[key];
+    const contains = (a: Box, c: Box) => a[0] <= c[0] && a[1] <= c[1] && a[2] >= c[2] && a[3] >= c[3];
+    if (!force && prev && contains(prev.bbox, view) && Math.abs(prev.zoom - z) < 2) {
+      setOv(key, { withheld: false });
+      return;
+    }
+
+    // Fetch a little wider than the screen so a nudge of the map does not
+    // expose an unpainted margin. Demographic layers get a tighter pad: their
+    // polygons are large and the payload grows fast.
+    const pad = key === 'zoning' ? 0.08
+      : (key === 'population' || key === 'age' || key === 'income') ? 0.025 : 0.10;
+    const dx = (view[2] - view[0]) * pad, dy = (view[3] - view[1]) * pad;
+    const bbox: Box = [view[0] - dx, view[1] - dy, view[2] + dx, view[3] + dy];
+
+    setOv(key, { busy: true, error: null, withheld: false });
+    try {
+      if (key === 'contours') {
+        const { lines, note } = await loadContours(
+          { west: bbox[0], south: bbox[1], east: bbox[2], north: bbox[3] }, z);
+        paintContours(lines);
+        ovView.current[key] = { bbox, zoom: z };
+        setOv(key, { busy: false, error: null, note });
+      } else if (key === 'zoning') {
+        const c = m.getCenter();
+        const res = await loadZoning(bbox, z, { lng: c.lng, lat: c.lat }, jurisRef.current);
+        paintVector(key, res.geojson.features);
+        ovView.current[key] = { bbox, zoom: z };
+        setOv(key, { busy: false, error: null, note: res.note });
+      } else {
+        const res = await loadAbsOverlay(key, bbox, z);
+        paintVector(key, res.geojson.features);
+        ovView.current[key] = { bbox, zoom: z };
+        setOv(key, { busy: false, error: null, note: res.note });
+      }
+    } catch (e: any) {
+      // A failed query is NOT an empty layer. Say so on the chip, and leave
+      // whatever was drawn alone rather than blanking it to look clean.
+      delete ovView.current[key];
+      setOv(key, { busy: false, error: String(e?.message ?? e), note: null });
+    }
+  }, [paintVector, paintContours, setOv]);
+  useEffect(() => { loadOneRef.current = (k, f) => { void loadOne(k, f); }; });
+
+  const toggleOverlay = useCallback((key: OverlayKey) => {
+    const on = !ovStatus[key].on;
+    setOv(key, { on, error: null, note: null, withheld: false, busy: on });
+    if (!on) {
+      ovGroups.current[key]?.clearLayers();
+      delete ovView.current[key];
+      setOv(key, { busy: false });
+      return;
+    }
+    void loadOne(key, true);
+  }, [ovStatus, loadOne, setOv]);
+
   // init
   useEffect(() => {
     let dead = false;
@@ -132,6 +334,14 @@ export default function SiteMap({
       tile.current = leaflet.tileLayer(BASEMAPS.satellite.url, {
         attribution: BASEMAPS.satellite.attribution, maxZoom: BASEMAPS.satellite.max,
       }).addTo(m);
+
+      // Live overlays get a pane BELOW the default overlay pane (400), so
+      // context can never paint over the cadastre or the drawn boundary
+      // whatever order things are added in.
+      const pane = m.createPane('ausfeas-overlays');
+      pane.style.zIndex = '380';
+      OVERLAY_ORDER.forEach((k) => { ovGroups.current[k] = leaflet.layerGroup().addTo(m); });
+
       (Object.keys(LAYER_STYLE) as (keyof LayerVis)[]).forEach((k) => {
         groups.current[k] = leaflet.layerGroup().addTo(m);
       });
@@ -146,6 +356,15 @@ export default function SiteMap({
         onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
       });
       m.on('mousemove', (e: any) => {
+        // coordinate readout, throttled: React does not need 60 updates a
+        // second and the readout is unreadable at that rate anyway
+        pendingLatLng.current = { lat: e.latlng.lat, lng: e.latlng.lng };
+        if (!coordTimer.current) {
+          coordTimer.current = setTimeout(() => {
+            coordTimer.current = null;
+            if (pendingLatLng.current) setCoords(pendingLatLng.current);
+          }, 90);
+        }
         const b = band.current, d = draftRef.current;
         if (!b || !d.length) return;
         b.setLatLngs([d[d.length - 1], [e.latlng.lat, e.latlng.lng]] as any);
@@ -155,12 +374,53 @@ export default function SiteMap({
         if (md === 'polygon' || md === 'line') finishRef.current();
       });
 
+      // Panning re-queries whatever overlays are on, once the map settles.
+      m.on('moveend', () => {
+        setZoom(m.getZoom());
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        refreshTimer.current = setTimeout(() => {
+          for (const k of OVERLAY_ORDER) if (ovOnRef.current[k]) loadOneRef.current(k, false);
+        }, 650);
+
+        if (jurisTimer.current) clearTimeout(jurisTimer.current);
+        jurisTimer.current = setTimeout(async () => {
+          const c = m.getCenter();
+          const seq = ++jurisSeq.current;
+          const j = await jurisdictionAt(c.lng, c.lat);
+          // a slower earlier lookup must not overwrite a newer one
+          if (seq === jurisSeq.current && j) setJuris(j);
+        }, 420);
+      });
+
       map.current = m;
       setReady(true);
+      setZoom(m.getZoom());
       setTimeout(() => m.invalidateSize(), 60);
     })();
-    return () => { dead = true; map.current?.remove(); map.current = null; };
+    return () => {
+      dead = true;
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      if (jurisTimer.current) clearTimeout(jurisTimer.current);
+      if (coordTimer.current) clearTimeout(coordTimer.current);
+      map.current?.remove();
+      map.current = null;
+      ovGroups.current = {};
+    };
   }, [addVertex]);
+
+  // saved sites are read once on mount — localStorage is not available during
+  // the server render, so this cannot be an initialiser
+  useEffect(() => { setSites(listSavedSites()); }, []);
+
+  // first jurisdiction label, without waiting for the user to move the map
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    let dead = false;
+    const c = m.getCenter();
+    jurisdictionAt(c.lng, c.lat).then((j) => { if (!dead && j) setJuris(j); });
+    return () => { dead = true; };
+  }, [ready]);
 
   // double-click must place-and-close, not zoom, while a shape is being drawn
   useEffect(() => {
@@ -394,6 +654,87 @@ export default function SiteMap({
     setErr(null); setNote(null);
   }, []);
 
+  // ── FIT SITE / REFRESH DATA / saved sites ────────────────────────────────
+  /** Whatever counts as "the site" right now, in priority order: the drawn
+   *  boundary, then a measured line, then the queried subject lot. */
+  const fitTarget = useCallback((): [number, number][][] | null => {
+    const r = ringsRef.current;
+    if (r?.length) return r;
+    if (line?.length) return [line];
+    const parcel = shapes?.parcel?.[0];
+    if (parcel?.length) return parcel;
+    return null;
+  }, [line, shapes]);
+
+  const fitSite = useCallback(() => {
+    const m = map.current, leaflet = Lref.current;
+    if (!m || !leaflet) return;
+    const target = fitTarget();
+    if (!target) return;
+    // The container is flex-sized AFTER Leaflet initialises, so its cached
+    // dimensions are stale until it is told otherwise — fitting against them
+    // lands the wrong zoom and leaves tiles blank. Same trap as the parcel fit.
+    m.invalidateSize();
+    m.fitBounds(leaflet.polygon(target as any).getBounds(), { padding: [50, 50], maxZoom: 18 });
+  }, [fitTarget]);
+
+  const refreshData = useCallback(async () => {
+    const m = map.current;
+    if (!m) return;
+    setRefreshing(true);
+    clearOverlayCaches();
+    ovView.current = {};
+    const on = OVERLAY_ORDER.filter((k) => ovStatus[k].on);
+    // sequential-ish: the ABS services rate-limit a burst and answer a queue
+    await Promise.all(on.map((k, i) => new Promise<void>((res) => {
+      setTimeout(() => { void loadOne(k, true).then(() => res()); }, i * 80);
+    })));
+    const c = m.getCenter();
+    const j = await jurisdictionAt(c.lng, c.lat);
+    if (j) setJuris(j);
+    setRefreshing(false);
+  }, [ovStatus, loadOne]);
+
+  const saveCurrent = useCallback(() => {
+    const r = ringsRef.current;
+    if (!r?.length) return;
+    const lats = r[0].map((p) => p[0]), lngs = r[0].map((p) => p[1]);
+    const centre: [number, number] = [
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+      (Math.min(...lngs) + Math.max(...lngs)) / 2,
+    ];
+    const base = juris?.lga || juris?.state || 'Site';
+    const n = listSavedSites().filter((s) => s.name.startsWith(base)).length + 1;
+    const next = persistSite({
+      name: `${base} ${n}`,
+      areaM2: polygonAreaM2(r),
+      rings: r.map((ring) => ring.map((p) => [p[0], p[1]] as [number, number])),
+      centre,
+    });
+    setSites(next);
+    setActiveSite(next[0]?.id ?? null);
+    setErr(null);
+    setNote(`Saved “${next[0]?.name}” — ${formatArea(polygonAreaM2(r))}. It stays in this browser.`);
+  }, [juris]);
+
+  const restoreSite = useCallback((s: SavedSite) => {
+    const m = map.current, leaflet = Lref.current;
+    setRings(s.rings);
+    setDraft([]); setLine(null); setMode('none'); setErr(null);
+    setActiveSite(s.id);
+    setNote(`Restored “${s.name}” — ${formatArea(s.areaM2)}, saved ${formatSiteDate(s.created)}.`);
+    if (m && leaflet) {
+      m.invalidateSize();                     // same stale-size trap as the parcel fit
+      m.fitBounds(leaflet.polygon(s.rings as any).getBounds(), { padding: [50, 50], maxZoom: 18 });
+    }
+  }, []);
+
+  const removeSite = useCallback((id: string) => {
+    const next = deleteSavedSite(id);
+    setSites(next);
+    setActiveSite((cur) => (cur === id ? null : cur));
+  }, []);
+
   const changeMode = useCallback((next: DrawMode) => {
     setErr(null);
     setDraft([]);                     // never carry a half-drawn shape across modes
@@ -418,6 +759,21 @@ export default function SiteMap({
   }, [q, ready, onPick]);
 
   const count = (k: keyof LayerVis) => (shapes?.[k]?.length ?? 0);
+
+  const ovBusy = OVERLAY_ORDER.some((k) => ovStatus[k].busy);
+  const liveText = ovBusy
+    ? 'Loading live data'
+    : base === 'satellite' ? 'Satellite + live Australian data' : 'OSM + live Australian data';
+
+  /** Surfaced in full under the chips, not just in a tooltip: a service that
+   *  did not answer has to be legible without hovering, because the wrong
+   *  reading of a blank layer is "nothing here". */
+  const ovIssues = OVERLAY_ORDER
+    .filter((k) => ovStatus[k].on && ovStatus[k].error)
+    .map((k) => `${OVERLAY_META[k].label}: ${ovStatus[k].error}`);
+  const ovHeld = OVERLAY_ORDER
+    .filter((k) => ovStatus[k].on && ovStatus[k].withheld)
+    .map((k) => `${OVERLAY_META[k].label} (zoom ${OVERLAY_META[k].minZoom}+)`);
 
   // Live readout: the shape in progress wins over the committed one, so the
   // figure on screen is always the thing under the cursor.
@@ -452,6 +808,25 @@ export default function SiteMap({
         </div>
       </div>
 
+      <LiveOverlays status={ovStatus} zoom={zoom} onToggle={toggleOverlay} />
+
+      <MapControls
+        jurisdiction={jurisdictionLabel(juris)}
+        coords={coords}
+        zoom={zoom}
+        live={liveText}
+        canFit={!!(rings?.length || line?.length || shapes?.parcel?.[0]?.length)}
+        onFit={fitSite}
+        onRefresh={() => { void refreshData(); }}
+        refreshing={refreshing}
+        canSave={!!rings?.length}
+        onSave={saveCurrent}
+        sites={sites}
+        activeId={activeSite}
+        onRestore={restoreSite}
+        onDelete={removeSite}
+      />
+
       <DrawTools
         mode={mode} onMode={changeMode}
         areaM2={liveArea} lengthM={liveLen} vertices={liveVerts}
@@ -477,6 +852,18 @@ export default function SiteMap({
         })}
       </div>
 
+      {ovHeld.length > 0 && (
+        <div className="map-msg">
+          Held back until you zoom in: {ovHeld.join(', ')}. At wider views the query
+          covers hundreds of kilometres and the shapes carry no site-level meaning.
+        </div>
+      )}
+      {ovIssues.length > 0 && (
+        <div className="map-msg bad">
+          {ovIssues.join(' · ')} — the service was asked and did not answer.
+          That is not a clearance.
+        </div>
+      )}
       {msg && <div className="map-msg">{msg}</div>}
       {/* crosshair only while placing points — in edit/delete the pointer is
           aimed at handles, and a map-wide crosshair would lie about that */}

@@ -6,6 +6,7 @@ import AreaPanel from '@/components/AreaPanel';
 import InputRail, { type Group } from '@/components/InputRail';
 import Kpis from '@/components/Kpis';
 import Statements from '@/components/Statements';
+import Statements2 from '@/components/Statements2';
 
 const SiteMap = dynamic(() => import('@/components/SiteMap'), {
   ssr: false, loading: () => <div className="map-canvas skeleton" />,
@@ -123,7 +124,12 @@ export default function Page() {
             <section className="results">
               {modelErr
                 ? <p className="note">Fix the input on the left and the statements return.</p>
-                : <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />}
+                : (
+                    <>
+                      <Statements analysis={analysis} fyOfMonth={resolved} inputs={values} />
+                      <Statements2 analysis={analysis} fyOfMonth={resolved} inputs={values} />
+                    </>
+                  )}
             </section>
           </>
         )}
