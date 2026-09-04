@@ -4402,12 +4402,12 @@ const GROUPS=[
   ["fundingoverride","Let this project's own cash-recycling flags override the standard policy","flag",0,"n"],
   ["drawmode","Facility drawn","flag",0,"n"],
   ["drawshare","Share of the shortfall drawn in the facility’s first month","% shortfall",100,"p"],
-  ["drawphasecount","Draw-rate schedule phases (0 = off, uses drawshare only)","count",0,"n"],
+  ["drawphasecount","Draw-rate schedule phases","count",0,"n"],
   ["drawphase1month","Phase 1 start month","month",0,"n"],["drawphase1rate","Phase 1 draw rate","% shortfall",100,"p"],
   ["drawphase2month","Phase 2 start month","month",0,"n"],["drawphase2rate","Phase 2 draw rate","% shortfall",100,"p"],
   ["drawphase3month","Phase 3 start month","month",0,"n"],["drawphase3rate","Phase 3 draw rate","% shortfall",100,"p"],
   ["drawphase4month","Phase 4 start month","month",0,"n"],["drawphase4rate","Phase 4 draw rate","% shortfall",100,"p"],
-  ["repaycount","Dated facility repayment lumps (0 = off)","count",0,"n"],
+  ["repaycount","Dated facility repayment lumps","count",0,"n"],
   ["repay1month","Repayment 1 month","month",0,"n"],["repay1amount","Repayment 1 amount","A$",0,"n"],
   ["repay2month","Repayment 2 month","month",0,"n"],["repay2amount","Repayment 2 amount","A$",0,"n"],
   ["repay3month","Repayment 3 month","month",0,"n"],["repay3amount","Repayment 3 amount","A$",0,"n"],
@@ -6049,7 +6049,9 @@ const SELECT_OPTIONS={
   taxfreq:[[0,"Annual"],[1,"Quarterly estimates"]],taxloss:[[0,"Carryforward only"],[1,"Carryback then carryforward"]],
   designbase:[[0,"Base construction cost"],[1,"Escalated actual construction cost"]],permitbase:[[0,"Booking-indexed base"],[1,"Actual construction cost"]],
   pidacct:[[0,"Reduce project cost"],[1,"Recognise against reimbursed cost"]],
-  modelphase:[[0,"Earliest active phase"],[1,"Phase 1"],[2,"Phase 2"],[3,"Phase 3"],[4,"Phase 4"],[5,"Phase 5"],[6,"Phase 6"]]
+  modelphase:[[0,"Earliest active phase"],[1,"Phase 1"],[2,"Phase 2"],[3,"Phase 3"],[4,"Phase 4"],[5,"Phase 5"],[6,"Phase 6"]],
+  drawphasecount:[[0,"Off — uses drawshare only"],[1,"1 phase"],[2,"2 phases"],[3,"3 phases"],[4,"4 phases"]],
+  repaycount:[[0,"Off"],[1,"1 lump"],[2,"2 lumps"],[3,"3 lumps"],[4,"4 lumps"],[5,"5 lumps"]]
 };
 ["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
 /* Boolean fields carry "flag" as their unit. Without an entry in SELECT_OPTIONS they
