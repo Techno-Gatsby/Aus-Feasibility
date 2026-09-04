@@ -45,11 +45,11 @@
   .detail div{padding:3px 0}
   .kind{font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.03em;color:var(--mute);margin-right:6px}
 
-  /* PIN gate: friction on top of the real boundary (sign-in + isAdmin, both
-     enforced server-side on every /api/admin/* call), not a replacement for
-     it - this only hides the page's own markup, nothing an admin's API
-     access depends on. body.pin-ok reveals everything below; until then only
-     #pinGate shows. */
+  /* PIN gate: a second, independent factor in front of the admin panel,
+     verified server-side (POST /api/admin/pin, checked again on every
+     /api/admin/* call - see api/access.mjs) - this CSS only mirrors that
+     state in the page's own markup, it is not where the check happens.
+     body.pin-ok reveals everything below; until then only #pinGate shows. */
   body:not(.pin-ok) header, body:not(.pin-ok) nav, body:not(.pin-ok) main { display: none; }
   #pinGate { display: none; }
   body:not(.pin-ok) #pinGate {
@@ -117,9 +117,14 @@
     return fetch(path, Object.assign({ cache: "no-store", headers: { "content-type": "application/json" } }, opts||{}))
       .then(function(r){
         if (r.status === 401) { window.location.href = "/login?redirect=" + encodeURIComponent(location.pathname); return Promise.reject(new Error("Signed out")); }
-        if (r.status === 403) { document.body.innerHTML = "<p style=\"padding:40px;font:14px sans-serif\">Admins only.</p>"; return Promise.reject(new Error("Forbidden")); }
         return r.text().then(function(t){
           var body = t ? JSON.parse(t) : null;
+          /* The server, not this page, decides the PIN - see POST /api/admin/pin.
+             A 403 with pinRequired means "right account, wrong browser state" -
+             every caller of api() gets this handled the same way the 401/403
+             cases above are, rather than needing its own catch for it. */
+          if (r.status === 403 && body && body.pinRequired) { showPinGate(body.error); throw new Error("PIN required"); }
+          if (r.status === 403) { document.body.innerHTML = "<p style=\"padding:40px;font:14px sans-serif\">Admins only.</p>"; throw new Error("Forbidden"); }
           if (!r.ok) throw new Error((body && body.error) || ("Request failed (" + r.status + ")"));
           return body;
         });
@@ -193,6 +198,10 @@
 
   function loadUsers(){
     return api("/api/admin/users").then(function(data){
+      /* /api/admin/users is pin-gated, so reaching here at all means the PIN
+         was already accepted (now, or on an earlier page load via the
+         cookie) - the one place that should flip pin-ok on. */
+      document.body.classList.add("pin-ok");
       var body = document.getElementById("usersBody");
       body.innerHTML = "";
       (data.users||[]).forEach(function(u){
@@ -331,39 +340,41 @@
   var loaders = { users: loadUsers, requests: loadRequests, sessions: loadSessions, audit: loadAudit };
 
   function initAfterPin(){
-    api("/api/me").then(function(me){
-      document.getElementById("who").textContent = me.upn;
-      loadUsers();
-      loadRequests();
-    }).catch(showErr);
+    api("/api/me").then(function(me){ document.getElementById("who").textContent = me.upn; }).catch(showErr);
+    loadUsers();
+    loadRequests();
   }
 
-  /* PIN gate. Deliberately client-side only, checked once per browser
-     session (sessionStorage) - the real boundary is sign-in + isAdmin,
-     enforced on every /api/admin/* call regardless of this. This exists so
-     the page's own markup and data calls do not fire until it is entered,
-     not to stand in for server-side authorization. */
-  var PIN = "221144";
-  if (sessionStorage.getItem("adminPinOk") === "1") {
-    document.body.classList.add("pin-ok");
-    initAfterPin();
-  } else {
+  function showPinGate(message){
+    document.body.classList.remove("pin-ok");
+    document.getElementById("pinErr").textContent = message || "";
+    document.getElementById("pinInput").value = "";
     document.getElementById("pinInput").focus();
-    document.getElementById("pinForm").addEventListener("submit", function(e){
-      e.preventDefault();
-      var entered = document.getElementById("pinInput").value;
-      if (entered === PIN) {
-        sessionStorage.setItem("adminPinOk", "1");
-        document.body.classList.add("pin-ok");
-        document.getElementById("pinErr").textContent = "";
-        initAfterPin();
-      } else {
-        document.getElementById("pinErr").textContent = "Incorrect PIN.";
-        document.getElementById("pinInput").value = "";
-        document.getElementById("pinInput").focus();
-      }
-    });
   }
+
+  /* The PIN itself is checked by POST /api/admin/pin, not by anything in
+     this page - view-source no longer shows it. A pin_cookie set by that
+     route persists across reloads, so on load we just try the real thing
+     (loadUsers, which hits a pin-gated route) and let its response tell us
+     whether the gate is already open. */
+  document.getElementById("pinForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var submitBtn = e.target.querySelector("button");
+    submitBtn.disabled = true;
+    fetch("/api/admin/pin", {
+      method: "POST", cache: "no-store", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: document.getElementById("pinInput").value }),
+    })
+      .then(function(r){ return r.text().then(function(t){ return { ok: r.ok, body: t ? JSON.parse(t) : {} }; }); })
+      .then(function(res){
+        submitBtn.disabled = false;
+        if (res.ok) { initAfterPin(); return; }
+        showPinGate(res.body.error || "Incorrect PIN.");
+      })
+      .catch(function(){ submitBtn.disabled = false; showPinGate("Could not reach the server."); });
+  });
+
+  initAfterPin();
 })();
 </script>
 </body>

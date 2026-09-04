@@ -19,6 +19,15 @@ const REGIONS = new Set(["US", "AU"]);
 const COOKIE_NAME = "sid";
 const COOKIE_MAX_AGE_S = 60 * 60 * 12; // 12 hours
 
+/* Second factor in front of the admin panel specifically, independent of
+   whose account is signed in - a shared PIN the whole admin group knows,
+   checked here, not trusted from the page. Hardcoded rather than an app
+   setting on purpose: changing it is an edit + deploy, not a portal step
+   someone could flip without it showing up in git history. */
+const ADMIN_PIN = "221144";
+const PIN_COOKIE_NAME = "apin";
+const PIN_COOKIE_MAX_AGE_S = 60 * 60 * 12; // 12 hours, same lifetime as a session
+
 /* ─────────────────────────────────────────────────────────────────────────
    Passwords. scrypt rather than bcrypt/argon2 so this needs no dependency -
    node:crypto already ships it. Stored as "<salt hex>:<hash hex>", one
@@ -70,36 +79,49 @@ function randomTempPassword() {
    open gate" stance the rest of this file already takes.
    ───────────────────────────────────────────────────────────────────────── */
 
-function signSession(sessionId) {
+/* Shared signed-cookie mechanics for both the session cookie and the admin
+   PIN cookie below. `purpose` is mixed into the HMAC so a valid session
+   cookie cannot be replayed as a pin cookie or vice versa even though both
+   are signed with the same SESSION_SECRET. */
+function signValue(purpose, value) {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw Object.assign(new Error("Sign-in is not configured on this server."), { status: 503 });
-  return createHmac("sha256", secret).update(sessionId).digest("hex");
+  return createHmac("sha256", secret).update(purpose + ":" + value).digest("hex");
 }
 
-function sessionCookieHeader(sessionId, maxAgeS) {
-  const value = `${sessionId}.${signSession(sessionId)}`;
-  const attrs = [`${COOKIE_NAME}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "Secure", "SameSite=Lax"];
+function cookieHeader(name, purpose, value, maxAgeS) {
+  const cookieValue = `${value}.${signValue(purpose, value)}`;
+  const attrs = [`${name}=${encodeURIComponent(cookieValue)}`, "Path=/", "HttpOnly", "Secure", "SameSite=Lax"];
   attrs.push(maxAgeS > 0 ? `Max-Age=${maxAgeS}` : "Max-Age=0");
   return attrs.join("; ");
 }
 
-function sessionIdFromRequest(req) {
+function valueFromCookie(req, name, purpose) {
   const header = req.headers.cookie;
   if (!header) return null;
-  const found = header.split(";").map((s) => s.trim()).find((s) => s.startsWith(COOKIE_NAME + "="));
+  const found = header.split(";").map((s) => s.trim()).find((s) => s.startsWith(name + "="));
   if (!found) return null;
-  const raw = decodeURIComponent(found.slice(COOKIE_NAME.length + 1));
+  const raw = decodeURIComponent(found.slice(name.length + 1));
   const dot = raw.lastIndexOf(".");
   if (dot < 0) return null;
-  const sessionId = raw.slice(0, dot);
+  const value = raw.slice(0, dot);
   const sig = raw.slice(dot + 1);
   let expected;
-  try { expected = signSession(sessionId); } catch { return null; }
+  try { expected = signValue(purpose, value); } catch { return null; }
   const a = Buffer.from(sig, "hex");
   const b = Buffer.from(expected, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  return sessionId;
+  return value;
 }
+
+const sessionCookieHeader = (sessionId, maxAgeS) => cookieHeader(COOKIE_NAME, "sid", sessionId, maxAgeS);
+const sessionIdFromRequest = (req) => valueFromCookie(req, COOKIE_NAME, "sid");
+
+/* The pin cookie's value carries no information of its own - "ok" is not a
+   secret, the signature is what proves this browser passed POST
+   /api/admin/pin. */
+const pinCookieHeader = (maxAgeS) => cookieHeader(PIN_COOKIE_NAME, "apin", "ok", maxAgeS);
+const pinCookieValid = (req) => valueFromCookie(req, PIN_COOKIE_NAME, "apin") === "ok";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Resolving a caller from their session cookie - who they are, what they can
@@ -146,6 +168,19 @@ export async function grantsFor(req) {
   };
   cache.set(sessionId, { at: Date.now(), result });
   return result;
+}
+
+/* A 6-digit PIN is 1e6 combinations - trivially scriptable with no throttle.
+   Per-IP, in-memory, reset on success: enough to turn "write a loop" into
+   "wait five minutes," without a database table for something this cheap. */
+const pinAttempts = new Map(); // ip -> { count, lockedUntil }
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 5 * 60_000;
+
+function clientIp(req) {
+  const fwd = req.headers["x-forwarded-for"];
+  if (fwd) return String(fwd).split(",")[0].trim();
+  return (req.socket && req.socket.remoteAddress) || "unknown";
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -234,6 +269,32 @@ export async function handle(req, res) {
       return true;
     }
 
+    /* POST /api/admin/pin { pin } - independent of sign-in state on purpose
+       (the client shows this before it has even checked /api/me), but grants
+       nothing by itself: every /api/admin/* route below still requires
+       isAdmin AND this cookie, so passing the PIN alone reaches nothing. */
+    if (req.method === "POST" && path === "/api/admin/pin") {
+      const ip = clientIp(req);
+      const now = Date.now();
+      const attempt = pinAttempts.get(ip);
+      if (attempt && attempt.lockedUntil > now) {
+        send(res, 429, { error: "Too many attempts. Try again in a few minutes." });
+        return true;
+      }
+      const body = await readBody(req);
+      const pin = String(body.pin || "");
+      if (pin === ADMIN_PIN) {
+        pinAttempts.delete(ip);
+        res.setHeader("Set-Cookie", pinCookieHeader(PIN_COOKIE_MAX_AGE_S));
+        send(res, 200, { ok: true });
+      } else {
+        const count = (attempt ? attempt.count : 0) + 1;
+        pinAttempts.set(ip, { count, lockedUntil: count >= PIN_MAX_ATTEMPTS ? now + PIN_LOCKOUT_MS : 0 });
+        send(res, 401, { error: "Incorrect PIN." });
+      }
+      return true;
+    }
+
     const caller = await grantsFor(req);
     if (!caller) { send(res, 401, { error: "Not signed in." }); return true; }
 
@@ -292,8 +353,14 @@ export async function handle(req, res) {
       return true;
     }
 
-    /* Everything past this point is admin-only. */
+    /* Everything past this point is admin-only, and - separately - requires
+       the PIN cookie from POST /api/admin/pin above. Two independent checks:
+       isAdmin says who this person is; the PIN says this browser passed the
+       shared gate. Reported as two different reasons so the page can tell
+       "you are not an admin" from "enter the PIN" rather than showing one
+       generic 403 for both. */
     if (!caller.isAdmin) { send(res, 403, { error: "Admins only." }); return true; }
+    if (!pinCookieValid(req)) { send(res, 403, { error: "PIN required.", pinRequired: true }); return true; }
 
     if (req.method === "GET" && path === "/api/admin/users") {
       const { rows } = await query(`select * from dbo.user_access order by upn`, []);
