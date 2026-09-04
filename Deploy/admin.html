@@ -44,9 +44,36 @@
   .detail{padding:14px 16px;background:var(--bg);border:1px solid var(--line);border-top:0;font-size:12px}
   .detail div{padding:3px 0}
   .kind{font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.03em;color:var(--mute);margin-right:6px}
+
+  /* PIN gate: friction on top of the real boundary (sign-in + isAdmin, both
+     enforced server-side on every /api/admin/* call), not a replacement for
+     it - this only hides the page's own markup, nothing an admin's API
+     access depends on. body.pin-ok reveals everything below; until then only
+     #pinGate shows. */
+  body:not(.pin-ok) header, body:not(.pin-ok) nav, body:not(.pin-ok) main { display: none; }
+  #pinGate { display: none; }
+  body:not(.pin-ok) #pinGate {
+    display: flex; position: fixed; top: 18px; right: 18px; z-index: 50;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(20,30,60,.12); padding: 16px 18px; flex-direction: column; gap: 8px; width: 220px;
+  }
+  #pinGate h2 { margin: 0; font-size: 13px; }
+  #pinGate input { height: 34px; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; font: 15px inherit; letter-spacing: 2px; }
+  #pinGate input:focus { border-color: var(--accent); outline: none; }
+  #pinGate button { height: 32px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: 600 12.5px inherit; cursor: pointer; }
+  #pinGate button:hover { background: #0d4487; }
+  #pinGate .pinErr { color: var(--neg); font-size: 11.5px; min-height: 14px; }
 </style>
 </head>
 <body>
+<div id="pinGate">
+  <h2>Enter PIN</h2>
+  <form id="pinForm">
+    <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" placeholder="••••••" autocomplete="off" maxlength="12">
+    <div class="pinErr" id="pinErr"></div>
+    <button type="submit">Unlock</button>
+  </form>
+</div>
 <header><h1>Access admin</h1><span class="who" id="who"></span></header>
 <nav>
   <button data-pane="users" class="on">Users</button>
@@ -303,11 +330,40 @@
 
   var loaders = { users: loadUsers, requests: loadRequests, sessions: loadSessions, audit: loadAudit };
 
-  api("/api/me").then(function(me){
-    document.getElementById("who").textContent = me.upn;
-    loadUsers();
-    loadRequests();
-  }).catch(showErr);
+  function initAfterPin(){
+    api("/api/me").then(function(me){
+      document.getElementById("who").textContent = me.upn;
+      loadUsers();
+      loadRequests();
+    }).catch(showErr);
+  }
+
+  /* PIN gate. Deliberately client-side only, checked once per browser
+     session (sessionStorage) - the real boundary is sign-in + isAdmin,
+     enforced on every /api/admin/* call regardless of this. This exists so
+     the page's own markup and data calls do not fire until it is entered,
+     not to stand in for server-side authorization. */
+  var PIN = "221144";
+  if (sessionStorage.getItem("adminPinOk") === "1") {
+    document.body.classList.add("pin-ok");
+    initAfterPin();
+  } else {
+    document.getElementById("pinInput").focus();
+    document.getElementById("pinForm").addEventListener("submit", function(e){
+      e.preventDefault();
+      var entered = document.getElementById("pinInput").value;
+      if (entered === PIN) {
+        sessionStorage.setItem("adminPinOk", "1");
+        document.body.classList.add("pin-ok");
+        document.getElementById("pinErr").textContent = "";
+        initAfterPin();
+      } else {
+        document.getElementById("pinErr").textContent = "Incorrect PIN.";
+        document.getElementById("pinInput").value = "";
+        document.getElementById("pinInput").focus();
+      }
+    });
+  }
 })();
 </script>
 </body>
