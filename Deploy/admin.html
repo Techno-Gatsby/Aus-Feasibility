@@ -56,8 +56,16 @@
 </nav>
 <main>
   <div id="globalErr"></div>
-  <section class="pane on" id="pane-users"><table><thead><tr>
-    <th>Person</th><th>Australia</th><th>United States</th><th>Admin</th><th>Last seen</th>
+  <section class="pane on" id="pane-users">
+    <form id="createUserForm" style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <input id="newUserEmail" type="email" placeholder="person@sobharealty.com" required
+        style="flex:1;height:32px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:12.5px inherit">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink2)"><input type="checkbox" id="newUserAU" checked>AU</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink2)"><input type="checkbox" id="newUserUS">US</label>
+      <button type="submit" class="btn">Create user</button>
+    </form>
+    <table><thead><tr>
+    <th>Person</th><th>Australia</th><th>United States</th><th>Admin</th><th>Password</th><th>Last seen</th>
   </tr></thead><tbody id="usersBody"></tbody></table></section>
 
   <section class="pane" id="pane-requests"><table><thead><tr>
@@ -81,7 +89,7 @@
   function api(path, opts){
     return fetch(path, Object.assign({ cache: "no-store", headers: { "content-type": "application/json" } }, opts||{}))
       .then(function(r){
-        if (r.status === 401) { window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(location.pathname); return Promise.reject(new Error("Signed out")); }
+        if (r.status === 401) { window.location.href = "/login?redirect=" + encodeURIComponent(location.pathname); return Promise.reject(new Error("Signed out")); }
         if (r.status === 403) { document.body.innerHTML = "<p style=\"padding:40px;font:14px sans-serif\">Admins only.</p>"; return Promise.reject(new Error("Forbidden")); }
         return r.text().then(function(t){
           var body = t ? JSON.parse(t) : null;
@@ -121,6 +129,28 @@
     return b;
   }
 
+  /* A temp password only ever exists in the response to a create/reset call
+     - it is never stored anywhere retrievable again, so it has to be shown
+     right here. prompt() rather than a custom modal: its text is pre-selected
+     and Ctrl+C-able with no extra markup, which is the whole requirement. */
+  function showTempPassword(email, tempPassword){
+    window.prompt("Temporary password for " + email + " - copy it now, it will not be shown again:", tempPassword);
+  }
+
+  function resetPasswordButton(u){
+    var b = document.createElement("button");
+    b.className = "toggle";
+    b.textContent = "Reset password";
+    b.onclick = function(){
+      if (!confirm("Reset " + u.upn + "'s password? They will be signed out everywhere.")) return;
+      b.disabled = true;
+      api("/api/admin/users/" + u.user_id + "/reset-password", { method: "POST" })
+        .then(function(data){ showTempPassword(u.upn, data.tempPassword); loadUsers(); })
+        .catch(function(e){ showErr(e); b.disabled = false; });
+    };
+    return b;
+  }
+
   function adminToggle(u){
     var b = document.createElement("button");
     b.className = "toggle" + (u.is_admin ? " danger" : "");
@@ -141,21 +171,43 @@
       (data.users||[]).forEach(function(u){
         var tr = document.createElement("tr");
         var pendingBadge = u.pending_requests ? ' <span class="pill pending">' + u.pending_requests + " pending</span>" : "";
+        var pwBadge = !u.has_password ? '<span class="pill pending">No password set</span>'
+          : u.must_change_password ? '<span class="pill pending">Must change</span>' : '<span class="pill on">Active</span>';
         tr.innerHTML =
           "<td><strong>" + esc(u.display_name || u.upn) + "</strong>" + pendingBadge +
             '<div class="muted">' + esc(u.upn) + "</div></td>" +
           "<td data-cell='AU'></td><td data-cell='US'></td><td data-cell='admin'></td>" +
+          "<td data-cell='password'>" + pwBadge + "</td>" +
           "<td>" + when(u.last_seen_at) + "</td>";
         tr.querySelector("[data-cell='AU']").appendChild(regionToggle(u, "AU"));
         tr.querySelector("[data-cell='US']").appendChild(regionToggle(u, "US"));
         var adminCell = tr.querySelector("[data-cell='admin']");
         if (u.is_admin) adminCell.innerHTML = '<span class="pill admin">Admin</span> ';
         adminCell.appendChild(adminToggle(u));
+        tr.querySelector("[data-cell='password']").appendChild(resetPasswordButton(u));
         body.appendChild(tr);
       });
-      if (!data.users || !data.users.length) body.innerHTML = '<tr><td colspan="5" class="empty">No users yet.</td></tr>';
+      if (!data.users || !data.users.length) body.innerHTML = '<tr><td colspan="6" class="empty">No users yet.</td></tr>';
     }).catch(showErr);
   }
+
+  document.getElementById("createUserForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var email = document.getElementById("newUserEmail").value.trim();
+    var regions = [];
+    if (document.getElementById("newUserAU").checked) regions.push("AU");
+    if (document.getElementById("newUserUS").checked) regions.push("US");
+    var btn = e.target.querySelector("button[type=submit]");
+    btn.disabled = true;
+    api("/api/admin/users", { method: "POST", body: JSON.stringify({ email: email, regions: regions }) })
+      .then(function(data){
+        showTempPassword(data.email, data.tempPassword);
+        document.getElementById("newUserEmail").value = "";
+        loadUsers();
+      })
+      .catch(showErr)
+      .then(function(){ btn.disabled = false; });
+  });
 
   /* ── requests ─────────────────────────────────────────────────────── */
   function loadRequests(){

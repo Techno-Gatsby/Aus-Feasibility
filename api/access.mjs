@@ -3,99 +3,148 @@
    a dynamic import that degrades to "not enabled" on failure - and consulted
    by api/appraisals.mjs for the same entitlement check the page gate applies.
 
-   Identity comes from exactly one header, X-MS-CLIENT-PRINCIPAL-NAME, and it
-   is only trustworthy because Easy Auth strips any copy the browser tried to
-   send - see the identical warning in appraisals.mjs. Do not enable the gate
-   in server.js (ACCESS_ENFORCE=1) until Easy Auth is actually on. */
+   Identity is internal, not Microsoft/Entra: an email + password this app
+   owns, hashed with node:crypto's scrypt (see hashPassword/verifyPassword
+   below) - no external identity provider, no app registration, nothing that
+   depends on the tenant. A session is a row in dbo.user_session, created by
+   POST /api/login and named by an HMAC-signed cookie (see signSession/
+   sessionIdFromRequest) so the cookie cannot be forged without SESSION_SECRET.
+   Do not enable the gate in server.js (ACCESS_ENFORCE=1) until at least the
+   bootstrap admin can sign in - see api/README.md. */
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHmac } from "node:crypto";
 import { query, tx } from "./db.mjs";
 import { send, readBody } from "./http.mjs";
 
 const REGIONS = new Set(["US", "AU"]);
-const SESSION_IDLE_MINUTES = 30;
+const COOKIE_NAME = "sid";
+const COOKIE_MAX_AGE_S = 60 * 60 * 12; // 12 hours
 
-export function principal(req) {
-  const name = req.headers["x-ms-client-principal-name"];
-  if (name) return String(name).trim().toLowerCase();
-  if (process.env.ALLOW_ANON_DEV === "1") return "dev@local";
-  return null;
+/* ─────────────────────────────────────────────────────────────────────────
+   Passwords. scrypt rather than bcrypt/argon2 so this needs no dependency -
+   node:crypto already ships it. Stored as "<salt hex>:<hash hex>", one
+   column, so a lookup is a single string compare after decoding.
+   ───────────────────────────────────────────────────────────────────────── */
+
+export function hashPassword(password) {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 64);
+  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored || typeof password !== "string" || !password) return false;
+  const sep = stored.indexOf(":");
+  if (sep < 0) return false;
+  const salt = Buffer.from(stored.slice(0, sep), "hex");
+  const expected = Buffer.from(stored.slice(sep + 1), "hex");
+  if (!salt.length || !expected.length) return false;
+  const actual = scryptSync(password, salt, expected.length);
+  return timingSafeEqual(actual, expected);
+}
+
+/* A fixed, valid-shape hash with no real account behind it, so /api/login can
+   run verifyPassword() even when the email does not match a row - a wrong
+   password and a wrong email then cost the same scrypt call, and the response
+   time itself cannot be used to enumerate which emails have accounts. */
+const DUMMY_HASH = hashPassword("no-such-account-timing-guard");
+
+/* A temporary password shown once to the admin who creates or resets an
+   account, for them to relay out of band - there is no email sending here.
+   Excludes visually-confusable characters (0/O, 1/l/I) on purpose. */
+function randomTempPassword() {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(14);
+  let out = "";
+  for (let i = 0; i < 14; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Resolving a caller: who they are, what they can see, and which session
-   this request belongs to - all three in one round trip, cached per UPN.
+   Sessions. The cookie carries only a session id and its HMAC, signed with
+   SESSION_SECRET (an app setting) - the id itself means nothing without a
+   database lookup, so a stolen cookie is useless once the row is deleted
+   (POST /api/logout, or an admin reset - see the admin routes below).
 
-   The cache is why this is safe to call on every gated page load and every
-   API request: a hit costs nothing, and a miss happens at most once per
-   CACHE_TTL_MS per person, which is also the outside bound on how long a
-   revoke takes to apply (the plan's "within a minute" - one cache window,
-   not a separate invalidation mechanism, since a TTL that short makes a
-   version counter no simpler and no faster in practice).
+   Missing SESSION_SECRET fails closed: signSession throws a 503 rather than
+   falling back to a guessable default, the same "an outage beats a silently
+   open gate" stance the rest of this file already takes.
+   ───────────────────────────────────────────────────────────────────────── */
 
-   The same round trip open-or-touches this person's session (§3 of the plan):
-   a session_id already cached and still within the idle window is reused and
-   its last_seen_at bumped; otherwise a new one starts. Because the whole
-   resolution shares the cache TTL, a session's last_seen_at is only as fresh
-   as the last cache miss - a person active for an hour touches it roughly
-   once a minute, not on every request, which is the point.
+function signSession(sessionId) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw Object.assign(new Error("Sign-in is not configured on this server."), { status: 503 });
+  return createHmac("sha256", secret).update(sessionId).digest("hex");
+}
+
+function sessionCookieHeader(sessionId, maxAgeS) {
+  const value = `${sessionId}.${signSession(sessionId)}`;
+  const attrs = [`${COOKIE_NAME}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "Secure", "SameSite=Lax"];
+  attrs.push(maxAgeS > 0 ? `Max-Age=${maxAgeS}` : "Max-Age=0");
+  return attrs.join("; ");
+}
+
+function sessionIdFromRequest(req) {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  const found = header.split(";").map((s) => s.trim()).find((s) => s.startsWith(COOKIE_NAME + "="));
+  if (!found) return null;
+  const raw = decodeURIComponent(found.slice(COOKIE_NAME.length + 1));
+  const dot = raw.lastIndexOf(".");
+  if (dot < 0) return null;
+  const sessionId = raw.slice(0, dot);
+  const sig = raw.slice(dot + 1);
+  let expected;
+  try { expected = signSession(sessionId); } catch { return null; }
+  const a = Buffer.from(sig, "hex");
+  const b = Buffer.from(expected, "hex");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  return sessionId;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Resolving a caller from their session cookie - who they are, what they can
+   see - cached per session so a hit costs nothing on every gated page load
+   and every API request. A miss happens at most once per CACHE_TTL_MS per
+   session, which is also the outside bound on how long a revoke takes to
+   apply - one cache window, not a separate invalidation mechanism.
    ───────────────────────────────────────────────────────────────────────── */
 
 const CACHE_TTL_MS = 60_000;
-const cache = new Map(); // upn -> { at, result }
+const cache = new Map(); // sessionId -> { at, result }
 
 const RESOLVE_SQL = `
-declare @upn nvarchar(200) = @p1;
+declare @sid uniqueidentifier = @p1;
 declare @now datetime2(3) = sysutcdatetime();
 
-merge dbo.app_user as t
-using (select @upn as upn) as s
-on t.upn = s.upn
-when matched then update set last_seen_at = @now
-when not matched then insert (upn, created_by, updated_by) values (s.upn, @upn, @upn);
+update dbo.user_session set last_seen_at = @now where session_id = @sid;
 
-declare @uid uniqueidentifier = (select user_id from dbo.app_user where upn = @upn);
-
-if not exists (select 1 from dbo.access_audit where subject_upn = @upn and action = N'signin')
-  insert into dbo.access_audit (actor_upn, subject_upn, action) values (@upn, @upn, N'signin');
-
-declare @sid uniqueidentifier = (
-  select top 1 session_id from dbo.user_session
-  where user_id = @uid and datediff(minute, last_seen_at, @now) <= ${SESSION_IDLE_MINUTES}
-  order by last_seen_at desc);
-
-if @sid is null
-begin
-  set @sid = newid();
-  insert into dbo.user_session (session_id, user_id, upn, started_at, last_seen_at) values (@sid, @uid, @upn, @now, @now);
-end
-else
-  update dbo.user_session set last_seen_at = @now where session_id = @sid;
-
-select u.user_id, u.upn, u.is_admin, u.disabled_at, @sid as session_id,
+select u.user_id, u.upn, u.is_admin, u.disabled_at, u.must_change_password,
        (select string_agg(r.region, ',') from dbo.user_region_access r where r.user_id = u.user_id) as regions
-from dbo.app_user u where u.upn = @upn;`;
+from dbo.user_session s
+join dbo.app_user u on u.user_id = s.user_id
+where s.session_id = @sid;`;
 
-/* `req` -> null (not signed in) or { upn, userId, isAdmin, disabled, regions, sessionId }.
-   `regions` is a Set, always - empty for a brand-new or disabled user, never
-   undefined, so every caller can write `caller.regions.has("AU")` without a
-   null check. */
 export async function grantsFor(req) {
-  const upn = principal(req);
-  if (!upn) return null;
+  const sessionId = sessionIdFromRequest(req);
+  if (!sessionId) return null;
 
-  const cached = cache.get(upn);
+  const cached = cache.get(sessionId);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
 
-  const { rows } = await query(RESOLVE_SQL, [upn]);
+  const { rows } = await query(RESOLVE_SQL, [sessionId]);
   const row = rows[0];
+  if (!row) return null; // cookie verifies but the session row is gone - logged out, or reset elsewhere
+
   const result = {
-    upn,
+    upn: row.upn,
     userId: row.user_id,
     isAdmin: !!row.is_admin,
     disabled: !!row.disabled_at,
+    mustChangePassword: !!row.must_change_password,
     regions: new Set(String(row.regions || "").split(",").filter(Boolean)),
-    sessionId: row.session_id,
+    sessionId,
   };
-  cache.set(upn, { at: Date.now(), result });
+  cache.set(sessionId, { at: Date.now(), result });
   return result;
 }
 
@@ -108,12 +157,14 @@ export async function grantsFor(req) {
    combined regex with optional groups - a combined pattern let a malformed
    path like /api/admin/requests/<uuid>/regions satisfy the same capture
    groups as /api/admin/users/<uuid>/regions and reach the wrong handler. */
-const ROUTE = /^\/api\/(me|access-requests|admin\/[a-z][a-z-]*(?:\/[0-9a-fA-F-]{36}(?:\/[a-z]+)?)?)\/?$/;
+const ROUTE = /^\/api\/(me|login|logout|change-password|bootstrap-admin|access-requests|admin\/[a-z][a-z-]*(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]+)?)?)\/?$/;
 const UUID = "[0-9a-fA-F-]{36}";
 const R_USER_REGIONS = new RegExp(`^/api/admin/users/(${UUID})/regions$`);
 const R_USER_ADMIN   = new RegExp(`^/api/admin/users/(${UUID})/admin$`);
+const R_USER_RESET   = new RegExp(`^/api/admin/users/(${UUID})/reset-password$`);
 const R_REQUEST      = new RegExp(`^/api/admin/requests/(${UUID})$`);
 const R_SESSION      = new RegExp(`^/api/admin/sessions/(${UUID})$`);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function auditAccess(session, actor, subject, action, region, detail) {
   await query(
@@ -126,10 +177,66 @@ export async function handle(req, res) {
   const m = ROUTE.exec(path);
   if (!m) return false;
 
-  const caller = await grantsFor(req);
-  if (!caller) { send(res, 401, { error: "Not signed in." }); return true; }
-
   try {
+    /* POST /api/login { email, password } - the only route that runs before
+       the signed-in check, for the obvious reason. Deliberately looks up the
+       row and calls verifyPassword() even when no row matches (against a
+       fixed dummy hash) so a wrong email and a wrong password take about the
+       same time - a real-not-real email cannot be timed out of this. */
+    if (req.method === "POST" && path === "/api/login") {
+      const body = await readBody(req);
+      const email = String(body.email || "").trim().toLowerCase();
+      const password = String(body.password || "");
+      const { rows } = await query(`select user_id, upn, password_hash, disabled_at from dbo.app_user where upn=@p1`, [email]);
+      const row = rows[0];
+      const ok = verifyPassword(password, row ? row.password_hash : DUMMY_HASH);
+      if (!ok || !row) { send(res, 401, { error: "Incorrect email or password." }); return true; }
+      if (row.disabled_at) { send(res, 403, { error: "This account is disabled." }); return true; }
+
+      const sessionId = randomUUID();
+      await query(`insert into dbo.user_session (session_id, user_id, upn) values (@p1,@p2,@p3)`, [sessionId, row.user_id, row.upn]);
+      await auditAccess(sessionId, row.upn, row.upn, "login", null, null);
+      res.setHeader("Set-Cookie", sessionCookieHeader(sessionId, COOKIE_MAX_AGE_S));
+      send(res, 200, { ok: true });
+      return true;
+    }
+
+    if (req.method === "POST" && path === "/api/logout") {
+      const sessionId = sessionIdFromRequest(req);
+      if (sessionId) {
+        cache.delete(sessionId);
+        const { rows } = await query(`select upn from dbo.user_session where session_id=@p1`, [sessionId]);
+        await query(`delete from dbo.user_session where session_id=@p1`, [sessionId]);
+        if (rows[0]) await auditAccess(null, rows[0].upn, rows[0].upn, "logout", null, null);
+      }
+      res.setHeader("Set-Cookie", sessionCookieHeader("", 0));
+      send(res, 200, { ok: true });
+      return true;
+    }
+
+    /* POST /api/bootstrap-admin { email, password } - sets the very first
+       password. Only ever succeeds once: schema-access.sqlserver.sql creates
+       the named admin's row with password_hash null, and this route refuses
+       to run against a row that already has one - see its own header comment
+       for the full sequence. Safe to leave deployed permanently. */
+    if (req.method === "POST" && path === "/api/bootstrap-admin") {
+      const body = await readBody(req);
+      const email = String(body.email || "").trim().toLowerCase();
+      const password = String(body.password || "");
+      if (password.length < 10) { send(res, 400, { error: "Password must be at least 10 characters." }); return true; }
+      const { rows } = await query(`select user_id, is_admin, password_hash from dbo.app_user where upn=@p1`, [email]);
+      const row = rows[0];
+      if (!row || !row.is_admin || row.password_hash) { send(res, 403, { error: "Bootstrap is not available." }); return true; }
+      await query(`update dbo.app_user set password_hash=@p1, must_change_password=0, updated_by=@p2, updated_at=sysutcdatetime() where user_id=@p3`,
+        [hashPassword(password), email, row.user_id]);
+      await auditAccess(null, email, email, "bootstrap", null, "Admin password set.");
+      send(res, 200, { ok: true });
+      return true;
+    }
+
+    const caller = await grantsFor(req);
+    if (!caller) { send(res, 401, { error: "Not signed in." }); return true; }
+
     /* GET /api/me - anyone signed in. What the request page, the landing
        page's region picker and the admin-link visibility all read. */
     if (req.method === "GET" && path === "/api/me") {
@@ -138,8 +245,28 @@ export async function handle(req, res) {
         [caller.userId]);
       send(res, 200, {
         upn: caller.upn, isAdmin: caller.isAdmin, disabled: caller.disabled,
+        mustChangePassword: caller.mustChangePassword,
         regions: [...caller.regions], pendingRequests: rows,
       });
+      return true;
+    }
+
+    /* POST /api/change-password { currentPassword, newPassword } - anyone
+       signed in, over their own account only. */
+    if (req.method === "POST" && path === "/api/change-password") {
+      const body = await readBody(req);
+      const current = String(body.currentPassword || "");
+      const next = String(body.newPassword || "");
+      if (next.length < 10) { send(res, 400, { error: "New password must be at least 10 characters." }); return true; }
+      const { rows } = await query(`select password_hash from dbo.app_user where user_id=@p1`, [caller.userId]);
+      if (!verifyPassword(current, rows[0] && rows[0].password_hash)) {
+        send(res, 401, { error: "Current password is incorrect." }); return true;
+      }
+      await query(`update dbo.app_user set password_hash=@p1, must_change_password=0, updated_by=@p2, updated_at=sysutcdatetime() where user_id=@p3`,
+        [hashPassword(next), caller.upn, caller.userId]);
+      cache.delete(caller.sessionId);
+      await auditAccess(caller.sessionId, caller.upn, caller.upn, "change_password", null, null);
+      send(res, 200, { ok: true });
       return true;
     }
 
@@ -276,6 +403,67 @@ export async function handle(req, res) {
         [grant ? 1 : 0, caller.upn, subId]);
       await auditAccess(caller.sessionId, caller.upn, subjectUpn, grant ? "grant_admin" : "revoke_admin", null, null);
       send(res, 200, { ok: true });
+      return true;
+    }
+
+    /* POST /api/admin/users { email, displayName?, regions?: ["AU","US"] }
+       Creates the account with a random temporary password, returned once in
+       the response - there is no email sending here, so relay it to the
+       person out of band. must_change_password is set so the app can prompt
+       them to pick their own on first sign-in. */
+    if (req.method === "POST" && path === "/api/admin/users") {
+      const body = await readBody(req);
+      const email = String(body.email || "").trim().toLowerCase();
+      if (!EMAIL_RE.test(email)) { send(res, 400, { error: "A valid email is required." }); return true; }
+      const displayName = body.displayName ? String(body.displayName).slice(0, 200) : null;
+      const wantedRegions = Array.isArray(body.regions)
+        ? [...new Set(body.regions.map((r) => String(r).toUpperCase()).filter((r) => REGIONS.has(r)))]
+        : [];
+      const tempPassword = randomTempPassword();
+      const hash = hashPassword(tempPassword);
+
+      const out = await tx(async (c) => {
+        const existing = await c.query(`select user_id from dbo.app_user where upn=@p1`, [email]);
+        if (existing.rows.length) return { conflict: true };
+        const ins = await c.query(
+          `insert into dbo.app_user (upn, display_name, password_hash, must_change_password, created_by, updated_by)
+           output inserted.user_id
+           values (@p1,@p2,@p3,1,@p4,@p4)`,
+          [email, displayName, hash, caller.upn]);
+        const userId = ins.rows[0].user_id;
+        for (const region of wantedRegions) {
+          await c.query(`insert into dbo.user_region_access (user_id, region, granted_by) values (@p1,@p2,@p3)`,
+            [userId, region, caller.upn]);
+        }
+        return { userId };
+      });
+      if (out.conflict) { send(res, 409, { error: "That email already has an account." }); return true; }
+
+      await auditAccess(caller.sessionId, caller.upn, email, "created_user", null,
+        wantedRegions.length ? "Regions: " + wantedRegions.join(",") : null);
+      send(res, 201, { userId: out.userId, email, tempPassword });
+      return true;
+    }
+
+    /* POST /api/admin/users/:id/reset-password - issues a new temporary
+       password (shown once, same as account creation) and signs the person
+       out everywhere by dropping their sessions, so a compromised or
+       forgotten password cannot be used again once reset. */
+    const resetMatch = req.method === "POST" && R_USER_RESET.exec(path);
+    if (resetMatch) {
+      const subId = resetMatch[1];
+      const { rows: subRows } = await query(`select upn from dbo.app_user where user_id=@p1`, [subId]);
+      if (!subRows.length) { send(res, 404, { error: "No such user." }); return true; }
+      const subjectUpn = subRows[0].upn;
+      const tempPassword = randomTempPassword();
+
+      await query(`update dbo.app_user set password_hash=@p1, must_change_password=1, updated_by=@p2, updated_at=sysutcdatetime() where user_id=@p3`,
+        [hashPassword(tempPassword), caller.upn, subId]);
+      const { rows: killed } = await query(`select session_id from dbo.user_session where user_id=@p1`, [subId]);
+      killed.forEach((r) => cache.delete(r.session_id));
+      await query(`delete from dbo.user_session where user_id=@p1`, [subId]);
+      await auditAccess(caller.sessionId, caller.upn, subjectUpn, "reset_password", null, null);
+      send(res, 200, { tempPassword });
       return true;
     }
 

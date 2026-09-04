@@ -3,25 +3,110 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sobha | Land Feasibility</title>
-<meta http-equiv="refresh" content="0; url=/landing">
+<title>Sobha | Sign in</title>
 <style>
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:#f4f6fa;font:14px -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#5b6b82}
-  a{color:#0F4F9E}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; font-family: Arial, Helvetica, sans-serif; }
+  body { overflow: hidden; }
+
+  .hero {
+    position: relative; width: 100%; height: 100vh; min-height: 600px; overflow: hidden;
+    background-image: url("gold-coast-landing.jpg"); background-size: cover; background-position: center center;
+    background-repeat: no-repeat; color: #ffffff;
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,.02) 0%, rgba(0,0,0,.02) 45%, rgba(0,0,0,.18) 68%, rgba(0,0,0,.55) 88%, rgba(0,0,0,.78) 100%);
+    pointer-events: none; z-index: 1;
+  }
+  .content { position: absolute; left: 5%; bottom: 7%; z-index: 5; color: #ffffff; width: min(360px, 90%); }
+  .greeting { margin-bottom: 22px; font-size: clamp(28px, 3vw, 40px); line-height: 1.05; font-weight: 700;
+    letter-spacing: -1.2px; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+
+  form { display: flex; flex-direction: column; gap: 10px; }
+  .field {
+    height: 40px; padding: 0 16px; border: 1px solid rgba(255,255,255,.55); border-radius: 22px; outline: none;
+    background: rgba(15,20,20,.45); color: #ffffff; font: 13px Arial, Helvetica, sans-serif;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .2s ease, border-color .2s ease;
+  }
+  .field::placeholder { color: rgba(255,255,255,.75); }
+  .field:focus { border-color: #ffffff; background: rgba(15,20,20,.65); }
+
+  .submit-button {
+    height: 40px; padding: 0 24px; border: 1px solid rgba(255,255,255,.55); border-radius: 22px;
+    background: rgba(15,20,20,.45); color: #ffffff; font: 500 12px Arial, Helvetica, sans-serif; cursor: pointer;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    transition: background .2s ease, color .2s ease, border-color .2s ease;
+  }
+  .submit-button:hover { background: #ffffff; color: #111111; border-color: #ffffff; }
+  .submit-button:disabled { opacity: .6; cursor: default; }
+  .submit-button:active { transform: scale(.98); }
+
+  .message { min-height: 18px; margin-top: 4px; font-size: 11.5px; color: rgba(255,255,255,.92); }
+  .message.err { color: #ffd7d3; }
+
+  @media (max-width: 768px) { .content { left: 7%; right: 7%; bottom: 7%; width: auto; } .greeting { font-size: 28px; } }
+  @media (max-width: 480px) { .content { left: 6%; right: 6%; bottom: 6%; } .greeting { font-size: 24px; } }
 </style>
 </head>
 <body>
-<!-- This used to be a client-side login screen comparing what you typed
-     against a password list held in the page itself - a prototype, and never
-     a real authenticator (a browser-side check like that is a doorway, not a
-     boundary: anyone can read or bypass code running in their own browser).
-     Sign-in is now Microsoft Entra via Azure App Service Easy Auth, enforced
-     at the platform edge before any request reaches this app. This page's
-     only remaining job is to send a visitor on to /landing, which resolves
-     who they are (and which regions they may open) from the server, not from
-     anything the browser claims. -->
-<script>window.location.replace("/landing");</script>
-<noscript><p>Continue to <a href="/landing">Sobha Land Feasibility</a>.</p></noscript>
+<section class="hero">
+  <div class="content">
+    <h1 class="greeting">Sign in</h1>
+    <form id="loginForm" autocomplete="on">
+      <input class="field" type="email" id="email" name="email" placeholder="Email" autocomplete="username" required>
+      <input class="field" type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required>
+      <button type="submit" class="submit-button" id="submitBtn">Sign in</button>
+    </form>
+    <div id="message" class="message"></div>
+  </div>
+</section>
+<script>
+(function () {
+  "use strict";
+  /* Internal login, not Microsoft/Entra: an admin creates each account
+     (admin.html) and this posts straight to /api/login, which sets an
+     HttpOnly session cookie - see api/access.mjs. No token or identity
+     provider is involved anywhere in this page. */
+  var params = new URLSearchParams(location.search);
+  var redirect = params.get("redirect") || "/landing";
+
+  var form = document.getElementById("loginForm");
+  var message = document.getElementById("message");
+  var submitBtn = document.getElementById("submitBtn");
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    message.className = "message";
+    message.textContent = "";
+    submitBtn.disabled = true;
+
+    fetch("/api/login", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value,
+      }),
+    })
+      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, body: t ? JSON.parse(t) : {} }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          message.className = "message err";
+          message.textContent = res.body.error || "Sign-in failed.";
+          submitBtn.disabled = false;
+          return;
+        }
+        window.location.href = redirect;
+      })
+      .catch(function () {
+        message.className = "message err";
+        message.textContent = "Could not reach the server. Try again.";
+        submitBtn.disabled = false;
+      });
+  });
+})();
+</script>
 </body>
 </html>

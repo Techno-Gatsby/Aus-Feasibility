@@ -169,19 +169,46 @@ seed — is all doable from this machine once those exist.
 
 ## Access control — who signs in, and which region they see
 
-Identity is Microsoft Entra via Easy Auth (the section above); authorization -
-which region a signed-in person may open, and who administers that - is
-`api/access.mjs` plus `api/schema-access.sqlserver.sql`. Neither existed before
-the store had to answer "someone with Australia access must not be able to open
-the US model."
+Identity is internal, not Microsoft/Entra: an email + password this app owns
+and hashes itself (node:crypto `scrypt`, no dependency), because Easy Auth
+would have made every signed-in person a Sobha Entra account, and the
+requirement is the opposite - specific external people, admin-created, with no
+tenant membership at all. Authorization - which region a signed-in person may
+open, and who administers that - is `api/access.mjs` plus
+`api/schema-access.sqlserver.sql`. Neither existed before the store had to
+answer "someone with Australia access must not be able to open the US model."
 
 | | |
 |---|---|
-| `schema-access.sqlserver.sql` | `app_user`, `user_region_access`, `access_request`, `user_session`, `access_audit`, `appraisal_audit`, and the views the routes and the gate read - `user_access`, `session_summary`, `session_activity`. Run once, after `schema.sqlserver.sql`. Ends with a guarded bootstrap: the named UPN in it becomes the first admin, but only while no admin exists, so re-running it is a no-op once one does. |
-| `access.mjs` | `grantsFor(req)` - resolves a caller once per minute per person (cached; a revoke is visible within that window, no separate invalidation needed) - and the routes: `GET /api/me`, `POST /api/access-requests`, and `/api/admin/*` (users, requests, sessions, audit) behind an `isAdmin` check. |
-| `Deploy/server.js` | gates `us.html`, `australia.html` and `admin.html` on the resolved region/admin flag, *after* `resolveRequestPath()` so every alias (`/us`, `/usa`, `/us.html`, …) is covered by one check. No principal → redirect to Easy Auth; wrong or no region → 403 with `no-access.html`; the access module unreachable → 503, never a silent open. |
+| `schema-access.sqlserver.sql` | `app_user` (now carrying `password_hash`, `must_change_password`), `user_region_access`, `access_request`, `user_session`, `access_audit`, `appraisal_audit`, and the views the routes and the gate read - `user_access`, `session_summary`, `session_activity`. Run once, after `schema.sqlserver.sql`. Ends with a guarded bootstrap: the named UPN becomes the first admin, but with no password - see **Bootstrapping the first admin** below - and only while no admin exists, so re-running it is a no-op once one does. |
+| `access.mjs` | Password hashing (`hashPassword`/`verifyPassword`), signed session cookies (`sessionCookieHeader`/`sessionIdFromRequest`, HMAC'd with the `SESSION_SECRET` app setting), `POST /api/login`, `POST /api/logout`, `POST /api/bootstrap-admin`, `POST /api/change-password`, `GET /api/me`, `POST /api/access-requests`, and `/api/admin/*` (users incl. create/reset-password, requests, sessions, audit) behind an `isAdmin` check. `grantsFor(req)` resolves a caller from their session cookie once per minute per session (cached; a revoke is visible within that window, no separate invalidation needed). |
+| `Deploy/server.js` | gates `us.html`, `australia.html` and `admin.html` on the resolved region/admin flag, *after* `resolveRequestPath()` so every alias (`/us`, `/usa`, `/us.html`, …) is covered by one check. No session → redirect to `/login`; wrong or no region → 403 with `no-access.html`; the access module unreachable → 503, never a silent open. |
+| `Deploy/sobha-login-region.html` | the actual sign-in form (email + password → `POST /api/login`). Aliased at `/`, `/login`. |
+| `Deploy/change-password.html` | self-service password change; where `must_change_password` sends someone after a first sign-in or an admin reset. |
 | `Deploy/no-access.html` | what a signed-in person without the region sees - reads `/api/me`, offers a request form, hides it if the account is disabled. |
-| `Deploy/admin.html` | grant/revoke a region, make/remove an admin, decide pending requests, and the session-activity view below - one page, four tabs. |
+| `Deploy/admin.html` | create a user (with a one-time temporary password), reset a password, grant/revoke a region, make/remove an admin, decide pending requests, and the session-activity view below - one page, four tabs. |
+
+**Bootstrapping the first admin.** `schema-access.sqlserver.sql` creates the
+named admin's `app_user` row but leaves `password_hash` null - hashing has to
+happen in the app, not T-SQL. Finish it with one call, which only ever
+succeeds once (it refuses a UPN that already has a `password_hash`, so it is
+safe to leave deployed rather than needing removal after use):
+
+```bash
+curl -X POST https://uat-landfeasibility.sobhaapps.com/api/bootstrap-admin \
+  -H 'content-type: application/json' \
+  -d '{"email":"jay.kadam@sobharealty.com","password":"<a real password, 10+ chars>"}'
+```
+
+From there, sign in at `/login` and use `admin.html` → **Create user** for
+everyone else - each gets a random temporary password shown once (there is no
+email sending here, so relay it out of band) and `must_change_password` set,
+which routes them to `/change-password` on their first sign-in.
+
+**`SESSION_SECRET`** (app setting) signs the session cookie; without it,
+`/api/login` and every gated request fail closed with 503 rather than falling
+back to a guessable default - the same stance the rest of this file takes on
+an unreachable database.
 
 **Off by default.** `ACCESS_ENFORCE` (app setting) or `access.config.json`
 (`{"enforce": true}`, a plain file next to `server.js`) turns the gate on;
@@ -193,10 +220,13 @@ seconds - no restart. If `access.mjs` fails to load, or `grantsFor` throws
 enforcement flag that quietly stops enforcing is worse than an outage, and the
 outage is one Kudu PUT away from `enforce off`.
 
-**Sessions are derived, not declared.** There is no cookie of this app's own -
-Easy Auth already owns the one that matters - so a session is a run of activity:
-the first gated request after 30 idle minutes opens a `user_session` row, and
-later requests within that window just touch it. A save (`appraisal_audit`,
+**Sessions.** `POST /api/login` creates the `user_session` row explicitly and
+names it with an HMAC-signed cookie (`SESSION_SECRET`) - the id means nothing
+without a matching row, so a stolen cookie is useless once that row is deleted,
+which `POST /api/logout` and an admin's reset-password action both do. Unlike
+the derived-from-activity design this replaced, the cookie's own 12-hour
+`Max-Age` is what ends a session on its own; every request in between just
+touches `last_seen_at`. A save (`appraisal_audit`,
 alongside the existing `appraisal_version`) and a delete (which never touched
 `appraisal_version` - this is the only record it leaves) both carry the
 session's id, and so does an access change (`access_audit.session_id`). That is

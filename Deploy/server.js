@@ -119,7 +119,15 @@ async function gateStaticFile(req, res, fileName) {
   }
 
   if (!caller) {
-    sendRedirect(res, "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(req.url || "/"));
+    sendRedirect(res, "/login?redirect=" + encodeURIComponent(req.url || "/"));
+    return true;
+  }
+
+  /* A temporary password (new account, or an admin's reset) must be changed
+     before anything else, not just on whichever path Landing.html happens to
+     be on - otherwise a bookmarked /australia would let it be skipped. */
+  if (caller.mustChangePassword) {
+    sendRedirect(res, "/change-password?redirect=" + encodeURIComponent(req.url || "/"));
     return true;
   }
 
@@ -165,6 +173,9 @@ function resolveRequestPath(requestUrl) {
     "/sobha-login-region.html": "/sobha-login-region.html",
     "/login": "/sobha-login-region.html",
     "/login/": "/sobha-login-region.html",
+    "/login.html": "/sobha-login-region.html",
+    "/change-password": "/change-password.html",
+    "/change-password/": "/change-password.html",
     "/us": "/us.html",
     "/us/": "/us.html",
     "/us.html": "/us.html",

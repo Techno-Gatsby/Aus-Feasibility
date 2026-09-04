@@ -15,26 +15,34 @@
 /* ═════════════════════════════════════════════════════════════════════════════
    1. Who signs in, and what they can see
 
-   One row per person, keyed on the Easy Auth principal name (UPN) - the same
-   header api/appraisals.mjs already trusts, and trusts for the same reason:
-   App Service Authentication validates the Entra token at the platform edge
-   and strips any copy the browser tried to send, so the header is only
-   trustworthy with Easy Auth actually switched on. Everything in this section
-   is worthless as a security boundary until it is.
+   One row per person, keyed on their sign-in email. There is no external
+   identity provider - password_hash below is this app's own credential,
+   verified by api/access.mjs against exactly this table. Everything in this
+   section is worthless as a security boundary until SESSION_SECRET is set
+   (signs the session cookie) and the bootstrap admin has run
+   POST /api/bootstrap-admin - see api/README.md.
    ════════════════════════════════════════════════════════════════════════════ */
 
 if object_id(N'dbo.app_user', N'U') is null
 create table dbo.app_user (
   user_id       uniqueidentifier not null constraint df_app_user_id default newid(),
-  /* the Easy Auth principal name, lower-cased at write time so a lookup never
-     depends on how a person's tenant happens to capitalise their UPN */
+  /* the sign-in email, lower-cased at write time so a lookup never depends on
+     how someone happens to capitalise it. Not an Entra UPN - there is no
+     Microsoft identity provider here; this is this app's own login. */
   upn           nvarchar(200)    not null,
-  /* the stable Entra object id, when the caller's principal claims carry one -
-     a UPN can be renamed (marriage, rebrand); this cannot. Nullable because the
-     one header appraisals.mjs reads today (X-MS-CLIENT-PRINCIPAL-NAME) does not
-     carry it - populate it once access.mjs reads the fuller principal claims. */
+  /* unused now that sign-in is internal rather than Entra, kept nullable
+     rather than dropped - a later Entra integration would populate it, not
+     need a new column */
   entra_oid     nvarchar(100)    null,
   display_name  nvarchar(200)    null,
+  /* salt:hash, both hex, from node:crypto scrypt - see hashPassword in
+     access.mjs. Null means the admin has not set this person's password yet
+     (or, for the bootstrap admin, has not completed /api/bootstrap-admin) -
+     login refuses a null hash rather than treating it as "no password". */
+  password_hash nvarchar(300)    null,
+  /* set on account creation and on an admin-triggered reset, so a temporary
+     password can be required to be changed before anything else works */
+  must_change_password bit       not null constraint df_app_user_mustchange default 0,
   is_admin      bit              not null constraint df_app_user_admin default 0,
   disabled_at   datetime2(3)     null,
   first_seen_at datetime2(3)     not null constraint df_app_user_first default sysutcdatetime(),
@@ -45,6 +53,15 @@ create table dbo.app_user (
   constraint pk_app_user primary key (user_id),
   constraint uq_app_user_upn unique (upn)
 );
+GO
+
+/* Backfill for a database created before password_hash/must_change_password
+   existed - ALTER TABLE has no IF NOT EXISTS, so this is the T-SQL idiom for
+   the same idempotence every other statement in this file already has. */
+if not exists (select 1 from sys.columns where object_id = object_id(N'dbo.app_user') and name = N'password_hash')
+  alter table dbo.app_user add password_hash nvarchar(300) null;
+if not exists (select 1 from sys.columns where object_id = object_id(N'dbo.app_user') and name = N'must_change_password')
+  alter table dbo.app_user add must_change_password bit not null constraint df_app_user_mustchange default 0;
 GO
 
 if not exists (select 1 from sys.indexes where name = N'ix_app_user_entra_oid' and object_id = object_id(N'dbo.app_user'))
@@ -164,9 +181,21 @@ create table dbo.access_audit (
   constraint fk_access_audit_session foreign key (session_id) references dbo.user_session(session_id),
   constraint ck_access_audit_action check (action in (
     N'signin', N'request', N'grant_region', N'revoke_region',
-    N'grant_admin', N'revoke_admin', N'disable', N'enable', N'bootstrap')),
+    N'grant_admin', N'revoke_admin', N'disable', N'enable', N'bootstrap',
+    N'login', N'logout', N'created_user', N'reset_password', N'change_password')),
   constraint ck_access_audit_region check (region is null or region in (N'US', N'AU'))
 );
+GO
+
+/* T-SQL has no ALTER CHECK, so a database from before login/logout/
+   created_user/reset_password/change_password existed needs the constraint
+   dropped and recreated - safe to run whether or not it already has them. */
+if exists (select 1 from sys.check_constraints where name = N'ck_access_audit_action')
+  alter table dbo.access_audit drop constraint ck_access_audit_action;
+alter table dbo.access_audit add constraint ck_access_audit_action check (action in (
+  N'signin', N'request', N'grant_region', N'revoke_region',
+  N'grant_admin', N'revoke_admin', N'disable', N'enable', N'bootstrap',
+  N'login', N'logout', N'created_user', N'reset_password', N'change_password'));
 GO
 
 if not exists (select 1 from sys.indexes where name = N'ix_access_audit_subject' and object_id = object_id(N'dbo.access_audit'))
@@ -209,6 +238,8 @@ GO
 create or alter view dbo.user_access as
 select u.user_id, u.upn, u.display_name, u.is_admin, u.disabled_at,
        u.first_seen_at, u.last_seen_at,
+       cast(case when u.password_hash is not null then 1 else 0 end as bit) as has_password,
+       u.must_change_password,
        (select string_agg(r.region, ',') within group (order by r.region)
         from dbo.user_region_access r where r.user_id = u.user_id) as regions,
        (select count(*) from dbo.access_request q
@@ -256,9 +287,14 @@ GO
 
    A guarded insert: only fires when the table exists and holds zero admins, so
    re-running this file after an admin already exists is a no-op, not a reset.
-   Belt and braces with the ACCESS_BOOTSTRAP_ADMIN app setting in server.js,
-   which performs the same "only if there are no admins" grant from the
-   running app - so a lockout is recoverable without a SQL connection at all.
+   This creates the row and the admin flag only - password_hash stays null,
+   because hashing (node:crypto scrypt) has to happen in the app, not T-SQL.
+
+   After running this file, finish bootstrapping from the app itself:
+     POST /api/bootstrap-admin { "email": "<the UPN below>", "password": "..." }
+   That route only ever succeeds once - it refuses if the named admin already
+   has a password_hash - so it is safe to leave deployed rather than needing
+   to be removed after use.
 
    Replace the placeholder UPN below before running this file.
    ════════════════════════════════════════════════════════════════════════════ */

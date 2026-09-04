@@ -482,11 +482,11 @@
 
 
     /* Who is signed in, and which regions they may open, both come from
-       /api/me now - the server's own record of the Easy Auth principal and
-       its grants, not anything the browser can set. sessionStorage held only
-       {displayName, username} written by the old client-side login screen,
-       which is why this used to fall back to "User": there was nothing
-       server-verified to show. */
+       /api/me now - the server's own record of this app's own login session
+       and its grants, not anything the browser can set. sessionStorage held
+       only {displayName, username} written by the old client-side login
+       screen, which is why this used to fall back to "User": there was
+       nothing server-verified to show. */
 
     const regionUrls = { AU: "/australia", US: "/usa" };
     const regionLabel = { AU: "Sobha Australia", US: "Sobha USA" };
@@ -494,7 +494,7 @@
     fetch("/api/me", { cache: "no-store" })
         .then(function (r) {
             if (r.status === 401) {
-                window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(location.pathname);
+                window.location.href = "/login?redirect=" + encodeURIComponent(location.pathname);
                 return null;
             }
             if (!r.ok) throw new Error("Could not load your account.");
@@ -504,6 +504,11 @@
             if (!me) return;
 
             document.getElementById("userName").textContent = me.upn;
+
+            if (me.mustChangePassword) {
+                window.location.href = "/change-password?redirect=" + encodeURIComponent(location.pathname);
+                return;
+            }
 
             if (me.disabled || !me.regions || !me.regions.length) {
                 window.location.href = "/no-access";
