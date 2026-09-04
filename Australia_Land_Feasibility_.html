@@ -103,6 +103,9 @@ input.hbtn::placeholder{color:#93A0B5;}
   font:650 8.6px var(--sans);letter-spacing:.07em;text-transform:uppercase;vertical-align:1px;cursor:help;}
 .tagref{background:var(--canvas);color:var(--faint);border:1px solid var(--line);}
 .tagoff{background:var(--warn-bg);color:var(--warn);border:1px solid #E8D3A8;}
+.tagcalc{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:3px;
+  font:650 9.5px var(--mono);letter-spacing:0;text-transform:none;vertical-align:1px;cursor:help;
+  background:var(--info-bg);color:#1A5FB4;border:1px solid var(--line2);}
 .sliders{padding:10px 15px 13px;}
 .sl{}
 .sl label{display:inline-block;}
@@ -4057,6 +4060,8 @@ function landPaymentMonths(d){
 }
 const GROUPS=[
  {g:"Site and yield",f:[
+  ["dutystate","State / Territory — prefills duty and land tax below","code",0,"n"],
+  ["landvacant","Land status for the state calculator","flag",1,"n"],
   ["acresGross","Gross site area","sqm",4497,"n"],
   ["_acresNet","Developable site area","sqm",4497,"n"],
   ["nsa","Net saleable area","sqm",0,"n"],
@@ -6051,8 +6056,221 @@ const SELECT_OPTIONS={
   pidacct:[[0,"Reduce project cost"],[1,"Recognise against reimbursed cost"]],
   modelphase:[[0,"Earliest active phase"],[1,"Phase 1"],[2,"Phase 2"],[3,"Phase 3"],[4,"Phase 4"],[5,"Phase 5"],[6,"Phase 6"]],
   drawphasecount:[[0,"Off — uses drawshare only"],[1,"1 phase"],[2,"2 phases"],[3,"3 phases"],[4,"4 phases"]],
-  repaycount:[[0,"Off"],[1,"1 lump"],[2,"2 lumps"],[3,"3 lumps"],[4,"4 lumps"],[5,"5 lumps"]]
+  repaycount:[[0,"Off"],[1,"1 lump"],[2,"2 lumps"],[3,"3 lumps"],[4,"4 lumps"],[5,"5 lumps"]],
+  dutystate:[[0,"— Select to prefill duty —"],[1,"NSW"],[2,"VIC"],[3,"QLD"],[4,"WA"],[5,"SA"],[6,"TAS"],[7,"ACT"],[8,"NT"]],
+  landvacant:[[1,"Vacant land"],[0,"Occupied / improved property"]]
 };
+/* Transfer (stamp) duty and foreign purchaser surcharge, one state at a time.
+   Ported from stampdutycalcs.com.au's own shipped calculation code (their
+   Next.js bundle embeds the rate tables and bracket math directly, so this
+   was read out of it rather than re-derived from scattered state-government
+   pages), for their Vacant Land / Investor / not-first-home-buyer / foreign-buyer
+   scenario - the one this app always models. Verified by them 2026-07-17 for
+   the 2026-27 financial year. Every bracket is "base + rate% of the amount by
+   which the dutiable value exceeds `min`", rounded up to the next $100 first;
+   `flatRate` brackets (VIC $960k-$2m, ACT above $1.455m) charge that rate on
+   the ENTIRE value, not just the excess. NSW's premium tier above $3.87m
+   replaces the standard top bracket rather than extending it. NT has no
+   bracket table at all - a quadratic formula below $525k, flat rates above. */
+const AU_DUTY_TABLE={
+  1:{name:"NSW",minimumDuty:20,foreignPct:9,brackets:[
+    {min:0,max:18000,base:0,rate:1.25},{min:18000,max:38000,base:225,rate:1.5},
+    {min:38000,max:103000,base:525,rate:1.75},{min:103000,max:387000,base:1662,rate:3.5},
+    {min:387000,max:1290000,base:11602,rate:4.5},{min:1290000,max:3870000,base:52237,rate:5.5},
+    {min:3870000,max:Infinity,base:194137,rate:7}]},
+  2:{name:"VIC",minimumDuty:0,foreignPct:8,brackets:[
+    {min:0,max:25000,base:0,rate:1.4},{min:25000,max:130000,base:350,rate:2.4},
+    {min:130000,max:960000,base:2870,rate:6},{min:960000,max:2000000,flatRate:.055},
+    {min:2000000,max:Infinity,base:110000,rate:6.5}]},
+  3:{name:"QLD",minimumDuty:0,foreignPct:8,brackets:[
+    {min:0,max:5000,base:0,rate:0},{min:5000,max:75000,base:0,rate:1.5},
+    {min:75000,max:540000,base:1050,rate:3.5},{min:540000,max:1000000,base:17325,rate:4.5},
+    {min:1000000,max:Infinity,base:38025,rate:5.75}]},
+  4:{name:"WA",minimumDuty:0,foreignPct:7,brackets:[
+    {min:0,max:120000,base:0,rate:1.9},{min:120000,max:150000,base:2280,rate:2.85},
+    {min:150000,max:360000,base:3135,rate:3.8},{min:360000,max:725000,base:11115,rate:4.75},
+    {min:725000,max:Infinity,base:28453,rate:5.15}]},
+  5:{name:"SA",minimumDuty:0,foreignPct:7,brackets:[
+    {min:0,max:12000,base:0,rate:1},{min:12000,max:30000,base:120,rate:2},
+    {min:30000,max:50000,base:480,rate:3},{min:50000,max:100000,base:1080,rate:3.5},
+    {min:100000,max:200000,base:2830,rate:4},{min:200000,max:250000,base:6830,rate:4.25},
+    {min:250000,max:300000,base:8955,rate:4.75},{min:300000,max:500000,base:11330,rate:5},
+    {min:500000,max:Infinity,base:21330,rate:5.5}]},
+  6:{name:"TAS",minimumDuty:50,foreignPct:8,brackets:[
+    {min:0,max:3000,flat:50},{min:3000,max:25000,base:50,rate:1.75},
+    {min:25000,max:75000,base:435,rate:2.25},{min:75000,max:200000,base:1560,rate:3.5},
+    {min:200000,max:375000,base:5935,rate:4},{min:375000,max:725000,base:12935,rate:4.25},
+    {min:725000,max:Infinity,base:27810,rate:4.5}]},
+  7:{name:"ACT",minimumDuty:0,foreignPct:0,brackets:[
+    {min:0,max:200000,base:0,rate:1.2},{min:200000,max:300000,base:2400,rate:2.2},
+    {min:300000,max:500000,base:4600,rate:3.4},{min:500000,max:750000,base:11400,rate:4.32},
+    {min:750000,max:1000000,base:22200,rate:5.9},{min:1000000,max:1455000,base:36950,rate:6.4},
+    {min:1455000,max:Infinity,flatRate:.0454}]},
+  8:{name:"NT",minimumDuty:0,foreignPct:0,formula:v=>{
+    if(v<=525000){const t=v/1000;return Math.round(.06571441*t*t+15*t)}
+    if(v<3000000)return Math.round(v*.0495);
+    if(v<5000000)return Math.round(v*.0575);
+    return Math.round(v*.0595)}}
+};
+function auDutyOnBracket(value,brackets){
+  const b=brackets.find(t=>value>t.min&&value<=t.max)||brackets[brackets.length-1];
+  if(!b)return 0;
+  if(b.flat!=null)return b.flat;
+  if(b.flatRate!=null)return Math.round(value*b.flatRate);
+  return Math.round(b.base+Math.ceil((value-b.min)/100)*100/100*b.rate);
+}
+/* Annual land tax, same treatment as duty above: bracket tables and thresholds
+   ported from landtaxpro.com.au's own calc.js (plain, unminified - read directly,
+   not reverse-engineered from a bundle). Two figures corrected against the
+   current official rate rather than copied as-is, because they were stale
+   there: NSW's foreign surcharge is 5% since the 2025 land tax year (its code
+   still had 4%), and QLD's is 3% of the value ABOVE $350,000, not 4% of the
+   whole value (QRO raised 2%->3% from FY2024-25; the site also had the wrong
+   base). VIC 4%, TAS 2% and ACT 0.75% matched the site exactly. WA and SA
+   carry no general land-tax foreign surcharge in Australia, same as the site.
+   NT has no land tax at all, so it is simply absent from the table.
+   Basis: land value EXCLUDING GST (a government site-value proxy, not a
+   transaction price), unlike the duty calculation which is GST-inclusive.
+   Ownership persona fixed to Trust + Offshore, mirroring the Investor +
+   Foreign Buyer persona used for duty - the site only offers
+   Individual/Trust, and Trust is the closer analogue to a corporate
+   development entity. Vacant/occupied is the one input the site's own logic
+   actually varies on: VIC's Vacant Residential Land Tax (`vacantRate`, 1% of
+   land value, folded into the `landtax` figure) is the only place `landStatus`
+   changes anything in landtaxpro's calc.js - it is applied when the new
+   "Land status" input above is set to Vacant. Real VRLT carries geographic
+   and exemption carve-outs (inner/middle Melbourne LGAs, one-year
+   grace periods, etc.) this app has no fields to check, so treat it as an
+   upper bound, same as the rest of this table. WA's Metropolitan Region
+   Improvement Tax is not conditioned on vacant/occupied in the site's own
+   code either, and still has no field to land in - left out. */
+const AU_LAND_TAX_TABLE={
+  1:{name:"NSW",foreignPct:5,brackets:[
+    {min:0,max:1075000,flat:100},{min:1075000,max:6571000,base:100,rate:1.6},
+    {min:6571000,max:Infinity,base:88836,rate:2}]},
+  2:{name:"VIC",foreignPct:4,vacantRate:.01,brackets:[
+    {min:0,max:25000,base:0,rate:0},{min:25000,max:50000,base:82,rate:.375},
+    {min:50000,max:100000,base:676,rate:.375},{min:100000,max:250000,base:1338,rate:.375},
+    {min:250000,max:600000,base:1901,rate:.675},{min:600000,max:1000000,base:4263,rate:.975},
+    {min:1000000,max:1800000,base:8163,rate:1.275},{min:1800000,max:3000000,base:18363,rate:1.1072},
+    {min:3000000,max:Infinity,base:31650,rate:2.65}]},
+  3:{name:"QLD",foreignPct:3,foreignDeduct:350000,brackets:[
+    {min:0,max:350000,base:0,rate:0},{min:350000,max:2250000,base:1450,rate:1.7},
+    {min:2250000,max:5000000,base:33750,rate:1.5},{min:5000000,max:10000000,base:75000,rate:2.25},
+    {min:10000000,max:Infinity,base:187500,rate:2.75}]},
+  4:{name:"WA",foreignPct:0,brackets:[
+    {min:0,max:300000,base:0,rate:0},{min:300000,max:420000,flat:300},
+    {min:420000,max:1000000,base:300,rate:.25},{min:1000000,max:1800000,base:1750,rate:.9},
+    {min:1800000,max:5000000,base:8950,rate:1.8},{min:5000000,max:11000000,base:66550,rate:2},
+    {min:11000000,max:Infinity,base:186550,rate:2.67}]},
+  5:{name:"SA",foreignPct:0,brackets:[
+    {min:0,max:25000,base:0,rate:0},{min:25000,max:732000,base:125,rate:.5},
+    {min:732000,max:1176000,base:3660,rate:1},{min:1176000,max:1711000,base:8100,rate:1.5},
+    {min:1711000,max:2738000,base:16125,rate:2.4},{min:2738000,max:Infinity,base:40773,rate:2.4}]},
+  6:{name:"TAS",foreignPct:2,brackets:[
+    {min:0,max:125000,base:0,rate:0},{min:125000,max:500000,base:50,rate:.45},
+    {min:500000,max:Infinity,base:1737.5,rate:1.5}]},
+  7:{name:"ACT",foreignPct:.75,brackets:[
+    {min:0,max:150000,base:0,rate:.54},{min:150000,max:275000,base:810,rate:.64},
+    {min:275000,max:1000000,base:1610,rate:1.24},{min:1000000,max:2000000,base:10600,rate:1.25},
+    {min:2000000,max:Infinity,base:23100,rate:1.26}]}
+};
+/* Shared by applyStatePrefill (writes into D) and auStateCalcRef (badges,
+   read-only) so the two can never drift onto different formulas. */
+function auCalcStateFigures(code,acresGross,pr,landgstPct,vacant){
+  const cfg=AU_DUTY_TABLE[code];
+  if(!cfg)return null;
+  const acres=Math.max(0,acresGross),p=Math.max(0,pr),
+    landExGst=acres*p,landIncGst=landExGst*(1+Math.max(0,landgstPct)/100);
+  if(!(landExGst>0))return null;
+  const ltcfg=AU_LAND_TAX_TABLE[code],
+    landtax=ltcfg?auDutyOnBracket(landExGst,ltcfg.brackets)+(vacant&&ltcfg.vacantRate?landExGst*ltcfg.vacantRate:0):0;
+  return{state:cfg.name,
+    stampfixed:Math.round(Math.max(cfg.minimumDuty||0,cfg.formula?cfg.formula(landIncGst):auDutyOnBracket(landIncGst,cfg.brackets))),
+    foreignsurcharge:cfg.foreignPct,
+    landtax:Math.round(landtax),
+    foreignlandtax:ltcfg&&ltcfg.foreignPct?Math.round(Math.max(0,landExGst-(ltcfg.foreignDeduct||0))*ltcfg.foreignPct/100):0};
+}
+function applyStatePrefill(){
+  const r=auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
+  if(!r)return;
+  D.stampmode=1;D.stampfixed=r.stampfixed;D.foreignsurcharge=r.foreignsurcharge;
+  D.landtax=r.landtax;D.foreignlandtax=r.foreignlandtax;
+}
+/* Read-only reference for the badges below - the same formula as
+   applyStatePrefill, but never writes into D, so it can be recomputed on
+   every form build to show what the state's rules say NOW beside whatever
+   figure is actually typed into the field (prefilled once, then free to
+   diverge as the user edits it). */
+const STATE_CALC_FIELDS=new Set(["stampfixed","foreignsurcharge","landtax","foreignlandtax","firbfee"]);
+function auStateCalcRef(){
+  return auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
+}
+/* FIRB application fee - federal, not state-dependent, so shown regardless of
+   whether a duty state is even picked above (auStateCalcRef returns null with
+   no state selected, which would otherwise hide this badge too). Schedule of
+   Fees v8 (Treasury, 1 July 2026), Table 1: "Commercial land, tenements,
+   businesses, and entities" consideration bands against the "Notifiable
+   actions" fee - the application type every parcel here would lodge, not an
+   exemption certificate. Every band is a flat fee, not marginal, so
+   auDutyOnBracket's `flat` branch (built for VIC/ACT's flat-rate duty bands)
+   already does exactly this lookup with no changes needed. Consideration is
+   the GST-inclusive contract price, the same basis stamp duty above uses -
+   not the GST-exclusive site-value proxy the land tax figures use. */
+const AU_FIRB_TABLE=[
+  {min:0,max:75000,flat:4600},{min:75000,max:50000000,flat:15600},
+  {min:50000000,max:100000000,flat:31300},{min:100000000,max:150000000,flat:62600},
+  {min:150000000,max:200000000,flat:93900},{min:200000000,max:250000000,flat:125200},
+  {min:250000000,max:300000000,flat:156500},{min:300000000,max:350000000,flat:187800},
+  {min:350000000,max:400000000,flat:219100},{min:400000000,max:450000000,flat:250400},
+  {min:450000000,max:500000000,flat:281700},{min:500000000,max:550000000,flat:313000},
+  {min:550000000,max:600000000,flat:344300},{min:600000000,max:650000000,flat:375600},
+  {min:650000000,max:700000000,flat:406900},{min:700000000,max:750000000,flat:438200},
+  {min:750000000,max:800000000,flat:469500},{min:800000000,max:850000000,flat:500800},
+  {min:850000000,max:900000000,flat:532100},{min:900000000,max:950000000,flat:563400},
+  {min:950000000,max:1000000000,flat:594700},{min:1000000000,max:1050000000,flat:626000},
+  {min:1050000000,max:1100000000,flat:657300},{min:1100000000,max:1150000000,flat:688600},
+  {min:1150000000,max:1200000000,flat:719900},{min:1200000000,max:1250000000,flat:751200},
+  {min:1250000000,max:1300000000,flat:782500},{min:1300000000,max:1350000000,flat:813800},
+  {min:1350000000,max:1400000000,flat:845100},{min:1400000000,max:1450000000,flat:876400},
+  {min:1450000000,max:1500000000,flat:907700},{min:1500000000,max:1550000000,flat:939000},
+  {min:1550000000,max:1600000000,flat:970300},{min:1600000000,max:1650000000,flat:1001600},
+  {min:1650000000,max:1700000000,flat:1032900},{min:1700000000,max:1750000000,flat:1064200},
+  {min:1750000000,max:1800000000,flat:1095500},{min:1800000000,max:1850000000,flat:1126800},
+  {min:1850000000,max:1900000000,flat:1158100},{min:1900000000,max:1950000000,flat:1189400},
+  {min:1950000000,max:2000000000,flat:1220700},{min:2000000000,max:Infinity,flat:1245500}
+];
+function auFirbFeeRef(){
+  const acres=Math.max(0,_num(D.acresGross,0)),p=Math.max(0,_num(D.pr,0)),
+    landIncGst=acres*p*(1+Math.max(0,_num(D.landgst,0))/100);
+  if(!(landIncGst>0))return null;
+  return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
+}
+/* Runs after every render(), not just after a form rebuild, so the badge
+   tracks acresGross/pr/landgst as they're typed - not just the state dropdown
+   that first wrote the figures into the fields below. */
+function paintStateCalcBadges(){
+  const ref=auStateCalcRef();
+  const firbRef=auFirbFeeRef();
+  STATE_CALC_FIELDS.forEach(k=>{
+    const inp=document.getElementById("i_"+k);
+    const row=inp&&inp.closest(".f"),label=row&&row.querySelector("label");
+    if(!label)return;
+    let span=label.querySelector(".tagcalc");
+    if(k==="firbfee"){
+      if(firbRef==null){if(span)span.remove();return}
+      if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
+      span.textContent="calc: $"+firbRef.toLocaleString("en-AU");
+      span.title="FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band: $"+firbRef.toLocaleString("en-AU")+". Reference only — not written back automatically.";
+      return;
+    }
+    if(!ref){if(span)span.remove();return}
+    const v2=k==="foreignsurcharge"?ref.foreignsurcharge+"%":"$"+Math.round(ref[k]).toLocaleString("en-AU");
+    if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
+    span.textContent="calc: "+v2;
+    span.title=ref.state+" calculated value from the current land inputs: "+v2+". Reference only — not written back unless you re-pick the state (or land status) above.";
+  });
+}
 ["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
 /* Boolean fields carry "flag" as their unit. Without an entry in SELECT_OPTIONS they
    rendered as a bare number box showing 0 or 1, which reads as a value to type rather
@@ -6233,6 +6451,8 @@ function buildFormCore(){
         inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
           if(isNaN(v)){inp.value=D[k];return}
           if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,1);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
+          if(k==="dutystate"){D.dutystate=_clamp(Math.round(v),0,8);applyStatePrefill();buildForm();render();return}
+          if(k==="landvacant"){D.landvacant=v>=.5?1:0;applyStatePrefill();buildForm();render();return}
           if(k==="nph"){
             if(!Number.isInteger(v)){alert("Construction phases must be entered as a whole number.");inp.value=D[k];return}
             D.nph=_clamp(v,1,6);
@@ -6752,7 +6972,7 @@ function render(){
     cancelOptimiserWorker();cancelSummaryAnalytics();clearCache();
     Object.keys(PANE).forEach(k=>{if(k!=="cpl"&&k!=="ccf"&&k!=="source")DIRTY[k]=true});clearModelError();
     if(renderFrame)cancelAnimationFrame(renderFrame);
-    renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();
+    renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();
       setTimeout(()=>{const pane=activePane();if(pane==="port")schedulePortfolioResults(80);if(CONTEXT_PANES.has(pane))scheduleActiveContext(pane==="cf"?20:50);else queuePanePaint(pane)},0)});
   }catch(e){showModelError(e)}
 }
@@ -8885,6 +9105,7 @@ function buildForm(){
   if(typeof paintCalc==='function')paintCalc();
   rebucketInputs();
   compactRenderedInputs();
+  if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();
   return result;
 }
 window.buildForm=buildForm;
