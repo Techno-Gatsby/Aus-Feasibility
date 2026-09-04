@@ -1,3 +1,5 @@
+begin;
+
 /* 400 Glenmore Road Paddington - 4:1 FSR
       npbt 155,039,349 */
 insert into appraisal (id, name, location, region, envelope, envelope_v, created_by, created_at, updated_by, updated_at)
@@ -219,3 +221,4 @@ values ('c3e78ebe-628c-451a-865a-29a186aab8f0', 1, $j$Project 9, Sydney (Apartme
         'jay.kadam@sobharealty.com', timestamptz '2026-09-04 00:00:00+00' + interval '0 seconds', 'Seed rebuild')
 on conflict (appraisal_id, version) do nothing;
 
+commit;
