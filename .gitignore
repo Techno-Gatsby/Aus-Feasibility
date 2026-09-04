@@ -2,8 +2,15 @@ assistant/node_modules/
 assistant-runtime/
 assistant/scripts/build-*.mjs
 
-# Reference clone of the colleague's Next.js app - not part of this project
-Aus-Feasibility/
+# Reference clone of the colleague's Next.js app - source is tracked,
+# but its own build/dep artefacts and nested repo are not
+Aus-Feasibility/node_modules/
+Aus-Feasibility/.next/
+Aus-Feasibility/.git/
+Aus-Feasibility/dev-server.log
+Aus-Feasibility/*.tsbuildinfo
+Aus-Feasibility/next-env.d.ts
+Aus-Feasibility/lib/engine/*.raw.js
 
 # Secrets - never commit. The Apify token lives in pipeline/.env
 .env
