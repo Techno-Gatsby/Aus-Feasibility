@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sobha | Access admin</title>
+<style>
+  :root{--ink:#1b2431;--ink2:#37455a;--mute:#5b6b82;--faint:#93a0b3;--line:#e3e8f0;
+    --accent:#0F4F9E;--accent-soft:#eaf1fb;--bg:#f4f6fa;--card:#ffffff;
+    --pos:#1a7a3d;--pos-bg:#e7f6ec;--warn:#9a6a00;--warn-bg:#fff4e0;--neg:#b3261e;--neg-bg:#fbeceb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:baseline;gap:12px}
+  header h1{margin:0;font-size:16px}
+  header .who{color:var(--mute);font-size:12px;margin-left:auto}
+  nav{display:flex;gap:2px;padding:0 22px;background:var(--card);border-bottom:1px solid var(--line)}
+  nav button{border:0;background:none;padding:12px 14px;font:600 12.5px inherit;color:var(--mute);cursor:pointer;border-bottom:2px solid transparent}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  main{max-width:1080px;margin:0 auto;padding:22px}
+  .pane{display:none}
+  .pane.on{display:block}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}
+  th{background:var(--bg);color:var(--mute);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:0}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.02em;
+    padding:3px 8px;border-radius:20px;text-transform:uppercase}
+  .pill.on{background:var(--pos-bg);color:var(--pos)}
+  .pill.off{background:var(--bg);color:var(--faint);border:1px solid var(--line)}
+  .pill.admin{background:var(--accent-soft);color:var(--accent)}
+  .pill.pending{background:var(--warn-bg);color:var(--warn)}
+  .toggle{border:1px solid var(--line);background:var(--card);border-radius:5px;padding:4px 9px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--ink2)}
+  .toggle:hover{border-color:var(--accent);color:var(--accent)}
+  .toggle.danger:hover{border-color:var(--neg);color:var(--neg)}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:5px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .btn:hover{background:#0d4487}
+  .btn.decline{background:var(--card);color:var(--neg);border:1px solid var(--neg)}
+  .btn.decline:hover{background:var(--neg-bg)}
+  .muted{color:var(--mute)}
+  .empty{padding:26px;text-align:center;color:var(--mute)}
+  .err{background:var(--neg-bg);color:var(--neg);border-radius:7px;padding:10px 12px;margin-bottom:14px;font-size:12.5px}
+  .session-row{cursor:pointer}
+  .session-row:hover{background:var(--accent-soft)}
+  .detail{padding:14px 16px;background:var(--bg);border:1px solid var(--line);border-top:0;font-size:12px}
+  .detail div{padding:3px 0}
+  .kind{font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.03em;color:var(--mute);margin-right:6px}
+</style>
+</head>
+<body>
+<header><h1>Access admin</h1><span class="who" id="who"></span></header>
+<nav>
+  <button data-pane="users" class="on">Users</button>
+  <button data-pane="requests">Requests<span id="reqBadge"></span></button>
+  <button data-pane="sessions">Sessions</button>
+  <button data-pane="audit">Audit</button>
+</nav>
+<main>
+  <div id="globalErr"></div>
+  <section class="pane on" id="pane-users"><table><thead><tr>
+    <th>Person</th><th>Australia</th><th>United States</th><th>Admin</th><th>Last seen</th>
+  </tr></thead><tbody id="usersBody"></tbody></table></section>
+
+  <section class="pane" id="pane-requests"><table><thead><tr>
+    <th>Person</th><th>Region</th><th>Requested</th><th>Message</th><th></th>
+  </tr></thead><tbody id="requestsBody"></tbody></table></section>
+
+  <section class="pane" id="pane-sessions"><table><thead><tr>
+    <th>Person</th><th>Region</th><th>Started</th><th>Last seen</th><th>Saves</th><th>Deletes</th><th>Access changes</th>
+  </tr></thead><tbody id="sessionsBody"></tbody></table></section>
+
+  <section class="pane" id="pane-audit"><table><thead><tr>
+    <th>When</th><th>Who did it</th><th>To whom</th><th>Action</th><th>Region</th><th>Detail</th>
+  </tr></thead><tbody id="auditBody"></tbody></table></section>
+</main>
+<script>
+(function(){
+  "use strict";
+  var esc = function(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); };
+  var when = function(iso){ if(!iso) return "—"; var d=new Date(iso); return isNaN(d) ? "—" : d.toLocaleString(); };
+
+  function api(path, opts){
+    return fetch(path, Object.assign({ cache: "no-store", headers: { "content-type": "application/json" } }, opts||{}))
+      .then(function(r){
+        if (r.status === 401) { window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(location.pathname); return Promise.reject(new Error("Signed out")); }
+        if (r.status === 403) { document.body.innerHTML = "<p style=\"padding:40px;font:14px sans-serif\">Admins only.</p>"; return Promise.reject(new Error("Forbidden")); }
+        return r.text().then(function(t){
+          var body = t ? JSON.parse(t) : null;
+          if (!r.ok) throw new Error((body && body.error) || ("Request failed (" + r.status + ")"));
+          return body;
+        });
+      });
+  }
+
+  function showErr(err){
+    document.getElementById("globalErr").innerHTML = '<div class="err">' + esc(err.message) + "</div>";
+    setTimeout(function(){ document.getElementById("globalErr").innerHTML = ""; }, 5000);
+  }
+
+  /* ── tabs ─────────────────────────────────────────────────────────── */
+  document.querySelectorAll("nav button").forEach(function(btn){
+    btn.onclick = function(){
+      document.querySelectorAll("nav button").forEach(function(b){ b.classList.remove("on"); });
+      document.querySelectorAll(".pane").forEach(function(p){ p.classList.remove("on"); });
+      btn.classList.add("on");
+      document.getElementById("pane-" + btn.dataset.pane).classList.add("on");
+      loaders[btn.dataset.pane]();
+    };
+  });
+
+  /* ── users ────────────────────────────────────────────────────────── */
+  function regionToggle(u, region){
+    var have = (u.regions||"").split(",").indexOf(region) !== -1;
+    var b = document.createElement("button");
+    b.className = "toggle" + (have ? " danger" : "");
+    b.textContent = have ? region + " ✕" : "Grant " + region;
+    b.onclick = function(){
+      b.disabled = true;
+      api("/api/admin/users/" + u.user_id + "/regions", { method: "POST", body: JSON.stringify({ region: region, grant: !have }) })
+        .then(loadUsers).catch(function(e){ showErr(e); b.disabled = false; });
+    };
+    return b;
+  }
+
+  function adminToggle(u){
+    var b = document.createElement("button");
+    b.className = "toggle" + (u.is_admin ? " danger" : "");
+    b.textContent = u.is_admin ? "Remove admin" : "Make admin";
+    b.onclick = function(){
+      if (u.is_admin && !confirm(u.upn + " will lose admin access. Continue?")) return;
+      b.disabled = true;
+      api("/api/admin/users/" + u.user_id + "/admin", { method: "POST", body: JSON.stringify({ grant: !u.is_admin }) })
+        .then(loadUsers).catch(function(e){ showErr(e); b.disabled = false; });
+    };
+    return b;
+  }
+
+  function loadUsers(){
+    return api("/api/admin/users").then(function(data){
+      var body = document.getElementById("usersBody");
+      body.innerHTML = "";
+      (data.users||[]).forEach(function(u){
+        var tr = document.createElement("tr");
+        var pendingBadge = u.pending_requests ? ' <span class="pill pending">' + u.pending_requests + " pending</span>" : "";
+        tr.innerHTML =
+          "<td><strong>" + esc(u.display_name || u.upn) + "</strong>" + pendingBadge +
+            '<div class="muted">' + esc(u.upn) + "</div></td>" +
+          "<td data-cell='AU'></td><td data-cell='US'></td><td data-cell='admin'></td>" +
+          "<td>" + when(u.last_seen_at) + "</td>";
+        tr.querySelector("[data-cell='AU']").appendChild(regionToggle(u, "AU"));
+        tr.querySelector("[data-cell='US']").appendChild(regionToggle(u, "US"));
+        var adminCell = tr.querySelector("[data-cell='admin']");
+        if (u.is_admin) adminCell.innerHTML = '<span class="pill admin">Admin</span> ';
+        adminCell.appendChild(adminToggle(u));
+        body.appendChild(tr);
+      });
+      if (!data.users || !data.users.length) body.innerHTML = '<tr><td colspan="5" class="empty">No users yet.</td></tr>';
+    }).catch(showErr);
+  }
+
+  /* ── requests ─────────────────────────────────────────────────────── */
+  function loadRequests(){
+    return api("/api/admin/requests").then(function(data){
+      var body = document.getElementById("requestsBody");
+      body.innerHTML = "";
+      var reqs = data.requests || [];
+      document.getElementById("reqBadge").textContent = reqs.length ? " (" + reqs.length + ")" : "";
+      reqs.forEach(function(r){
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td><strong>" + esc(r.display_name || r.upn) + '</strong><div class="muted">' + esc(r.upn) + "</div></td>" +
+          "<td>" + esc(r.region) + "</td><td>" + when(r.requested_at) + "</td>" +
+          "<td class=\"muted\">" + esc(r.message || "—") + "</td><td></td>";
+        var cell = tr.lastElementChild;
+        var approve = document.createElement("button");
+        approve.className = "btn"; approve.textContent = "Approve";
+        var decline = document.createElement("button");
+        decline.className = "btn decline"; decline.textContent = "Decline"; decline.style.marginLeft = "6px";
+        [[approve, "approved"], [decline, "declined"]].forEach(function(pair){
+          pair[0].onclick = function(){
+            approve.disabled = decline.disabled = true;
+            api("/api/admin/requests/" + r.request_id, { method: "POST", body: JSON.stringify({ decision: pair[1] }) })
+              .then(function(){ loadRequests(); loadUsers(); }).catch(function(e){ showErr(e); approve.disabled = decline.disabled = false; });
+          };
+        });
+        cell.appendChild(approve); cell.appendChild(decline);
+        body.appendChild(tr);
+      });
+      if (!reqs.length) body.innerHTML = '<tr><td colspan="5" class="empty">No pending requests.</td></tr>';
+    }).catch(showErr);
+  }
+
+  /* ── sessions ─────────────────────────────────────────────────────── */
+  function sessionDetailRow(session){
+    return api("/api/admin/sessions/" + session.session_id).then(function(data){
+      var tr = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 7;
+      var html = '<div class="detail">';
+      if (!data.activity.length) html += "<div class=\"muted\">Nothing recorded in this session.</div>";
+      data.activity.forEach(function(a){
+        html += "<div><span class=\"kind\">" + esc(a.kind) + "</span>" + when(a.at) + " — " + esc(a.action) +
+          (a.region ? " (" + esc(a.region) + ")" : "") + (a.detail ? ": " + esc(a.detail) : "") + "</div>";
+      });
+      html += "</div>";
+      td.innerHTML = html;
+      tr.appendChild(td);
+      return tr;
+    });
+  }
+
+  function loadSessions(){
+    return api("/api/admin/sessions").then(function(data){
+      var body = document.getElementById("sessionsBody");
+      body.innerHTML = "";
+      (data.sessions||[]).forEach(function(s){
+        var tr = document.createElement("tr");
+        tr.className = "session-row";
+        tr.innerHTML =
+          "<td><strong>" + esc(s.upn) + "</strong></td>" +
+          "<td>" + esc(s.region_touched || "—") + "</td>" +
+          "<td>" + when(s.started_at) + "</td>" +
+          "<td>" + when(s.last_seen_at) + (s.ended_at ? "" : ' <span class="pill on">live</span>') + "</td>" +
+          "<td>" + s.saves + "</td><td>" + s.deletes + "</td><td>" + s.access_changes + "</td>";
+        var open = false, detailTr = null;
+        tr.onclick = function(){
+          if (open) { if (detailTr) detailTr.remove(); open = false; return; }
+          open = true;
+          sessionDetailRow(s).then(function(row){ detailTr = row; tr.after(row); });
+        };
+        body.appendChild(tr);
+      });
+      if (!data.sessions || !data.sessions.length) body.innerHTML = '<tr><td colspan="7" class="empty">No sessions recorded yet.</td></tr>';
+    }).catch(showErr);
+  }
+
+  /* ── audit ────────────────────────────────────────────────────────── */
+  function loadAudit(){
+    return api("/api/admin/audit").then(function(data){
+      var body = document.getElementById("auditBody");
+      body.innerHTML = "";
+      (data.audit||[]).forEach(function(a){
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + when(a.at) + "</td><td>" + esc(a.actor_upn) + "</td><td>" + esc(a.subject_upn) + "</td>" +
+          "<td>" + esc(a.action) + "</td><td>" + esc(a.region || "—") + "</td><td class=\"muted\">" + esc(a.detail || "—") + "</td>";
+        body.appendChild(tr);
+      });
+      if (!data.audit || !data.audit.length) body.innerHTML = '<tr><td colspan="6" class="empty">Nothing recorded yet.</td></tr>';
+    }).catch(showErr);
+  }
+
+  var loaders = { users: loadUsers, requests: loadRequests, sessions: loadSessions, audit: loadAudit };
+
+  api("/api/me").then(function(me){
+    document.getElementById("who").textContent = me.upn;
+    loadUsers();
+    loadRequests();
+  }).catch(showErr);
+})();
+</script>
+</body>
+</html>

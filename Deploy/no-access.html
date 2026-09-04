@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sobha | Request access</title>
+<style>
+  :root{--ink:#1b2431;--mute:#5b6b82;--line:#e3e8f0;--accent:#0F4F9E;--accent-soft:#eaf1fb;--bg:#f4f6fa;--card:#ffffff;--neg:#b3261e;--neg-bg:#fbeceb}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);
+    font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+  .card{width:min(460px,92vw);background:var(--card);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 8px 28px rgba(20,30,60,.08);padding:28px 26px}
+  h1{margin:0 0 4px;font-size:18px;font-weight:700}
+  .who{margin:0 0 18px;color:var(--mute);font-size:12.5px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:1px solid var(--line)}
+  .region-name{font-weight:600}
+  .status{font-size:11.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:20px}
+  .status.have{background:#e7f6ec;color:#1a7a3d}
+  .status.pending{background:#fff4e0;color:#9a6a00}
+  .ask{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .ask:hover{background:#0d4487}
+  .ask:disabled{background:#c7cedb;cursor:default}
+  .msg{margin-top:16px;padding:11px 12px;border-radius:7px;font-size:12.5px;display:none}
+  .msg.on{display:block}
+  .msg.err{background:var(--neg-bg);color:var(--neg)}
+  .msg.ok{background:var(--accent-soft);color:var(--accent)}
+  .disabled-note{background:var(--neg-bg);color:var(--neg);border-radius:7px;padding:12px 14px;font-size:12.5px}
+  .loading{color:var(--mute);font-size:12.5px}
+  .foot{margin-top:18px;font-size:11.5px;color:var(--mute)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1>Request access</h1>
+  <p class="loading" id="loading">Checking your account&hellip;</p>
+</div>
+<script>
+(function(){
+  "use strict";
+  var REGION_LABEL = { US: "United States model", AU: "Australia model" };
+  var card = document.getElementById("card");
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+
+  function render(me){
+    var rows = "";
+    ["US","AU"].forEach(function(region){
+      var have = me.regions.indexOf(region) !== -1;
+      var pending = (me.pendingRequests||[]).some(function(r){ return r.region === region && r.status === "pending"; });
+      rows += '<div class="row"><span class="region-name">' + esc(REGION_LABEL[region]) + "</span>" +
+        (have ? '<span class="status have">You have access</span>'
+          : pending ? '<span class="status pending">Requested</span>'
+          : '<button class="ask" data-region="' + region + '">Request access</button>') +
+        "</div>";
+    });
+
+    var body = me.disabled
+      ? '<div class="disabled-note">This account has been disabled. Contact your administrator if you believe this is a mistake.</div>'
+      : rows + '<div class="msg" id="msg"></div>';
+
+    card.innerHTML =
+      "<h1>Request access</h1>" +
+      '<p class="who">Signed in as ' + esc(me.upn) + "</p>" +
+      body +
+      '<p class="foot">An administrator reviews every request before access is granted.</p>';
+
+    if (!me.disabled) {
+      card.querySelectorAll(".ask").forEach(function(btn){
+        btn.onclick = function(){ ask(btn.dataset.region, btn); };
+      });
+    }
+  }
+
+  function ask(region, btn){
+    btn.disabled = true;
+    btn.textContent = "Requesting…";
+    fetch("/api/access-requests", {
+      method: "POST", cache: "no-store",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ region: region })
+    }).then(function(r){
+      if (!r.ok) return r.json().then(function(j){ throw new Error(j.error || "Could not send the request."); });
+      return load();
+    }).catch(function(err){
+      var msg = document.getElementById("msg");
+      if (msg) { msg.className = "msg on err"; msg.textContent = err.message; }
+      btn.disabled = false;
+      btn.textContent = "Request access";
+    });
+  }
+
+  function load(){
+    return fetch("/api/me", { cache: "no-store" }).then(function(r){
+      if (r.status === 401) { window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(location.pathname); return; }
+      if (!r.ok) throw new Error("Could not load your account.");
+      return r.json();
+    }).then(function(me){ if (me) render(me); });
+  }
+
+  load().catch(function(err){
+    card.innerHTML = "<h1>Request access</h1><p class=\"disabled-note\">" + esc(err.message) + "</p>";
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "_comment": "Caps for the realestate.com.au scrape. Deliberately conservative to start - the first month's ledger tells you the real cost before these are raised. Every value can be overridden by an environment variable of the same name in upper snake case.",
+
+  "monthlyItemBudget": 10000,
+  "maxItemsPerRun": 2000,
+  "maxSuburbsPerRun": 40,
+  "maxConcurrentRuns": 1,
+
+  "cacheTtlDays": 30,
+  "soldWindow": "12:months",
+
+  "_estimate_comment": "Used only for the pre-flight projection, refined from the ledger once real runs exist.",
+  "assumedItemsPerSuburb": 120
+}

@@ -1,0 +1,19 @@
+assistant/node_modules/
+assistant-runtime/
+assistant/scripts/build-*.mjs
+
+# Reference clone of the colleague's Next.js app - not part of this project
+Aus-Feasibility/
+
+# Secrets - never commit. The Apify token lives in pipeline/.env
+.env
+*.env
+!*.env.example
+
+# Pipeline working files: caches, derived artefacts and backups
+pipeline/out/
+pipeline/cache/
+*.bak
+
+# Windows folder metadata
+desktop.ini

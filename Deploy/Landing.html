@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sobha | Select Region</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            overflow: hidden;
+        }
+
+        /* =====================================================
+           FULL SCREEN HERO
+           Uses the original reference image
+        ===================================================== */
+
+        .hero {
+            position: relative;
+
+            width: 100%;
+            height: 100vh;
+            min-height: 600px;
+
+            overflow: hidden;
+
+            background-image:
+                url("gold-coast-landing.jpg");
+
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+
+            color: #ffffff;
+        }
+
+
+        /* =====================================================
+           DARK GRADIENT
+           Similar to the reference image
+        ===================================================== */
+
+        .hero::after {
+            content: "";
+
+            position: absolute;
+            inset: 0;
+
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.02) 0%,
+                rgba(0, 0, 0, 0.02) 45%,
+                rgba(0, 0, 0, 0.18) 68%,
+                rgba(0, 0, 0, 0.55) 88%,
+                rgba(0, 0, 0, 0.78) 100%
+            );
+
+            pointer-events: none;
+
+            z-index: 1;
+        }
+
+
+        /* =====================================================
+           MAIN CONTENT
+           Bottom-left just like reference
+        ===================================================== */
+
+        .content {
+            position: absolute;
+
+            left: 5%;
+            bottom: 7%;
+
+            z-index: 5;
+
+            color: #ffffff;
+        }
+
+
+        /* =====================================================
+           GREETING
+        ===================================================== */
+
+        .greeting {
+            margin-bottom: 22px;
+
+            font-size: clamp(30px, 3vw, 46px);
+            line-height: 1.05;
+
+            font-weight: 700;
+            letter-spacing: -1.4px;
+
+            color: #ffffff;
+
+            text-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.35);
+        }
+
+
+        /* =====================================================
+           REGION + ENTER ROW
+        ===================================================== */
+
+        .action-row {
+            display: flex;
+            align-items: center;
+
+            gap: 10px;
+        }
+
+
+        /* =====================================================
+           SELECT WRAPPER
+        ===================================================== */
+
+        .select-wrapper {
+            position: relative;
+        }
+
+
+        /* Custom arrow */
+
+        .select-wrapper::after {
+            content: "";
+
+            position: absolute;
+
+            right: 17px;
+            top: 50%;
+
+            width: 7px;
+            height: 7px;
+
+            border-right: 1.5px solid #ffffff;
+            border-bottom: 1.5px solid #ffffff;
+
+            transform:
+                translateY(-70%)
+                rotate(45deg);
+
+            pointer-events: none;
+        }
+
+
+        /* =====================================================
+           REGION DROPDOWN
+        ===================================================== */
+
+        .region-select {
+            appearance: none;
+            -webkit-appearance: none;
+
+            width: 195px;
+            height: 40px;
+
+            padding:
+                0
+                42px
+                0
+                18px;
+
+            border:
+                1px solid
+                rgba(255, 255, 255, 0.55);
+
+            border-radius: 22px;
+
+            outline: none;
+
+            background:
+                rgba(15, 20, 20, 0.45);
+
+            color: #ffffff;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            font-size: 12px;
+            font-weight: 500;
+
+            cursor: pointer;
+
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+
+            transition:
+                background 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+
+        .region-select:hover {
+            border-color:
+                rgba(255, 255, 255, 0.9);
+
+            background:
+                rgba(15, 20, 20, 0.6);
+        }
+
+
+        .region-select:focus {
+            border-color: #ffffff;
+
+            background:
+                rgba(15, 20, 20, 0.65);
+        }
+
+
+        .region-select option {
+            color: #111111;
+            background: #ffffff;
+
+            font-size: 14px;
+        }
+
+
+        /* =====================================================
+           ENTER BUTTON
+        ===================================================== */
+
+        .enter-button {
+            height: 40px;
+
+            padding:
+                0
+                24px;
+
+            border:
+                1px solid
+                rgba(255, 255, 255, 0.55);
+
+            border-radius: 22px;
+
+            background:
+                rgba(15, 20, 20, 0.45);
+
+            color: #ffffff;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            font-size: 12px;
+            font-weight: 500;
+
+            cursor: pointer;
+
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+
+            transition:
+                background 0.2s ease,
+                color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+
+        .enter-button:hover {
+            background: #ffffff;
+
+            color: #111111;
+
+            border-color: #ffffff;
+        }
+
+
+        .enter-button:active {
+            transform: scale(0.98);
+        }
+
+
+        /* =====================================================
+           VALIDATION MESSAGE
+        ===================================================== */
+
+        .message {
+            min-height: 18px;
+
+            margin-top: 10px;
+
+            font-size: 11px;
+
+            color:
+                rgba(255, 255, 255, 0.9);
+        }
+
+
+        /* =====================================================
+           RESPONSIVE
+        ===================================================== */
+
+        @media (max-width: 768px) {
+
+            .hero {
+                min-height: 600px;
+
+                background-position: center center;
+            }
+
+            .content {
+                left: 7%;
+                right: 7%;
+                bottom: 7%;
+            }
+
+            .greeting {
+                font-size: 30px;
+
+                margin-bottom: 20px;
+            }
+
+            .action-row {
+                width: 100%;
+            }
+
+            .select-wrapper {
+                flex: 1;
+            }
+
+            .region-select {
+                width: 100%;
+            }
+        }
+
+
+        @media (max-width: 480px) {
+
+            .content {
+                left: 6%;
+                right: 6%;
+                bottom: 6%;
+            }
+
+            .greeting {
+                font-size: 26px;
+            }
+
+            .action-row {
+                flex-direction: column;
+
+                align-items: stretch;
+
+                gap: 9px;
+            }
+
+            .select-wrapper,
+            .region-select,
+            .enter-button {
+                width: 100%;
+            }
+
+            .region-select,
+            .enter-button {
+                height: 44px;
+            }
+
+            .enter-button {
+                padding: 0 20px;
+            }
+        }
+
+    </style>
+</head>
+
+
+<body>
+
+
+<section class="hero">
+
+    <div class="content">
+
+
+        <!-- ============================================
+             USER NAME COMES FROM LOGIN
+        ============================================= -->
+
+        <h1 class="greeting">
+
+            <span id="greetingText">
+                Good morning
+            </span>,
+
+            <span id="userName"></span>
+
+        </h1>
+
+
+        <!-- ============================================
+             REGION SELECTION
+        ============================================= -->
+
+        <div class="action-row">
+
+
+            <div class="select-wrapper">
+
+                <select
+                    id="regionSelect"
+                    class="region-select"
+                    aria-label="Select region"
+                >
+
+                    <option
+                        value=""
+                        selected
+                        disabled
+                    >
+                        Select region
+                    </option>
+
+                    <!-- populated from /api/me - only the regions this person
+                         has been granted, see the script below -->
+
+                </select>
+
+            </div>
+
+
+            <!-- ========================================
+                 ENTER BUTTON
+            ========================================= -->
+
+            <button
+                type="button"
+                id="enterButton"
+                class="enter-button"
+            >
+                Enter
+            </button>
+
+
+        </div>
+
+
+        <div
+            id="message"
+            class="message"
+        ></div>
+
+
+    </div>
+
+</section>
+
+
+<script>
+
+    /* ==================================================
+       1. GET LOGGED-IN USER
+
+       Do NOT hardcode the user name here in production.
+
+       Your login/backend should expose the authenticated
+       user's name.
+
+       Expected example:
+
+       window.currentUser = {
+           name: "Lokeshwaran"
+       };
+
+    ================================================== */
+
+
+    /* Who is signed in, and which regions they may open, both come from
+       /api/me now - the server's own record of the Easy Auth principal and
+       its grants, not anything the browser can set. sessionStorage held only
+       {displayName, username} written by the old client-side login screen,
+       which is why this used to fall back to "User": there was nothing
+       server-verified to show. */
+
+    const regionUrls = { AU: "/australia", US: "/usa" };
+    const regionLabel = { AU: "Sobha Australia", US: "Sobha USA" };
+
+    fetch("/api/me", { cache: "no-store" })
+        .then(function (r) {
+            if (r.status === 401) {
+                window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(location.pathname);
+                return null;
+            }
+            if (!r.ok) throw new Error("Could not load your account.");
+            return r.json();
+        })
+        .then(function (me) {
+            if (!me) return;
+
+            document.getElementById("userName").textContent = me.upn;
+
+            if (me.disabled || !me.regions || !me.regions.length) {
+                window.location.href = "/no-access";
+                return;
+            }
+
+            const select = document.getElementById("regionSelect");
+            me.regions.forEach(function (region) {
+                const opt = document.createElement("option");
+                opt.value = region;
+                opt.textContent = regionLabel[region] || region;
+                select.appendChild(opt);
+            });
+
+            /* Only one region granted - there is nothing to choose, so skip
+               straight to it rather than making someone pick from a list of
+               one. Both are granted - the picker stays, same as before. */
+            if (me.regions.length === 1) {
+                window.location.href = regionUrls[me.regions[0]];
+            }
+        })
+        .catch(function (err) {
+            const el = document.getElementById("message");
+            if (el) el.textContent = err.message;
+        });
+
+
+
+    /* ==================================================
+       2. AUTOMATIC GOOD MORNING / AFTERNOON / EVENING
+    ================================================== */
+
+
+    function setGreeting() {
+
+        const hour =
+            new Date().getHours();
+
+
+        let greeting;
+
+
+        if (hour < 12) {
+
+            greeting = "Good morning";
+
+        }
+
+        else if (hour < 18) {
+
+            greeting = "Good afternoon";
+
+        }
+
+        else {
+
+            greeting = "Good evening";
+
+        }
+
+
+        document
+            .getElementById("greetingText")
+            .textContent = greeting;
+
+    }
+
+
+    setGreeting();
+
+
+
+    /* regionUrls is declared once already, above, alongside the /api/me call
+       that populates the <select> - the option values it writes (AU/US)
+       are exactly this map's keys. */
+
+
+
+    /* ==================================================
+       4. ENTER BUTTON
+    ================================================== */
+
+
+    const enterButton =
+        document.getElementById("enterButton");
+
+
+    const regionSelect =
+        document.getElementById("regionSelect");
+
+
+    const message =
+        document.getElementById("message");
+
+
+
+    function enterSelectedRegion() {
+
+        const selectedRegion =
+            regionSelect.value;
+
+
+        /* No region selected */
+
+        if (!selectedRegion) {
+
+            message.textContent =
+                "Please select a region.";
+
+            return;
+
+        }
+
+
+        message.textContent = "";
+
+
+        const destination =
+            regionUrls[selectedRegion];
+
+
+        if (destination) {
+
+            window.location.href =
+                destination;
+
+        }
+
+    }
+
+
+
+    enterButton.addEventListener(
+        "click",
+        enterSelectedRegion
+    );
+
+
+
+    /* ==================================================
+       OPTIONAL:
+       Press Enter on keyboard to continue
+    ================================================== */
+
+
+    regionSelect.addEventListener(
+        "keydown",
+        function(event) {
+
+            if (event.key === "Enter") {
+
+                enterSelectedRegion();
+
+            }
+
+        }
+    );
+
+
+</script>
+
+
+</body>
+</html>

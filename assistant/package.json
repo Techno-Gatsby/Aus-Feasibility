@@ -1,0 +1,14 @@
+{
+  "name": "australia-feasibility-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Claude bridge for the Australia land feasibility application",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.0",
+    "pptxgenjs": "^4.0.0"
+  }
+}

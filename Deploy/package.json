@@ -1,0 +1,14 @@
+{
+  "name": "sobha-land-feasibility-uat",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "mssql": "^12.7.0"
+  }
+}

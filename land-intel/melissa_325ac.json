@@ -1,0 +1,286 @@
+{
+  "input": {
+    "prop_id": 460174,
+    "lat": 33.291012696256196,
+    "lon": -96.49936531908644
+  },
+  "assumptions": {
+    "address": null,
+    "latlon": null,
+    "prop_id": 460174,
+    "open_space_pct": 15.0,
+    "row_pct": 22.0,
+    "stream_buffer_ft": 50.0,
+    "max_slope_pct": 15.0,
+    "density": 3.0,
+    "json": "melissa_325ac.json"
+  },
+  "parcel": {
+    "source": "Collin CAD",
+    "prop_id": 460174,
+    "geo_id": "R-6304-002-0150-1",
+    "owner": "CHAMBLISS LAND LLC",
+    "owner_mailing": "5376 FM 545 MELISSA TX 75454-2608",
+    "legal": "ABS A0304 JAMES FISHER SURVEY, SHEET 2, TRACT 15, 326.1471 ACRES; SN1: 1338179144, HUD1: TEX0259453, SN1: OC04868388, SN1: OC04868388, SN1: OC04868388",
+    "situs": "5376 FM 545 MELISSA",
+    "gross_acres": 324.059,
+    "gross_sqft": 14116010,
+    "cad_land_acres": 326.1471,
+    "cad_ag_exempt_acres": 324.1471,
+    "cad_land_value": 9784413.0,
+    "cad_market_value": 10475803.0
+  },
+  "regulatory": {
+    "prosper_jurisdiction": null,
+    "school_district": "Melissa ISD",
+    "special_districts": [],
+    "in_etj_release_area": false
+  },
+  "soils": {
+    "units": [
+      {
+        "mukey": "364065",
+        "map_unit": "Eddy gravelly clay loam, 3 to 8 percent slopes, eroded",
+        "component": "Eddy",
+        "component_pct": 100.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 6.0,
+        "linear_extensibility_pct": 1.5,
+        "plasticity_index": 16.0
+      },
+      {
+        "mukey": "364077",
+        "map_unit": "Houston Black clay, 2 to 4 percent slopes, eroded",
+        "component": "Houston Black",
+        "component_pct": 100.0,
+        "drainage": "Moderately well drained",
+        "hydro_group": "D",
+        "slope_pct": 3.0,
+        "linear_extensibility_pct": 17.0,
+        "plasticity_index": 47.0
+      },
+      {
+        "mukey": "364089",
+        "map_unit": "Water",
+        "component": "Water",
+        "component_pct": 100.0,
+        "drainage": null,
+        "hydro_group": "D",
+        "slope_pct": null,
+        "linear_extensibility_pct": null,
+        "plasticity_index": null
+      },
+      {
+        "mukey": "625800",
+        "map_unit": "Miscellaneous water",
+        "component": "Water",
+        "component_pct": 100.0,
+        "drainage": null,
+        "hydro_group": "D",
+        "slope_pct": null,
+        "linear_extensibility_pct": null,
+        "plasticity_index": null
+      },
+      {
+        "mukey": "364056",
+        "map_unit": "Austin silty clay, 1 to 3 percent slopes",
+        "component": "Austin",
+        "component_pct": 90.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 2.0,
+        "linear_extensibility_pct": 5.1,
+        "plasticity_index": 37.0
+      },
+      {
+        "mukey": "364057",
+        "map_unit": "Austin silty clay, 2 to 5 percent slopes, moderately eroded",
+        "component": "Austin",
+        "component_pct": 85.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 4.0,
+        "linear_extensibility_pct": 5.1,
+        "plasticity_index": 28.0
+      },
+      {
+        "mukey": "364058",
+        "map_unit": "Austin silty clay, 5 to 8 percent slopes, moderately eroded",
+        "component": "Austin",
+        "component_pct": 85.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 7.0,
+        "linear_extensibility_pct": 5.1,
+        "plasticity_index": 28.0
+      },
+      {
+        "mukey": "3178137",
+        "map_unit": "Tinn clay, 0 to 1 percent slopes, occasionally flooded",
+        "component": "Tinn",
+        "component_pct": 85.0,
+        "drainage": "Moderately well drained",
+        "hydro_group": "D",
+        "slope_pct": 0.5,
+        "linear_extensibility_pct": 11.0,
+        "plasticity_index": 41.0
+      },
+      {
+        "mukey": "364076",
+        "map_unit": "Houston Black clay, 1 to 3 percent slopes",
+        "component": "Houston Black",
+        "component_pct": 80.0,
+        "drainage": "Moderately well drained",
+        "hydro_group": "D",
+        "slope_pct": 2.0,
+        "linear_extensibility_pct": 12.0,
+        "plasticity_index": 44.0
+      },
+      {
+        "mukey": "364086",
+        "map_unit": "Stephen-Eddy complex, 2 to 5 percent slopes",
+        "component": "Stephen",
+        "component_pct": 70.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 4.0,
+        "linear_extensibility_pct": 4.5,
+        "plasticity_index": 30.0
+      },
+      {
+        "mukey": "364086",
+        "map_unit": "Stephen-Eddy complex, 2 to 5 percent slopes",
+        "component": "Eddy",
+        "component_pct": 25.0,
+        "drainage": "Well drained",
+        "hydro_group": "D",
+        "slope_pct": 4.0,
+        "linear_extensibility_pct": 1.5,
+        "plasticity_index": 19.0
+      }
+    ],
+    "shrink_swell": "very high",
+    "max_linear_extensibility_pct": 17.0,
+    "note": "High shrink-swell drives foundation design and cost. Blackland Prairie clays commonly require deepened / post-tensioned slabs or moisture-conditioned subgrade -- confirm with a geotech report before pricing."
+  },
+  "terrain": {
+    "samples": 48,
+    "min_ft": 576.6,
+    "max_ft": 664.4,
+    "relief_ft": 87.8,
+    "sample_spacing_ft": 375,
+    "mean_slope_pct": 2.86,
+    "p90_slope_pct": 5.0,
+    "max_slope_pct": 5.48
+  },
+  "constraints": {
+    "floodplain": {
+      "source": "county",
+      "zones_present": [
+        "A",
+        "X (AREA OF MINIMAL FLOOD HAZARD)"
+      ],
+      "sfha_acres": 34.948,
+      "sfha_pct": 10.8
+    },
+    "water_bodies": {
+      "source": "county",
+      "count": 4,
+      "acres": 38.125
+    },
+    "streams": {
+      "source": "county",
+      "segments_nearby": 8,
+      "buffer_ft": 50.0,
+      "buffer_acres": 38.125
+    },
+    "wetlands": {
+      "source": "USFWS NWI",
+      "features_on_site": 27,
+      "types": {
+        "Lake": 1,
+        "Freshwater Emergent Wetland": 1,
+        "Freshwater Forested/Shrub Wetland": 2,
+        "Freshwater Pond": 10,
+        "Riverine": 13
+      },
+      "acres": 30.182
+    },
+    "steep_slope": {
+      "threshold_pct": 15.0,
+      "pct_of_site": 0.0,
+      "acres": 0.0
+    },
+    "combined_unbuildable": {
+      "acres": 88.957,
+      "pct_of_site": 27.5,
+      "sum_if_double_counted": 141.379,
+      "note": "Union of floodplain / water / stream buffer / steep slope / wetlands. Layers overlap, so this is less than their sum."
+    },
+    "_grid_points": 204,
+    "_acres_per_sample": 1.5885
+  },
+  "context": {
+    "nearby_developments": [],
+    "planned_thoroughfares_crossing_site": [],
+    "county_thoroughfare_plan_crossing_site": 2,
+    "outer_loop_within_2mi": [
+      {
+        "name": " ",
+        "desc": "Segment 5",
+        "lanes": 0
+      },
+      {
+        "name": " ",
+        "desc": "Segment 1",
+        "lanes": 0
+      }
+    ],
+    "mineral_estate": {
+      "pipelines": {
+        "crossing_site": [],
+        "within_half_mile": 0
+      },
+      "wells_within_half_mile": [],
+      "wells_query_failed": [
+        "well"
+      ]
+    },
+    "schools_within_2mi": []
+  },
+  "yield": {
+    "gross_acres": 324.059,
+    "deductions": [
+      {
+        "item": "Physical constraints [floodplain, water, streams, wetlands]",
+        "acres": 88.957
+      },
+      {
+        "item": "Street / ROW take (22.0%)",
+        "acres": 51.722
+      },
+      {
+        "item": "Open space dedication (15.0%)",
+        "acres": 35.265
+      }
+    ],
+    "net_developable_acres": 148.114,
+    "efficiency_pct": 45.7,
+    "density_units_per_acre": 3.0,
+    "indicative_units": 444,
+    "caveat": "Indicative only. Actual yield is governed by the PD ordinance / zoning district lot mix, not by a blended density. Confirm setbacks, minimum lot size, and open space against the controlling ordinance."
+  },
+  "open_diligence": [
+    "No zoning polygon available for this jurisdiction (Melissa publishes zoning as PDF only). Request the zoning shapefile by Public Information Request, or georeference the adopted zoning map.",
+    "Water & sewer CCN holder and capacity commitment (PUC CCN + utility will-serve letter)",
+    "Wastewater capacity / lift station requirement (Prosper Wastewater Master Plan; request via city PIR)",
+    "Impact fee schedule and roughly proportionate ROW/infrastructure exactions",
+    "Recorded deed restrictions, easements and mineral severance (title commitment + Collin County Clerk records)",
+    "Mineral severance + surface use agreement. RRC GIS shows what is PERMITTED and mapped, NOT who owns the minerals -- that is a title question and a mapped-clear site can still be encumbered.",
+    "Wetlands: NWI is a desktop screen only. A jurisdictional determination from USACE is required before relying on it.",
+    "Geotechnical report -- confirm shrink-swell and bearing capacity",
+    "School district capacity and attendance boundary confirmation",
+    "Land comps -- Texas is a non-disclosure state; sale prices are NOT public. Broker or CoStar required."
+  ]
+}

@@ -1,0 +1,386 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #0f2d4a;
+  --warnbg: #fff8e6;
+  --warnline: #f0c36d;
+  --pad: 20px;
+  --radius: 12px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+/* Nothing may force the page wider than the screen -- the fold is 280px. */
+html, body { overflow-x: hidden; }
+
+main { max-width: 1600px; margin: 0 auto; padding: var(--pad); }
+
+/* Headline figures — the three numbers that matter, before any scrolling. */
+.phead { position: sticky; top: 0; background: var(--card); z-index: 2;
+         padding-bottom: 8px; margin: -4px 0 0; }
+.headline {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin: 12px 0 10px;
+}
+.headline div {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 6px; text-align: center; min-width: 0;
+}
+.headline b {
+  display: block; font-size: clamp(15px, 2.4vw, 19px);
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.headline span { font-size: 11px; color: var(--muted); }
+
+.report { width: 100%; margin-bottom: 4px; }
+
+.tabs {
+  display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px;
+  border-bottom: 1px solid var(--line); margin-bottom: 12px;
+  position: sticky; top: 0; background: var(--card); z-index: 1;
+}
+.tabs button {
+  background: transparent; color: var(--muted); font-size: 13px;
+  padding: 7px 11px; border-radius: 7px; min-height: 34px;
+}
+.tabs button.on { background: var(--accent); color: #fff; }
+.tabs button:not(.on):hover { background: var(--bg); color: var(--ink); }
+
+/* ---------- header ---------- */
+
+.top {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.top h1 {
+  font: 600 clamp(19px, 4.5vw, 24px)/1.2 ui-serif, Georgia, serif;
+  margin: 0; letter-spacing: .01em;
+}
+.sub { color: var(--muted); font-size: 13px; }
+
+.search { display: flex; gap: 8px; flex: 1 1 260px; max-width: 560px; }
+.search input {
+  flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--card);
+  font-size: 16px; /* 16px stops iOS zooming the page on focus */
+}
+.search input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+button {
+  padding: 10px 16px; border: 0; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 14px;
+  font-weight: 500; cursor: pointer; white-space: nowrap;
+  min-height: 40px; /* comfortable touch target */
+}
+button:disabled { opacity: .55; cursor: default; }
+
+.examples {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+.chip {
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); font-weight: 400; font-size: 13px;
+  padding: 6px 12px; min-height: 34px;
+}
+.chip:hover { border-color: var(--accent); }
+
+.err, .note, .warn {
+  padding: 10px 14px; border-radius: 8px; font-size: 13.5px; margin: 0 0 12px;
+}
+.err { background: #fdecec; border: 1px solid #f3b0b0; }
+.note { background: #eef4fb; border: 1px solid #c3d8ef; }
+.warn {
+  background: var(--warnbg); border: 1px solid var(--warnline);
+  margin: 8px 0 14px;
+}
+
+/* ---------- layout ---------- */
+
+.split { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+.mapwrap {
+  position: relative;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; flex-direction: column;
+  height: 58vh; min-height: 320px;
+}
+.map { flex: 1; width: 100%; min-height: 0; }
+
+.basemap {
+  position: absolute; top: 10px; right: 10px; z-index: 500;
+  display: flex; border-radius: 8px; overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.basemap button {
+  border-radius: 0; background: var(--card); color: var(--ink);
+  font-size: 12.5px; padding: 7px 12px; min-height: 32px; font-weight: 500;
+}
+.basemap button.on { background: var(--accent); color: #fff; }
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  padding: 10px 12px; border-top: 1px solid var(--line);
+  font-size: 12.5px; background: var(--card);
+  max-height: 30vh; overflow-y: auto;
+}
+.legend label {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  min-height: 26px;
+}
+.legend i, .tbl i {
+  width: 11px; height: 11px; border-radius: 3px;
+  display: inline-block; flex: none;
+}
+
+.panel {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: var(--pad); align-self: start;
+  min-width: 0;
+}
+.panel h2 {
+  font: 600 clamp(16px, 3.6vw, 18px)/1.3 ui-serif, Georgia, serif;
+  margin: 0 0 4px; overflow-wrap: anywhere;
+}
+.panel h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 22px 0 8px;
+  border-top: 1px solid var(--line); padding-top: 14px;
+}
+.legal {
+  color: var(--muted); font-size: 12.5px; margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.empty { color: var(--muted); }
+.fine { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.kv dt { color: var(--muted); font-size: 13px; }
+.kv dd {
+  margin: 0; font-size: 13.5px; text-align: right; overflow-wrap: anywhere;
+}
+
+.slider { display: block; margin: 12px 0; }
+.slider span {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 13px; color: var(--muted); margin-bottom: 4px;
+}
+.slider b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.slider input { width: 100%; accent-color: var(--accent); height: 24px; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.tbl td:first-child {
+  display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
+}
+.num {
+  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+  padding-left: 8px;
+}
+.tbl .ded td { color: var(--muted); }
+.tbl .strong td, .tbl .total td { font-weight: 600; }
+.tbl .total td {
+  border-top: 2px solid var(--ink); border-bottom: 0; padding-top: 8px;
+}
+
+.list {
+  margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted);
+}
+.list li { margin: 2px 0; overflow-wrap: anywhere; }
+
+/* ---------- narrow: folded phones (~280px) ---------- */
+
+@media (max-width: 430px) {
+  :root { --pad: 12px; --radius: 10px; }
+  .top { gap: 8px; }
+  /* Input and button will not both fit on a folded phone -- stack them. */
+  .search { flex: 1 1 100%; flex-wrap: wrap; }
+  .search input { flex: 1 1 100%; }
+  .search button { flex: 1 1 100%; }
+  .examples { gap: 6px; }
+  .chip { font-size: 12px; padding: 5px 9px; }
+  .legend { gap: 4px 10px; font-size: 12px; }
+  .kv { grid-template-columns: 1fr; gap: 0 0; }
+  .kv dt { margin-top: 6px; }
+  .kv dd { text-align: left; font-weight: 500; }
+  .mapwrap { height: 52vh; min-height: 260px; }
+}
+
+/* ---------- phones and small tablets ---------- */
+
+@media (min-width: 431px) and (max-width: 700px) {
+  :root { --pad: 14px; }
+  .search { flex-basis: 100%; }
+}
+
+/* ---------- unfolded phones / tablets ---------- */
+
+@media (min-width: 701px) and (max-width: 1079px) {
+  .mapwrap { height: 60vh; }
+}
+
+/* ---------- laptop and up: two columns, sticky map ---------- */
+
+/* (two-column behaviour now lives in the .app shell rules above) */
+
+/* ---------- short landscape (phone on its side) ---------- */
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .mapwrap { height: 78vh; min-height: 220px; }
+  .legend { max-height: 22vh; }
+}
+
+/* ---------- PIN gate ---------- */
+
+.gate { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.gate form {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: clamp(20px, 6vw, 32px);
+  width: 100%; max-width: 360px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.gate h1 {
+  font: 600 clamp(20px, 5vw, 24px)/1.2 ui-serif, Georgia, serif; margin: 0 0 4px;
+}
+.gate .sub { display: block; margin-bottom: 22px; }
+.gate label {
+  display: block; font-size: 13px; color: var(--muted); margin-bottom: 16px;
+}
+.gate input {
+  display: block; width: 100%; margin-top: 6px; padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 18px;
+  letter-spacing: .3em; text-align: center;
+}
+.gate input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.gate button { width: 100%; padding: 12px; }
+.gerr {
+  background: #fdecec; border: 1px solid #f3b0b0; color: #8a1c1c;
+  padding: 8px 12px; border-radius: 8px; font-size: 13px; margin: 0 0 14px;
+}
+.gate .fine { margin-top: 18px; text-align: center; }
+
+/* Leaflet tooltips carry parcel ownership -- keep them readable on phones. */
+.leaflet-tooltip { font-size: 12.5px; line-height: 1.4; max-width: 220px; white-space: normal; }
+
+/* App shell. On desktop the page itself never scrolls -- the map holds full
+   height and the panel scrolls inside itself, so there is no dead space to
+   the left once you read past the fold. */
+.app { display: flex; flex-direction: column; padding: var(--pad); gap: 12px; }
+.body { display: grid; grid-template-columns: 1fr; gap: 16px; min-height: 0; }
+.brand { display: flex; flex-direction: column; }
+
+@media (min-width: 1080px) {
+  .app { height: 100vh; max-width: 1800px; margin: 0 auto; }
+  .body {
+    grid-template-columns: minmax(0, 1fr) 440px;
+    flex: 1; min-height: 0;
+  }
+  .mapwrap { height: 100%; min-height: 0; }
+  .panel { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+  html, body { overflow: hidden; }
+}
+@media (min-width: 1500px) { .body { grid-template-columns: minmax(0, 1fr) 500px; } }
+
+/* ---------- search typeahead ---------- */
+.sugwrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.sugwrap input { flex: 1; min-width: 0; }
+.sugs {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 1200;
+  margin: 0; padding: 4px; list-style: none; max-height: 340px; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15,45,74,.14);
+}
+.sugs li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 7px 9px; border-radius: 7px; cursor: pointer;
+}
+.sugs li.on { background: #eef4fb; }
+.sugs .tag {
+  font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px; flex: none;
+  background: #e7edf5; color: #46617f;
+}
+.sugs .tag.address { background: #e8f3ec; color: #3d6b4e; }
+.sugs .tag.propId { background: #f5eee0; color: #7a5a22; }
+.sugs .sl { display: flex; flex-direction: column; min-width: 0; }
+.sugs .sl b { font-weight: 500; font-size: 13.5px; }
+.sugs .sl em {
+  font-style: normal; font-size: 12px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---------- panel navigation ---------- */
+.navbar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.ghost {
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  font-size: 12.5px; padding: 5px 10px; min-height: 30px; font-weight: 500;
+}
+.ghost:hover:not(:disabled) { border-color: var(--accent); }
+.ghost:disabled { opacity: .4; }
+.crumb {
+  font-size: 12px; color: var(--muted); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* ---------- 3D terrain ---------- */
+.t3d { position: relative; flex: 1; min-height: 0; background: #0d1520; }
+.t3dcanvas { position: absolute; inset: 0; }
+.t3dcanvas canvas { display: block; touch-action: none; cursor: grab; }
+.t3dcanvas canvas:active { cursor: grabbing; }
+.t3dmsg {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: #cbd5e1; font-size: 13.5px; text-align: center; padding: 20px;
+}
+.t3dlegend {
+  position: absolute; left: 10px; bottom: 10px; z-index: 5;
+  background: rgba(13,21,32,.82); color: #e2e8f0;
+  font-size: 11.5px; padding: 6px 10px; border-radius: 7px;
+}
+.exag { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.exag input { width: 130px; accent-color: var(--accent); }
+
+/* ---------- external links ---------- */
+.extlinks { display: flex; gap: 6px; margin-bottom: 4px; }
+.extlinks a {
+  flex: 1; text-align: center; text-decoration: none;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: 7px 8px; font-size: 12.5px; font-weight: 500;
+}
+.extlinks a:hover { border-color: var(--accent); }
+
+/* ---------- street view ---------- */
+.svwrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.svframe { flex: 1; width: 100%; border: 0; min-height: 0; }
+.svbar {
+  padding: 8px 12px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--muted); background: var(--card);
+}
+.svnote { display: block; margin-top: 3px; font-size: 11.5px; }
+.svmsg {
+  flex: 1; display: flex; flex-direction: column; gap: 12px;
+  align-items: center; justify-content: center; padding: 28px;
+  text-align: center; color: var(--muted); font-size: 13.5px;
+}
+.svmsg p { margin: 0; max-width: 460px; }
+.svradius { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.svradius button {
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  font-size: 12.5px; padding: 6px 12px; min-height: 32px;
+}
+.svradius a {
+  text-decoration: none; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 12px; font-size: 12.5px; font-weight: 500;
+}
