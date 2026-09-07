@@ -240,9 +240,25 @@ export async function handle(req, res) {
       const sessionId = sessionIdFromRequest(req);
       if (sessionId) {
         cache.delete(sessionId);
-        const { rows } = await query(`select upn from dbo.user_session where session_id=@p1`, [sessionId]);
-        await query(`delete from dbo.user_session where session_id=@p1`, [sessionId]);
-        if (rows[0]) await auditAccess(null, rows[0].upn, rows[0].upn, "logout", null, null);
+        /* By the time anyone signs out, dbo.access_audit already has at
+           least one row referencing this session_id (the login itself was
+           audited against it) - fk_access_audit_session has no ON DELETE
+           action, so this delete has always thrown a foreign key violation
+           and been caught below as a 500 "The access store is unavailable",
+           meaning /api/logout has never actually deleted a session or
+           cleared the cookie: signing out looked like it worked (the page
+           still navigated to /login) but the old session, and its cookie
+           if a copy of it survived, both kept working. Catching this
+           specific failure and still clearing the cookie fixes the signed-
+           out browser immediately; the row itself is cleaned up once the
+           FK is migrated to ON DELETE SET NULL (see schema-access.sqlserver.sql). */
+        try {
+          const { rows } = await query(`select upn from dbo.user_session where session_id=@p1`, [sessionId]);
+          await query(`delete from dbo.user_session where session_id=@p1`, [sessionId]);
+          if (rows[0]) await auditAccess(null, rows[0].upn, rows[0].upn, "logout", null, null);
+        } catch (err) {
+          console.error("[access] logout could not remove the session row:", err.message);
+        }
       }
       res.setHeader("Set-Cookie", sessionCookieHeader("", 0));
       send(res, 200, { ok: true });
