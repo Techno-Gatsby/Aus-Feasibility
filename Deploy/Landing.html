@@ -459,10 +459,14 @@
 
     </div>
 
-    <button type="button" id="signOutBtn" style="position:absolute;top:24px;right:28px;z-index:5;
-        height:32px;padding:0 16px;border:1px solid rgba(255,255,255,.55);border-radius:18px;
-        background:rgba(15,20,20,.45);color:#fff;font:500 11.5px Arial,Helvetica,sans-serif;
-        cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">Sign out</button>
+    <div style="position:absolute;top:24px;right:28px;z-index:5;display:flex;gap:8px">
+      <button type="button" id="changePwBtn" style="height:32px;padding:0 16px;border:1px solid rgba(255,255,255,.55);border-radius:18px;
+          background:rgba(15,20,20,.45);color:#fff;font:500 11.5px Arial,Helvetica,sans-serif;
+          cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">Change password</button>
+      <button type="button" id="signOutBtn" style="height:32px;padding:0 16px;border:1px solid rgba(255,255,255,.55);border-radius:18px;
+          background:rgba(15,20,20,.45);color:#fff;font:500 11.5px Arial,Helvetica,sans-serif;
+          cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">Sign out</button>
+    </div>
 
 </section>
 
@@ -584,6 +588,10 @@
 
     setGreeting();
 
+
+    document.getElementById("changePwBtn").addEventListener("click", function () {
+        window.location.href = "/change-password?redirect=" + encodeURIComponent("/landing");
+    });
 
     document.getElementById("signOutBtn").addEventListener("click", function () {
         fetch("/api/logout", { method: "POST", cache: "no-store" }).then(function () {
