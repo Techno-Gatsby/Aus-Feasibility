@@ -5200,13 +5200,20 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     sold+=dlv[m];devCum+=R.devc[m];devCogsCum+=R.landcogs[m]+R.concogs[m]+R.vertcogs[m]+R.othcogs[m];
     pidInventoryReduction+=R.pid[m];riskAddsCum+=R.bradd[m];riskCompleteCum+=R.brcomplete[m];
     const owns=m>=holdFrom&&m<=holdTo?1:0;
-    /* The reference total and the annual rates ADD rather than replace one another.
-       They used to be exclusive, which made any holding cost a workbook states outside
-       its headline holding cell unrecoverable: Oxlade's P&L sets its holding line to
-       'Land value'!Q12 minus a separate 2,010,000 land-tax surcharge, and with the
-       rates switched off there was nowhere for that 2,010,000 to go. Every parcel
-       carries zero in the three annual rates, so nothing else moves. */
-    const pt=owns*((d.holdingfixed>0?d.holdingfixed/holdingMonths:0)+(d.landtax+d.foreignlandtax+d.councilrates)/12),hoa=0;
+    /* holdingfixed is its own line, standing alone - not summed with landtax/
+       foreignlandtax. Those two are now locked to the state's calculated
+       figure (see AU_LOCKED_TAX_FIELDS) rather than a free-typed annual
+       rate, so adding them in here would silently inflate every project's
+       holding cost by the full calculated land tax for every month held,
+       which is not what a reference-only figure should do to the P&L.
+       councilrates remains a free-typed input and still contributes.
+       NOTE: this reverses a deliberate earlier fix - Oxlade's own P&L sets
+       its holding line to 'Land value'!Q12 minus a separate 2,010,000
+       land-tax surcharge, which relied on landtax/foreignlandtax adding
+       into this total to be recovered. If Oxlade (or any project) needs
+       its own land-tax surcharge reflected in holding cost again, that
+       has to happen through holdingfixed or councilrates instead now. */
+    const pt=owns*((d.holdingfixed>0?d.holdingfixed/holdingMonths:0)+d.councilrates/12),hoa=0;
     const wip=Math.max(0,riskAddsCum-riskCompleteCum),insurance=d.insur/100/12*wip;
     R.retax[m]=pt;R.hoaexp[m]=hoa;R.insurance[m]=insurance;R.carry[m]=R.retax[m]+R.hoaexp[m]+R.insurance[m]
   }
