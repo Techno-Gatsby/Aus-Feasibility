@@ -131,6 +131,12 @@ export async function handle(req, res) {
          where deleted_at is null and region in (${placeholders})
          order by ${order}`,
         params);
+      /* mssql hands nvarchar(max) back as a raw string - unlike pg's jsonb,
+         which the Postgres version relied on to auto-parse this same column.
+         Without this, every row's envelope.parcels access on the client
+         silently sees undefined and the store looks empty no matter how much
+         is in it. */
+      if (expand) rows.forEach((r) => { r.envelope = JSON.parse(r.envelope); });
       send(res, 200, { appraisals: rows });
       return true;
     }
@@ -142,7 +148,8 @@ export async function handle(req, res) {
          from dbo.appraisal_version v join dbo.appraisal a on a.id = v.appraisal_id
          where v.appraisal_id=@p1 and v.version=@p2${rf.clause.replace("@p", "@p3")}`,
         [id, Number(versionNo), ...rf.params]);
-      if (rows.length) send(res, 200, rows[0]); else send(res, 404, { error: "No such version." });
+      if (rows.length) { rows[0].envelope = JSON.parse(rows[0].envelope); send(res, 200, rows[0]); }
+      else send(res, 404, { error: "No such version." });
       return true;
     }
 
@@ -163,7 +170,8 @@ export async function handle(req, res) {
       const { rows } = await query(
         `select ${LIST_COLS}, envelope from dbo.appraisal where id=@p1 and deleted_at is null${rf.clause.replace("@p", "@p2")}`,
         [id, ...rf.params]);
-      if (rows.length) send(res, 200, rows[0]); else send(res, 404, { error: "No such appraisal." });
+      if (rows.length) { rows[0].envelope = JSON.parse(rows[0].envelope); send(res, 200, rows[0]); }
+      else send(res, 404, { error: "No such appraisal." });
       return true;
     }
 
