@@ -6202,7 +6202,12 @@ function applyStatePrefill(){
    every form build to show what the state's rules say NOW beside whatever
    figure is actually typed into the field (prefilled once, then free to
    diverge as the user edits it). */
-const STATE_CALC_FIELDS=new Set(["stampfixed","foreignsurcharge","landtax","foreignlandtax","firbfee","holdingfixed"]);
+const STATE_CALC_FIELDS=new Set(["foreignsurcharge","landtax","foreignlandtax"]);
+/* stampfixed, firbfee and holdingfixed get their own dedicated read-only
+   reference row instead (see AU_REF_FIELDS / paintAuRefFields below) - the
+   input itself stays fully editable, per the decision to keep these as
+   type-in fields with a separate, uneditable field alongside for comparison,
+   rather than a small badge or a locked input. */
 function auStateCalcRef(){
   return auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
 }
@@ -6247,18 +6252,6 @@ function auFirbFeeFor(acresGross,pr,landgstPct){
   return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
 }
 function auFirbFeeRef(){return auFirbFeeFor(D.acresGross,D.pr,D.landgst)}
-/* Duty and the FIRB fee are both statutory lookups with one correct answer for
-   the land inputs entered - unlike holdingfixed, there is never a legitimate
-   reason to type something else in. Locked here rather than left to the
-   calc-badge alone, so the field itself cannot drift from what it displays. */
-const AU_CALC_LOCKED_FIELDS=new Set(["stampfixed","firbfee"]);
-function enforceAuCalcLockedFields(target){
-  const ref=auCalcStateFigures(Math.round(_num(target.dutystate,0)),_num(target.acresGross,0),_num(target.pr,0),_num(target.landgst,0),Math.round(_num(target.landvacant,1))===1);
-  if(ref)target.stampfixed=ref.stampfixed;
-  const firb=auFirbFeeFor(target.acresGross,target.pr,target.landgst);
-  if(firb!=null)target.firbfee=firb;
-  return target;
-}
 /* Holding-cost reference - unlike duty/FIRB this has no external schedule to
    look up; the only "calculated" figure available is what the three annual
    rate inputs above (landtax/foreignlandtax/councilrates) total over the
@@ -6279,34 +6272,50 @@ function auHoldingRef(){
    that first wrote the figures into the fields below. */
 function paintStateCalcBadges(){
   const ref=auStateCalcRef();
-  const firbRef=auFirbFeeRef();
-  const holdRef=auHoldingRef();
   STATE_CALC_FIELDS.forEach(k=>{
     const inp=document.getElementById("i_"+k);
     const row=inp&&inp.closest(".f"),label=row&&row.querySelector("label");
     if(!label)return;
     let span=label.querySelector(".tagcalc");
-    if(k==="firbfee"){
-      if(inp)inp.value=numFieldFormat(D.firbfee);
-      if(firbRef==null){if(span)span.remove();return}
-      if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
-      span.textContent="calc: $"+firbRef.toLocaleString("en-AU");
-      span.title="FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band: $"+firbRef.toLocaleString("en-AU")+". Reference only — not written back automatically.";
-      return;
-    }
-    if(k==="holdingfixed"){
-      if(holdRef==null){if(span)span.remove();return}
-      if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
-      span.textContent="calc: $"+holdRef.toLocaleString("en-AU");
-      span.title="Land tax + foreign land-tax surcharge + council rates, at their annual rates above, over the "+Math.round(_num(D.holddur,0))+"-month holding duration entered below: $"+holdRef.toLocaleString("en-AU")+". This adds to (does not replace) whatever total is entered here. Reference only — not written back automatically.";
-      return;
-    }
-    if(k==="stampfixed"&&inp)inp.value=numFieldFormat(D.stampfixed);
     if(!ref){if(span)span.remove();return}
     const v2=k==="foreignsurcharge"?ref.foreignsurcharge+"%":"$"+Math.round(ref[k]).toLocaleString("en-AU");
     if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
     span.textContent="calc: "+v2;
     span.title=ref.state+" calculated value from the current land inputs: "+v2+". Reference only — not written back unless you re-pick the state (or land status) above.";
+  });
+}
+/* Three costs the model can calculate independently of whatever is typed
+   into their own field - duty, the FIRB fee, and the annual-rates share of
+   holding cost. Each gets its own separate, read-only reference row (not a
+   locked input, not just a badge) immediately below the real field, per the
+   decision that these stay type-in with a distinct field alongside for
+   comparison. Runs on every render() so it tracks acresGross/pr/landgst/
+   holddur as they're typed, the same way the badges above do. */
+const AU_REF_FIELDS=new Set(["stampfixed","firbfee","holdingfixed"]);
+const AU_REF_LABELS={
+  stampfixed:"Duty — calculated (reference)",
+  firbfee:"FIRB fee — calculated (reference)",
+  holdingfixed:"Holding cost, annual rates — calculated (reference)"
+};
+const AU_REF_TITLES={
+  stampfixed:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs. Reference only — the field above is not changed automatically.":"Select a state above to calculate."},
+  firbfee:()=>"FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band. Reference only — the field above is not changed automatically.",
+  holdingfixed:()=>"Land tax + foreign land-tax surcharge + council rates, at their annual rates above, over the "+Math.round(_num(D.holddur,0))+"-month holding duration entered below. This is what those annual rates alone contribute - it adds to, not replaces, whatever total is entered above. Reference only."
+};
+function auRefValueFor(k){
+  if(k==="stampfixed"){const r=auStateCalcRef();return r?r.stampfixed:null}
+  if(k==="firbfee")return auFirbFeeRef();
+  if(k==="holdingfixed")return auHoldingRef();
+  return null;
+}
+function paintAuRefFields(){
+  AU_REF_FIELDS.forEach(k=>{
+    const inp=document.getElementById("ref_"+k);
+    if(!inp)return;
+    const v=auRefValueFor(k);
+    inp.value=v==null?"":numFieldFormat(v);
+    inp.placeholder=v==null?"Not calculable yet":"";
+    inp.title=AU_REF_TITLES[k]();
   });
 }
 ["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
@@ -6408,7 +6417,6 @@ function setAllInputSections(collapsed){
 function buildFormCore(){
   ensureActivePhaseDurations();
   ensureActivePhaseShares();
-  if(typeof enforceAuCalcLockedFields==='function')enforceAuCalcLockedFields(D);
   const derived=derive(D),host=document.getElementById("form");host.innerHTML="";
   const md=document.createElement("div");md.className="fs shut";
   md.innerHTML=`<button type="button" class="lg" aria-expanded="false">1. Project &amp; development type</button>
@@ -6472,6 +6480,11 @@ function buildFormCore(){
       const hasSelect=t!=="c"&&(SELECT_OPTIONS[k]||isFlagField);row.innerHTML=`<label for="i_${k}">${lab}${badge}</label>${hasSelect?`<select id="i_${k}">${optionsHtml(k,D[k],isFlagField)}</select>`:`<input id="i_${k}" ${t==="c"?"readonly tabindex=-1":""}>`}<span class="u">${hasSelect?"":unit}</span>`;
       if(t!=="c"&&ref)row.classList.add("refonly");
       g.appendChild(row);
+      if(AU_REF_FIELDS.has(k)){
+        const refRow=document.createElement("div");refRow.className="f calc";
+        refRow.innerHTML=`<label for="ref_${k}">${AU_REF_LABELS[k]}</label><input id="ref_${k}" readonly tabindex="-1"><span class="u">${unit}</span>`;
+        g.appendChild(refRow);
+      }
       if(k==="_land"){
         const inp=row.querySelector("input");
         inp.readOnly=false;inp.removeAttribute("readonly");inp.tabIndex=0;
@@ -6487,8 +6500,7 @@ function buildFormCore(){
       }
       if(t!=="c"){const inp=row.querySelector("input,select");if(!hasSelect)autoBlankApply(inp,k,D[k]);
         if(MANDATORY_ACCOUNTING_FIELDS.has(k)){inp.value=ACCOUNTING_POLICY[k];inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
-        if(AU_CALC_LOCKED_FIELDS.has(k)){inp.value=numFieldFormat(D[k]);inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
-        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(AU_CALC_LOCKED_FIELDS.has(k)){enforceAuCalcLockedFields(D);inp.value=numFieldFormat(D[k]);return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
+        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
           if(isNaN(v)){inp.value=D[k];return}
           if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,1);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
           if(k==="dutystate"){D.dutystate=_clamp(Math.round(v),0,8);applyStatePrefill();buildForm();render();return}
@@ -7010,10 +7022,9 @@ function render(){
   modelErrorBox();
   try{
     cancelOptimiserWorker();cancelSummaryAnalytics();clearCache();
-    if(typeof enforceAuCalcLockedFields==='function')enforceAuCalcLockedFields(D);
     Object.keys(PANE).forEach(k=>{if(k!=="cpl"&&k!=="ccf"&&k!=="source")DIRTY[k]=true});clearModelError();
     if(renderFrame)cancelAnimationFrame(renderFrame);
-    renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();
+    renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();if(typeof paintAuRefFields==='function')paintAuRefFields();
       setTimeout(()=>{const pane=activePane();if(pane==="port")schedulePortfolioResults(80);if(CONTEXT_PANES.has(pane))scheduleActiveContext(pane==="cf"?20:50);else queuePanePaint(pane)},0)});
   }catch(e){showModelError(e)}
 }
@@ -9046,7 +9057,21 @@ function initCollapsibleInputRail(){
   }
   function rowByKey(key){const el=document.getElementById("i_"+key);return el&&el.closest(".f")}
   function sequenceSubhead(text){const h=document.createElement("div");h.className="input-sequence-subhead";h.textContent=text;return h}
-function collectRows(keys){return keys.map(rowByKey).filter(Boolean)}
+function collectRows(keys){
+  const out=[];
+  keys.forEach(key=>{
+    const r=rowByKey(key);if(r)out.push(r);
+    /* stampfixed/firbfee carry a read-only reference row immediately after
+       them (see AU_REF_FIELDS) - id "ref_"+key rather than "i_"+key, so
+       rowByKey alone would not find it, and a plain re-sequence by key would
+       otherwise strand it at the end of the group as an unrecognised leftover. */
+    if(typeof AU_REF_FIELDS!=='undefined'&&AU_REF_FIELDS.has(key)){
+      const refEl=document.getElementById("ref_"+key),refRow=refEl&&refEl.closest(".f");
+      if(refRow)out.push(refRow);
+    }
+  });
+  return out;
+}
   function rebuildGroupInSequence(group,blocks,tail=[]){
     if(!group)return;
     const used=new Set();const prepared=blocks.map(b=>({title:b[0],rows:collectRows(b[1])}));prepared.forEach(b=>b.rows.forEach(r=>used.add(r)));
@@ -9145,6 +9170,7 @@ function buildForm(){
   rebucketInputs();
   compactRenderedInputs();
   if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();
+  if(typeof paintAuRefFields==='function')paintAuRefFields();
   return result;
 }
 window.buildForm=buildForm;
