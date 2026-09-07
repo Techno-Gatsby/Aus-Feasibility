@@ -11,12 +11,6 @@
 
 begin transaction;
 
-begin;
-
-begin;
-
-begin;
-
 /* 400 Glenmore Road Paddington - 4:1 FSR
       npbt 158,561,049 */
 if not exists (select 1 from dbo.appraisal where id = 'a8b7c8ea-9869-5236-9a20-1914f3cf211b')

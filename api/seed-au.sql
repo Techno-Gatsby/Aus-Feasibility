@@ -1,11 +1,5 @@
 begin;
 
-begin;
-
-begin;
-
-begin;
-
 /* 400 Glenmore Road Paddington - 4:1 FSR
       npbt 158,561,049 */
 insert into appraisal (id, name, location, region, envelope, envelope_v, created_by, created_at, updated_by, updated_at)
