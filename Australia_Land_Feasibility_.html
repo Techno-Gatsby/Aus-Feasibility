@@ -6205,13 +6205,19 @@ function applyStatePrefill(){
    every form build to show what the state's rules say NOW beside whatever
    figure is actually typed into the field (prefilled once, then free to
    diverge as the user edits it). */
-const STATE_CALC_FIELDS=new Set(["landtax","foreignlandtax"]);
-/* stamprt, foreignsurcharge, firbfee and holdingfixed get their own dedicated
-   read-only reference row instead (see AU_REF_FIELDS / paintAuRefFields
-   below) - the input itself stays fully editable, per the decision to keep
-   these as
-   type-in fields with a separate, uneditable field alongside for comparison,
-   rather than a small badge or a locked input. */
+/* landtax and foreignlandtax used to carry a small "calc: $X" badge each,
+   but both are now folded into the single holdingfixed reference row
+   (Land tax + foreign surcharge — calculated) below, so a per-field badge
+   here would just repeat the same figures a second time. Left empty (rather
+   than removing paintStateCalcBadges outright) in case a field needing this
+   lighter-weight badge treatment shows up again. */
+const STATE_CALC_FIELDS=new Set();
+/* stamprt, stampfixed, foreignsurcharge, firbfee and holdingfixed get their
+   own dedicated read-only reference row instead (see AU_REF_FIELDS /
+   paintAuRefFields below) - the input itself stays fully editable, per the
+   decision to keep these as type-in fields with a separate, uneditable
+   field alongside for comparison, rather than a small badge or a locked
+   input. */
 function auStateCalcRef(){
   return auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
 }
