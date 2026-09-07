@@ -177,6 +177,16 @@ const pinAttempts = new Map(); // ip -> { count, lockedUntil }
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 5 * 60_000;
 
+/* Same shape, for /api/login - there was never a lockout here, which stayed
+   low-risk while every password was at least 10 characters. Removing that
+   minimum (anyone can now pick a short password) makes unlimited-attempt
+   brute force a real exposure, not just a theoretical one. Keyed by IP, not
+   by email, so this cannot be used to lock a real account out by hammering
+   their address from elsewhere. */
+const loginAttempts = new Map(); // ip -> { count, lockedUntil }
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_MS = 5 * 60_000;
+
 function clientIp(req) {
   const fwd = req.headers["x-forwarded-for"];
   if (fwd) return String(fwd).split(",")[0].trim();
@@ -219,13 +229,25 @@ export async function handle(req, res) {
        fixed dummy hash) so a wrong email and a wrong password take about the
        same time - a real-not-real email cannot be timed out of this. */
     if (req.method === "POST" && path === "/api/login") {
+      const ip = clientIp(req);
+      const now = Date.now();
+      const attempt = loginAttempts.get(ip);
+      if (attempt && attempt.lockedUntil > now) {
+        send(res, 429, { error: "Too many attempts. Try again in a few minutes." });
+        return true;
+      }
       const body = await readBody(req);
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
       const { rows } = await query(`select user_id, upn, password_hash, disabled_at from dbo.app_user where upn=@p1`, [email]);
       const row = rows[0];
       const ok = verifyPassword(password, row ? row.password_hash : DUMMY_HASH);
-      if (!ok || !row) { send(res, 401, { error: "Incorrect email or password." }); return true; }
+      if (!ok || !row) {
+        const count = (attempt ? attempt.count : 0) + 1;
+        loginAttempts.set(ip, { count, lockedUntil: count >= LOGIN_MAX_ATTEMPTS ? now + LOGIN_LOCKOUT_MS : 0 });
+        send(res, 401, { error: "Incorrect email or password." }); return true;
+      }
+      loginAttempts.delete(ip);
       if (row.disabled_at) { send(res, 403, { error: "This account is disabled." }); return true; }
 
       const sessionId = randomUUID();

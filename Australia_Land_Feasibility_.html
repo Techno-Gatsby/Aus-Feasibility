@@ -5656,7 +5656,7 @@ const LEV=[
  {k:"modelmo",n:"Display / sales-centre period",u:"mth",   lo:0,    hi:36,    st:1,    f:v=>M0(v),       grp:"Vertical"},
  {k:"permpc",n:"Permit cost",             u:"% build",lo:0,   hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Vertical"},
  {k:"vlag",  n:"Vertical unit start lag",     u:"mth",   lo:0,    hi:48,    st:1,    f:v=>M0(v),       grp:"Vertical"},
- {k:"pr",    n:"Land consideration",      u:"A$",      lo:0,    hi:5e9,   st:100000, f:v=>"$"+M0(v), grp:"Land",
+ {k:"pr",    n:"Land price",              u:"A$",      lo:0,    hi:5e9,   st:100000, f:v=>"$"+M0(v), grp:"Land",
    abs:d=>_num(d.pr,0)*_num(d.acresGross,0),
    map:(v,d)=>({pr:_num(d.acresGross,0)>0?v/_num(d.acresGross,0):0})},
  {k:"vff",   n:"Sale price per sqm",u:"A$/sqm",  lo:0,    hi:20000, st:10,   f:v=>"$"+M0(v,2), grp:"Revenue",
@@ -5668,7 +5668,7 @@ const LEV=[
  {k:"absn",  n:"Sales velocity",              u:"units/m",lo:.5,   hi:80,    st:.5,   f:v=>M0(v,1)+" /m",grp:"Revenue"},
  {k:"esc",   n:"Price escalation",        u:"% pa",  lo:-15,  hi:25,    st:.25,  f:v=>M0(v,2)+"%", grp:"Revenue"},
  {k:"depo",  n:"Deposit on contract",     u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Revenue"},
- {k:"vinfl", n:"Construction cost per unit",  u:"A$/unit", lo:0,    hi:3000000,st:10000, f:v=>"$"+M0(v),   grp:"Cost",
+ {k:"vinfl", n:"Construction cost per lot / unit",u:"A$/unit", lo:0,  hi:3000000,st:10000, f:v=>"$"+M0(v),   grp:"Cost",
    abs:d=>d.infl, map:(v)=>({infl:v})},
  {k:"vcont", n:"Construction contingency",u:"$",     lo:0,    hi:60e6,  st:1e5,  f:v=>"$"+M0(v),   grp:"Cost",
    abs:d=>actualContingencyTotal(d),
@@ -5676,13 +5676,25 @@ const LEV=[
      return {contpc:base>0?Math.max(0,v-fixed)/base*100:0}}},
  {k:"contpc",n:"Contingency rate",        u:"%",     lo:0,    hi:40,    st:.5,   f:v=>M0(v,1)+"%", grp:"Cost"},
  {k:"infesc",n:"Construction escalation",u:"% pa", lo:0,    hi:25,    st:.25,  f:v=>M0(v,2)+"%", grp:"Cost"},
+ {k:"infrastructurecharge",n:"Council infrastructure charges",u:"A$",lo:0,hi:60e6,st:1e5, f:v=>"$"+M0(v),   grp:"Cost"},
+ {k:"dafees",n:"Development application fees",u:"A$",lo:0,    hi:3e6,   st:5e3,  f:v=>"$"+M0(v),   grp:"Cost"},
+ {k:"qleave",n:"QLeave levy",             u:"A$",    lo:0,    hi:15e6,  st:5e4,  f:v=>"$"+M0(v),   grp:"Cost"},
  {k:"ddpc",  n:"Due diligence",           u:"% selected base",lo:0,    hi:30,    st:.5,   f:v=>M0(v,1)+"%", grp:"Land"},
  {k:"sfpc",  n:"Professional fees",               u:"% selected base",lo:0,    hi:40,    st:.5,   f:v=>M0(v,1)+"%", grp:"Land"},
- {k:"ptax",  n:"Land holding cost rate",       u:"% pa",  lo:0,    hi:6,     st:.05,  f:v=>M0(v,2)+"%", grp:"Carry"},
- {k:"assess",n:"Council / holding charge",     u:"A$/unit pa",lo:0,  hi:12000, st:100,  f:v=>"$"+M0(v),   grp:"Carry"},
+ {k:"dmpc",  n:"Development management fees",u:"% COC", lo:0,    hi:40,    st:.5,   f:v=>M0(v,1)+"%", grp:"Land"},
+ {k:"otherdirect",n:"Other direct / project-processing cost",u:"A$",lo:0,  hi:10e6,  st:5e4,  f:v=>"$"+M0(v),   grp:"Land"},
+ /* ptax/assess dropped: both are marked "Legacy" in the input form itself
+    (superseded by holdingfixed / councilrates below) and go inert the moment
+    holdingfixed is set, which is the common case - not worth a slot in the
+    picker. councilrates and holdingfixed are the live fields they were
+    standing in for. */
+ {k:"councilrates",n:"Council rates and holding charges",u:"A$/year",lo:0,hi:2e6,st:1e4, f:v=>"$"+M0(v),   grp:"Carry"},
+ {k:"holdingfixed",n:"Reference total land holding cost",u:"A$",lo:0,hi:10e6,  st:5e4,  f:v=>"$"+M0(v),   grp:"Carry"},
  {k:"comm",  n:"Brokerage and incentive", u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
+ {k:"sellingpc",n:"Selling / settlement expenses",u:"% gross sales",lo:0,hi:15, st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
  {k:"gnapc", n:"General and admin",       u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
  {k:"staffpc",n:"Staff and manpower",     u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
+ {k:"marketingpc",n:"Marketing and advertising",u:"% rev",lo:0, hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
  {k:"pidel", n:"Eligible share",          u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Reimbursement"},
  {k:"pidrt", n:"Reimbursement rate",      u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Reimbursement"},
  {k:"vpid",  n:"Reimbursement received",  u:"$",     lo:0,    hi:120e6, st:5e5,  f:v=>"$"+M0(v),   grp:"Reimbursement",
@@ -5690,11 +5702,12 @@ const LEV=[
    map:(v,d)=>{const eligible=(actualInfrastructureTotal(d)+actualContingencyTotal(d))*Math.max(0,d.pidel)/100;
      return {pidrt:eligible>0?Math.max(0,Math.min(100,v/eligible*100)):0}}},
  {k:"pidlag",n:"Reimbursement lag",       u:"mth",   lo:0,    hi:48,    st:1,    f:v=>M0(v),       grp:"Reimbursement"},
- {k:"ltc",   n:"Gearing",                 u:"% cost",lo:0,    hi:95,    st:1,    f:v=>M0(v)+"%",   grp:"Debt"},
- {k:"rate",  n:"Interest rate",           u:"% pa",  lo:0,    hi:30,    st:.25,  f:v=>M0(v,2)+"%", grp:"Debt"},
- {k:"relpc", n:"Lot release price",       u:"x",     lo:1,    hi:2.5,   st:.05,  f:v=>v.toFixed(2)+"x",grp:"Debt"},
- {k:"ftax",  n:"Income tax",              u:"%",     lo:0,    hi:50,    st:1,    f:v=>M0(v)+"%",   grp:"Tax"},
- {k:"r",     n:"Pre-tax unlevered discount rate", u:"% pa",  lo:0,    hi:40,    st:.25,  f:v=>M0(v,2)+"%", grp:"Return"},
+ {k:"ltc",   n:"Facility limit",          u:"% cost",lo:0,    hi:95,    st:1,    f:v=>M0(v)+"%",   grp:"Debt"},
+ {k:"rate",  n:"All-in interest rate",    u:"% pa",  lo:0,    hi:30,    st:.25,  f:v=>M0(v,2)+"%", grp:"Debt"},
+ {k:"relpc", n:"Lot / unit release price",u:"x",     lo:1,    hi:2.5,   st:.05,  f:v=>v.toFixed(2)+"x",grp:"Debt"},
+ {k:"ftax",  n:"Corporate income tax",    u:"%",     lo:0,    hi:50,    st:1,    f:v=>M0(v)+"%",   grp:"Tax"},
+ {k:"stax",  n:"State / franchise tax",   u:"%",     lo:0,    hi:10,    st:.25,  f:v=>M0(v,2)+"%", grp:"Tax"},
+ {k:"r",     n:"Cost of capital",         u:"% pa",  lo:0,    hi:40,    st:.25,  f:v=>M0(v,2)+"%", grp:"Return"},
  {k:"phm",   n:"Default phase duration",    u:"mth",   lo:1,    hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
  {k:"ph1dur",n:"Phase 1 duration",u:"mth",lo:1,hi:60,st:1,f:v=>M0(v),grp:"Programme",abs:d=>d.ph1dur||d.phm},
  {k:"ph2dur",n:"Phase 2 duration",u:"mth",lo:1,hi:60,st:1,f:v=>M0(v),grp:"Programme",abs:d=>d.ph2dur||d.phm},
@@ -5702,9 +5715,13 @@ const LEV=[
  {k:"ph4dur",n:"Phase 4 duration",u:"mth",lo:1,hi:60,st:1,f:v=>M0(v),grp:"Programme",abs:d=>d.ph4dur||d.phm},
  {k:"ph5dur",n:"Phase 5 duration",u:"mth",lo:1,hi:60,st:1,f:v=>M0(v),grp:"Programme",abs:d=>d.ph5dur||d.phm},
  {k:"ph6dur",n:"Phase 6 duration",u:"mth",lo:1,hi:60,st:1,f:v=>M0(v),grp:"Programme",abs:d=>d.ph6dur||d.phm},
- {k:"nph",   n:"Phases",                  u:"no",    lo:1,    hi:6,     st:1,    f:v=>M0(v),       grp:"Programme"},
- {k:"dellag",n:"Contract to delivery",    u:"mth",   lo:0,    hi:48,    st:1,    f:v=>M0(v),       grp:"Programme"},
- {k:"entdur",n:"Entitlement duration",    u:"mth",   lo:1,    hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"nph",   n:"Construction phases",     u:"no",    lo:1,    hi:6,     st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"dellag",n:"Contract to settlement",  u:"mth",   lo:0,    hi:48,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"entdur",n:"Planning / approval duration",u:"mth",lo:1,   hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"ddur",  n:"Due diligence duration",  u:"mth",   lo:0,    hi:36,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"infradur",n:"Construction cost duration",u:"mth",lo:0,   hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"sfdur", n:"Consultant fees duration",u:"mth",   lo:0,    hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
+ {k:"holddur",n:"Holding costs duration", u:"mth",   lo:0,    hi:60,    st:1,    f:v=>M0(v),       grp:"Programme"},
 ];
 const LV=Object.fromEntries(LEV.map(l=>[l.k,l]));
 function levers(){return leversForMode(!!D.vert)}
@@ -5811,8 +5828,6 @@ function modeScenarios(d=D){const x=derive(d);if(x.vert)return [
   {n:"Upside",ov:{[key]:base*1.08,absn:x.absn*1.2,vinfl:x.infl*.95,esc:x.esc+1,contpc:Math.max(0,x.contpc-1)}}]}
 function normalizeModeState(resetScenarios=false){D.pmode=Number(D.pmode)===1?1:0;enforceAccountingPolicy(D);const vertical=!!derive(D).vert,allowed=new Set(leversForMode(vertical).map(l=>l.k)),fallback=vertical?"hpsf":(D.pmode===1?"vpsf":"vff");["sDrv","xDrv","goalDrv"].forEach(k=>{if(!allowed.has(APP[k]))APP[k]=fallback});if(!allowed.has(APP.yDrv))APP.yDrv=vertical?"vel":"absn";APP.cols=vertical?["pr","hpsf","buildpsf","vel","esc","contpc"]:["pr","vpsf","absn","vinfl","esc","contpc"];APP.opLev=vertical?["hpsf","buildpsf","vel","pr","contpc"]:["vpsf","absn","vinfl","pr","contpc"];const incompatible=APP.scn.some(s=>Object.keys(s.ov||{}).some(k=>vertical?["vff","vpsf","absn"].includes(k):["hpsf","buildpsf","vel","buildmo"].includes(k)));const legacyVerticalDefaults=vertical&&APP.scn.length===4&&Math.abs(_num(APP.scn[0]?.ov?.hpsf)-275)<1e-9&&Math.abs(_num(APP.scn[1]?.ov?.hpsf)-300)<1e-9&&Math.abs(_num(APP.scn[3]?.ov?.hpsf)-350)<1e-9;if(resetScenarios||incompatible||APP.scnAuto||legacyVerticalDefaults){APP.scn=modeScenarios(D);APP.scnAuto=true}APP.opRes=null;APP.sFrom=APP.sTo=null}
 function leverInert(k){
-  /* holding and contingency rates do nothing once a total is stated outright */
-  if((k==="ptax"||k==="assess")&&_num(D.holdingfixed,0)>0)return true;
   if(k==="vcont"&&!(baseConstructionTotal(derive(D))>0))return true;
   /* infrastructure reimbursement is not part of any Australian scheme here */
   if(["pidel","pidrt","vpid","pidlag"].includes(k)&&!(_num(D.pidrt,0)>0&&_num(D.pidel,0)>0))return true;
@@ -10110,6 +10125,7 @@ const QLD_ZONING_PROVIDERS=[
  {key:"redland",match:/redland/i,kind:"arcgis",agency:"Redland City Council",status:"Official Redland City Council open-data City Plan zoning",instrument:"Redland City Plan Version 14",zoneUrl:"https://services7.arcgis.com/VGRM775aS3HJEeB7/ArcGIS/rest/services/Current_Version_14_City_Plan_Zones_and_Overlays/FeatureServer/44",heritageUrls:["https://services7.arcgis.com/VGRM775aS3HJEeB7/ArcGIS/rest/services/Current_Version_14_City_Plan_Zones_and_Overlays/FeatureServer/13","https://services7.arcgis.com/VGRM775aS3HJEeB7/ArcGIS/rest/services/Current_Version_14_City_Plan_Zones_and_Overlays/FeatureServer/14"],sourceUrl:"https://services7.arcgis.com/VGRM775aS3HJEeB7/ArcGIS/rest/services/Current_Version_14_City_Plan_Zones_and_Overlays/FeatureServer/44",dataCurrency:"10 Nov 2025 scheme commencement",minZoom:9},
  {key:"toowoomba",match:/toowoomba/i,kind:"arcgis",agency:"Toowoomba Regional Council",status:"Official Toowoomba Regional Council Planning Scheme GIS",instrument:"Toowoomba Regional Planning Scheme",zoneUrl:"https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/170",precinctUrls:["https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/167"],heritageUrls:["https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/152"],sourceUrl:"https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/170",minZoom:9},
  {key:"rockhampton",match:/rockhampton/i,kind:"arcgis",agency:"Rockhampton Regional Council",status:"Official Rockhampton Region Planning Scheme land-use zoning GIS",instrument:"Rockhampton Region Planning Scheme",zoneUrl:"https://services-ap1.arcgis.com/hx2J5p82likyGt5G/ArcGIS/rest/services/Land_Use_Zones/FeatureServer/0",sourceUrl:"https://services-ap1.arcgis.com/hx2J5p82likyGt5G/ArcGIS/rest/services/Land_Use_Zones/FeatureServer/0",dataCurrency:"Live layer last edited 24 Mar 2026",minZoom:9},
+ {key:"townsville",match:/townsville/i,kind:"arcgis",agency:"Townsville City Council",status:"Official Townsville City Council live City Plan GIS",instrument:"Townsville City Plan 2014",zoneUrl:"https://services6.arcgis.com/3VCE6mezZtwKJeIR/arcgis/rest/services/TCC_City_Planning_Scheme_Zoning_GDA2020/FeatureServer/0",sourceUrl:"https://services6.arcgis.com/3VCE6mezZtwKJeIR/arcgis/rest/services/TCC_City_Planning_Scheme_Zoning_GDA2020/FeatureServer/0",minZoom:9},
  {key:"scenic-rim",match:/scenic rim/i,kind:"arcgis",agency:"Scenic Rim Regional Council",status:"Official Scenic Rim Regional Council Planning Scheme GIS",instrument:"Scenic Rim Planning Scheme 2020",zoneUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",sourceUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",minZoom:9}
 ];
 function qldZoningProvider(lga){const t=String(lga||"");return QLD_ZONING_PROVIDERS.find(p=>p.match.test(t))||null}
@@ -10160,8 +10176,24 @@ function uniqueText(a,limit=8){const out=[];for(const v of a||[]){const t=String
 function arcGeometryParams(lng,lat,feature){if(feature&&feature.geometry&&/Polygon/.test(feature.geometry.type)){return {geometry:JSON.stringify({rings:feature.geometry.coordinates,spatialReference:{wkid:4326}}),geometryType:"esriGeometryPolygon"}}return {geometry:`${lng},${lat}`,geometryType:"esriGeometryPoint"}}
 async function arcFeatures(url,lng,lat,feature,max=50){if(!url)return[];const gp=arcGeometryParams(lng,lat,feature),p=new URLSearchParams({where:"1=1",geometry:gp.geometry,geometryType:gp.geometryType,inSR:"4326",outSR:"4326",spatialRel:"esriSpatialRelIntersects",outFields:"*",returnGeometry:"false",resultRecordCount:String(max),f:"json"}),j=await fetchJson(url+"/query?"+p.toString(),null,14000);return (j.features||[]).map(x=>x&&x.attributes||{}).filter(Boolean)}
 async function saIdentify(lng,lat){const cfg=ZONING.SA;if(!cfg.identifyRoot)return[];const dx=.004,dy=.004,p=new URLSearchParams({geometry:`${lng},${lat}`,geometryType:"esriGeometryPoint",sr:"4326",layers:"all:0",tolerance:"2",mapExtent:`${lng-dx},${lat-dy},${lng+dx},${lat+dy}`,imageDisplay:"800,600,96",returnGeometry:"false",f:"json"});try{const j=await fetchJson(cfg.identifyRoot+"/identify?"+p.toString(),null,14000);return j.results||[]}catch(_){return[]}}
-function normalizeZoneAttrs(sc,a,ctx={},provider=null){a=a||{};let code="",name="",scheme="",authority="",date="",url="",subzone="";if(sc==="NSW"){code=prop(a,["SYM_CODE"]);name=prop(a,["LAY_CLASS","LABEL"]);scheme=prop(a,["EPI_NAME"]);authority=prop(a,["LGA_NAME"]);date=prop(a,["CURRENCY_DATE","COMMENCED_DATE","PUBLISHED_DATE"])}else if(sc==="VIC"){code=prop(a,["ZONE_CODE"]);name=prop(a,["ZONE_DESCRIPTION","ZONE_CODE_GROUP_LABEL"]);scheme=prop(a,["SCHEME_CODE"]);authority=prop(a,["LGA"]);date=prop(a,["GAZ_BEGIN_DATE","UFI_CREATED"])}else if(sc==="QLD"){const k=provider&&provider.key||"";scheme=provider&&provider.instrument||ZONING.QLD.instrument;authority=provider&&provider.agency||ctx.lga||"Relevant Queensland local government";if(k==="brisbane"){code=prop(a,["zone_code"]);name=prop(a,["lvl2_zone","lvl1_zone"]);subzone=prop(a,["zone_prec_desc","zone_prec"]);date=prop(a,["amd_date","gaz_date","cad_ver"])}else if(k==="gold-coast"){code=prop(a,["ZONE_CODE","zone_code"]);name=prop(a,["ZONE","LVL1_ZONE","ZONE_NAME"]);subzone=prop(a,["ZONE_PRECINCT"]);date=prop(a,["last_edited_date","CAD_VER"])}else if(k==="sunshine-coast"){code=prop(a,["ZONE_CODE","CODE"]);name=prop(a,["LABEL","DESCRIPT","HEADING"]);subzone=prop(a,["PRECINCT","LABEL2"]);date=prop(a,["EDIT_DATE","LAST_EDITED_DATE"])}else if(k==="moreton-bay"){code=prop(a,["ZONE_CODE","ZONE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE","ZONE_NAME","ZONE"]);subzone=prop(a,["ZONE_PREC","ZONE_PRECINCT"]);date=prop(a,["AMD_DATE","GAZ_DATE","CAD_VER"])}else if(k==="logan"){code=prop(a,["Zone_Code","ZONE_CODE"]);name=prop(a,["Zone"]);date=prop(a,["EditDate"])}else if(k==="redland"){code=prop(a,["QPP_Zone"]);name=prop(a,["QPP_Description"]);subzone=prop(a,["QPP_Precinct"]);date=provider&&provider.dataCurrency}else if(k==="toowoomba"){code=prop(a,["ZONE_CODE","Zone_Code"]);name=prop(a,["TRPS_Zones","FEAT_NAME","ZONE"]);subzone=prop(a,["PRECINCT"])}else if(k==="rockhampton"){code=prop(a,["Zone_prefix","ZONE_CODE","GISREF"]);name=prop(a,["Zone_Lable","Zone","DESCRIPTION"]);subzone=prop(a,["Split_Zone","Former_PS_Precinct"]);scheme=prop(a,["SCHEME"])||scheme;date=prop(a,["PUBLISH_DATE","GAZETTE_DATE"])}else if(k==="scenic-rim"){code=prop(a,["ZONE_CODE","zone_new"]);name=prop(a,["EPlan_TxtZ","New_Zone_A"]);subzone=prop(a,["EPlan_TxtP","ZONE_PREC_"])}if(!date&&provider&&provider.dataCurrency)date=provider.dataCurrency}else if(sc==="WA"){code=prop(a,["LABEL","ZONE_CATEGORY"]);name=prop(a,["ZONE_RESOLVED","ZONE","LABEL_DESC"]);scheme=prop(a,["SCHEME_NAME","LPSCHEME_ID"]);authority=prop(a,["LGA"]);date=prop(a,["LAST_EDITED_DATE","AMEND_GAZ_DATE","GAZETTAL_DATE"]);url=prop(a,["URL"])}else if(sc==="SA"){code=prop(a,["VALUE","ZONE"]);name=prop(a,["NAME","ZONE_MEANING","DESCRIPTION"]);scheme=ZONING.SA.instrument;date=prop(a,["DELIVERYDATE","STARTDATE","LEGALSTARTDATE"])}else if(sc==="TAS"){code=prop(a,["ZONE_ABB","ZONE_NO"]);name=prop(a,["ZONE"]);scheme=prop(a,["LPS"]);date=prop(a,["LPSDATE","CREATED_ON"])}else if(sc==="ACT"){code=prop(a,["LAND_USE_ZONE_CODE_ID"]);name=prop(a,["DESCRIPTION","LAND_USE_POLICY_DESC"]);scheme=ZONING.ACT.instrument;authority="ACT Territory Planning Authority";date=prop(a,["GAZETTAL_DATE"])}return {code:String(code||"").trim(),name:String(name||"").trim(),scheme:String(scheme||"").trim(),authority:String(authority||ctx.lga||"").trim(),date:planDate(date),url:String(url||"").trim(),subzone:String(subzone||"").trim()}}
-async function resolveZoningState(lng,lat){const known=state().jurisdiction&&stateCode(state().jurisdiction.state);if(known)return known;try{const a=await pointQuery(AU.states,lng,lat);return stateCode(prop(a,["STE_NAME_2021","STATE_NAME_2021","state_name_2021"]))}catch(_){return""}}
+function normalizeZoneAttrs(sc,a,ctx={},provider=null){a=a||{};let code="",name="",scheme="",authority="",date="",url="",subzone="";if(sc==="NSW"){code=prop(a,["SYM_CODE"]);name=prop(a,["LAY_CLASS","LABEL"]);scheme=prop(a,["EPI_NAME"]);authority=prop(a,["LGA_NAME"]);date=prop(a,["CURRENCY_DATE","COMMENCED_DATE","PUBLISHED_DATE"])}else if(sc==="VIC"){code=prop(a,["ZONE_CODE"]);name=prop(a,["ZONE_DESCRIPTION","ZONE_CODE_GROUP_LABEL"]);scheme=prop(a,["SCHEME_CODE"]);authority=prop(a,["LGA"]);date=prop(a,["GAZ_BEGIN_DATE","UFI_CREATED"])}else if(sc==="QLD"){const k=provider&&provider.key||"";scheme=provider&&provider.instrument||ZONING.QLD.instrument;authority=provider&&provider.agency||ctx.lga||"Relevant Queensland local government";if(k==="brisbane"){code=prop(a,["zone_code"]);name=prop(a,["lvl2_zone","lvl1_zone"]);subzone=prop(a,["zone_prec_desc","zone_prec"]);date=prop(a,["amd_date","gaz_date","cad_ver"])}else if(k==="gold-coast"){code=prop(a,["ZONE_CODE","zone_code"]);name=prop(a,["ZONE","LVL1_ZONE","ZONE_NAME"]);subzone=prop(a,["ZONE_PRECINCT"]);date=prop(a,["last_edited_date","CAD_VER"])}else if(k==="sunshine-coast"){code=prop(a,["ZONE_CODE","CODE"]);name=prop(a,["LABEL","DESCRIPT","HEADING"]);subzone=prop(a,["PRECINCT","LABEL2"]);date=prop(a,["EDIT_DATE","LAST_EDITED_DATE"])}else if(k==="moreton-bay"){code=prop(a,["ZONE_CODE","ZONE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE","ZONE_NAME","ZONE"]);subzone=prop(a,["ZONE_PREC","ZONE_PRECINCT"]);date=prop(a,["AMD_DATE","GAZ_DATE","CAD_VER"])}else if(k==="logan"){code=prop(a,["Zone_Code","ZONE_CODE"]);name=prop(a,["Zone"]);date=prop(a,["EditDate"])}else if(k==="redland"){code=prop(a,["QPP_Zone"]);name=prop(a,["QPP_Description"]);subzone=prop(a,["QPP_Precinct"]);date=provider&&provider.dataCurrency}else if(k==="toowoomba"){code=prop(a,["ZONE_CODE","Zone_Code"]);name=prop(a,["TRPS_Zones","FEAT_NAME","ZONE"]);subzone=prop(a,["PRECINCT"])}else if(k==="rockhampton"){code=prop(a,["Zone_prefix","ZONE_CODE","GISREF"]);name=prop(a,["Zone_Lable","Zone","DESCRIPTION"]);subzone=prop(a,["Split_Zone","Former_PS_Precinct"]);scheme=prop(a,["SCHEME"])||scheme;date=prop(a,["PUBLISH_DATE","GAZETTE_DATE"])}else if(k==="scenic-rim"){code=prop(a,["ZONE_CODE","zone_new"]);name=prop(a,["EPlan_TxtZ","New_Zone_A"]);subzone=prop(a,["EPlan_TxtP","ZONE_PREC_"])}else if(k==="townsville"){code=prop(a,["TCC_CODE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["GAZ_DATE","CAD_DATE"])}if(!date&&provider&&provider.dataCurrency)date=provider.dataCurrency}else if(sc==="WA"){code=prop(a,["LABEL","ZONE_CATEGORY"]);name=prop(a,["ZONE_RESOLVED","ZONE","LABEL_DESC"]);scheme=prop(a,["SCHEME_NAME","LPSCHEME_ID"]);authority=prop(a,["LGA"]);date=prop(a,["LAST_EDITED_DATE","AMEND_GAZ_DATE","GAZETTAL_DATE"]);url=prop(a,["URL"])}else if(sc==="SA"){code=prop(a,["VALUE","ZONE"]);name=prop(a,["NAME","ZONE_MEANING","DESCRIPTION"]);scheme=ZONING.SA.instrument;date=prop(a,["DELIVERYDATE","STARTDATE","LEGALSTARTDATE"])}else if(sc==="TAS"){code=prop(a,["ZONE_ABB","ZONE_NO"]);name=prop(a,["ZONE"]);scheme=prop(a,["LPS"]);date=prop(a,["LPSDATE","CREATED_ON"])}else if(sc==="ACT"){code=prop(a,["LAND_USE_ZONE_CODE_ID"]);name=prop(a,["DESCRIPTION","LAND_USE_POLICY_DESC"]);scheme=ZONING.ACT.instrument;authority="ACT Territory Planning Authority";date=prop(a,["GAZETTAL_DATE"])}return {code:String(code||"").trim(),name:String(name||"").trim(),scheme:String(scheme||"").trim(),authority:String(authority||ctx.lga||"").trim(),date:planDate(date),url:String(url||"").trim(),subzone:String(subzone||"").trim()}}
+/* state().jurisdiction only gets (re)written by a full "Analyse site" run
+   (queryPlanning's own caller already has a fresh ctx.state in hand then and
+   never reaches the fallback below at all - see queryPlanning's `stateCode(
+   ctx&&ctx.state)||await resolveZoningState(...)`). The standalone Zoning
+   toggle (loadZoningLayer/zoningMapConfig) calls this directly with no fresh
+   ctx, so trusting a cache scoped to "whatever site was last fully analysed"
+   used to send it querying the wrong state's zoning service after switching
+   states without a fresh analysis - same staleness bug fixed for cadastre.
+   Verify against the actual point every time; only fall back to the cache
+   value if the live check itself fails (offline, service down, etc). */
+async function resolveZoningState(lng,lat){
+  const known=state().jurisdiction&&stateCode(state().jurisdiction.state);
+  try{
+    const a=await pointQuery(AU.states,lng,lat),sc=stateCode(prop(a,["STE_NAME_2021","STATE_NAME_2021","state_name_2021"]));
+    return sc||known||"";
+  }catch(_){return known||""}
+}
 async function resolveQldLga(lng,lat){try{const a=await pointQuery(AUX.lga,lng,lat);return String(prop(a,["LGA_NAME_2025","lga_name_2025"])||"").trim()}catch(_){const j=state().jurisdiction;return j&&stateCode(j.state)==="QLD"?String(j.lga||""):""}}
 function odsFeatureRows(j){if(j&&Array.isArray(j.records))return j.records.map(r=>({attrs:r.fields||{},shape:(r.fields&&r.fields.geo_shape)||r.geometry||null}));if(j&&Array.isArray(j.results))return j.results.map(r=>({attrs:r||{},shape:r.geo_shape||r.geometry||null}));return[]}
 function odsShapeGeometry(shape){if(!shape)return null;if(shape.type==="Feature")return shape.geometry||null;if(shape.type&&shape.coordinates)return shape;return null}
@@ -10504,7 +10536,8 @@ function adoptCadastre(e){
      is also more exact than a rendered hit: tile clipping cannot truncate it. */
   if(typeof window.__auCadastreAt==="function"){
     busy(true,"Finding the lot");
-    window.__auCadastreAt(pt[0],pt[1]).then(function(fs){
+    window.__auCadastreAt(pt[0],pt[1]).then(function(result){
+      const fs=result&&result.fs,field=result&&result.field;
       const hit=(fs||[]).find(function(f){
         const gm=f&&f.geometry;
         if(!gm||!/Polygon/.test(gm.type))return false;
@@ -10514,7 +10547,7 @@ function adoptCadastre(e){
       if(!hit||!hit.geometry){toast("No cadastre lot there - roads and reserves are not lots",2800);return}
       const gm=hit.geometry,polys=gm.type==="Polygon"?[gm.coordinates]:gm.coordinates;
       const coords=polys.find(function(p){return pip(pt,p[0])})||polys[0];
-      adoptCadastreRing(coords,hit.properties||{});
+      adoptCadastreRing(coords,hit.properties||{},field);
     }).catch(function(err){
       toast("Cadastre lookup failed: "+((err&&err.message)||err),3200);
     }).finally(function(){busy(false)});
@@ -10549,14 +10582,18 @@ function adoptCadastre(e){
   return adoptCadastreRing(coords,props);
 }
 /* Shared by the point-query path and the rendered-hit fallback beneath it. */
-function adoptCadastreRing(coords,props){
+function adoptCadastreRing(coords,props,field){
   /* Each state's cadastre service names its lot-id field differently - NSW's
-     is lotidstring, QLD's is lotplan. window.__auCadastreFieldNow (defined
-     alongside window.__auCadastreAt) knows which one is live for the state
-     actually being clicked; without it, every non-NSW lot fell straight
-     through to a meaningless internal row number (OBJECTID) instead of a
-     real lot identifier. */
-  const stateField=typeof window.__auCadastreFieldNow==="function"?window.__auCadastreFieldNow():null;
+     is lotidstring, QLD's is lotplan. The point-query path (adoptCadastre)
+     already knows which one answered THIS click and passes it as `field`;
+     without it, every non-NSW lot fell straight through to a meaningless
+     internal row number (OBJECTID) instead of a real lot identifier. The
+     rendered-hit fallback below has no such answer in hand, so it still asks
+     window.__auCadastreFieldNow() (defined alongside window.__auCadastreAt),
+     which is stateCodeNow()-based and can be stale - but that fallback path
+     is only reachable when window.__auCadastreAt is itself undefined, which
+     it never is in this file. */
+  const stateField=field||(typeof window.__auCadastreFieldNow==="function"?window.__auCadastreFieldNow():null);
   const key=(stateField&&props[stateField])||props.lotidstring||props.lotplan||props.propid||props.OBJECTID||props.objectid;
   const g=state(),label=String(key||"lot");
   g.features.features.forEach(function(x){if(x.properties)x.properties.saved=false});
@@ -14100,31 +14137,59 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
      for NSW, meaningless for every other state whose service names that
      field differently (QLD's is lotplan). Exposed the same way
      __auCadastreAt already crosses this boundary. */
+  /* Legacy bridge, kept for the rendered-hit fallback path in adoptCadastre
+     (only reachable when window.__auCadastreAt itself is undefined, which it
+     never is in this file - so in practice this stays on the stale
+     stateCodeNow() path; __auCadastreAt's own resolved {fs,field} is what the
+     real, always-taken path uses instead). */
   window.__auCadastreFieldNow = function () {
     var sc = stateAbbrev(stateCodeNow()), def = srcFor(sc, "cadastre");
     return (def && def.field) || null;
   };
-  /* One lot, with its ring, for the click that adopts it. */
+  /* One lot, with its ring, for the click that adopts it. This is the actual
+     commit action - unlike a pan or a layer toggle, a lot click is occasional
+     and deliberate, so it is worth one extra small lookup to resolve state
+     from THIS click's own coordinates rather than trusting stateCodeNow(),
+     which only gets refreshed on entering "Select lot" or on a pan-triggered
+     layer reload - both miss the case of clicking a lot right after crossing
+     a state border, or before that first refresh has resolved. Falls back to
+     stateCodeNow() if the fresh lookup itself fails, so a brief outage of the
+     state-boundary service degrades to the old behaviour instead of breaking
+     lot adoption outright. */
+  function cadastreStateAt(lng, lat) {
+    return pointQuery(AU.states, lng, lat)
+      .then(function (a) { return stateCode(prop(a, ["STE_NAME_2021", "STATE_NAME_2021", "state_name_2021"])) || stateAbbrev(stateCodeNow()); })
+      .catch(function () { return stateAbbrev(stateCodeNow()); });
+  }
+  /* Resolves to {fs, field}, not just fs: the field name (lotidstring vs
+     lotplan, etc) is a property of whichever state's service actually
+     answered THIS click, so it has to travel with the features rather than
+     being re-derived afterward from __auCadastreFieldNow()'s own (separately
+     stale-prone, and would cost a second network round trip) resolution. */
   window.__auCadastreAt = function (lng, lat) {
-    var sc = stateAbbrev(stateCodeNow()), def = srcFor(sc, "cadastre");
-    if (!def) return Promise.reject(new Error("No cadastre service for " + (sc || "this area")));
-    var p = new URLSearchParams({
-      f: "geojson",
-      geometry: JSON.stringify({ x: lng, y: lat, spatialReference: { wkid: 4326 } }),
-      geometryType: "esriGeometryPoint", inSR: "4326", outSR: "4326",
-      spatialRel: "esriSpatialRelIntersects", outFields: "*",
-      returnGeometry: "true", geometryPrecision: "6", resultRecordCount: "4"
+    return cadastreStateAt(lng, lat).then(function (sc) {
+      var def = srcFor(sc, "cadastre");
+      if (!def) throw new Error("No cadastre service for " + (sc || "this area"));
+      var field = def.field || null;
+      var p = new URLSearchParams({
+        f: "geojson",
+        geometry: JSON.stringify({ x: lng, y: lat, spatialReference: { wkid: 4326 } }),
+        geometryType: "esriGeometryPoint", inSR: "4326", outSR: "4326",
+        spatialRel: "esriSpatialRelIntersects", outFields: "*",
+        returnGeometry: "true", geometryPrecision: "6", resultRecordCount: "4"
+      });
+      if (def.noQuery) return cadastreIdentify(def, lng, lat).then(function (fs) { return { fs: fs, field: field }; });
+      return fetch(def.url + "/query?" + p.toString(), { mode: "cors", credentials: "omit" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) {
+          if (j && j.error) throw new Error(j.error.message || "cadastre query failed");
+          var fs = (j && j.features) || [];
+          if (!fs.length) throw new Error("no feature from query");
+          return fs;
+        })
+        .catch(function () { return cadastreIdentify(def, lng, lat); })
+        .then(function (fs) { return { fs: fs, field: field }; });
     });
-    if (def.noQuery) return cadastreIdentify(def, lng, lat);
-    return fetch(def.url + "/query?" + p.toString(), { mode: "cors", credentials: "omit" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (j) {
-        if (j && j.error) throw new Error(j.error.message || "cadastre query failed");
-        var fs = (j && j.features) || [];
-        if (!fs.length) throw new Error("no feature from query");
-        return fs;
-      })
-      .catch(function () { return cadastreIdentify(def, lng, lat); });
   };
   function stateCodeNow() {
     var g = state();
@@ -14147,7 +14212,28 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
     if (!AM.map) return;
     var g = state();
     if (!g.layers[key]) { hidePurpose(key); buttonState(key, "", LAYERS[key].source); return; }
+    /* g.jurisdiction only gets (re)written when a full "Analyse site" run
+       succeeds, so stateCodeNow() can still be holding whichever state was
+       last analysed - e.g. NSW from an earlier parcel - long after the map
+       has moved to a QLD site. That silently sends this layer's query to
+       the wrong state's service, which returns nothing for the point
+       actually on screen but throws no error either: the toggle just looks
+       "on" with nothing drawn. setMode("parcel") already re-resolves state
+       from the live map centre for the lot-picker; doing it here too covers
+       the far more common entry point - just toggling the layer on. */
     var sc = stateAbbrev(stateCodeNow());
+    try {
+      var centre = AM.map.getCenter();
+      var ctxFeature = await pointQuery(AU.states, centre.lng, centre.lat);
+      var liveState = stateCode(prop(ctxFeature, ["STE_NAME_2021", "STATE_NAME_2021", "state_name_2021"]));
+      if (liveState) {
+        var liveAbbrev = stateAbbrev(liveState);
+        if (liveAbbrev !== sc) {
+          g.jurisdiction = Object.assign({}, g.jurisdiction || {}, { state: liveState });
+          sc = liveAbbrev;
+        }
+      }
+    } catch (e) {}
     if (!sc) { buttonState(key, "", "Search or select a site first so the jurisdiction is known"); return; }
     var def = srcFor(sc, key);
     if (!def) {
