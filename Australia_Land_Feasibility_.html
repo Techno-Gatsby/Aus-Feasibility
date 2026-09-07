@@ -6202,7 +6202,7 @@ function applyStatePrefill(){
    every form build to show what the state's rules say NOW beside whatever
    figure is actually typed into the field (prefilled once, then free to
    diverge as the user edits it). */
-const STATE_CALC_FIELDS=new Set(["stampfixed","foreignsurcharge","landtax","foreignlandtax","firbfee"]);
+const STATE_CALC_FIELDS=new Set(["stampfixed","foreignsurcharge","landtax","foreignlandtax","firbfee","holdingfixed"]);
 function auStateCalcRef(){
   return auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
 }
@@ -6246,12 +6246,28 @@ function auFirbFeeRef(){
   if(!(landIncGst>0))return null;
   return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
 }
+/* Holding-cost reference - unlike duty/FIRB this has no external schedule to
+   look up; the only "calculated" figure available is what the three annual
+   rate inputs above (landtax/foreignlandtax/councilrates) total over the
+   holding duration entered below. Only meaningful once holddur is stated
+   explicitly - when it is 0 the model instead carries the rate through to
+   the last delivery, a schedule this reference (deliberately) does not run
+   the engine to reproduce. Mirrors the ADD-not-replace behaviour at the
+   R.retax reconciliation line: this is what the annual rates alone
+   contribute, on top of whatever total is typed into holdingfixed. */
+function auHoldingRef(){
+  const holddur=Math.round(_num(D.holddur,0));
+  if(!(holddur>0))return null;
+  const annual=Math.max(0,_num(D.landtax,0))+Math.max(0,_num(D.foreignlandtax,0))+Math.max(0,_num(D.councilrates,0));
+  return Math.round(annual/12*holddur);
+}
 /* Runs after every render(), not just after a form rebuild, so the badge
    tracks acresGross/pr/landgst as they're typed - not just the state dropdown
    that first wrote the figures into the fields below. */
 function paintStateCalcBadges(){
   const ref=auStateCalcRef();
   const firbRef=auFirbFeeRef();
+  const holdRef=auHoldingRef();
   STATE_CALC_FIELDS.forEach(k=>{
     const inp=document.getElementById("i_"+k);
     const row=inp&&inp.closest(".f"),label=row&&row.querySelector("label");
@@ -6262,6 +6278,13 @@ function paintStateCalcBadges(){
       if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
       span.textContent="calc: $"+firbRef.toLocaleString("en-AU");
       span.title="FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band: $"+firbRef.toLocaleString("en-AU")+". Reference only — not written back automatically.";
+      return;
+    }
+    if(k==="holdingfixed"){
+      if(holdRef==null){if(span)span.remove();return}
+      if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
+      span.textContent="calc: $"+holdRef.toLocaleString("en-AU");
+      span.title="Land tax + foreign land-tax surcharge + council rates, at their annual rates above, over the "+Math.round(_num(D.holddur,0))+"-month holding duration entered below: $"+holdRef.toLocaleString("en-AU")+". This adds to (does not replace) whatever total is entered here. Reference only — not written back automatically.";
       return;
     }
     if(!ref){if(span)span.remove();return}
