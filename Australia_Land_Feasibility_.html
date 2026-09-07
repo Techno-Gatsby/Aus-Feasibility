@@ -3856,7 +3856,7 @@ nav.tabs button{letter-spacing:.02em;}
   <aside class="rail">
     <div class="railhead"><span class="rail-title">Inputs</span><span class="spacer"></span><button type="button" id="btnCollapseInputs" class="rail-collapse-btn" aria-pressed="false" title="Collapse all input sections">Collapse all</button><button type="button" id="btnRailToggle" class="rail-toggle" aria-expanded="true" aria-label="Collapse input panel" title="Collapse input panel"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="io">
-      <button id="btnSave">Save</button><button id="btnLoad">Open</button><button id="btnCloudSave" title="Save changed projects to the shared store">Save project</button><button id="btnCloudOpen" title="Discard local changes and reload every project from the shared store">Reload all</button><button id="btnReset">Reset</button>
+      <button id="btnLoad">Open</button><button id="btnCloudSave" title="Save changed projects to the shared store">Save project</button><button id="btnCloudOpen" title="Discard local changes and reload every project from the shared store">Reload all</button><button id="btnReset">Reset</button>
       <input type="file" id="fileIn" accept=".json" hidden="">
     </div>
     <div id="form"></div>
@@ -6240,11 +6240,24 @@ const AU_FIRB_TABLE=[
   {min:1850000000,max:1900000000,flat:1158100},{min:1900000000,max:1950000000,flat:1189400},
   {min:1950000000,max:2000000000,flat:1220700},{min:2000000000,max:Infinity,flat:1245500}
 ];
-function auFirbFeeRef(){
-  const acres=Math.max(0,_num(D.acresGross,0)),p=Math.max(0,_num(D.pr,0)),
-    landIncGst=acres*p*(1+Math.max(0,_num(D.landgst,0))/100);
+function auFirbFeeFor(acresGross,pr,landgstPct){
+  const acres=Math.max(0,_num(acresGross,0)),p=Math.max(0,_num(pr,0)),
+    landIncGst=acres*p*(1+Math.max(0,_num(landgstPct,0))/100);
   if(!(landIncGst>0))return null;
   return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
+}
+function auFirbFeeRef(){return auFirbFeeFor(D.acresGross,D.pr,D.landgst)}
+/* Duty and the FIRB fee are both statutory lookups with one correct answer for
+   the land inputs entered - unlike holdingfixed, there is never a legitimate
+   reason to type something else in. Locked here rather than left to the
+   calc-badge alone, so the field itself cannot drift from what it displays. */
+const AU_CALC_LOCKED_FIELDS=new Set(["stampfixed","firbfee"]);
+function enforceAuCalcLockedFields(target){
+  const ref=auCalcStateFigures(Math.round(_num(target.dutystate,0)),_num(target.acresGross,0),_num(target.pr,0),_num(target.landgst,0),Math.round(_num(target.landvacant,1))===1);
+  if(ref)target.stampfixed=ref.stampfixed;
+  const firb=auFirbFeeFor(target.acresGross,target.pr,target.landgst);
+  if(firb!=null)target.firbfee=firb;
+  return target;
 }
 /* Holding-cost reference - unlike duty/FIRB this has no external schedule to
    look up; the only "calculated" figure available is what the three annual
@@ -6274,6 +6287,7 @@ function paintStateCalcBadges(){
     if(!label)return;
     let span=label.querySelector(".tagcalc");
     if(k==="firbfee"){
+      if(inp)inp.value=numFieldFormat(D.firbfee);
       if(firbRef==null){if(span)span.remove();return}
       if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
       span.textContent="calc: $"+firbRef.toLocaleString("en-AU");
@@ -6287,6 +6301,7 @@ function paintStateCalcBadges(){
       span.title="Land tax + foreign land-tax surcharge + council rates, at their annual rates above, over the "+Math.round(_num(D.holddur,0))+"-month holding duration entered below: $"+holdRef.toLocaleString("en-AU")+". This adds to (does not replace) whatever total is entered here. Reference only — not written back automatically.";
       return;
     }
+    if(k==="stampfixed"&&inp)inp.value=numFieldFormat(D.stampfixed);
     if(!ref){if(span)span.remove();return}
     const v2=k==="foreignsurcharge"?ref.foreignsurcharge+"%":"$"+Math.round(ref[k]).toLocaleString("en-AU");
     if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
@@ -6393,6 +6408,7 @@ function setAllInputSections(collapsed){
 function buildFormCore(){
   ensureActivePhaseDurations();
   ensureActivePhaseShares();
+  if(typeof enforceAuCalcLockedFields==='function')enforceAuCalcLockedFields(D);
   const derived=derive(D),host=document.getElementById("form");host.innerHTML="";
   const md=document.createElement("div");md.className="fs shut";
   md.innerHTML=`<button type="button" class="lg" aria-expanded="false">1. Project &amp; development type</button>
@@ -6471,7 +6487,8 @@ function buildFormCore(){
       }
       if(t!=="c"){const inp=row.querySelector("input,select");if(!hasSelect)autoBlankApply(inp,k,D[k]);
         if(MANDATORY_ACCOUNTING_FIELDS.has(k)){inp.value=ACCOUNTING_POLICY[k];inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
-        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
+        if(AU_CALC_LOCKED_FIELDS.has(k)){inp.value=numFieldFormat(D[k]);inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
+        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(AU_CALC_LOCKED_FIELDS.has(k)){enforceAuCalcLockedFields(D);inp.value=numFieldFormat(D[k]);return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
           if(isNaN(v)){inp.value=D[k];return}
           if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,1);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
           if(k==="dutystate"){D.dutystate=_clamp(Math.round(v),0,8);applyStatePrefill();buildForm();render();return}
@@ -6993,6 +7010,7 @@ function render(){
   modelErrorBox();
   try{
     cancelOptimiserWorker();cancelSummaryAnalytics();clearCache();
+    if(typeof enforceAuCalcLockedFields==='function')enforceAuCalcLockedFields(D);
     Object.keys(PANE).forEach(k=>{if(k!=="cpl"&&k!=="ccf"&&k!=="source")DIRTY[k]=true});clearModelError();
     if(renderFrame)cancelAnimationFrame(renderFrame);
     renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();
@@ -8589,8 +8607,6 @@ function applyEnvelope(j){
     D=P0().inputs;normalizeModeState();
     buildParcels();buildForm();buildScaffold();showNav();render()
 }
-document.getElementById("btnSave").onclick=()=>{
-  dl(new Blob([JSON.stringify(buildEnvelope(),null,2)],{type:"application/json"}),fname(P0().name)+".json")};
 document.getElementById("btnLoad").onclick=()=>document.getElementById("fileIn").click();
 document.getElementById("fileIn").onchange=e=>{const f=e.target.files[0];if(!f)return;
   const rd=new FileReader();rd.onload=()=>{try{applyEnvelope(JSON.parse(rd.result))}
