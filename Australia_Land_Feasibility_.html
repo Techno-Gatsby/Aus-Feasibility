@@ -4620,10 +4620,10 @@ function fieldShown(k,vert){
   "staffsharedfixed","corpfixed",
   /* No depreciation or other-income line exists on the template. */
   "dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth",
-  /* Land is a deposit and a settlement payment. Interim tranches, the fixed-amount
-     alternative and the retired duty inputs all feed lines already on screen. */
+  /* Land is a deposit and a settlement payment. Interim tranches and the
+     fixed-amount alternative feed lines already on screen. */
   "landdeposit","_landdepositamt","landpaycount","landpay1","landpay1month",
-  "_landpresettlementamt","_landbalanceamt","stampmode","stampfixed","acquisitionfee",
+  "_landpresettlementamt","_landbalanceamt","acquisitionfee",
   /* Soft cost is a professional rate and a DM rate; the itemised method and the
      rate read-backs restate them. */
   "softmode","_profpc","_dmpc","_softpc",
@@ -4676,6 +4676,9 @@ function fieldShown(k,vert){
   if(costPayMatch&&Number(costPayMatch[2])>costPaymentCount(D,costPayMatch[1]))return false;
   if(k==="facilityfixed"&&Math.round(_num(D.facmode,0))!==1)return false;
   if(k==="gstmarginbase"&&Math.round(_num(D.gstmode,0))!==1)return false;
+  /* Duty is entered as a fixed dollar figure or a rate against land value - never both. */
+  if(k==="stampfixed"&&Math.round(_num(D.stampmode,1))!==1)return false;
+  if(k==="stamprt"&&Math.round(_num(D.stampmode,1))===1)return false;
   /* Deposit and settlement controls are always the land payment structure. */
   if((k==="sfpc"||k==="dmpc")&&Math.round(_num(D.softmode,0))===1)return false;
   if(["sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc"].includes(k)&&Math.round(_num(D.softmode,0))!==1)return false;
@@ -6288,27 +6291,29 @@ function paintStateCalcBadges(){
    type-in with a distinct field alongside for comparison. Runs on every
    render() so it tracks acresGross/pr/landgst as they're typed, the same
    way the badges above do. */
-/* stampfixed is the field that would carry duty's actual dollar figure, but
-   it (and stampmode) are unconditionally hidden from the form - see the
-   `hidden` set in fieldShown - so a reference row attached to it would never
-   render. stamprt (the visible "Duty Rate" percentage) is the field the
-   reference belongs next to instead. */
-const AU_REF_FIELDS=new Set(["stamprt","foreignsurcharge","firbfee","holdingfixed"]);
-const AU_REF_UNITS={stamprt:"A$"};
+/* stampfixed carries duty's actual dollar figure and stamprt the equivalent
+   rate - mutually exclusive, gated on stampmode in fieldShown, so only one
+   of the two is ever on screen at a time. Both carry the same reference row
+   (the calculation itself is mode-independent), so whichever one is visible
+   keeps the comparison in view. */
+const AU_REF_FIELDS=new Set(["stamprt","stampfixed","foreignsurcharge","firbfee","holdingfixed"]);
+const AU_REF_UNITS={stamprt:"A$",stampfixed:"A$"};
 const AU_REF_LABELS={
   stamprt:"Duty — calculated (reference)",
+  stampfixed:"Duty — calculated (reference)",
   foreignsurcharge:"Foreign buyer surcharge — calculated (reference)",
   firbfee:"FIRB fee — calculated (reference)",
   holdingfixed:"Land tax + foreign surcharge — calculated (reference)"
 };
 const AU_REF_TITLES={
   stamprt:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs, as a dollar figure — compare against the percentage rate entered above. Reference only.":"Select a state above to calculate."},
+  stampfixed:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs — compare against the fixed amount entered above. Reference only.":"Select a state above to calculate."},
   foreignsurcharge:()=>{const r=auStateCalcRef();return r?r.state+" calculated foreign purchaser duty surcharge rate for the current land status. Reference only.":"Select a state above to calculate."},
   firbfee:()=>"FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band. Reference only — the field above is not changed automatically.",
   holdingfixed:()=>"Calculated land tax plus calculated foreign land-tax surcharge, summed for comparison — not an additional cost line of its own. Reference only."
 };
 function auRefValueFor(k){
-  if(k==="stamprt"){const r=auStateCalcRef();return r?r.stampfixed:null}
+  if(k==="stamprt"||k==="stampfixed"){const r=auStateCalcRef();return r?r.stampfixed:null}
   if(k==="foreignsurcharge"){const r=auStateCalcRef();return r?r.foreignsurcharge:null}
   if(k==="firbfee")return auFirbFeeRef();
   if(k==="holdingfixed")return auHoldingRef();
@@ -6527,7 +6532,7 @@ function buildFormCore(){
              made "Sales volume basis" look dead: the mode flipped but the yearly boxes
              it reveals were never drawn. statpaycount, holdpaycount and holdingfixed
              gate fields the same way and were missing for the same reason. */
-          if(k==="salesmode"||k==="statpaycount"||k==="holdpaycount"||k==="holdingfixed"||k==="ovhmode"||k==="softmode"||k==="facmode"||k==="gstmode"||k==="costgstbasis"||k==="landpaycount"){buildForm();buildScaffold();showNav();render();return}
+          if(k==="salesmode"||k==="statpaycount"||k==="holdpaycount"||k==="holdingfixed"||k==="ovhmode"||k==="softmode"||k==="facmode"||k==="gstmode"||k==="costgstbasis"||k==="landpaycount"||k==="stampmode"){buildForm();buildScaffold();showNav();render();return}
           syncSliders();render()}}
     });
     if(sec.g==="Vertical development"&&D.vert)buildVerticalProductEditor(g);
