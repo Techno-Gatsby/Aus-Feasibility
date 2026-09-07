@@ -6202,10 +6202,11 @@ function applyStatePrefill(){
    every form build to show what the state's rules say NOW beside whatever
    figure is actually typed into the field (prefilled once, then free to
    diverge as the user edits it). */
-const STATE_CALC_FIELDS=new Set(["foreignsurcharge","landtax","foreignlandtax"]);
-/* stampfixed, firbfee and holdingfixed get their own dedicated read-only
-   reference row instead (see AU_REF_FIELDS / paintAuRefFields below) - the
-   input itself stays fully editable, per the decision to keep these as
+const STATE_CALC_FIELDS=new Set(["landtax","foreignlandtax"]);
+/* stamprt, foreignsurcharge, firbfee and holdingfixed get their own dedicated
+   read-only reference row instead (see AU_REF_FIELDS / paintAuRefFields
+   below) - the input itself stays fully editable, per the decision to keep
+   these as
    type-in fields with a separate, uneditable field alongside for comparison,
    rather than a small badge or a locked input. */
 function auStateCalcRef(){
@@ -6252,20 +6253,14 @@ function auFirbFeeFor(acresGross,pr,landgstPct){
   return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
 }
 function auFirbFeeRef(){return auFirbFeeFor(D.acresGross,D.pr,D.landgst)}
-/* Holding-cost reference - unlike duty/FIRB this has no external schedule to
-   look up; the only "calculated" figure available is what the three annual
-   rate inputs above (landtax/foreignlandtax/councilrates) total over the
-   holding duration entered below. Only meaningful once holddur is stated
-   explicitly - when it is 0 the model instead carries the rate through to
-   the last delivery, a schedule this reference (deliberately) does not run
-   the engine to reproduce. Mirrors the ADD-not-replace behaviour at the
-   R.retax reconciliation line: this is what the annual rates alone
-   contribute, on top of whatever total is typed into holdingfixed. */
+/* Not a separate cost item - just the calculated land tax and foreign
+   land-tax surcharge (the same two figures the badges above show
+   individually) shown as one sum, for direct comparison against whatever
+   total is typed into the holding-cost reference field. */
 function auHoldingRef(){
-  const holddur=Math.round(_num(D.holddur,0));
-  if(!(holddur>0))return null;
-  const annual=Math.max(0,_num(D.landtax,0))+Math.max(0,_num(D.foreignlandtax,0))+Math.max(0,_num(D.councilrates,0));
-  return Math.round(annual/12*holddur);
+  const ref=auStateCalcRef();
+  if(!ref)return null;
+  return Math.round(ref.landtax+ref.foreignlandtax);
 }
 /* Runs after every render(), not just after a form rebuild, so the badge
    tracks acresGross/pr/landgst as they're typed - not just the state dropdown
@@ -6278,32 +6273,43 @@ function paintStateCalcBadges(){
     if(!label)return;
     let span=label.querySelector(".tagcalc");
     if(!ref){if(span)span.remove();return}
-    const v2=k==="foreignsurcharge"?ref.foreignsurcharge+"%":"$"+Math.round(ref[k]).toLocaleString("en-AU");
+    const v2="$"+Math.round(ref[k]).toLocaleString("en-AU");
     if(!span){span=document.createElement("span");span.className="tagcalc";label.appendChild(span)}
     span.textContent="calc: "+v2;
     span.title=ref.state+" calculated value from the current land inputs: "+v2+". Reference only — not written back unless you re-pick the state (or land status) above.";
   });
 }
-/* Three costs the model can calculate independently of whatever is typed
-   into their own field - duty, the FIRB fee, and the annual-rates share of
-   holding cost. Each gets its own separate, read-only reference row (not a
-   locked input, not just a badge) immediately below the real field, per the
-   decision that these stay type-in with a distinct field alongside for
-   comparison. Runs on every render() so it tracks acresGross/pr/landgst/
-   holddur as they're typed, the same way the badges above do. */
-const AU_REF_FIELDS=new Set(["stampfixed","firbfee","holdingfixed"]);
+/* Four figures the model can calculate independently of whatever is typed
+   into their own field - duty, the foreign buyer surcharge rate, the FIRB
+   fee, and the calculated land tax + foreign land-tax surcharge (for
+   comparison against the holding-cost reference total). Each gets its own
+   separate, read-only reference row (not a locked input, not just a badge)
+   immediately below the real field, per the decision that these stay
+   type-in with a distinct field alongside for comparison. Runs on every
+   render() so it tracks acresGross/pr/landgst as they're typed, the same
+   way the badges above do. */
+/* stampfixed is the field that would carry duty's actual dollar figure, but
+   it (and stampmode) are unconditionally hidden from the form - see the
+   `hidden` set in fieldShown - so a reference row attached to it would never
+   render. stamprt (the visible "Duty Rate" percentage) is the field the
+   reference belongs next to instead. */
+const AU_REF_FIELDS=new Set(["stamprt","foreignsurcharge","firbfee","holdingfixed"]);
+const AU_REF_UNITS={stamprt:"A$"};
 const AU_REF_LABELS={
-  stampfixed:"Duty — calculated (reference)",
+  stamprt:"Duty — calculated (reference)",
+  foreignsurcharge:"Foreign buyer surcharge — calculated (reference)",
   firbfee:"FIRB fee — calculated (reference)",
-  holdingfixed:"Holding cost, annual rates — calculated (reference)"
+  holdingfixed:"Land tax + foreign surcharge — calculated (reference)"
 };
 const AU_REF_TITLES={
-  stampfixed:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs. Reference only — the field above is not changed automatically.":"Select a state above to calculate."},
+  stamprt:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs, as a dollar figure — compare against the percentage rate entered above. Reference only.":"Select a state above to calculate."},
+  foreignsurcharge:()=>{const r=auStateCalcRef();return r?r.state+" calculated foreign purchaser duty surcharge rate for the current land status. Reference only.":"Select a state above to calculate."},
   firbfee:()=>"FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band. Reference only — the field above is not changed automatically.",
-  holdingfixed:()=>"Land tax + foreign land-tax surcharge + council rates, at their annual rates above, over the "+Math.round(_num(D.holddur,0))+"-month holding duration entered below. This is what those annual rates alone contribute - it adds to, not replaces, whatever total is entered above. Reference only."
+  holdingfixed:()=>"Calculated land tax plus calculated foreign land-tax surcharge, summed for comparison — not an additional cost line of its own. Reference only."
 };
 function auRefValueFor(k){
-  if(k==="stampfixed"){const r=auStateCalcRef();return r?r.stampfixed:null}
+  if(k==="stamprt"){const r=auStateCalcRef();return r?r.stampfixed:null}
+  if(k==="foreignsurcharge"){const r=auStateCalcRef();return r?r.foreignsurcharge:null}
   if(k==="firbfee")return auFirbFeeRef();
   if(k==="holdingfixed")return auHoldingRef();
   return null;
@@ -6482,7 +6488,7 @@ function buildFormCore(){
       g.appendChild(row);
       if(AU_REF_FIELDS.has(k)){
         const refRow=document.createElement("div");refRow.className="f calc";
-        refRow.innerHTML=`<label for="ref_${k}">${AU_REF_LABELS[k]}</label><input id="ref_${k}" readonly tabindex="-1"><span class="u">${unit}</span>`;
+        refRow.innerHTML=`<label for="ref_${k}">${AU_REF_LABELS[k]}</label><input id="ref_${k}" readonly tabindex="-1"><span class="u">${AU_REF_UNITS[k]||unit}</span>`;
         g.appendChild(refRow);
       }
       if(k==="_land"){
