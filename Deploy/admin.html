@@ -174,10 +174,16 @@
     b.className = "toggle";
     b.textContent = "Reset password";
     b.onclick = function(){
-      if (!confirm("Reset " + u.upn + "'s password? They will be signed out everywhere.")) return;
+      /* Blank submits as a random generated password (the old behaviour,
+         shown once via showTempPassword); typing one here sets that exact
+         password directly - no relaying, no forced re-change on next
+         sign-in, it just works with whatever was typed. */
+      var chosen = window.prompt("Set a password for " + u.upn + " (leave blank to generate a random one instead):", "");
+      if (chosen === null) return;
+      if (!confirm((chosen ? "Set that password for " : "Reset ") + u.upn + "? They will be signed out everywhere.")) return;
       b.disabled = true;
-      api("/api/admin/users/" + u.user_id + "/reset-password", { method: "POST" })
-        .then(function(data){ showTempPassword(u.upn, data.tempPassword); loadUsers(); })
+      api("/api/admin/users/" + u.user_id + "/reset-password", { method: "POST", body: JSON.stringify({ password: chosen }) })
+        .then(function(data){ if (!chosen) showTempPassword(u.upn, data.tempPassword); loadUsers(); })
         .catch(function(e){ showErr(e); b.disabled = false; });
     };
     return b;

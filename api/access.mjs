@@ -512,10 +512,14 @@ export async function handle(req, res) {
       return true;
     }
 
-    /* POST /api/admin/users/:id/reset-password - issues a new temporary
-       password (shown once, same as account creation) and signs the person
-       out everywhere by dropping their sessions, so a compromised or
-       forgotten password cannot be used again once reset.
+    /* POST /api/admin/users/:id/reset-password { password?: string } - either
+       issues a new random temporary password (shown once, same as account
+       creation, must_change_password stays on) or, when the admin supplies
+       one in the body, sets that exact password directly and leaves
+       must_change_password alone - the admin already knows what they typed,
+       there is nothing to relay and nothing to force changing again. Either
+       way the person is signed out everywhere by dropping their sessions, so
+       a compromised or forgotten password cannot be used again once reset.
 
        The audit insert runs BEFORE the session delete on purpose: if the
        admin is resetting their own account, the delete removes their own
@@ -532,11 +536,13 @@ export async function handle(req, res) {
       const { rows: subRows } = await query(`select upn from dbo.app_user where user_id=@p1`, [subId]);
       if (!subRows.length) { send(res, 404, { error: "No such user." }); return true; }
       const subjectUpn = subRows[0].upn;
-      const tempPassword = randomTempPassword();
+      const body = await readBody(req);
+      const chosen = String(body.password || "");
+      const tempPassword = chosen || randomTempPassword();
 
-      await query(`update dbo.app_user set password_hash=@p1, must_change_password=1, updated_by=@p2, updated_at=sysutcdatetime() where user_id=@p3`,
-        [hashPassword(tempPassword), caller.upn, subId]);
-      await auditAccess(caller.sessionId, caller.upn, subjectUpn, "reset_password", null, null);
+      await query(`update dbo.app_user set password_hash=@p1, must_change_password=@p2, updated_by=@p3, updated_at=sysutcdatetime() where user_id=@p4`,
+        [hashPassword(tempPassword), chosen ? 0 : 1, caller.upn, subId]);
+      await auditAccess(caller.sessionId, caller.upn, subjectUpn, "reset_password", null, chosen ? "Admin set a specific password." : null);
       const { rows: killed } = await query(`select session_id from dbo.user_session where user_id=@p1`, [subId]);
       killed.forEach((r) => cache.delete(r.session_id));
       await query(`delete from dbo.user_session where user_id=@p1`, [subId]);
