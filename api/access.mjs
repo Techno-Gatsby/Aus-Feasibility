@@ -187,10 +187,27 @@ const loginAttempts = new Map(); // ip -> { count, lockedUntil }
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_LOCKOUT_MS = 5 * 60_000;
 
+/* Both lockouts below (PIN and login) are keyed on this. Azure App
+   Service's X-Forwarded-For is "<client-ip>:<port>", not a bare IP - the
+   port is the connection's ephemeral source port, different on every new
+   TCP connection even from the same client. Using the raw header value as
+   the lockout key meant the count reset every time an attacker's client
+   opened a fresh connection (the default for most HTTP libraries, and for
+   any real brute-force script), so 23 separate wrong-PIN requests measured
+   live never once tripped the "5 attempts" lockout even though the lockout
+   logic itself is correct - confirmed by re-running the same attempts on
+   one *reused* connection, where it tripped exactly on schedule. Strip the
+   port before using the value as a key. Bracketed IPv6-with-port
+   ("[::1]:1234") is unwrapped the same way; a bare IPv6 address (no
+   brackets, so an embedded colon can't be distinguished from a port
+   separator) is left untouched rather than guessed at. */
 function clientIp(req) {
   const fwd = req.headers["x-forwarded-for"];
-  if (fwd) return String(fwd).split(",")[0].trim();
-  return (req.socket && req.socket.remoteAddress) || "unknown";
+  const raw = fwd ? String(fwd).split(",")[0].trim() : ((req.socket && req.socket.remoteAddress) || "unknown");
+  const bracketed = raw.match(/^\[(.+)\]:\d+$/);
+  if (bracketed) return bracketed[1];
+  if (/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(raw)) return raw.slice(0, raw.lastIndexOf(":"));
+  return raw;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
