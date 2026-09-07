@@ -10543,7 +10543,14 @@ function adoptCadastre(e){
 }
 /* Shared by the point-query path and the rendered-hit fallback beneath it. */
 function adoptCadastreRing(coords,props){
-  const key=props.lotidstring||props.propid||props.OBJECTID||props.objectid;
+  /* Each state's cadastre service names its lot-id field differently - NSW's
+     is lotidstring, QLD's is lotplan. window.__auCadastreFieldNow (defined
+     alongside window.__auCadastreAt) knows which one is live for the state
+     actually being clicked; without it, every non-NSW lot fell straight
+     through to a meaningless internal row number (OBJECTID) instead of a
+     real lot identifier. */
+  const stateField=typeof window.__auCadastreFieldNow==="function"?window.__auCadastreFieldNow():null;
+  const key=(stateField&&props[stateField])||props.lotidstring||props.lotplan||props.propid||props.OBJECTID||props.objectid;
   const g=state(),label=String(key||"lot");
   g.features.features.forEach(function(x){if(x.properties)x.properties.saved=false});
   const nf={type:"Feature",id:genId(),properties:{name:"Site polygon - "+label,saved:true,cadastre:label},
@@ -11070,7 +11077,15 @@ function terrariumTile(z,x,y){
   const pr=new Promise(function(res,rej){
     const img=new Image();
     img.crossOrigin="anonymous";
+    /* Every other network call in this file is fetch()-based with an
+       AbortController timeout; this is the one Image()-based exception, and
+       a stalled image request (no load, no error - happens on flaky CDN
+       paths) never settled either callback, leaving analyzeSite()'s worker
+       pool awaiting this promise forever and the whole analysis stuck. */
+    let settled=false;
+    const timer=setTimeout(function(){if(settled)return;settled=true;rej(new Error("Elevation tile timed out"))},12000);
     img.onload=function(){
+      if(settled)return;settled=true;clearTimeout(timer);
       try{
         const cv=document.createElement("canvas");cv.width=256;cv.height=256;
         const g=cv.getContext("2d",{willReadFrequently:true});
@@ -11078,7 +11093,7 @@ function terrariumTile(z,x,y){
         res(g.getImageData(0,0,256,256).data);
       }catch(err){rej(err)}
     };
-    img.onerror=function(){rej(new Error("Elevation tile could not be loaded"))};
+    img.onerror=function(){if(settled)return;settled=true;clearTimeout(timer);rej(new Error("Elevation tile could not be loaded"))};
     img.src="https://s3.amazonaws.com/elevation-tiles-prod/terrarium/"+z+"/"+x+"/"+y+".png";
   });
   AM.elevationCache.set(k,pr);
@@ -14047,6 +14062,16 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
     map.setLayoutProperty(sid + "-raster", "visibility", "visible");
     return true;
   }
+  /* adoptCadastreRing (an earlier script block, no access to srcFor/LAYER_ROWS)
+     used to read whichever lot-id field NSW's ArcGIS service happens to use
+     (lotidstring) regardless of which state was actually clicked - correct
+     for NSW, meaningless for every other state whose service names that
+     field differently (QLD's is lotplan). Exposed the same way
+     __auCadastreAt already crosses this boundary. */
+  window.__auCadastreFieldNow = function () {
+    var sc = stateAbbrev(stateCodeNow()), def = srcFor(sc, "cadastre");
+    return (def && def.field) || null;
+  };
   /* One lot, with its ring, for the click that adopts it. */
   window.__auCadastreAt = function (lng, lat) {
     var sc = stateAbbrev(stateCodeNow()), def = srcFor(sc, "cadastre");
@@ -14273,7 +14298,18 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
                     : Promise.resolve(null);
     /* Street level is a link out now, not a panel, so nothing is fetched for it. */
     var svP = Promise.resolve(null);
-    var out = await origRunSI.apply(this, arguments);
+    var out;
+    try {
+      out = await origRunSI.apply(this, arguments);
+    } catch (e) {
+      /* origRunSI's own try/finally clears the busy state on any error inside
+         it, but its precondition guard (missing feature/geometry) throws
+         before that try/finally even starts - so without this catch, that
+         one path left the button stuck on "Analysing..." forever, relying
+         entirely on the caller happening to have its own matching catch. */
+      clearIntelLoading();
+      throw e;
+    }
     try {
       var g = state();
       if (!g.siteIntel) return out;
