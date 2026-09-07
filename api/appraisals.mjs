@@ -51,6 +51,18 @@ function checkEnvelope(body) {
 
 const LIST_COLS = "id, name, location, region, version, envelope_v, created_by, created_at, updated_by, updated_at";
 const OUTPUT_COLS = LIST_COLS.split(", ").map((c) => "inserted." + c).join(", ");
+/* dbo.appraisal carries an AFTER trigger (appraisal_projection_sync, which
+   rebuilds the site/feature/source projections on every envelope change) -
+   and SQL Server refuses an `OUTPUT ... ` clause with no `INTO` on any table
+   that has an enabled trigger ("cannot have any enabled triggers if the
+   statement contains an OUTPUT clause without INTO clause"). Every INSERT/
+   UPDATE below that needs the changed row back has to capture it into a
+   table variable first, then SELECT it out as a second statement in the
+   same batch - `query()` returns the last recordset, so the two-statement
+   shape still comes back as one row via `rows[0]`, unchanged for callers. */
+const OUTPUT_DECLARE = `declare @out table (id uniqueidentifier, name nvarchar(200), location nvarchar(200), region nvarchar(2), version int, envelope_v int, created_by nvarchar(200), created_at datetime2(3), updated_by nvarchar(200), updated_at datetime2(3));`;
+const OUTPUT_INTO = OUTPUT_COLS + " into @out";
+const SELECT_OUT = "select * from @out;";
 
 /* Every route below adds one more check beyond "is anyone signed in": is this
    *particular caller* entitled to this region. Two routes had no region
@@ -183,9 +195,11 @@ export async function handle(req, res) {
       }
       const row = await tx(async (c) => {
         const ins = await c.query(
-          `insert into dbo.appraisal (name, location, region, envelope, envelope_v, created_by, updated_by)
-           output ${OUTPUT_COLS}
-           values (@p1,@p2,@p3,@p4,@p5,@p6,@p6)`,
+          `${OUTPUT_DECLARE}
+           insert into dbo.appraisal (name, location, region, envelope, envelope_v, created_by, updated_by)
+           output ${OUTPUT_INTO}
+           values (@p1,@p2,@p3,@p4,@p5,@p6,@p6);
+           ${SELECT_OUT}`,
           [p.name, p.location, p.region, asText(JSON.stringify(p.env)), p.v, who]);
         const created = ins.rows[0];
         await c.query(
@@ -217,10 +231,12 @@ export async function handle(req, res) {
            version means a cross-model write cannot land even if a caller sends
            the right id and version. */
         const upd = await c.query(
-          `update dbo.appraisal set name=@p1, location=@p2, envelope=@p3, envelope_v=@p4,
+          `${OUTPUT_DECLARE}
+           update dbo.appraisal set name=@p1, location=@p2, envelope=@p3, envelope_v=@p4,
                                     version=version+1, updated_by=@p5, updated_at=sysutcdatetime()
-           output ${OUTPUT_COLS}
-           where id=@p6 and deleted_at is null and version=@p7 and region=@p8`,
+           output ${OUTPUT_INTO}
+           where id=@p6 and deleted_at is null and version=@p7 and region=@p8;
+           ${SELECT_OUT}`,
           [p.name, p.location, asText(JSON.stringify(p.env)), p.v, who, id, expected, p.region]);
         if (!upd.rows.length) return null;
         const updated = upd.rows[0];
@@ -256,9 +272,11 @@ export async function handle(req, res) {
       const rf = regionFilter(caller, "region");
       const out = await tx(async (c) => {
         const upd = await c.query(
-          `update dbo.appraisal set deleted_at=sysutcdatetime(), updated_by=@p2
-           output ${OUTPUT_COLS}
-           where id=@p1 and deleted_at is null${rf.clause.replace("@p", "@p3")}`,
+          `${OUTPUT_DECLARE}
+           update dbo.appraisal set deleted_at=sysutcdatetime(), updated_by=@p2
+           output ${OUTPUT_INTO}
+           where id=@p1 and deleted_at is null${rf.clause.replace("@p", "@p3")};
+           ${SELECT_OUT}`,
           [id, who, ...rf.params]);
         if (!upd.rows.length) return null;
         const deleted = upd.rows[0];
