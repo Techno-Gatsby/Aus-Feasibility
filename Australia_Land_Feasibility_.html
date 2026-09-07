@@ -3849,6 +3849,7 @@ nav.tabs button{letter-spacing:.02em;}
     <button class="hbtn" id="btnXls">Download Excel (.xlsx)</button>
     <button class="hbtn" id="btnStmtPdf">Cashflow &amp; P&amp;L PDF</button>
     <button class="hbtn solid" id="btnPrint">Download PDF</button>
+    <button class="hbtn" id="btnSignOut" title="Sign out">Sign out</button>
   </div>
   <div class="parcels" id="parcels"></div>
 </header>
@@ -8628,6 +8629,7 @@ function wire(){
 document.getElementById("btnPrint").onclick=()=>exportPdf(); /* exportPdf is registered by the Board PDF module below. */
 document.getElementById("btnStmtPdf").onclick=()=>exportStatementsPdf();
 document.getElementById("btnXls").onclick=()=>buildExcel();
+document.getElementById("btnSignOut").onclick=()=>{fetch("/api/logout",{method:"POST",cache:"no-store"}).catch(()=>{}).then(()=>{location.href="/login"})};
 /* Save and load, once. The file buttons and the server buttons both go through
    these two, so a stored appraisal and a saved .json can never diverge - which
    is the only thing that makes the server copy trustworthy.

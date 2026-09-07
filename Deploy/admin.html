@@ -74,7 +74,7 @@
     <button type="submit">Unlock</button>
   </form>
 </div>
-<header><h1>Access admin</h1><span class="who" id="who"></span></header>
+<header><h1>Access admin</h1><span class="who" id="who"></span><button type="button" id="signOutBtn" class="toggle" style="margin-left:12px">Sign out</button></header>
 <nav>
   <button data-pane="users" class="on">Users</button>
   <button data-pane="requests">Requests<span id="reqBadge"></span></button>
@@ -372,6 +372,14 @@
         showPinGate(res.body.error || "Incorrect PIN.");
       })
       .catch(function(){ submitBtn.disabled = false; showPinGate("Could not reach the server."); });
+  });
+
+  document.getElementById("signOutBtn").addEventListener("click", function () {
+    fetch("/api/logout", { method: "POST", cache: "no-store" }).then(function () {
+      window.location.href = "/login";
+    }).catch(function () {
+      window.location.href = "/login";
+    });
   });
 
   initAfterPin();

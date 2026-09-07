@@ -515,7 +515,17 @@ export async function handle(req, res) {
     /* POST /api/admin/users/:id/reset-password - issues a new temporary
        password (shown once, same as account creation) and signs the person
        out everywhere by dropping their sessions, so a compromised or
-       forgotten password cannot be used again once reset. */
+       forgotten password cannot be used again once reset.
+
+       The audit insert runs BEFORE the session delete on purpose: if the
+       admin is resetting their own account, the delete removes their own
+       current session (the one auditAccess's session_id argument points at),
+       and dbo.access_audit's session_id column has a foreign key onto
+       dbo.user_session - inserting after the delete violates it, which
+       previously surfaced as a 500 "The access store is unavailable" and
+       left the password silently changed with no tempPassword ever
+       delivered. Auditing first means the referenced session still exists
+       at insert time regardless of whose session gets dropped next. */
     const resetMatch = req.method === "POST" && R_USER_RESET.exec(path);
     if (resetMatch) {
       const subId = resetMatch[1];
@@ -526,10 +536,10 @@ export async function handle(req, res) {
 
       await query(`update dbo.app_user set password_hash=@p1, must_change_password=1, updated_by=@p2, updated_at=sysutcdatetime() where user_id=@p3`,
         [hashPassword(tempPassword), caller.upn, subId]);
+      await auditAccess(caller.sessionId, caller.upn, subjectUpn, "reset_password", null, null);
       const { rows: killed } = await query(`select session_id from dbo.user_session where user_id=@p1`, [subId]);
       killed.forEach((r) => cache.delete(r.session_id));
       await query(`delete from dbo.user_session where user_id=@p1`, [subId]);
-      await auditAccess(caller.sessionId, caller.upn, subjectUpn, "reset_password", null, null);
       send(res, 200, { tempPassword });
       return true;
     }
