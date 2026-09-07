@@ -258,7 +258,7 @@ export async function handle(req, res) {
       const body = await readBody(req);
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
-      if (password.length < 10) { send(res, 400, { error: "Password must be at least 10 characters." }); return true; }
+      if (!password) { send(res, 400, { error: "A password is required." }); return true; }
       const { rows } = await query(`select user_id, is_admin, password_hash from dbo.app_user where upn=@p1`, [email]);
       const row = rows[0];
       if (!row || !row.is_admin || row.password_hash) { send(res, 403, { error: "Bootstrap is not available." }); return true; }
@@ -318,7 +318,7 @@ export async function handle(req, res) {
       const body = await readBody(req);
       const current = String(body.currentPassword || "");
       const next = String(body.newPassword || "");
-      if (next.length < 10) { send(res, 400, { error: "New password must be at least 10 characters." }); return true; }
+      if (!next) { send(res, 400, { error: "A new password is required." }); return true; }
       const { rows } = await query(`select password_hash from dbo.app_user where user_id=@p1`, [caller.userId]);
       if (!verifyPassword(current, rows[0] && rows[0].password_hash)) {
         send(res, 401, { error: "Current password is incorrect." }); return true;
