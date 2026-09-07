@@ -6205,7 +6205,12 @@ function auCalcStateFigures(code,acresGross,pr,landgstPct,vacant){
 function applyStatePrefill(){
   const r=auCalcStateFigures(Math.round(_num(D.dutystate,0)),_num(D.acresGross,0),_num(D.pr,0),_num(D.landgst,0),Math.round(_num(D.landvacant,1))===1);
   if(!r)return;
-  D.stampmode=1;D.stampfixed=r.stampfixed;D.foreignsurcharge=r.foreignsurcharge;
+  /* stampfixed/foreignsurcharge used to be prefilled here too, but that meant
+     picking a state (or re-toggling vacant land) silently overwrote whatever
+     the user had typed - the same complaint firbfee never had, since firbfee
+     is never written programmatically anywhere. Duty and the surcharge now
+     get the same treatment: type-in fields the state calc never touches,
+     compared only via the read-only reference row (auStateCalcRef, below). */
   D.landtax=r.landtax;D.foreignlandtax=r.foreignlandtax;
 }
 /* Land tax and the foreign land-tax surcharge are both statutory lookups
@@ -6221,11 +6226,11 @@ function enforceAuLockedTaxFields(target){
   target.landtax=r.landtax;target.foreignlandtax=r.foreignlandtax;
   return target;
 }
-/* Read-only reference for the badges below - the same formula as
-   applyStatePrefill, but never writes into D, so it can be recomputed on
-   every form build to show what the state's rules say NOW beside whatever
-   figure is actually typed into the field (prefilled once, then free to
-   diverge as the user edits it). */
+/* Read-only reference for the badges below - the same formula
+   auCalcStateFigures uses, but never writes into D, so it can be recomputed
+   on every form build to show what the state's rules say NOW beside whatever
+   figure is actually typed into the field. Duty and the surcharge are never
+   auto-populated, so this is the only place the calculated figure appears. */
 /* landtax and foreignlandtax used to carry a small "calc: $X" badge each,
    but both are now folded into the single holdingfixed reference row
    (Land tax + foreign surcharge — calculated) below, so a per-field badge
@@ -10565,7 +10570,24 @@ function adoptCadastreRing(coords,props){
   setTimeout(function(){saveSite().catch(function(){})},0);
   return true;
 }
-function setMode(mode){AM.mode=mode;AM.draft=[];document.querySelectorAll("#p_map [data-draw]").forEach(b=>b.classList.toggle("active",b.dataset.draw===mode));clearEditMarkers();if(AM.map){AM.map.getCanvas().style.cursor=["site","polygon","line","point"].includes(mode)?"crosshair":mode==="parcel"?"copy":mode==="delete"?"not-allowed":"";if(["site","polygon","line"].includes(mode))AM.map.doubleClickZoom.disable();else AM.map.doubleClickZoom.enable()}if(mode==="site"||mode==="polygon")hint("Click each corner; double-click or press Enter to finish the polygon.");else if(mode==="line")hint("Click line vertices; double-click or press Enter to finish.");else if(mode==="point")hint("Click the map to add a point.");else if(mode==="parcel"){const g=state();if(!g.layers.cadastre){g.layers.cadastre=true;const cb=buttonFor("cadastre");if(cb)cb.setAttribute("aria-pressed","true");loadLayer("cadastre",false);toast("Loading cadastre - then click a lot",2400)}hint("Click a cadastre lot to adopt its boundary as the site. Zoom in if no lots are drawn.")}
+function setMode(mode){AM.mode=mode;AM.draft=[];document.querySelectorAll("#p_map [data-draw]").forEach(b=>b.classList.toggle("active",b.dataset.draw===mode));clearEditMarkers();if(AM.map){AM.map.getCanvas().style.cursor=["site","polygon","line","point"].includes(mode)?"crosshair":mode==="parcel"?"copy":mode==="delete"?"not-allowed":"";if(["site","polygon","line"].includes(mode))AM.map.doubleClickZoom.disable();else AM.map.doubleClickZoom.enable()}if(mode==="site"||mode==="polygon")hint("Click each corner; double-click or press Enter to finish the polygon.");else if(mode==="line")hint("Click line vertices; double-click or press Enter to finish.");else if(mode==="point")hint("Click the map to add a point.");else if(mode==="parcel"){const g=state();
+    /* g.jurisdiction only gets (re)written when runSiteIntelligence's own
+       queryContext succeeds - i.e. after a full "Analyse site" run. Picking
+       "Select lot" is usually the FIRST thing done on a new site, before any
+       analysis has run for it, so stateCodeNow() (which loadLayer/srcFor use
+       to pick the cadastre service) can still be holding whichever state was
+       last analysed - a leftover NSW jurisdiction silently sends every QLD
+       lot click at the NSW cadastre service, which returns nothing for a
+       Queensland point but throws no error either. Re-resolve from the
+       current map centre and reload if it turns out to disagree. */
+    if(AM.map){const c=AM.map.getCenter();pointQuery(AU.states,c.lng,c.lat).then(a=>{
+      const sc=stateCode(prop(a,["STE_NAME_2021","STATE_NAME_2021","state_name_2021"]));
+      if(!sc)return;
+      const had=g.jurisdiction&&stateCode(g.jurisdiction.state);
+      g.jurisdiction={...(g.jurisdiction||{}),state:sc};
+      if(sc!==had&&g.layers.cadastre&&AM.mode==="parcel")loadLayer("cadastre",false);
+    }).catch(()=>{})}
+    if(!g.layers.cadastre){g.layers.cadastre=true;const cb=buttonFor("cadastre");if(cb)cb.setAttribute("aria-pressed","true");loadLayer("cadastre",false);toast("Loading cadastre - then click a lot",2400)}hint("Click a cadastre lot to adopt its boundary as the site. Zoom in if no lots are drawn.")}
   else if(mode==="edit")hint("Drag a solid handle to move a point. Click a hollow handle on a side to add one. Right-click or Alt-click a point to delete it.");else if(mode==="delete")hint("Click a drawn feature to delete it.");else hint("");syncDrawings();renderEditMarkers()}
 function addDraftPoint(c){if(AM.mode==="point"){const f={type:"Feature",id:genId(),properties:{name:"Point"},geometry:{type:"Point",coordinates:c}};state().features.features.push(f);AM.selectedId=f.id;AM.draft=[];syncDrawings();setMode("select");return}const last=AM.draft[AM.draft.length-1];if(!last||Math.abs(last[0]-c[0])>1e-9||Math.abs(last[1]-c[1])>1e-9)AM.draft.push(c);syncDrawings()}
 function finishDraft(){if(!["site","polygon","line"].includes(AM.mode))return;const finishedMode=AM.mode;while(AM.draft.length>1){const a=AM.draft[AM.draft.length-1],b=AM.draft[AM.draft.length-2];if(Math.abs(a[0]-b[0])<1e-10&&Math.abs(a[1]-b[1])<1e-10)AM.draft.pop();else break}const need=finishedMode==="line"?2:3;if(AM.draft.length<need){toast(`Add at least ${need} points first`);return}let geom;if(finishedMode==="line")geom={type:"LineString",coordinates:AM.draft.slice()};else{const ring=AM.draft.map(c=>c.slice());ring.push(ring[0].slice());geom={type:"Polygon",coordinates:[ring]}}const f={type:"Feature",id:genId(),properties:{name:finishedMode==="site"?"Site polygon":finishedMode==="line"?"Measured line":"Polygon",saved:finishedMode==="site"},geometry:geom};state().features.features.push(f);AM.selectedId=f.id;if(finishedMode==="site"){state().primaryId=f.id;state().savedSiteId=f.id}AM.draft=[];setMode("select");syncDrawings();if(finishedMode==="site"){fitSite();setTimeout(()=>saveSite().catch(()=>{}),0)}}
@@ -10992,7 +11014,15 @@ function marketSectionHtml(){
   return '<section class="aumap-siteintel-section aumap-market-section">'+head+body+"</section>";
 }
 function renderSiteIntelligence(){
-  const r=renderSiteIntelligenceCore.apply(this,arguments);
+  /* This runs inside runSiteIntelligence's finally block - a throw here (from
+     the full-data render branch, taken for the first time once g.siteIntel
+     has just been populated) replaces that function's successful
+     `return g.siteIntel` with a rejection, which is why a render bug here
+     used to surface as "some site intelligence could not be loaded" even
+     though the data had already been fetched successfully. */
+  let r;
+  try{r=renderSiteIntelligenceCore.apply(this,arguments)}
+  catch(e){console.error("[siteintel] render failed:",e);return}
   try{enhanceIntelSections()}catch(e){}
   return r;
 }
@@ -14376,7 +14406,8 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
      that opens Google Maps in a new tab, which is both simpler and allowed. */
   var origRenderSI = renderSiteIntelligence;
   renderSiteIntelligence = function () {
-    origRenderSI.apply(this, arguments);
+    try { origRenderSI.apply(this, arguments); }
+    catch (e) { console.error("[siteintel] render failed:", e); return; }
     try {
       var host = document.getElementById("aumap_site_intelligence");
       if (!host) return;
