@@ -6200,6 +6200,19 @@ function applyStatePrefill(){
   D.stampmode=1;D.stampfixed=r.stampfixed;D.foreignsurcharge=r.foreignsurcharge;
   D.landtax=r.landtax;D.foreignlandtax=r.foreignlandtax;
 }
+/* Land tax and the foreign land-tax surcharge are both statutory lookups
+   with one correct answer for the current land inputs, same as duty - so
+   unlike holdingfixed (a genuine manual override total), there is no
+   legitimate reason to type something else in here. Locked read-only and
+   forced to the calculated figure on every render/build, rather than left
+   as a separate reference alongside an editable field. */
+const AU_LOCKED_TAX_FIELDS=new Set(["landtax","foreignlandtax"]);
+function enforceAuLockedTaxFields(target){
+  const r=auCalcStateFigures(Math.round(_num(target.dutystate,0)),_num(target.acresGross,0),_num(target.pr,0),_num(target.landgst,0),Math.round(_num(target.landvacant,1))===1);
+  if(!r)return target;
+  target.landtax=r.landtax;target.foreignlandtax=r.foreignlandtax;
+  return target;
+}
 /* Read-only reference for the badges below - the same formula as
    applyStatePrefill, but never writes into D, so it can be recomputed on
    every form build to show what the state's rules say NOW beside whatever
@@ -6262,15 +6275,6 @@ function auFirbFeeFor(acresGross,pr,landgstPct){
   return Math.round(auDutyOnBracket(landIncGst,AU_FIRB_TABLE));
 }
 function auFirbFeeRef(){return auFirbFeeFor(D.acresGross,D.pr,D.landgst)}
-/* Not a separate cost item - just the calculated land tax and foreign
-   land-tax surcharge (the same two figures the badges above show
-   individually) shown as one sum, for direct comparison against whatever
-   total is typed into the holding-cost reference field. */
-function auHoldingRef(){
-  const ref=auStateCalcRef();
-  if(!ref)return null;
-  return Math.round(ref.landtax+ref.foreignlandtax);
-}
 /* Runs after every render(), not just after a form rebuild, so the badge
    tracks acresGross/pr/landgst as they're typed - not just the state dropdown
    that first wrote the figures into the fields below. */
@@ -6288,41 +6292,40 @@ function paintStateCalcBadges(){
     span.title=ref.state+" calculated value from the current land inputs: "+v2+". Reference only — not written back unless you re-pick the state (or land status) above.";
   });
 }
-/* Four figures the model can calculate independently of whatever is typed
-   into their own field - duty, the foreign buyer surcharge rate, the FIRB
-   fee, and the calculated land tax + foreign land-tax surcharge (for
-   comparison against the holding-cost reference total). Each gets its own
-   separate, read-only reference row (not a locked input, not just a badge)
-   immediately below the real field, per the decision that these stay
-   type-in with a distinct field alongside for comparison. Runs on every
-   render() so it tracks acresGross/pr/landgst as they're typed, the same
-   way the badges above do. */
+/* Three figures the model can calculate independently of whatever is typed
+   into their own field - duty, the foreign buyer surcharge rate, and the
+   FIRB fee. Each gets its own separate, read-only reference row (not a
+   locked input, not just a badge) immediately below the real field, per the
+   decision that these stay type-in with a distinct field alongside for
+   comparison. Runs on every render() so it tracks acresGross/pr/landgst as
+   they're typed, the same way the badges above do.
+   (Land tax and the foreign land-tax surcharge are handled differently -
+   see AU_LOCKED_TAX_FIELDS above - they are locked to the calculated
+   figure rather than left editable with a reference alongside, since
+   unlike holdingfixed there is no legitimate manual override for either.) */
 /* stampfixed carries duty's actual dollar figure and stamprt the equivalent
    rate - mutually exclusive, gated on stampmode in fieldShown, so only one
    of the two is ever on screen at a time. Both carry the same reference row
    (the calculation itself is mode-independent), so whichever one is visible
    keeps the comparison in view. */
-const AU_REF_FIELDS=new Set(["stamprt","stampfixed","foreignsurcharge","firbfee","holdingfixed"]);
+const AU_REF_FIELDS=new Set(["stamprt","stampfixed","foreignsurcharge","firbfee"]);
 const AU_REF_UNITS={stamprt:"A$",stampfixed:"A$"};
 const AU_REF_LABELS={
   stamprt:"Duty — calculated (reference)",
   stampfixed:"Duty — calculated (reference)",
   foreignsurcharge:"Foreign buyer surcharge — calculated (reference)",
-  firbfee:"FIRB fee — calculated (reference)",
-  holdingfixed:"Land tax + foreign surcharge — calculated (reference)"
+  firbfee:"FIRB fee — calculated (reference)"
 };
 const AU_REF_TITLES={
   stamprt:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs, as a dollar figure — compare against the percentage rate entered above. Reference only.":"Select a state above to calculate."},
   stampfixed:()=>{const r=auStateCalcRef();return r?r.state+" calculated duty from the current land inputs — compare against the fixed amount entered above. Reference only.":"Select a state above to calculate."},
   foreignsurcharge:()=>{const r=auStateCalcRef();return r?r.state+" calculated foreign purchaser duty surcharge rate for the current land status. Reference only.":"Select a state above to calculate."},
-  firbfee:()=>"FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band. Reference only — the field above is not changed automatically.",
-  holdingfixed:()=>"Calculated land tax plus calculated foreign land-tax surcharge, summed for comparison — not an additional cost line of its own. Reference only."
+  firbfee:()=>"FIRB Schedule of Fees v8 (1 Jul 2026) — Notifiable actions, Commercial land/tenements/businesses/entities band. Reference only — the field above is not changed automatically."
 };
 function auRefValueFor(k){
   if(k==="stamprt"||k==="stampfixed"){const r=auStateCalcRef();return r?r.stampfixed:null}
   if(k==="foreignsurcharge"){const r=auStateCalcRef();return r?r.foreignsurcharge:null}
   if(k==="firbfee")return auFirbFeeRef();
-  if(k==="holdingfixed")return auHoldingRef();
   return null;
 }
 function paintAuRefFields(){
@@ -6333,6 +6336,15 @@ function paintAuRefFields(){
     inp.value=v==null?"":numFieldFormat(v);
     inp.placeholder=v==null?"Not calculable yet":"";
     inp.title=AU_REF_TITLES[k]();
+  });
+  /* landtax/foreignlandtax are locked (see AU_LOCKED_TAX_FIELDS) - D is kept
+     correct by enforceAuLockedTaxFields at the top of render()/buildFormCore,
+     but the visible input still needs repainting here on every render(),
+     the same way the reference rows above do, since most of the fields that
+     feed the calculation (acresGross/pr/landgst) don't trigger a form rebuild. */
+  AU_LOCKED_TAX_FIELDS.forEach(k=>{
+    const inp=document.getElementById("i_"+k);
+    if(inp)inp.value=numFieldFormat(D[k]);
   });
 }
 ["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
@@ -6434,6 +6446,7 @@ function setAllInputSections(collapsed){
 function buildFormCore(){
   ensureActivePhaseDurations();
   ensureActivePhaseShares();
+  if(typeof enforceAuLockedTaxFields==='function')enforceAuLockedTaxFields(D);
   const derived=derive(D),host=document.getElementById("form");host.innerHTML="";
   const md=document.createElement("div");md.className="fs shut";
   md.innerHTML=`<button type="button" class="lg" aria-expanded="false">1. Project &amp; development type</button>
@@ -6517,7 +6530,8 @@ function buildFormCore(){
       }
       if(t!=="c"){const inp=row.querySelector("input,select");if(!hasSelect)autoBlankApply(inp,k,D[k]);
         if(MANDATORY_ACCOUNTING_FIELDS.has(k)){inp.value=ACCOUNTING_POLICY[k];inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
-        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
+        if(AU_LOCKED_TAX_FIELDS.has(k)){inp.value=numFieldFormat(D[k]);inp.readOnly=true;inp.tabIndex=-1;row.classList.add("calc");}
+        inp.onchange=()=>{if(MANDATORY_ACCOUNTING_FIELDS.has(k)){enforceAccountingPolicy(D);inp.value=ACCOUNTING_POLICY[k];return}if(AU_LOCKED_TAX_FIELDS.has(k)){enforceAuLockedTaxFields(D);inp.value=numFieldFormat(D[k]);return}if(!hasSelect&&autoBlankTaken(inp,k))return;const v=numFieldParse(inp.value);
           if(isNaN(v)){inp.value=D[k];return}
           if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,1);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
           if(k==="dutystate"){D.dutystate=_clamp(Math.round(v),0,8);applyStatePrefill();buildForm();render();return}
@@ -7039,6 +7053,7 @@ function render(){
   modelErrorBox();
   try{
     cancelOptimiserWorker();cancelSummaryAnalytics();clearCache();
+    if(typeof enforceAuLockedTaxFields==='function')enforceAuLockedTaxFields(D);
     Object.keys(PANE).forEach(k=>{if(k!=="cpl"&&k!=="ccf"&&k!=="source")DIRTY[k]=true});clearModelError();
     if(renderFrame)cancelAnimationFrame(renderFrame);
     renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();if(typeof paintStateCalcBadges==='function')paintStateCalcBadges();if(typeof paintAuRefFields==='function')paintAuRefFields();
