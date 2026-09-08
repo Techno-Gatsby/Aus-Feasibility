@@ -10033,13 +10033,13 @@ function cleanStatementHost(id){
     }
     direct.push(["","Soft Costs",null,T("softCost"),borne("softCost")]);
     direct.push(["","Authority & Statutory Costs",null,T("authorityCost"),borne("authorityCost")]);
-    direct.push(["","Brokerage & Incentives",null,T("brokerageMarketing")]);
-    direct.push(["","Real Estate Property Tax",null,T("realEstateTax")]);
     direct.push(["","Other Costs"+(String(d.otherdirectlabel||"").trim()?" - "+String(d.otherdirectlabel).trim():""),null,T("otherCosts"),borne("otherCosts")]);
     const below=[["","Overhead Costs",null,T("overheadCost")]];
     const dep=T("depreciation");
     if(Math.abs(dep)>.5)below.push(["","Depreciation & Amortisation",null,dep]);
     below.push(["","External Finance Costs",null,T("financeCost")]);
+    below.push(["","Brokerage & Incentives",null,T("brokerageMarketing")]);
+    below.push(["","Real Estate Property Tax",null,T("realEstateTax")]);
     const cost=direct.concat(below);
     /* Numbered here rather than by hand, so inserting or dropping a line cannot
        leave the Total Cost caption pointing at the wrong rows. */
