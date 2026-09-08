@@ -654,14 +654,14 @@ nav.tabs button[aria-selected=true]{
 /* PART 2 - SUMMARY SURFACE VISUAL REFRESH Summary KPI cards, recommendation, summary tables, controls and charts only. No calculation or interaction logic changes. */
 /* PART 3 - REMAINING WORKSPACE SURFACES Cosmetic treatment for scenarios, optimiser, statements, sensitivity, land value and consolidation. No model logic, labels, rows, columns or interactions are changed. */
 /* Shared typography and vertical rhythm outside Summary. */
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) h2.ph{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) h2.ph{
   margin:0 0 5px;
   color:#12305E;
   font-size:20px;
   font-weight:760;
   letter-spacing:-.026em;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) p.pd{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) p.pd{
   max-width:1080px;
   margin:0 0 19px;
   color:#6B7A94;
@@ -693,7 +693,7 @@ nav.tabs button[aria-selected=true]{
   border-bottom-color:#1766CB;
 }
 /* All non-summary control bars become clear, raised work surfaces. */
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl{
   gap:10px;
   padding:12px 13px;
   margin-bottom:18px;
@@ -702,14 +702,14 @@ nav.tabs button[aria-selected=true]{
   background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%);
   box-shadow:0 2px 6px rgba(22,50,88,.055),0 9px 22px rgba(22,50,88,.05);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl .cl{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl .cl{
   color:#6B7A94;
   font-size:10.1px;
   font-weight:760;
   letter-spacing:.08em;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl select,
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl input.ni{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl select,
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl input.ni{
   min-height:30px;
   border-color:#C9D2E1;
   border-radius:var(--r);
@@ -717,12 +717,12 @@ nav.tabs button[aria-selected=true]{
   color:#12305E;
   box-shadow:inset 0 1px 2px rgba(15,42,79,.035);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl output.ov{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl output.ov{
   color:#12305E;
   font-weight:760;
 }
 /* Buttons follow the approved blue-and-white visual language. */
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .cbtn{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .cbtn{
   min-height:29px;
   padding:6px 12px;
   border-color:#C9D2E1;
@@ -731,18 +731,18 @@ nav.tabs button[aria-selected=true]{
   background:#FFFFFF;
   box-shadow:0 1px 2px rgba(20,48,85,.04);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .cbtn:hover{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .cbtn:hover{
   border-color:#6C9BD4;
   color:#1766CB;
   background:#F4F6FA;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .cbtn.go{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .cbtn.go{
   border-color:#1766CB;
   background:#2C62AD;
   color:#FFFFFF;
   box-shadow:0 3px 8px rgba(35,88,158,.18);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .cbtn.go:hover{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .cbtn.go:hover{
   border-color:#0F4F9E;
   background:#0F4F9E;
 }
@@ -769,14 +769,14 @@ nav.tabs button[aria-selected=true]{
   box-shadow:0 2px 5px rgba(35,88,158,.16);
 }
 /* Shared panels, charts, goal cards and wide-table containers. */
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) :is(.panel,.chart,.goal,.scrollx,.table-scroll){
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) :is(.panel,.chart,.goal,.scrollx,.table-scroll){
   border-color:#E4E9F1;
   border-radius:var(--r);
   background:#FFFFFF;
   box-shadow:0 3px 9px rgba(23,52,91,.06),0 12px 27px rgba(23,52,91,.055);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .panel>.ph2,
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .chart .ch{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .panel>.ph2,
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .chart .ch{
   padding:11px 13px;
   border-bottom-color:#E4E9F1;
   background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFD 100%);
@@ -784,16 +784,16 @@ nav.tabs button[aria-selected=true]{
   font-size:12px;
   font-weight:740;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .chart svg{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .chart svg{
   background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%);
 }
 /* Tables: clearer hierarchy, denser but more legible. */
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) table{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) table{
   border-color:#E4E9F1;
   border-radius:var(--r);
   box-shadow:0 3px 9px rgba(23,52,91,.055),0 11px 25px rgba(23,52,91,.045);
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) caption{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) caption{
   padding:12px 14px 11px;
   border-bottom-color:#E4E9F1;
   background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFD 100%);
@@ -801,7 +801,7 @@ nav.tabs button[aria-selected=true]{
   font-size:12.4px;
   font-weight:760;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) thead th{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) thead th{
   padding:9px 10px;
   border-bottom-color:#C9D2E1;
   background:#EDF1F7;
@@ -810,16 +810,16 @@ nav.tabs button[aria-selected=true]{
   font-weight:760;
   letter-spacing:.045em;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tbody td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tbody td{
   border-bottom-color:#E4E9F1;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tbody tr:nth-child(even):not(.sub):not(.res):not(.bad):not(.band) td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tbody tr:nth-child(even):not(.sub):not(.res):not(.bad):not(.band) td{
   background:#FBFCFE;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tbody tr:hover td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tbody tr:hover td{
   background:#F4F6FA;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tr.band td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tr.band td{
   padding-top:7px;
   padding-bottom:7px;
   background:#E4E9F1;
@@ -827,20 +827,20 @@ nav.tabs button[aria-selected=true]{
   border-top:1px solid #C9D2E1;
   border-bottom:1px solid #C9D2E1;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tr.sub td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tr.sub td{
   background:#F4F6FA;
   border-top:2px solid #C9D2E1;
   color:#12305E;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tr.res td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tr.res td{
   background:#EDF1F7;
   color:#2B6A52;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tr.bad td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tr.bad td{
   background:#F4F6FA;
   color:#B22F3B;
 }
-:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) tfoot td{
+:is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) tfoot td{
   background:#F4F6FA;
   border-top-color:#C9D2E1;
 }
@@ -912,31 +912,31 @@ nav.tabs button[aria-selected=true]{
   color:#6B7A94;
 }
 /* Statements: preserve every year and row while improving scanability. */
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll{
   border-color:#C9D2E1;
   background:#FFFFFF;
   box-shadow:0 3px 9px rgba(23,52,91,.055),0 12px 27px rgba(23,52,91,.05);
 }
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll table{box-shadow:none;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll thead th{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll table{box-shadow:none;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll thead th{
   position:sticky;
   top:0;
   z-index:2;
   background:#EDF1F7;
 }
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll td:nth-child(2){color:#12305E;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll th:nth-child(1),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll td:nth-child(1){text-align:right!important;color:#93A0B5;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll th:nth-child(2),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll td:nth-child(2){text-align:left!important;white-space:normal;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll tr.band td{text-align:left!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll th:nth-child(n/**/+3),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll td:nth-child(n/**/+3){text-align:right!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll tr.sub td{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(2){color:#12305E;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(1),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(1){text-align:right!important;color:#93A0B5;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(2),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(2){text-align:left!important;white-space:normal;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.band td{text-align:left!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(n/**/+3),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(n/**/+3){text-align:right!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.sub td{
   background:#E4E9F1;
   color:#12305E;
 }
 /* A band row and a sub row are both section headers; only Project P&L uses the
    first and only the year statements use the second, which is the whole reason
    the statements read as different designs. Same paint for both. */
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .table-scroll tr.band td{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.band td{
   background:#E4E9F1;
   color:#12305E;
   font:650 11px/1.28 var(--mono);
@@ -1010,7 +1010,7 @@ nav.tabs button[aria-selected=true]{
 }
 @media(max-width:1250px){
   #p_scn .sgrid table{font-size:12px;}
-  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) .ctl{padding:10px 11px;}
+  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) .ctl{padding:10px 11px;}
 }
 /* PART 4 - FINAL POLISH AND RESPONSIVE SAFETY Cross-page consistency and viewport-specific layout only. No model, text, fields, calculations or event logic changed. */
 /* Crisp controls in the input rail, matching the approved dashboard surface. */
@@ -1166,9 +1166,9 @@ nav.tabs button:focus-visible,
   nav.tabs button{min-height:46px;padding:12px 11px 10px;font-size:10.3px;}
   .pane{padding:16px 13px 22px;}
   h2.ph,
-  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) h2.ph{font-size:18px;}
+  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) h2.ph{font-size:18px;}
   p.pd,
-  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly) p.pd{font-size:12px;}
+  :is(#p_scn,#p_opt,:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_sens,#p_two,#p_offer,#p_cpl,#p_ccf,#p_source,#p_port,#p_cs_ppl,#p_cs_pl,#p_cs_cf,#p_cs_monthly,#p_exp,#p_eqsch,#p_salesov) p.pd{font-size:12px;}
   .f{grid-template-columns:minmax(0,1fr) 82px 28px;gap:6px;}
   .grp{padding-left:13px;padding-right:13px;}
   .railhead,.io{padding-left:14px;padding-right:14px;}
@@ -1207,14 +1207,14 @@ nav.tabs button:focus-visible,
 .rail-collapse-btn:hover{background:#EAF2FD;border-color:#6F99CC;color:#0F4F9E;}
 .rail-collapse-btn:focus-visible{outline:2px solid #1766CB;outline-offset:2px;}
 /* Financial statements: tighter spacing and visible vertical column rules. */
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th,
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td{
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th,
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td{
   padding:5px 7px;border-right:1px solid #E4E9F1
 ;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:last-child,
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:last-child{border-right:0;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:nth-child(2),
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:nth-child(2){
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:last-child,
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:last-child{border-right:0;}
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(2),
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(2){
   text-align:left!important;border-right:2px solid #C9D2E1;font-family:var(--sans)
 ;}
 #p_cpl .table-scroll th:first-child,#p_cpl .table-scroll td:first-child,
@@ -1262,7 +1262,7 @@ nav.tabs button:focus-visible,
 .table-scroll th,.table-scroll td{padding:5px 6px;}
 :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_port) .table-scroll th:not(:last-child),:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_port) .table-scroll td:not(:last-child){border-right:1px solid #E4E9F1;}
 :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_port) .table-scroll th:nth-child(2),:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_port) .table-scroll td:nth-child(2){border-right:2px solid #C9D2E1;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:nth-child(n/**/+3),:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:nth-child(n/**/+3){min-width:100px;width:106px;}
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(n/**/+3),:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(n/**/+3){min-width:100px;width:106px;}
 @media(max-width:1250px){.overview-field{grid-template-columns:minmax(0,1fr) 150px 0;}}
 @media(max-width:760px){.header-separator{display:none;}.header-model-field{flex:1 1 100%;display:grid;grid-template-columns:70px 1fr;}.header-model-field input.hbtn{max-width:none!important;}.overview-field{grid-template-columns:minmax(0,1fr) 145px 0;}}
 /* SINGLE-SCREEN REFERENCE SUMMARY Keeps the Summary dashboard within a 1536 x 1024 viewport. */
@@ -1438,8 +1438,8 @@ nav.tabs button:focus-visible,
   }
   /* Annual and monthly statement values must never spill into the next
      financial-year column.  Remove earlier maximum-width caps. */
-  :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:nth-child(n/**/+3),
-  :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:nth-child(n/**/+3){
+  :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(n/**/+3),
+  :is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(n/**/+3){
     width:auto!important;
     min-width:132px!important;
     max-width:none!important;
@@ -2319,6 +2319,8 @@ nav.tabs button:focus-visible,
 #p_port .portfolio-kpis .k{color:#42506B!important;font:750 9.5px/1.18 var(--sans)!important;letter-spacing:.045em!important;text-transform:uppercase!important;}
 #p_port .portfolio-kpis .v{margin-top:8px!important;color:#12305E!important;font:750 22px/1.05 var(--mono)!important;letter-spacing:-.035em!important;white-space:nowrap!important;}
 #p_port .portfolio-kpis .d{margin-top:7px!important;color:#6B7A94!important;font:500 10.5px/1.3 var(--sans)!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+#p_salesov .kpis .kpi{--kpi-accent:#1766CB;--kpi-icon-bg:#EAF2FD;--kpi-icon-border:#E4E9F1;position:relative;padding:16px 16px 14px 66px;border:1px solid #E4E9F1;border-top:3px solid var(--kpi-accent);box-shadow:0 3px 10px rgba(18,47,86,.06);text-align:left;}
+#p_salesov .kpis .kpi::before{display:grid;content:attr(data-icon);position:absolute;left:14px;top:17px;width:36px;height:36px;place-items:center;border:1px solid var(--kpi-icon-border);border-radius:50%;background:var(--kpi-icon-bg);color:var(--kpi-accent);font:750 14px/1 var(--sans);}
 #p_port .portfolio-dashboard-charts{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:16px!important;margin:0 0 16px!important;}
 #p_port .portfolio-dashboard-charts .chart{min-width:0!important;margin:0!important;border:1px solid #C9D2E1!important;border-radius:var(--r)!important;background:#fff!important;box-shadow:0 4px 14px rgba(18,47,86,.07)!important;overflow:hidden!important;}
 #p_port .portfolio-dashboard-charts .chart .ch{min-width:0!important;min-height:46px!important;display:flex!important;align-items:center!important;padding:13px 16px!important;border-bottom:1px solid #E4E9F1!important;background:#fff!important;color:#12305E!important;font:750 12px/1.2 var(--sans)!important;text-transform:none!important;letter-spacing:0!important;}
@@ -2662,47 +2664,47 @@ nav.tabs button:focus-visible,
 /* D3 · financial-statements-style Shared annual statement table styling */
 /* One visual source for annual financial statements. */
 /* Financial statements share one clean annual schedule treatment. */
-:is(#p_pl,#p_ppl)>.pd,#p_cf>.pd>.pd,#p_cpl>.pd,#p_ccf>.pd>.pd,#p_port>.pd{display:none!important;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll{
+:is(#p_pl,#p_ppl)>.pd,#p_cf>.pd>.pd,#p_cpl>.pd,#p_ccf>.pd>.pd,#p_port>.pd,#p_exp>.pd,#p_salesov>.pd{display:none!important;}
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll{
   display:block!important;width:100%!important;max-width:100%!important;overflow-x:auto!important;
   margin-bottom:10px!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table th:nth-child(1),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody td:nth-child(1){width:52px!important;min-width:52px!important;max-width:52px!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table th:nth-child(2),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody td:nth-child(2){width:228px!important;min-width:228px!important;max-width:228px!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table th:nth-child(3),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody td:nth-child(3){width:118px!important;min-width:118px!important;max-width:118px!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table th:nth-child(n/**/+4),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody td:nth-child(n/**/+4){width:104px!important;min-width:96px!important;max-width:118px!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table thead tr{background:#EDF1F7;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr{background:#fff;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr:nth-child(even):not(.sub):not(.res):not(.bad):not(.band){background:#FBFCFE;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr.sub{background:#F4F6FA;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr.res{background:var(--pos-bg);}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr.bad{background:var(--neg-bg);}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table tbody tr:hover{background:var(--raised);}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table th:nth-child(1),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody td:nth-child(1){width:52px!important;min-width:52px!important;max-width:52px!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table th:nth-child(2),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody td:nth-child(2){width:228px!important;min-width:228px!important;max-width:228px!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table th:nth-child(3),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody td:nth-child(3){width:118px!important;min-width:118px!important;max-width:118px!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table th:nth-child(n/**/+4),:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody td:nth-child(n/**/+4){width:104px!important;min-width:96px!important;max-width:118px!important;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table thead tr{background:#EDF1F7;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr{background:#fff;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr:nth-child(even):not(.sub):not(.res):not(.bad):not(.band){background:#FBFCFE;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr.sub{background:#F4F6FA;}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr.res{background:var(--pos-bg);}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr.bad{background:var(--neg-bg);}
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table tbody tr:hover{background:var(--raised);}
 /* Three roles had two fills between them: a section heading and a subtotal were
    both #E4E9F1, so Net Qualified Sales, Total Revenue and Direct Costs ran
    together as one dark block. One fill per role, lightest to darkest, and a rule
    above each so consecutive tinted rows still separate. The result tint is the
    pale green these lines already carry in the PDF export. */
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll tr.sub td{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.sub td{
   background:#F4F6FA!important;color:#12305E!important;border-top:2px solid #C9D2E1!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll tr.res td{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.res td{
   background:var(--pos-bg)!important;color:var(--pos)!important;border-top:1px solid #C9D2E1!important;}
-:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll tr.band td{
+:is(#p_pl,#p_ppl,#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll tr.band td{
   background:#E4E9F1!important;color:#42506B!important;
   border-top:2px solid #C9D2E1!important;border-bottom:1px solid #C9D2E1!important;}
 
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll table{
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll table{
   width:max-content!important;min-width:100%!important;max-width:none!important;
   margin:0!important;border-collapse:collapse!important;border-spacing:0!important;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th,
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td{
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th,
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td{
   padding:6px 8px!important;line-height:1.28!important;border-right:1px solid #E4E9F1!important;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:last-child,
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:last-child{border-right:0!important;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:nth-child(2),
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:nth-child(2){
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:last-child,
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:last-child{border-right:0!important;}
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(2),
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(2){
   min-width:270px!important;width:270px!important;max-width:none!important;white-space:normal!important;text-align:left!important;}
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll th:nth-child(n/**/+3),
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll td:nth-child(n/**/+3){
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll th:nth-child(n/**/+3),
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll td:nth-child(n/**/+3){
   min-width:126px!important;width:auto!important;max-width:none!important;white-space:nowrap!important;}
 </style>
 
@@ -3794,8 +3796,8 @@ thead th.l,thead th.n{text-align:center!important;}
 :is(#p_cpl,#p_ccf,#p_port) .portfolio-timeline thead th:first-child,
 #p_offer table thead th:first-child,
 #p_cpl .table-scroll thead th:first-child,
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll thead th:nth-child(2),
-:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf) .table-scroll thead th:nth-child(2){
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll thead th:nth-child(2),
+:is(:is(#p_pl,#p_ppl),#p_cf,#p_monthly,#p_cpl,#p_ccf,#p_exp,#p_eqsch,#p_salesov) .table-scroll thead th:nth-child(2){
   text-align:center!important;}
 
 /* ---- input rail: the unit column was cutting a third of its labels ------ *
@@ -6846,18 +6848,16 @@ function paintCalc(){const o=derive(D);GROUPS.forEach(s=>s.f.forEach(f=>{if(f[4]
   if(el)el.value=(f[2]==="$"||f[2]==="$/unit"||f[2]==="$/acre")
     ?Math.round(o[f[0]]).toLocaleString("en-US"):M0(o[f[0]],2)}}))}
 /* ── tabs and lazy panes ──────────────────────────────── */
-/* seven top-level views; statements and sensitivity hold more than one pane each */
+/* nine top-level views; statements and sensitivity hold more than one pane each */
 const NAV=[
  {id:"verdict",lab:"Summary",     panes:[["verdict","Summary"]]},
  {id:"map",    lab:"MAP",         panes:[["map","Site intelligence"]]},
- {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"]]},
+ {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure Statement"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
  {id:"sens",   lab:"Sensitivity", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
  {id:"scn",    lab:"Scenarios",   panes:[["scn","Scenario lab"]]},
  {id:"opt",    lab:"Optimiser",   panes:[["opt","Optimiser"]]},
  {id:"offer",  lab:"Land value",  panes:[["offer","Offer price"]]},
  {id:"port",   lab:"Consolidation", panes:[["cpl","Consolidated P&L"],["ccf","Consolidated cashflow"],["port","Project comparison"]]},
- {id:"exp",    lab:"Exposure Statement", panes:[["exp","Exposure Statement"],["eqsch","Equity Schedule"]]},
- {id:"salesov",lab:"Sales Overview", panes:[["salesov","Sales Overview"]]},
  {id:"intel",  lab:"Market intel", panes:[["intel","Market intel"]]},
 ];
 const TABS=NAV.flatMap(g=>g.panes);
@@ -9602,7 +9602,20 @@ function collectRows(keys){return keys.map(rowByKey).filter(Boolean)}
         }
         group.appendChild(sec);
       });
-      if(count){bucketFs.appendChild(group);frag.appendChild(bucketFs)}
+      if(count){
+        bucketFs.appendChild(group);
+        /* A per-section shortcut to the one real save mechanism (btnCloudSave /
+           the appraisal-store block) - not a separate partial-save, just saves
+           someone a scroll back to the toolbar after editing this bucket. */
+        const saveRow=document.createElement("div");saveRow.className="input-bucket-save";
+        saveRow.style.cssText="display:flex;justify-content:flex-end;padding:8px 4px 2px";
+        const saveBtn=document.createElement("button");saveBtn.type="button";saveBtn.className="sec-save-btn";
+        saveBtn.style.cssText="min-height:0;padding:5px 12px;font-size:11.5px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised);color:var(--text2);cursor:pointer";
+        saveBtn.textContent="Save changes";
+        saveBtn.onclick=()=>document.getElementById("btnCloudSave")?.click();
+        saveRow.appendChild(saveBtn);bucketFs.appendChild(saveRow);
+        frag.appendChild(bucketFs);
+      }
     });
     /* Preserve future/unknown sections rather than dropping them. */
     sectionMap.forEach((sec,name)=>{const b=sec.querySelector(":scope > button.lg");if(b)b.textContent=sectionTitle(name);frag.appendChild(sec)});
@@ -9802,11 +9815,21 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
         /* Interest earned and any district reimbursement are income the project
            makes without selling anything. District reimbursement is already
            recognised against development cost, so only interest is added here. */
-        otherIncome=pl("otherIncome",y)+b("intincome",y);
-      map[y]={qualifiedSales:b("sval",y),totalRevenue:pl("rev",y),landCost,constructionCost,brokerage,marketing,dueDiligence,softCosts,statutoryCosts,otherCostsOther,otherDirectCost,realEstateTax,directCost,grossProfit,salesMarketingCost,netGrossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:netGrossProfit-totalOverheadCost,otherIncome,npbt:pl("npbt",y),tax:pl("tax",y),franchiseTax:pl("franchise",y),corporateTax:pl("tax",y)-pl("franchise",y),npat:pl("npat",y)};
+        interestIncome=b("intincome",y),otherIncomeManual=pl("otherIncome",y),otherIncome=otherIncomeManual+interestIncome;
+      /* Processing fee vs. interest+line fee, split out of the one accrual figure
+         above (financeCost) rather than read separately, because financeCost is
+         net of whatever capitalised this year and the engine does not track that
+         capitalisation per finance component. The cash-basis mix for the year
+         (A.B.pf vs. A.B.intr+A.B.lf) stands in as the allocation weight, and
+         interestFinanceCost is defined as the remainder so the two rows always
+         foot to financeCost exactly - never a rounding drift. */
+      const pfCash=b("pf",y),intCash=b("intr",y)+b("lf",y),finCashTotal=pfCash+intCash,
+        processingFee=finCashTotal>1e-6?financeCost*pfCash/finCashTotal:0,
+        financeCostInterest=financeCost-processingFee;
+      map[y]={qualifiedSales:b("sval",y),totalRevenue:pl("rev",y),landCost,constructionCost,brokerage,marketing,dueDiligence,softCosts,statutoryCosts,otherCostsOther,otherDirectCost,realEstateTax,directCost,grossProfit,salesMarketingCost,netGrossProfit,gna,staff,corp,overheadCost,financeCost,processingFee,financeCostInterest,totalOverheadCost,preOtherIncomeProfit:netGrossProfit-totalOverheadCost,otherIncome,interestIncome,otherIncomeManual,npbt:pl("npbt",y),tax:pl("tax",y),franchiseTax:pl("franchise",y),corporateTax:pl("tax",y)-pl("franchise",y),npat:pl("npat",y)};
     });
     const value=(y,k)=>n(map[y]&&map[y][k]),total=k=>years.reduce((a,y)=>a+value(y,k),0);
-    return {years,map,value,total,vert:!!(d&&Math.round(n(d.vert))===1)};
+    return {years,map,value,total,vert:!!(d&&Math.round(n(d.vert))===1),eirr:A&&A.eirr};
   }
   function dynamicPortfolioQualifiedSales(Q){
     const out={};
@@ -17492,25 +17515,25 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     if(pd)pd.textContent="Assets tie to Liabilities & Equity every fiscal year -- see the balance-check row. Inventory/WIP, tax payable and sundry debtors are each cumulative cash paid or collected less the amount already recognised in the Profit and Loss statement.";
     const{years,rows}=exposureEquityData(A,d);
     if(!years.length){set(host,'<div class="empty">No activity in range.</div>');return}
-    const head=["USD",...years.map(y=>"FY "+y)];
-    const line=(label,vals,cls)=>({cls:cls||"",c:[label,...vals.map(money)]});
+    const head=["Sl. No.","Particulars",...years.map(y=>"FY "+y)];
+    const line=(sr,label,vals,cls)=>({cls:cls||"",c:[sr,label,...vals.map(money)]});
     const assets=rows.map(r=>r.cash+r.esc+r.recv+r.inv);
     const liabEq=rows.map(r=>r.debt+r.esc+r.taxPayable+r.paidIn+r.retained);
     const out=[
       {band:"Assets"},
-      line("Corporate cash",rows.map(r=>r.cash)),
-      line("Escrow cash (restricted)",rows.map(r=>r.esc)),
-      line("Sundry debtors / (deferred revenue)",rows.map(r=>r.recv)),
-      line("Inventory — work in progress (net of recognised cost)",rows.map(r=>r.inv)),
-      line("Total Assets",assets,"sub"),
+      line("1","Corporate Cash",rows.map(r=>r.cash)),
+      line("2","Escrow Cash (Restricted)",rows.map(r=>r.esc)),
+      line("3","Sundry Debtors / (Deferred Revenue)",rows.map(r=>r.recv)),
+      line("4","Inventory — Work in Progress (Net of Recognised Cost)",rows.map(r=>r.inv)),
+      line("","Total Assets",assets,"sub"),
       {band:"Equity & Liabilities"},
-      line("External bank debt",rows.map(r=>r.debt)),
-      line("Escrow liability (buyer deposits)",rows.map(r=>r.esc)),
-      line("Tax payable",rows.map(r=>r.taxPayable)),
-      line("Paid-in equity",rows.map(r=>r.paidIn)),
-      line("Retained earnings",rows.map(r=>r.retained)),
-      line("Total Equity & Liabilities",liabEq,"sub"),
-      {c:["Balance check",...rows.map((r,i)=>{const diff=assets[i]-liabEq[i];return Math.abs(diff)<2?"✓":money(diff)})]}
+      line("5","External Bank Debt",rows.map(r=>r.debt)),
+      line("6","Escrow Liability (Buyer Deposits)",rows.map(r=>r.esc)),
+      line("7","Tax Payable",rows.map(r=>r.taxPayable)),
+      line("8","Paid-In Equity",rows.map(r=>r.paidIn)),
+      line("9","Retained Earnings",rows.map(r=>r.retained)),
+      line("","Total Equity & Liabilities",liabEq,"sub"),
+      {c:["","Balance Check",...rows.map((r,i)=>{const diff=assets[i]-liabEq[i];return Math.abs(diff)<2?"✓":money(diff)})]}
     ];
     set(host,tbl("Exposure Statement · "+(d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""),head,out,"(All amounts in USD)",""));
   }
@@ -17522,23 +17545,23 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     if(pd)pd.textContent="Opening + infusion − release + profit after tax = closing equity. The closing balance reconciles to paid-in equity plus retained earnings on the Exposure Statement.";
     const{years,rows}=exposureEquityData(A,d);
     if(!years.length){set(host,'<div class="empty">No activity in range.</div>');return}
-    const head=["USD",...years.map(y=>"FY "+y)];
-    const line=(label,vals,cls)=>({cls:cls||"",c:[label,...vals.map(money)]});
+    const head=["Sl. No.","Particulars",...years.map(y=>"FY "+y)];
+    const line=(sr,label,vals,cls)=>({cls:cls||"",c:[sr,label,...vals.map(money)]});
     let run=0;const openings=[],closings=[];
     rows.forEach(r=>{openings.push(run);run+=r.eqIn-r.eqOut+r.pat;closings.push(run)});
     const bsEquity=rows.map(r=>r.paidIn+r.retained);
     const out=[
-      line("Opening equity balance",openings),
-      {band:"Movements in the year"},
-      line("Equity infusion",rows.map(r=>r.eqIn)),
-      line("Less: equity release / liquidation",rows.map(r=>-r.eqOut)),
-      line("Add: profit after tax",rows.map(r=>r.pat)),
-      line("Closing equity balance",closings,"sub"),
+      line("1","Opening Equity Balance",openings),
+      {band:"Movements in the Year"},
+      line("2","Equity Infusion",rows.map(r=>r.eqIn)),
+      line("3","Less: Equity Release / Liquidation",rows.map(r=>-r.eqOut)),
+      line("4","Add: Profit After Tax",rows.map(r=>r.pat)),
+      line("","Closing Equity Balance",closings,"sub"),
       {band:"Reconciliation to the Exposure Statement"},
-      line("Paid-in equity (balance sheet)",rows.map(r=>r.paidIn)),
-      line("Retained earnings (balance sheet)",rows.map(r=>r.retained)),
-      line("Total equity per Exposure Statement",bsEquity,"sub"),
-      {c:["Difference vs Equity Schedule",...closings.map((c,i)=>{const diff=c-bsEquity[i];return Math.abs(diff)<2?"✓":money(diff)})]}
+      line("5","Paid-In Equity (Balance Sheet)",rows.map(r=>r.paidIn)),
+      line("6","Retained Earnings (Balance Sheet)",rows.map(r=>r.retained)),
+      line("","Total Equity per Exposure Statement",bsEquity,"sub"),
+      {c:["","Difference vs Equity Schedule",...closings.map((c,i)=>{const diff=c-bsEquity[i];return Math.abs(diff)<2?"✓":money(diff)})]}
     ];
     set(host,tbl("Equity Schedule · "+(d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""),head,out,"(All amounts in USD)",""));
   }
@@ -17546,16 +17569,14 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
   /* ---- Sales Overview: contracted sales value & units by fiscal year ---- */
   function renderSalesOverview(C,hostId){
     const host=hostId||"o_salesov",{A,d}=C;
-    const pd=document.querySelector("#p_"+host.replace(/^o_/,"")+" .pd");
-    if(pd)pd.textContent="Contracted sales (bookings), by fiscal year, for "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||"this project")+".";
     const fys=A.fys||[];
     const b=(k,y)=>n(A.B&&A.B[k]&&A.B[k][y]);
     const sales=fys.map(y=>b("sval",y)),units=fys.map(y=>b("ctr",y));
     const totSales=sales.reduce((a,v)=>a+v,0),totUnits=units.reduce((a,v)=>a+v,0);
     const kpis=[
-      `<div class="kpi"><div class="k">Total contracted sales</div><div class="v">${money(totSales)}</div><div class="d">${d.vert?"home":"lot"} bookings, life of project</div></div>`,
-      `<div class="kpi"><div class="k">Total units</div><div class="v">${Math.round(totUnits).toLocaleString("en-US")}</div><div class="d">${d.vert?"homes":"lots"} contracted</div></div>`,
-      `<div class="kpi"><div class="k">Average value / unit</div><div class="v">${totUnits>0?money(totSales/totUnits):"–"}</div><div class="d">blended</div></div>`
+      `<div class="kpi" data-icon="$"><div class="k">Total contracted sales</div><div class="v">${money(totSales)}</div><div class="d">${d.vert?"home":"lot"} bookings, life of project</div></div>`,
+      `<div class="kpi" data-icon="#"><div class="k">Total units</div><div class="v">${Math.round(totUnits).toLocaleString("en-US")}</div><div class="d">${d.vert?"homes":"lots"} contracted</div></div>`,
+      `<div class="kpi" data-icon="~"><div class="k">Average value / unit</div><div class="v">${totUnits>0?money(totSales/totUnits):"–"}</div><div class="d">blended</div></div>`
     ].join("");
     const maxSales=Math.max(1,...sales);
     const rows=fys.map((y,i)=>{
