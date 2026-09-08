@@ -5374,6 +5374,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const unitsByPhase=Array.from({length:ph.count},()=>[]),productCtr=Array.from({length:PCOUNT},()=>new Array(NM+1).fill(0));
   unitRecords.forEach(u=>{unitsByPhase[u.phase].push(u);ctr[u.contractMonth]++;productCtr[u.product][u.contractMonth]++;dlv[u.delivery]++;R.sval[u.contractMonth]+=u.salePrice;R.dep[u.contractMonth]+=u.depositPct/100*u.salePrice;R.recog[u.delivery]+=u.salePrice;R.balr[u.delivery]+=(1-u.depositPct/100)*u.salePrice;R.escr[u.delivery]+=u.depositPct/100*u.salePrice});
   for(let m=0;m<=NM;m++){R.price[m]=ctr[m]?R.sval[m]/ctr[m]:0;R.lsr[m]=(d.escrow?0:R.dep[m])+R.balr[m]+(d.escrow?R.escr[m]:0)}
+  R.ctr=ctr;R.dlv=dlv;
   let escrowBalance=0;for(let m=0;m<=NM;m++){escrowBalance+=d.escrow?R.dep[m]-R.escr[m]:0;R.escbal[m]=escrowBalance}
   const phaseActual=ph.counts.map(()=>0),phaseEligible=ph.counts.map(()=>0),phaseReimb=ph.counts.map(()=>0);
   ph.durations.forEach((dur,i)=>{const phaseBase=infBase*ph.costWeights[i],phaseMunic=munic*ph.costWeights[i],weights=_spendWeights(dur,d.infracurve);for(let k=0;k<dur;k++){const m=phaseStart[i]+k,infraSpend=phaseBase*weights[k]*Math.pow(1+d.infesc/100,m/12),municSpend=phaseMunic*weights[k],contSpend=infraSpend*d.contpc/100+d.contfixed*ph.costWeights[i]*weights[k];R.cinf[m]+=infraSpend;R.munic[m]+=municSpend;R.cont[m]+=contSpend;phaseEligible[i]+=infraSpend+contSpend;phaseActual[i]+=infraSpend+contSpend+municSpend}const rm=phaseComplete[i]+d.pidlag;phaseReimb[i]=phaseEligible[i]*d.pidel/100*d.pidrt/100;if(rm<=NM)R.pid[rm]+=phaseReimb[i]});
@@ -6852,12 +6853,12 @@ function paintCalc(){const o=derive(D);GROUPS.forEach(s=>s.f.forEach(f=>{if(f[4]
 const NAV=[
  {id:"verdict",lab:"Summary",     panes:[["verdict","Summary"]]},
  {id:"map",    lab:"MAP",         panes:[["map","Site intelligence"]]},
- {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure Statement"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
+ {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
  {id:"sens",   lab:"Sensitivity", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
  {id:"scn",    lab:"Scenarios",   panes:[["scn","Scenario lab"]]},
  {id:"opt",    lab:"Optimiser",   panes:[["opt","Optimiser"]]},
  {id:"offer",  lab:"Land value",  panes:[["offer","Offer price"]]},
- {id:"port",   lab:"Consolidation", panes:[["cpl","Consolidated P&L"],["ccf","Consolidated cashflow"],["port","Project comparison"]]},
+ {id:"port",   lab:"Consolidation", panes:[["cpl","Consolidated P&L"],["ccf","Consolidated cashflow"],["port","Project comparison"],["cexp","Exposure"],["ceqsch","Equity Schedule"],["csalesov","Sales Overview"]]},
  {id:"intel",  lab:"Market intel", panes:[["intel","Market intel"]]},
 ];
 const TABS=NAV.flatMap(g=>g.panes);
@@ -7477,13 +7478,16 @@ function buildScaffold(){
   document.getElementById("p_ppl").innerHTML=`<h2 class="ph">Project P&amp;L</h2><p class="pd"></p><div id="o_ppl"></div>`;
   document.getElementById("p_pl").innerHTML=`<h2 class="ph">Profit and loss</h2><p class="pd">For the parcel currently open. Gross contracted sales are recognised at closing, transaction tax on sales is deducted to reach net revenue, and recoverable sales and use tax is credited against eligible project costs. Direct costs remain matched to the same settled lots / units.</p><div id="o_pl"></div>`;
   document.getElementById("p_cf").innerHTML=`<h2 class="ph">Cashflow</h2><p class="pd"></p><div id="o_cf"></div>`;
-  document.getElementById("p_monthly").innerHTML=`<h2 class="ph">Monthly engine</h2><p class="pd">The calculation layer behind every other tab.</p><div id="o_monthly"></div>`;
-  [["cs_ppl","Project P&amp;L"],["cs_pl","Profit and loss"],["cs_cf","Cashflow"],["cs_monthly","Monthly engine"]]
+  document.getElementById("p_monthly").innerHTML=`<h2 class="ph">Monthly engine</h2><p class="pd"></p><div id="o_monthly"></div>`;
+  [["cs_ppl","Project P&amp;L"],["cs_pl","Profit and loss"],["cs_cf","Cashflow"],["cs_monthly","Monthly engine"],["cs_exp","Exposure"],["cs_eqsch","Equity Schedule"],["cs_salesov","Sales Overview"]]
     .forEach(([id,lab])=>{const sec=document.getElementById("p_"+id);
       if(sec)sec.innerHTML=`<h2 class="ph">${lab}</h2><p class="pd"></p><div id="o_${id}"></div>`});
   document.getElementById("p_port").innerHTML=`<h2 class="ph">Project comparison</h2><p class="pd">Compare the projects included in the current consolidation scope. The complete merged statements are available in Consolidated P&L and Consolidated cashflow.</p><div id="o_port"></div>`;
   document.getElementById("p_cpl").innerHTML=`<h2 class="ph">Consolidated profit and loss</h2><p class="pd">Calendar-aligned dynamic P&L for the projects selected in the consolidation scope.</p><div id="o_cpl"></div>`;
   document.getElementById("p_ccf").innerHTML=`<h2 class="ph">Consolidated cashflow</h2><p class="pd"></p><div id="o_ccf"></div>`;
+  [["cexp","Exposure"],["ceqsch","Equity Schedule"],["csalesov","Sales Overview"]]
+    .forEach(([id,lab])=>{const sec=document.getElementById("p_"+id);
+      if(sec)sec.innerHTML=`<h2 class="ph">${lab}</h2><p class="pd"></p><div id="o_${id}"></div>`});
   document.getElementById("p_sens").innerHTML=
     `<h2 class="ph">Sensitivity</h2><p class="pd">One driver swept across a range; the appraisal runs in full at each step.</p>
      <div class="ctl"><span class="cl">Vary</span>${sel("s_drv",dO,APP.sDrv)}
@@ -7506,7 +7510,7 @@ function buildScaffold(){
   if(document.getElementById("p_manual"))document.getElementById("p_manual").innerHTML=
     `<h2 class="ph">Manual Inputs</h2><p class="pd">Type a year-by-year schedule and the appraisal recalculates live. Leave a schedule blank to fall back to the normal driven timing.</p><div id="o_manual"></div>`;
   if(document.getElementById("p_exp"))document.getElementById("p_exp").innerHTML=
-    `<h2 class="ph">Exposure Statement</h2><p class="pd"></p><div id="o_exp"></div>`;
+    `<h2 class="ph">Exposure</h2><p class="pd"></p><div id="o_exp"></div>`;
   if(document.getElementById("p_eqsch"))document.getElementById("p_eqsch").innerHTML=
     `<h2 class="ph">Equity Schedule</h2><p class="pd"></p><div id="o_eqsch"></div>`;
   if(document.getElementById("p_salesov"))document.getElementById("p_salesov").innerHTML=
@@ -8418,7 +8422,7 @@ function _buildExcel(){
      never drift from what the app itself shows. */
   if(typeof window.exposureEquityData==="function"){
     const EE=window.exposureEquityData(A,d),eys=EE.years,erows=EE.rows;
-    t=`<table><tr><td style="${bn}" colspan="${eys.length+2}">Exposure Statement</td></tr>
+    t=`<table><tr><td style="${bn}" colspan="${eys.length+2}">Exposure</td></tr>
       <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
     const addE=(sr,lab,fn,style=st)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>`+
       erows.map(r=>`<td style="${style}mso-number-format:${nf}">${Math.round(fn(r))}</td>`).join("")+`<td style="${style}"></td></tr>`};
@@ -8431,7 +8435,7 @@ function _buildExcel(){
     addE("8","Paid-in Equity",r=>r.paidIn);addE("9","Retained Earnings",r=>r.retained);
     addE("","Total Equity & Liabilities",r=>r.debt+r.esc+r.taxPayable+r.paidIn+r.retained,gr);
     addE("","Balance Check (A - B)",r=>(r.cash+r.esc+r.recv+r.inv)-(r.debt+r.esc+r.taxPayable+r.paidIn+r.retained),gn);
-    sheets.push(["Exposure Statement",t+`</table>`]);
+    sheets.push(["Exposure",t+`</table>`]);
     let run2=0;const openings=[],closings=[];erows.forEach(r=>{openings.push(run2);run2+=r.eqIn-r.eqOut+r.pat;closings.push(run2)});
     t=`<table><tr><td style="${bn}" colspan="${eys.length+2}">Equity Schedule</td></tr>
       <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
@@ -8441,7 +8445,7 @@ function _buildExcel(){
     addQ("2","Equity Infusion",erows.map(r=>r.eqIn));addQ("3","Less: Equity Release / Liquidation",erows.map(r=>-r.eqOut));
     addQ("4","Add: Profit After Tax",erows.map(r=>r.pat));addQ("","Closing Equity Balance",closings,gr);
     addQ("5","Paid-in Equity (Balance Sheet)",erows.map(r=>r.paidIn));addQ("6","Retained Earnings (Balance Sheet)",erows.map(r=>r.retained));
-    addQ("","Total Equity per Exposure Statement",erows.map(r=>r.paidIn+r.retained),gr);
+    addQ("","Total Equity per Exposure",erows.map(r=>r.paidIn+r.retained),gr);
     addQ("","Difference vs Equity Schedule",closings.map((c,i)=>c-(erows[i].paidIn+erows[i].retained)),gn);
     sheets.push(["Equity Schedule",t+`</table>`]);
   }
@@ -8616,89 +8620,27 @@ function renderProjectCashflow({A,d},hostId){
   const host=hostId||"o_cf",own=host==="o_cf";
   const cfKey=contextKey(),cfCached=own?cacheGetLRU(_projectCashflowHtml,cfKey):undefined;
   if(cfCached!==undefined){set(host,cfCached);return}
-  const activityRows=["cfrefresrev","cfrefinterestincome","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"];
+  const activityRows=["cfrefresrev","cfrefinterestincome","cfrefotherincome","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"];
   const fys=A.fys.filter(y=>activityRows.some(k=>Math.abs((A.B[k]&&A.B[k][y])||0)>.5));
   const b=(key,y)=>_num(A.B[key]&&A.B[key][y]),sum=(fn)=>fys.reduce((a,y)=>a+fn(y),0);
-  const L=(sr,lab,fn,cls,totalFn,fmt)=>{const f=fmt||$z;return {sr:1,cls:cls||"",c:[sr,lab,...fys.map(y=>f(fn(y))),f(totalFn?totalFn():sum(fn))]}};
-  const netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),landCost=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),
-    taxCost=y=>b("cfrefholding",y)+b("cfreffranchisetax",y)+b("cfrefcorporatetax",y),developmentCost=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sellingCost=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debtSchedule=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),financeCost=y=>b("pf",y)+b("intr",y)+b("lf",y);
-  const anyY=fn=>fys.some(y=>Math.abs(fn(y))>.5);
-  const taxTotal=A.R.taxm.reduce((a,v)=>a+v,0),otherIncomeTotal=A.R.otherincome.reduce((a,v)=>a+v,0),overheadTotal=A.R.ovh.reduce((a,v)=>a+v,0),reimbTotal=A.R.pid.reduce((a,v)=>a+v,0);
-  const noteBits=["Positive line 7 means a pre-financing cash requirement; negative means operating cash surplus.","Debt raised is shown as a negative requirement, debt repayment and finance costs as positive requirements.","Line 10 is actual equity injected; line 11 is actual distributable surplus returned to equity; line 12 is line 11 minus line 10."];
-  if(taxTotal>0)noteBits.push("The supplied layout has no income-tax row, so corporate/state tax cash payments are included in line 7 Net Cash Flow to keep the funding waterfall after tax.");
-  if(overheadTotal>0)noteBits.push("Project G&A/staff/corporate overhead cash is included in 3.7 Other Costs because the cash-flow layout has no separate overhead row.");
-  if(reimbTotal>0)noteBits.push("Council/infrastructure reimbursements are reported in 1.2 Other Income.");
-  noteBits.push(d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered in line 6 after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned in line 6 after the refund lag.");
-  const rows=[
-    L("","Homes Sold",y=>b("ctr",y),"",null,M0),
-    L("1","Net Revenue",netRevenue,"sub"),
-    L("1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)),
-    L("1.2","Other Income",y=>b("cfrefotherincome",y)),
-    ...(anyY(y=>b("cfrefsut",y))?[L("1.3","Less: Sales & Use Tax",y=>-b("cfrefsut",y))]:[]),
-    
-    L("2","Land & Acquisition Costs",landCost,"sub"),
-    L("2.1","Land Costs",y=>b("cfrefland",y)),
-    ...(anyY(y=>b("cfrefxfertax",y))?[L("2.2","Transfer and Recording Tax",y=>b("cfrefxfertax",y))]:[]),
-    ...(anyY(y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y))?[L("2.3","Other Acquisition Costs",y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y))]:[]),
-    
-    
-    
-    L("3","Development Costs",developmentCost,"sub"),
-    L("3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y)),
-    L("3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y)),
-    L("3.3","Design Costs",y=>b("cfrefdesigncost",y)),
-    L("3.4","Construction Costs",y=>b("cfrefbuildcost",y)),
-    L("3.5","Soft Costs",y=>b("cfrefsoftcost",y)),
-    L("3.6","Authority & Statutory Costs",y=>b("cfrefstatutory",y)),
-    L("3.7","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y)),
-    L("4","Selling Costs",sellingCost,"sub"),
-    L("4.1","Brokerage Costs",y=>b("cfrefbrokerage",y)),
-    L("4.2","Selling Expenses",y=>b("cfrefselling",y)),
-    L("4.3","Marketing & Advertising",y=>b("cfrefmarketing",y)),
-    L("5","Taxes",taxCost,"sub"),
-    L("5.1","Real Estate Property Tax",y=>b("cfrefholding",y)),
-    L("5.2","Franchise Tax",y=>b("cfreffranchisetax",y)),
-    L("5.3","Corporate Tax",y=>b("cfrefcorporatetax",y)),
-    L("6","Sales & Use Tax Recovered",y=>b("cfsutrefund",y),"sub"),
-    L("7","Net Cash Flow",y=>b("cfrefnetcash",y),"res"),
-    L("8","Debt Schedule",debtSchedule,"sub"),
-    L("8.1","(-) Debt Raised",y=>-b("dr1",y)),
-    L("8.2","(-) Debt Raised to Service Debt",y=>-b("dr2",y)),
-    L("8.3","(+) Debt Repayment",y=>b("rep",y)),
-    L("9","Finance Costs",financeCost,"sub"),
-    L("9.1","Processing Fee",y=>b("pf",y)),
-    L("9.2","Interest",y=>b("intr",y)),
-    L("9.3","Line Fee",y=>b("lf",y)),
-    L("10","Equity Needed",y=>b("cfrefequity",y),"res"),
-    L("11","Net Surplus",y=>b("cfrefsurplus",y),"res"),
-    L("12","Profit (11 - 10)",y=>b("cfrefprofit",y),"res")
-  ];
-  const warning=(taxTotal>0||overheadTotal>0||reimbTotal>0)?`<div class="source-note"><b>Reference-format mapping:</b> ${noteBits.slice(3).join(" ")}</div>`:"";
-  const cfHtml=warning+`<div class="scrollx">`+tbl("Project Cash Flow Statement",["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,noteBits.join(" "),"totalfirst")+`</div>`;
+  const rows=window.cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount,isBal])=>{
+    const f=isCount?M0:$z;
+    return {sr:1,cls:kind||"",c:[ref,label,...fys.map(y=>f(fn(y))),f(isBal?fn(fys[fys.length-1]):sum(fn))]};
+  });
+  const note="A real cash roll-forward: Opening Balance plus Total Cash Inflows (Equity Infused and Debt Raised included) less Total Cash Outflows equals Closing Balance. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under Total Overheads and Other Payments. "+
+    (d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered in Sales and Use Tax Recovered after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned in Sales and Use Tax Recovered after the refund lag.");
+  const cfHtml=`<div class="scrollx">`+tbl("Project Cash Flow Statement",["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,note,"totalfirst")+`</div>`;
   set(host,cfHtml);if(own)cacheSetLRU(_projectCashflowHtml,cfKey,cfHtml,8);
 };
 PANE.monthly=function({A,d},hostId){
-  const R=A.R;let last=0;["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"].forEach(k=>(R[k]||[]).forEach((v,i)=>{if(Math.abs(v)>.5)last=Math.max(last,i)}));
-  const mm=Array.from({length:last+1},(_,m)=>m),add=(...xs)=>mm.map((_,m)=>xs.reduce((a,x)=>a+_num((x||[])[m]),0)),sub=(a,b)=>mm.map((_,m)=>_num((a||[])[m])-_num((b||[])[m])),anyA=a=>(a||[]).some(v=>Math.abs(_num(v))>.5),neg=a=>mm.map((_,m)=>-_num((a||[])[m]));
-  const rows=[
-    ["","Homes Sold",A.contractCounts,"",M0],
-    ["","Net Qualified Sales",R.cfrefqualifiedsales],
-    ["1","Net Revenue",sub(R.cfrefresrev,R.cfrefsut),"sub"],["1.1","Revenue - Residential",sub(R.cfrefresrev,R.cfrefotherincome)],["1.2","Other Income",R.cfrefotherincome],
-    ...(anyA(R.cfrefsut)?[["1.3","Less: Sales & Use Tax",neg(R.cfrefsut)]]:[]),
-    ["2","Land & Acquisition Costs",add(R.cfrefland,R.cfrefxfertax,R.cfrefacqfee,R.cfreflandsurcharge),"sub"],["2.1","Land Costs",R.cfrefland],
-    ...(anyA(R.cfrefxfertax)?[["2.2","Transfer and Recording Tax",R.cfrefxfertax]]:[]),
-    ...(anyA(add(R.cfrefacqfee,R.cfreflandsurcharge))?[["2.3","Other Acquisition Costs",add(R.cfrefacqfee,R.cfreflandsurcharge)]]:[]),
-    ["3","Development Costs",add(R.cfrefconstruction,R.cfrefprofessional,R.cfrefdm,R.cfrefstatutory,R.cfrefcontingency),"sub"],["3.1","Due Diligence & Ancillary Fees",R.cfrefduediligence],["3.2","Infrastructure Costs",R.cfrefinfrastructure],["3.3","Design Costs",R.cfrefdesigncost],["3.4","Construction Costs",R.cfrefbuildcost],["3.5","Soft Costs",R.cfrefsoftcost],["3.6","Authority & Statutory Costs",R.cfrefstatutory],["3.7","Other Costs",add(R.cfrefothercost,R.cfrefcontingency,R.cfrefdm)],
-    ["4","Selling Costs",add(R.cfrefbrokerage,R.cfrefselling,R.cfrefmarketing),"sub"],["4.1","Brokerage Costs",R.cfrefbrokerage],["4.2","Selling Expenses",R.cfrefselling],["4.3","Marketing & Advertising",R.cfrefmarketing],
-    ["5","Taxes",add(R.cfrefholding,R.cfreffranchisetax,R.cfrefcorporatetax),"sub"],["5.1","Real Estate Property Tax",R.cfrefholding],["5.2","Franchise Tax",R.cfreffranchisetax],["5.3","Corporate Tax",R.cfrefcorporatetax],
-    ["6","Sales & Use Tax Recovered",R.cfsutrefund,"sub"],["7","Net Cash Flow",R.cfrefnetcash,"res"],
-    ["8","Debt Schedule",add(R.cfrefdebt,R.cfrefdebtfinance,R.cfrefrepayment),"sub"],["8.1","(-) Debt Raised",R.cfrefdebt],["8.2","(-) Debt Raised to Service Debt",R.cfrefdebtfinance],["8.3","(+) Debt Repayment",R.cfrefrepayment],
-    ["9","Finance Costs",add(R.cfrefprocessing,R.cfrefinterest,R.cfreflifetime),"sub"],["9.1","Processing Fee",R.cfrefprocessing],["9.2","Interest",R.cfrefinterest],["9.3","Line Fee",R.cfreflifetime],
-    ["10","Equity Needed",R.cfrefequity,"res"],["11","Net Surplus",R.cfrefsurplus,"res"],["12","Profit (11 - 10)",R.cfrefprofit,"res"]
-  ];
-  const tableRows=rows.map(([ref,label,arr,cls,fmt])=>{const f=fmt||$z;return {sr:1,cls:cls||"",
-    c:[ref,label,...mm.map(m=>f(arr[m])),f(mm.reduce((a,m)=>a+_num(arr[m],0),0))]}});
-  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Same line sequence as the annual cashflow. Positive line 7 is a cash requirement; line 12 is Net Surplus less Equity Needed. Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
+  const R=A.R;let last=0;["cfrefresrev","cfrefinterestincome","cfrefotherincome","cfrefsut","cfsutrefund","cfrefequity","dr1","dr2","cfrefland","cfrefxfertax","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefinfrastructure","cfrefdesigncost","cfrefbuildcost","cfrefsoftcost","cfrefstatutory","cfrefothercost","cfrefcontingency","cfrefdm","cfrefholding","cfreffranchisetax","cfrefcorporatetax","cfrefbrokerage","cfrefselling","cfrefmarketing","pf","intr","lf","rep","cfrefsurplus"].forEach(k=>(R[k]||[]).forEach((v,i)=>{if(Math.abs(v)>.5)last=Math.max(last,i)}));
+  const mm=Array.from({length:last+1},(_,m)=>m);
+  const bm=(k,m)=>_num(R[k]&&R[k][m]);
+  const tableRows=window.cashFlowRowDefs(bm,mm).map(([ref,label,fn,kind,isCount,isBal])=>{
+    const f=isCount?M0:$z;
+    return {sr:1,cls:kind||"",c:[ref,label,...mm.map(m=>f(fn(m))),f(isBal?fn(mm[mm.length-1]):mm.reduce((a,m)=>a+fn(m),0))]};
+  });
+  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Same line sequence as the annual cashflow: a real cash roll-forward from Opening to Closing Balance. Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
 };
 /* ═══════════════════ SENSITIVITY / HEAT / OFFER ═══════════════════ */
 function renderSensitivitySync({d},runFn=run,solveLandFn=solveLand){
@@ -15539,67 +15481,99 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
      copied verbatim from the on-screen row list so it cannot drift again - each
      caller supplies its own cell formatting. isCount marks the one row (Homes
      Sold) that is a unit count, not a dollar amount. */
+  /* Matches the reference workbooks' actual statement SHAPE, not just their line
+     grouping: a real cash roll-forward - Opening Balance, Total Cash Inflows
+     (Equity Infused and Debt Raised are real inflow lines here, the way the
+     reference shows them, not a derived "funding requirement"), Total Cash
+     Outflows, Closing Balance. Closing Balance is DERIVED (Opening + Inflows -
+     Outflows) rather than read from the engine's own R.cash, so the statement
+     always foots by construction; verified headless against the real engine for
+     both seeded Southlake parcels that the derived Closing Balance matches
+     R.cash exactly, every fiscal year - which is what proves this line list is
+     complete, not just internally tidy. If this function gets touched again,
+     re-run that check before trusting a rewrite. */
   function cashFlowRowDefs(b,years){
     const anyY=fn=>years.some(y=>Math.abs(fn(y))>.5);
-    const netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),
-      landCost=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),
+    const salesRevenue=y=>b("cfrefresrev",y)-b("cfrefotherincome",y)-b("cfrefsut",y),
+      interestIncome=y=>b("cfrefinterestincome",y),
+      otherIncome=y=>b("cfrefotherincome",y)-b("cfrefinterestincome",y),
+      sutRecovered=y=>b("cfsutrefund",y),
+      operatingInflow=y=>salesRevenue(y)+interestIncome(y)+otherIncome(y)+sutRecovered(y),
+      equityInfused=y=>b("cfrefequity",y),
+      debtRaised=y=>b("dr1",y),debtRaisedToService=y=>b("dr2",y),
+      loans=y=>debtRaised(y)+debtRaisedToService(y),
+      totalInflows=y=>operatingInflow(y)+equityInfused(y)+loans(y);
+    const landCost=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),
+      developmentCost=y=>b("cfrefduediligence",y)+b("cfrefinfrastructure",y)+b("cfrefdesigncost",y)+b("cfrefbuildcost",y)+b("cfrefsoftcost",y)+b("cfrefstatutory",y)+b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y),
+      projectPayments=y=>landCost(y)+developmentCost(y),
       taxCost=y=>b("cfrefholding",y)+b("cfreffranchisetax",y)+b("cfrefcorporatetax",y),
-      developmentCost=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),
       sellingCost=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),
-      debtSchedule=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),
-      financeCost=y=>b("pf",y)+b("intr",y)+b("lf",y);
+      overheadsAndTaxes=y=>taxCost(y)+sellingCost(y),
+      interestAndFees=y=>b("pf",y)+b("intr",y)+b("lf",y),
+      debtRepaid=y=>b("rep",y),
+      equityDistributed=y=>b("cfrefsurplus",y),
+      totalOutflows=y=>projectPayments(y)+overheadsAndTaxes(y)+interestAndFees(y)+debtRepaid(y)+equityDistributed(y);
+    let openRun=0;const openingOf={},closingOf={};
+    years.forEach(y=>{openingOf[y]=openRun;openRun+=totalInflows(y)-totalOutflows(y);closingOf[y]=openRun});
+    const opening=y=>openingOf[y]||0,closing=y=>closingOf[y]||0;
     return [
       ["","Homes Sold",y=>b("ctr",y),"",true],
-      ["1","Net Revenue",netRevenue,"sub"],
-      ["1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)],
-      ["1.2","Other Income",y=>b("cfrefotherincome",y)],
-      ...(anyY(y=>b("cfrefsut",y))?[["1.3","Less: Sales & Use Tax",y=>-b("cfrefsut",y)]]:[]),
-      ["2","Land & Acquisition Costs",landCost,"sub"],
-      ["2.1","Land Costs",y=>b("cfrefland",y)],
-      ...(anyY(y=>b("cfrefxfertax",y))?[["2.2","Transfer and Recording Tax",y=>b("cfrefxfertax",y)]]:[]),
-      ...(anyY(y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y))?[["2.3","Other Acquisition Costs",y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y)]]:[]),
-      ["3","Development Costs",developmentCost,"sub"],
-      ["3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y)],
-      ["3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y)],
-      ["3.3","Design Costs",y=>b("cfrefdesigncost",y)],
-      ["3.4","Construction Costs",y=>b("cfrefbuildcost",y)],
-      ["3.5","Soft Costs",y=>b("cfrefsoftcost",y)],
-      ["3.6","Authority & Statutory Costs",y=>b("cfrefstatutory",y)],
-      ["3.7","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y)],
-      ["4","Selling Costs",sellingCost,"sub"],
-      ["4.1","Brokerage Costs",y=>b("cfrefbrokerage",y)],
-      ["4.2","Selling Expenses",y=>b("cfrefselling",y)],
-      ["4.3","Marketing & Advertising",y=>b("cfrefmarketing",y)],
-      ["5","Taxes",taxCost,"sub"],
-      ["5.1","Real Estate Property Tax",y=>b("cfrefholding",y)],
-      ["5.2","Franchise Tax",y=>b("cfreffranchisetax",y)],
-      ["5.3","Corporate Tax",y=>b("cfrefcorporatetax",y)],
-      ["6","Sales & Use Tax Recovered",y=>b("cfsutrefund",y),"sub"],
-      ["7","Net Cash Flow",y=>b("cfrefnetcash",y),"res"],
-      ["8","Debt Schedule",debtSchedule,"sub"],
-      ["8.1","(-) Debt Raised",y=>-b("dr1",y)],
-      ["8.2","(-) Debt Raised to Service Debt",y=>-b("dr2",y)],
-      ["8.3","(+) Debt Repayment",y=>b("rep",y)],
-      ["9","Finance Costs",financeCost,"sub"],
-      ["9.1","Processing Fee",y=>b("pf",y)],
-      ["9.2","Interest",y=>b("intr",y)],
-      ["9.3","Line Fee",y=>b("lf",y)],
-      ["10","Equity Needed",y=>b("cfrefequity",y),"res"],
-      ["11","Net Surplus",y=>b("cfrefsurplus",y),"res"],
-      ["12","Profit (11 - 10)",y=>b("cfrefprofit",y),"res"]
+      ["A","Opening Balance",opening,"sub",false,true],
+      ["B","Cash Inflows",()=>0,"sub"],
+      ["1","Revenue - Residential",salesRevenue],
+      ["2","Interest Income",interestIncome],
+      ...(anyY(otherIncome)?[["3","Other Income",otherIncome]]:[]),
+      ["4","Sales and Use Tax Recovered",sutRecovered],
+      ["a","Operating Cash Inflows",operatingInflow,"sub"],
+      ["5","Equity Infused",equityInfused],
+      ["b","Promoter's Inflow",equityInfused,"sub"],
+      ["6","Debt Raised",debtRaised],
+      ["7","Debt Raised to Service Debt",debtRaisedToService],
+      ["c","Loans & Borrowings",loans,"sub"],
+      ["I","Total Cash Inflows",totalInflows,"res"],
+      ["C","Cash Outflows",()=>0,"sub"],
+      ["8","Land Costs",landCost],
+      ["9","Development Costs",developmentCost],
+      ["a","Project Related Payments",projectPayments,"sub"],
+      ["10","Real Estate Property Tax",y=>b("cfrefholding",y)],
+      ["11","Franchise Tax",y=>b("cfreffranchisetax",y)],
+      ["12","Corporate Tax",y=>b("cfrefcorporatetax",y)],
+      ["13","Selling Costs",sellingCost],
+      ["b","Total Overheads and Other Payments",overheadsAndTaxes,"sub"],
+      ["14","Processing Fee",y=>b("pf",y)],
+      ["15","Interest",y=>b("intr",y)],
+      ["16","Line Fee",y=>b("lf",y)],
+      ["c","Total Interest & Other Payments",interestAndFees,"sub"],
+      ["17","Debt Repaid",debtRepaid],
+      ["d","Total Debt Payments",debtRepaid,"sub"],
+      ...(anyY(equityDistributed)?[["18","Equity Distributed",equityDistributed],["e","Total Equity Distributions",equityDistributed,"sub"]]:[]),
+      ["II","Total Cash Outflows",totalOutflows,"res"],
+      ["D","Closing Balance",closing,"res",false,true]
     ];
   }
+  window.cashFlowRowDefs=cashFlowRowDefs;
   function cashTable(A,d){
     const activity=["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"],fys=(A.fys||[]).filter(y=>activity.some(k=>Math.abs(num(A.B[k]&&A.B[k][y]))>.5)),b=(k,y)=>num(A.B[k]&&A.B[k][y]);
-    const rows=cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount])=>{const f=isCount?M0:money;return {kind,cells:[ref,label,...fys.map(y=>f(fn(y))),f(fys.reduce((a,y)=>a+fn(y),0))]}});
-    return{title:"Project Cash Flow Statement",headers:["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,foot:"Positive Net Cash Flow is a funding requirement. Income tax, if enabled, is included in line 7 because the supplied reference structure has no separate income-tax row. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under line 5, Taxes."}
+    /* Opening/Closing Balance are a level, not a flow - summing them across
+       years the way every other row's Total column works would add up numbers
+       that mean nothing. Their Total column instead repeats the final year's
+       balance, matching how the statement's own D row reads as "where things
+       stand at the end". */
+    const rows=cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount,isBal])=>{
+      const f=isCount?M0:money,vals=fys.map(fn);
+      return {kind,cells:[ref,label,...vals.map(f),f(isBal?vals[vals.length-1]:vals.reduce((a,v)=>a+v,0))]};
+    });
+    return{title:"Project Cash Flow Statement",headers:["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,foot:"A real cash roll-forward: Opening Balance plus Total Cash Inflows (Equity Infused and Debt Raised included) less Total Cash Outflows equals Closing Balance. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under Total Overheads and Other Payments."}
   }
   function monthlyTable(A,d,titleText,rowDefs){const last=Math.max(0,...rowDefs.flatMap(r=>r.values.map((v,i)=>Math.abs(num(v))>.5?i:0))),months=Array.from({length:last+1},(_,m)=>m);return{title:titleText,headers:["Sl. No.","Particulars",...months.map(m=>mLabel(m,d))],rows:rowDefs.map((r,i)=>{const f=r.isCount?M0:money;return {kind:r.kind||"",cells:[r.ref!=null?r.ref:String(i+1),r.label,...months.map(m=>f(r.values[m]))]}}),foot:"Monthly appendix is generated from the active project cashflow engine."}}
   /* Split into what the schedules are and how they are drawn, so the workbook
      can write the same three schedules as values. monthlyTables is unchanged in
      what it produces. */
   function monthlyDefs(A,d){const R=A.R,add=(a,b)=>a.map((v,i)=>num(v)+num(b[i])),cum=a=>{let t=0;return a.map(v=>t+=num(v))},eqOut=R.eqout||[],eqIn=R.eqin||[],debt=R.lcl||[],openingDebt=debt.map((v,i)=>i?debt[i-1]:0);return[
-    monthlyBlock("Monthly Project Cashflow",[{ref:"",label:"Homes Sold",values:A.contractCounts||[],isCount:true},{ref:"1",label:"Net Revenue",values:(R.cfrefresrev||[]).map((v,i)=>v-num((R.cfrefsut||[])[i])),kind:"sub"},{ref:"2",label:"Land & Acquisition Costs",values:(R.cfrefland||[]).map((v,i)=>v+num((R.cfrefxfertax||[])[i])+num((R.cfrefacqfee||[])[i])+num((R.cfreflandsurcharge||[])[i])),kind:"sub"},{ref:"3",label:"Development Costs",values:(R.cfrefconstruction||[]).map((v,i)=>v+num((R.cfrefprofessional||[])[i])+num((R.cfrefdm||[])[i])+num((R.cfrefstatutory||[])[i])+num((R.cfrefcontingency||[])[i])),kind:"sub"},{ref:"4",label:"Selling Costs",values:(R.cfrefbrokerage||[]).map((v,i)=>v+num((R.cfrefselling||[])[i])+num((R.cfrefmarketing||[])[i])),kind:"sub"},{ref:"5",label:"Taxes",values:(R.cfrefholding||[]).map((v,i)=>v+num((R.cfreffranchisetax||[])[i])+num((R.cfrefcorporatetax||[])[i])),kind:"sub"},{ref:"6",label:"Sales and Use Tax Recovered",values:R.cfsutrefund||[]},{ref:"7",label:"Net Cash Flow",values:R.cfrefnetcash||[],kind:"res"},{ref:"8",label:"Debt Schedule",values:(R.cfrefdebt||[]).map((v,i)=>v+num((R.cfrefdebtfinance||[])[i])+num((R.cfrefrepayment||[])[i])),kind:"sub"},{ref:"8.1",label:"(-) Debt Raised",values:R.cfrefdebt||[]},{ref:"8.2",label:"(-) Debt Raised to Service Debt",values:R.cfrefdebtfinance||[]},{ref:"8.3",label:"(+) Debt Repayment",values:R.cfrefrepayment||[]},{ref:"9",label:"Finance Costs",values:(R.cfrefprocessing||[]).map((v,i)=>v+num((R.cfrefinterest||[])[i])+num((R.cfreflifetime||[])[i])),kind:"sub"},{ref:"10",label:"Equity Needed",values:R.cfrefequity||[],kind:"res"},{ref:"11",label:"Net Surplus",values:R.cfrefsurplus||[],kind:"res"},{ref:"12",label:"Profit (11 - 10)",values:R.cfrefprofit||[],kind:"res"}]),
+    monthlyBlock("Monthly Project Cashflow",(()=>{
+      const mmFull=Array.from({length:(A.NM||0)+1},(_,m)=>m),bmFull=(k,m)=>num(R[k]&&R[k][m]);
+      return cashFlowRowDefs(bmFull,mmFull).map(([ref,label,fn,kind,isCount])=>({ref,label,values:mmFull.map(fn),kind:kind||"",isCount:!!isCount}));
+    })()),
     monthlyBlock("Monthly Debt Schedule",[{label:"Opening debt",values:openingDebt},{label:"Operating debt drawn",values:R.dr1||[]},{label:"Finance-cost debt drawn",values:R.dr2||[]},{label:"Interest charged",values:R.intr||[]},{label:"Processing and line fees",values:add(R.pf||[],R.lf||[])},{label:"Debt repaid",values:R.rep||[]},{label:"Closing loan balance",values:debt,kind:"res"}]),
     monthlyBlock("Monthly Equity Cashflow",[{label:"Equity injected",values:eqIn},{label:"Equity returned",values:eqOut},{label:"Net equity cashflow",values:R.eqcf||[],kind:"res"},{label:"Cumulative equity injected",values:cum(eqIn)},{label:"Cumulative equity returned",values:cum(eqOut)},{label:"Outstanding equity",values:cum(eqIn).map((v,i)=>v-num(cum(eqOut)[i]))},{label:"Closing unrestricted cash",values:R.cash||[]}])
   ]}
@@ -16036,9 +16010,10 @@ function _boardPdfAnnualTableRows(R,years,type,C){
 }
 function _boardPdfCashTemplateRows(R,years,C){
   const b=(k,y)=>Number(R.A.B[k]&&R.A.B[k][y]||0),vals=fn=>years.map(fn),sum=a=>a.reduce((x,y)=>x+y,0);
-  return cashFlowRowDefs(b,years).map(([ref,label,fn,kind="",isCount])=>{
-    const a=vals(fn),fmt=v=>isCount?M0(v):_boardPdfShort(v),fill=kind==="res"?C.paleGreen:(kind==="sub"?C.row2:undefined),bold=kind==="res"||kind==="sub";
-    return {cells:[ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":fmt(v),{color:!isCount&&v<0?C.red:C.text})),_boardPdfCell(fmt(sum(a)),{bold})],fill,bold};
+  return cashFlowRowDefs(b,years).map(([ref,label,fn,kind="",isCount,isBal])=>{
+    const a=vals(fn),fmt=v=>isCount?M0(v):_boardPdfShort(v),fill=kind==="res"?C.paleGreen:(kind==="sub"?C.row2:undefined),bold=kind==="res"||kind==="sub",
+      total=isBal?(a.length?a[a.length-1]:0):sum(a);
+    return {cells:[ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":fmt(v),{color:!isCount&&v<0?C.red:C.text})),_boardPdfCell(fmt(total),{bold})],fill,bold};
   });
 }
 function _boardPdfPage9(pages,R,C,dateText,project){
@@ -17361,7 +17336,8 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
 (function(){
   if(typeof NAV!=="object"||typeof PANE!=="object"||typeof buildScaffold!=="function")return;
   const CS=[["cs_ppl","Project P&L"],["cs_pl","Profit and loss"],
-            ["cs_cf","Cashflow"],["cs_monthly","Monthly engine"]];
+            ["cs_cf","Cashflow"],["cs_monthly","Monthly engine"],
+            ["cs_exp","Exposure"],["cs_eqsch","Equity Schedule"],["cs_salesov","Sales Overview"]];
   const num=v=>{v=Number(v);return Number.isFinite(v)?v:0};
   /* The seller's sale and the buyer's land are the same transaction. */
   const SELLER_ELIM=["sval","recog","lsr","salescash","escr","dep","cfrefqualifiedsales"];
@@ -17477,6 +17453,9 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
   PANE.cs_pl=function(){return draw("cs_pl",function(C,h){PANE.pl(C,h)})};
   PANE.cs_cf=function(){return draw("cs_cf",function(C,h){PANE.cf(C,h)})};
   PANE.cs_monthly=function(){return draw("cs_monthly",function(C,h){PANE.monthly(C,h)})};
+  PANE.cs_exp=function(){return draw("cs_exp",function(C,h){PANE.exp(C,h)})};
+  PANE.cs_eqsch=function(){return draw("cs_eqsch",function(C,h){PANE.eqsch(C,h)})};
+  PANE.cs_salesov=function(){return draw("cs_salesov",function(C,h){PANE.salesov(C,h)})};
   /* Registered after the boot render, so they seed their own dirty flags. */
   CS.forEach(function(p){DIRTY[p[0]]=true});
 
@@ -17566,8 +17545,6 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
 
   function renderExposureStatement(C,hostId){
     const host=hostId||"o_exp",{A,d}=C;
-    const pd=document.querySelector("#p_"+host.replace(/^o_/,"")+" .pd");
-    if(pd)pd.textContent="Assets tie to Liabilities & Equity every fiscal year -- see the balance-check row. Inventory/WIP, tax payable and sundry debtors are each cumulative cash paid or collected less the amount already recognised in the Profit and Loss statement.";
     const{years,rows}=exposureEquityData(A,d);
     if(!years.length){set(host,'<div class="empty">No activity in range.</div>');return}
     const head=["Sl. No.","Particulars",...years.map(y=>"FY "+y)];
@@ -17590,14 +17567,12 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       line("","Total Equity & Liabilities",liabEq,"sub"),
       {c:["","Balance Check",...rows.map((r,i)=>{const diff=assets[i]-liabEq[i];return Math.abs(diff)<2?"✓":money(diff)})]}
     ];
-    set(host,tbl("Exposure Statement · "+(d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""),head,out,"(All amounts in USD)",""));
+    set(host,tbl("Exposure · "+(C.name||((d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""))),head,out,"(All amounts in USD)",""));
   }
 
   function equitySplitRow(r){return {paidIn:r.paidIn,retained:r.retained}}
   function renderEquitySchedule(C,hostId){
     const host=hostId||"o_eqsch",{A,d}=C;
-    const pd=document.querySelector("#p_"+host.replace(/^o_/,"")+" .pd");
-    if(pd)pd.textContent="Opening + infusion − release + profit after tax = closing equity. The closing balance reconciles to paid-in equity plus retained earnings on the Exposure Statement.";
     const{years,rows}=exposureEquityData(A,d);
     if(!years.length){set(host,'<div class="empty">No activity in range.</div>');return}
     const head=["Sl. No.","Particulars",...years.map(y=>"FY "+y)];
@@ -17612,13 +17587,13 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       line("3","Less: Equity Release / Liquidation",rows.map(r=>-r.eqOut)),
       line("4","Add: Profit After Tax",rows.map(r=>r.pat)),
       line("","Closing Equity Balance",closings,"sub"),
-      {band:"Reconciliation to the Exposure Statement"},
+      {band:"Reconciliation to Exposure"},
       line("5","Paid-In Equity (Balance Sheet)",rows.map(r=>r.paidIn)),
       line("6","Retained Earnings (Balance Sheet)",rows.map(r=>r.retained)),
-      line("","Total Equity per Exposure Statement",bsEquity,"sub"),
+      line("","Total Equity per Exposure",bsEquity,"sub"),
       {c:["","Difference vs Equity Schedule",...closings.map((c,i)=>{const diff=c-bsEquity[i];return Math.abs(diff)<2?"✓":money(diff)})]}
     ];
-    set(host,tbl("Equity Schedule · "+(d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""),head,out,"(All amounts in USD)",""));
+    set(host,tbl("Equity Schedule · "+(C.name||((d.vert?"Homebuilder":"Landowner")+" · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""))),head,out,"(All amounts in USD)",""));
   }
 
   /* ---- Sales Overview: contracted sales value & units by fiscal year ---- */
@@ -17643,14 +17618,14 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       ]};
     });
     rows.push({cls:"sub",c:["Total",money(totSales),Math.round(totUnits).toLocaleString("en-US"),"–",""]});
-    set(host,`<div class="kpis">${kpis}</div>`+tbl("Sales Overview · "+(APP.parcels[APP.active]&&APP.parcels[APP.active].name||""),
+    set(host,`<div class="kpis">${kpis}</div>`+tbl("Sales Overview · "+(C.name||(APP.parcels[APP.active]&&APP.parcels[APP.active].name||"")),
       ["Fiscal year","Contracted sales (USD)",(d.vert?"Homes":"Lots")+" (units)","YoY growth","Share"],rows,null,""));
   }
 
   CONTEXT_PANES.add("exp");CONTEXT_PANES.add("eqsch");CONTEXT_PANES.add("salesov");
-  PANE.exp=function(C){renderExposureStatement(C);return true};
-  PANE.eqsch=function(C){renderEquitySchedule(C);return true};
-  PANE.salesov=function(C){renderSalesOverview(C);return true};
+  PANE.exp=function(C,hostId){renderExposureStatement(C,hostId);return true};
+  PANE.eqsch=function(C,hostId){renderEquitySchedule(C,hostId);return true};
+  PANE.salesov=function(C,hostId){renderSalesOverview(C,hostId);return true};
 
   /* ---- Manual Inputs: year-by-year sales velocity + intercompany payment ---- */
   /* Both editors write straight into D (the active parcel's own inputs) through
@@ -17747,6 +17722,75 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     };
   }
   PANE.manual=function(C){renderManualInputs(C);return true};
+})();
+</script>
+<script id="portfolio-exposure-equity-runtime">
+/* G2 · portfolio-exposure-equity-runtime
+   Exposure, Equity Schedule and Sales Overview for the whole Consolidation
+   (portfolio) scope, the same way consolidated-statements-runtime reuses the
+   per-project renderers for the linked Landowner/Homebuilder pair -- one
+   render function, pointed at a merged context, so the three tabs cannot
+   drift from the per-project versions. Unlike the linked-pair merge, no
+   intercompany elimination happens here: it matches how Consolidated P&L and
+   Consolidated cashflow already treat the selected set (a straight add of
+   whatever is selected), not the single-deal netting the paired tab does. */
+(function(){
+  if(typeof PANE!=="object"||typeof portfolioData!=="function")return;
+  const num=v=>{v=Number(v);return Number.isFinite(v)?v:0};
+  let cacheKey="",cacheVal=null;
+  function portfolioExposureContext(){
+    const Q=portfolioData();
+    if(!Q.runs||!Q.runs.length)return null;
+    const key=Q.runs.map(r=>r.p.id).join(",")+"|"+Q.minAbs+"|"+Q.maxAbs+"|"+Q.fyEnd;
+    if(key===cacheKey&&cacheVal)return cacheVal;
+    const runs=Q.runs,minAbs=Q.minAbs,NM=Q.N-1,fyEnd=Q.fyEnd;
+    const R={},keys=new Set();
+    runs.forEach(r=>Object.keys(r.A.R||{}).forEach(k=>keys.add(k)));
+    keys.forEach(function(k){
+      if(!runs.some(r=>Array.isArray(r.A.R[k])))return;
+      const row=new Array(NM+1).fill(0);
+      runs.forEach(function(r){const a=r.A.R[k];if(!Array.isArray(a))return;
+        const base=r.start-minAbs;
+        for(let j=0;j<a.length;j++){const i=base+j;if(i>=0&&i<=NM)row[i]+=num(a[j])}});
+      R[k]=row;
+    });
+    const startYear=Math.floor(minAbs/12),startMonth=((minAbs%12)+12)%12+1;
+    const allVert=runs.every(r=>Number(r.d&&r.d.vert)===1);
+    const d={startYear:startYear,startMonth:startMonth,fyEnd:fyEnd,vert:allVert?1:0};
+    const fyOfMonth=function(m){const abs=minAbs+m,y=Math.floor(abs/12),mo=((abs%12)+12)%12+1;return mo>fyEnd?y+1:y};
+    const fys=Array.from(new Set(Array.from({length:NM+1},function(_,m){return fyOfMonth(m)}))).sort(function(a,b){return a-b});
+    const B={};Object.keys(R).forEach(function(k){const o={};fys.forEach(function(y){o[y]=0});
+      for(let m=0;m<=NM;m++)o[fyOfMonth(m)]+=num(R[k][m]);B[k]=o});
+    const PL={};
+    fys.forEach(function(y){
+      const o={};
+      runs.forEach(function(r){const p=(r.A.PL&&r.A.PL[y])||{};Object.keys(p).forEach(function(k){o[k]=num(o[k])+num(p[k])})});
+      PL[y]=o;
+    });
+    const scalar=function(k){return runs.reduce(function(s,r){return s+num(r.A[k])},0)};
+    const A={d:d,fys:fys,PL:PL,R:R,B:B,NM:NM,
+      transferTax:scalar("transferTax"),landSurcharge:scalar("landSurcharge"),acquisitionCost:scalar("acquisitionCost")};
+    cacheKey=key;
+    cacheVal={A:A,d:d,name:"Selected Portfolio ("+runs.length+" project"+(runs.length===1?"":"s")+")"};
+    return cacheVal;
+  }
+  window.portfolioExposureContext=portfolioExposureContext;
+
+  function draw(pane,fn){
+    const host=document.getElementById("o_"+pane);
+    if(!host)return false;
+    const C=portfolioExposureContext();
+    if(!C){host.innerHTML='<div class="empty">Select at least one valid project above to build the consolidated statement.</div>';return false}
+    fn(C,"o_"+pane);
+    if(typeof applyFrozenColumns==="function"){
+      try{requestAnimationFrame(function(){applyFrozenColumns(host)})}
+      catch(e){applyFrozenColumns(host)}
+    }
+  }
+  PANE.cexp=function(){return draw("cexp",function(C,h){PANE.exp(C,h)})};
+  PANE.ceqsch=function(){return draw("ceqsch",function(C,h){PANE.eqsch(C,h)})};
+  PANE.csalesov=function(){return draw("csalesov",function(C,h){PANE.salesov(C,h)})};
+  if(typeof DIRTY==="object"){DIRTY.cexp=DIRTY.ceqsch=DIRTY.csalesov=true}
 })();
 </script>
 <!-- ====================================================================================== -->
