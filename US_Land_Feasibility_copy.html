@@ -4155,7 +4155,7 @@ function _normalizedForDerive(raw){
   ["startMonth","fyEnd"].forEach(k=>o[k]=_clamp(Math.round(_num(o[k],1)),1,12));
   ["phm","buildmo","landdur"].forEach(k=>o[k]=Math.max(1,Math.round(_num(o[k],1))));
   ["ddur","entdur"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
-  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","lagcomm","vlag","modelmo","taxlag","taxqlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
+  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","vlag","modelmo","taxlag","taxqlag","combrokerlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
   o._lagAnchor=Math.round(_num(o._lagAnchor,-1));
   o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,2);
   o.landpaycount=_clamp(Math.round(_num(o.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS);
@@ -4556,7 +4556,7 @@ const GROUPS=[
   ["comm","Brokerage and incentive","% gross sales",3,"p"],
   ["sellingpc","Selling / closing expenses","% gross sales",0,"p"],
   ["commbookpc","Brokerage and selling cost paid at booking","% total selling cost",0,"p"],
-  ["lagcomm","Brokerage payment — months after collection","mth",0,"n"],
+  ["combrokerlag","Brokerage payment delay after delivery","mth",0,"n"],
   ["gnapc","General & administrative expenses","% net revenue",3,"p"],
   ["gnasharedpc","Shared-service G&A allocation","% net revenue",0,"p"],
   ["staffpc","Staff / manpower expenses","% net revenue",2,"p"],
@@ -4602,6 +4602,12 @@ const GROUPS=[
   ["finvert","Vertical construction financed","flag",1,"n"],
   ["rate","All-in interest rate","% p.a. debt balance",8.5,"p"],
   ["facstart","Facility start month","mth",-1,"n"],
+  ["drawcount","Number of dated facility draws","no.",0,"n"],
+  ["draw1month","Draw 1 month","mth",0,"n"],["draw1amount","Draw 1 amount","$",0,"n"],
+  ["draw2month","Draw 2 month","mth",0,"n"],["draw2amount","Draw 2 amount","$",0,"n"],
+  ["draw3month","Draw 3 month","mth",0,"n"],["draw3amount","Draw 3 amount","$",0,"n"],
+  ["draw4month","Draw 4 month","mth",0,"n"],["draw4amount","Draw 4 amount","$",0,"n"],
+  ["draw5month","Draw 5 month","mth",0,"n"],["draw5amount","Draw 5 amount","$",0,"n"],
   ["procf","Processing / establishment fee","% operating facility commitment",1.0,"p"],
   ["procfrate","Processing fee on drawn balance","% p.a.",0,"p"],
   ["linef","Line fee","% p.a.",0.5,"p"],
@@ -4613,6 +4619,17 @@ const GROUPS=[
   ["relfixed1","Product 1 fixed release","$/unit",0,"n"],
   ["relfixed2","Product 2 fixed release","$/unit",0,"n"],
   ["relfixed3","Product 3 fixed release","$/unit",0,"n"],
+  ["repaycount","Number of dated facility repayments","no.",0,"n"],
+  ["repay1month","Repayment 1 month","mth",0,"n"],["repay1amount","Repayment 1 amount","$",0,"n"],
+  ["repay2month","Repayment 2 month","mth",0,"n"],["repay2amount","Repayment 2 amount","$",0,"n"],
+  ["repay3month","Repayment 3 month","mth",0,"n"],["repay3amount","Repayment 3 amount","$",0,"n"],
+  ["repay4month","Repayment 4 month","mth",0,"n"],["repay4amount","Repayment 4 amount","$",0,"n"],
+  ["repay5month","Repayment 5 month","mth",0,"n"],["repay5amount","Repayment 5 amount","$",0,"n"],
+  /* 0 = off. When set, the whole outstanding facility is force-repaid at the
+     end of this fiscal year, cash-agnostic -- the same unconditional zero-out
+     the engine already does once there is no more future eligible spend, just
+     triggered by a chosen year instead of by running out of spend. */
+  ["debtRepayYear","Force full repayment in fiscal year","FY",0,"n"],
   ["revolver","Facility redraw permitted","flag",1,"n"],
   ["cashfungible","Debt may fund from cumulative eligible base","flag",0,"n"],
   ["equityreimb","Allow debt to reimburse prior equity","flag",0,"n"],
@@ -4855,7 +4872,10 @@ const VERT_ONLY_FIELDS=["vert","buildbua","_plotratio","_effic","bua1","bua2","b
   "buildstagger","permitbase","buildpsf","buildpsf1","buildpsf2","buildpsf3","buildpsf1ovr","buildpsf2ovr","buildpsf3ovr","hpsf1ovr","hpsf2ovr","hpsf3ovr","vel1","vel2","vel3","buildmo1ovr","buildmo2ovr","buildmo3ovr","modelphase","dsgnpc"];
 /* The funding selectors all stayed on one setting across every scheme, so the
    figures are asked for and the policy behind them is left as it stands. */
-const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facilityfixed"]);
+const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facilityfixed",
+  "facmode","relmode","relpc","relsalespc",
+  "drawcount","draw1month","draw1amount","draw2month","draw2amount","draw3month","draw3amount","draw4month","draw4amount","draw5month","draw5amount",
+  "repaycount","repay1month","repay1amount","repay2month","repay2amount","repay3month","repay3amount","repay4month","repay4amount","repay5month","repay5amount"]);
 const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ftax","stax","staxbase","taxwhen","taxlag","r","hurdle","tmoic"]);
 const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc"]);
 const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart",
@@ -4925,7 +4945,7 @@ function repaintLagBadge(lagKey){
    to rebuild it. Keep this in step with fieldShown and lagFieldHidden below. */
 const RESHAPES_PANEL=new Set(["salesmode","landpaycount","landdeposit","facmode","permtiming",
   "relmode","sutmode","softmode","softbase","sutoutfixed","sutcreditfixed","costsutbasis",
-  "ovhmode","_lagmode"]);
+  "ovhmode","_lagmode","drawcount","repaycount"]);
 function fieldShown(k,vert){
   if(lagFieldHidden(k))return false;
   /* landsurchargert and acqfeefixed both duplicate a field this file already has
@@ -5020,6 +5040,10 @@ function fieldShown(k,vert){
   if((k==="landpaystart"||k==="landpaygap")&&!(_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS)>0))return false;
   if(k==="landpaygap"&&_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS)<2)return false;
   const landPayMatch=String(k).match(/^landpay([1-5])$/);if(landPayMatch&&Number(landPayMatch[1])>_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS))return false;
+  const drawMatch=String(k).match(/^draw([1-5])(?:month|amount)$/);
+  if(drawMatch&&Number(drawMatch[1])>_clamp(Math.round(_num(D.drawcount,0)),0,5))return false;
+  const repayMatch=String(k).match(/^repay([1-5])(?:month|amount)$/);
+  if(repayMatch&&Number(repayMatch[1])>_clamp(Math.round(_num(D.repaycount,0)),0,5))return false;
   if(k==="facilityfixed"&&Math.round(_num(D.facmode,0))!==1)return false;
   if((k==="permdur"||k==="permstart"||k==="lagperm")&&Math.round(_num(D.permtiming,1))===1)return false;
   if(k==="relpc"&&Math.round(_num(D.relmode,0))!==0)return false;
@@ -5131,13 +5155,13 @@ function _runUncached(din,ov){
   [/* Both of these carry an explicit zero branch in the engine - the cost lands as
      a single payment instead of being spread - so zero is a real answer, not a
      value to be refused. */
-   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",0,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["lagcomm",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
+   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",0,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["drawcount",0,5],["repaycount",0,5],["draw1month",0,null],["draw2month",0,null],["draw3month",0,null],["draw4month",0,null],["draw5month",0,null],["repay1month",0,null],["repay2month",0,null],["repay3month",0,null],["repay4month",0,null],["repay5month",0,null],["debtRepayYear",0,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["combrokerlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
   const binaryFlags=["taxwhen","salesrecog","drawmode","distmode","buildstagger","softbase","vert","escrow","staxrecover","xfertaxmode","fundingmode","permtiming","finland","findd","finhoriz","finvert","fincapex","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
   for(let p=1;p<=MAX_PRODUCTS;p++)binaryFlags.push(`hpsf${p}ovr`,`buildpsf${p}ovr`,`buildmo${p}ovr`);
   binaryFlags.forEach(k=>{if(Number(raw[k])!==0&&Number(raw[k])!==1)throw new Error(`${k} must be entered as 0 or 1.`)});
   [["facmode",0,2],["prmode",0,2],["pmode",0,1],["intconv",0,2],["staxbase",0,5],["finbase",0,3],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["buildcurve",0,4],["relmode",0,2],["hoastart",0,2]].forEach(x=>requireInteger(...x));
   if(!Number.isInteger(Number(raw.facstart))||Number(raw.facstart)<-1)throw new Error("Facility commitment month must be -1 or a non-negative whole month.");
-  const nonNegative=["acresGross","acresDed","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landsut","landdepo","xfertaxfixed","xfertaxrt","landsurchargert","acqfeefixed","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","districtlevy","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","sutoutfixed","sutcreditfixed","sutmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","financefixed","relpc","mincash","intres","relsalespc","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic"];
+  const nonNegative=["acresGross","acresDed","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landsut","landdepo","xfertaxfixed","xfertaxrt","landsurchargert","acqfeefixed","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","districtlevy","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","sutoutfixed","sutcreditfixed","sutmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","financefixed","relpc","mincash","intres","relsalespc","draw1amount","draw2amount","draw3amount","draw4amount","draw5amount","repay1amount","repay2amount","repay3amount","repay4amount","repay5amount","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic"];
   for(let p=1;p<=MAX_PRODUCTS;p++)nonNegative.push(`n${p}`,`w${p}`,`d${p}`,`p${p}`,`bua${p}`,`hpsf${p}`,`buildpsf${p}`,`vel${p}`,`buildmo${p}`,`relfixed${p}`);
   nonNegative.forEach(k=>{if(_num(raw[k])<0)throw new Error(`${k} cannot be negative.`)});
   for(let p=1;p<=productCount(raw);p++)if(!Number.isInteger(_num(raw[`n${p}`])))throw new Error(`Product ${p} unit count must be a whole number.`);
@@ -5253,9 +5277,14 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const salesYearUnits=Array.from({length:8},(_,i)=>Math.max(0,_num(d["salesy"+(i+1)],0)));
   const salesRateAt=m=>{
     if(!manualSales)return projectRate;
-    const yr=Math.floor(Math.max(0,m-globalOpen)/12);
+    /* Year buckets follow the model's own financial year (fyOf), not a rolling
+       12 months from whenever sales happen to open - so a project opening
+       sales mid FY26 has a SHORT first year that ends at the same FY cutoff
+       every other statement in this file uses, not one that rolls into FY27. */
+    const y0=fyOf(globalOpen,d),yr=m<=globalOpen?0:fyOf(m,d)-y0;
     if(yr>=salesYearUnits.length)return L;
-    if(salesYearUnits[yr]>0)return salesYearUnits[yr]/12;
+    const c0=((d.startMonth-1+globalOpen)%12)+1,monthsInYear0=c0<=d.fyEnd?(d.fyEnd-c0+1):(12-c0+1+d.fyEnd),monthsThisYear=yr===0?monthsInYear0:12;
+    if(salesYearUnits[yr]>0)return salesYearUnits[yr]/monthsThisYear;
     /* A blank year inside the schedule is a genuine pause. A blank year with nothing
        after it means the schedule has run out, so the balance is released rather than
        waiting for the last year of the grid. */
@@ -5393,11 +5422,16 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     if(d.pidacct)R.pidcogs[Math.max(u.delivery,phaseComplete[u.phase]+d.pidlag)]-=pidReduction;
     const brokerageTotal=d.comm/100*u.salePrice,sellingExpenseTotal=d.sellingpc/100*u.salePrice,totalCommission=brokerageTotal+sellingExpenseTotal,payAtBooking=d.commbookpc/100;
     const brokerageBooking=brokerageTotal*payAtBooking,sellingBooking=sellingExpenseTotal*payAtBooking;
-    const commLag=Math.max(0,Math.round(_num(d.lagcomm,0))),brokBookMo=Math.min(NM,u.contractMonth+commLag),brokDelMo=Math.min(NM,u.delivery+commLag);
-    R.brokeragecash[brokBookMo]+=brokerageBooking;R.brokeragecash[brokDelMo]+=brokerageTotal-brokerageBooking;
+    /* The booking share is paid on contract, same as always. The delivery share is
+       the broker's cut of the cash actually collected at closing, so it moves with
+       combrokerlag - how many months after that collection the brokerage is
+       actually released - rather than landing in the collection month itself.
+       Selling expense and the P&L accrual (R.sell) are unaffected: only the
+       brokerage cash leg has a broker to pay on a delay. */
+    const brokerPayMonth=Math.min(NM,u.delivery+Math.max(0,Math.round(d.combrokerlag||0)));
+    R.brokeragecash[u.contractMonth]+=brokerageBooking;R.brokeragecash[brokerPayMonth]+=brokerageTotal-brokerageBooking;
     R.sellingexpensecash[u.contractMonth]+=sellingBooking;R.sellingexpensecash[u.delivery]+=sellingExpenseTotal-sellingBooking;
-    R.sellcash[brokBookMo]+=brokerageBooking;R.sellcash[brokDelMo]+=brokerageTotal-brokerageBooking;
-    R.sellcash[u.contractMonth]+=sellingBooking;R.sellcash[u.delivery]+=sellingExpenseTotal-sellingBooking;
+    R.sellcash[u.contractMonth]+=brokerageBooking+sellingBooking;R.sellcash[brokerPayMonth]+=brokerageTotal-brokerageBooking;R.sellcash[u.delivery]+=sellingExpenseTotal-sellingBooking;
     R.sell[u.delivery]+=totalCommission;
     u.eligibleCost=(d.finland?landC:0)+(d.findd?otherC:0)+(d.finhoriz?(phaseActual[u.phase]*pw+d.impact):0)+(d.finvert?vertC:0);
     R.relbase[u.delivery]+=u.eligibleCost;
@@ -5577,6 +5611,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
      const drawPc=Math.round(_num(d.facmode,0))>0?100:d.ltc;
     const reserveOutside=!!d.intresout,reserveCap=reserveOutside?Math.max(0,reserveRequested):Math.min(Math.max(0,reserveRequested),ltcCommit),operatingCommit=reserveOutside?ltcCommit:Math.max(0,ltcCommit-reserveCap),totalLimit=operatingCommit+reserveCap,equityFirstTarget=d.equityfixed>0?d.equityfixed:d.equitypc/100*finBase;
     let opDebt=0,intDebt=0,cumEligible=0,cumFinanceDraw=0,cumDraw=0,operatingDrawn=0,availableCash=0,unreimbursedEquity=0;
+    const drawCount=_clamp(Math.round(_num(d.drawcount,0)),0,5),repayCount=_clamp(Math.round(_num(d.repaycount,0)),0,5);
     for(let m=0;m<=NM;m++){
       const openingOp=opDebt,openingInt=intDebt,opening=openingOp+openingInt;out.opopen[m]=openingOp;out.intopen[m]=openingInt;out.lop[m]=opening;cumEligible+=Math.max(0,R.fdev[m]);
       /* Cash held at the start of the month earns for that month. Taken on the
@@ -5594,7 +5629,33 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       const reimbursementCapacity=Math.max(0,Math.min(baseHeadroom-normalDraw,monthlyEligible-normalDraw));
       const reimbursementDraw=(d.cashfungible&&d.equityreimb)?Math.min(reimbursementCapacity,unreimbursedEquity):0;
       out.dr1[m]=normalDraw+reimbursementDraw;out.eqreimbcap[m]=reimbursementDraw;unreimbursedEquity=Math.max(0,unreimbursedEquity-reimbursementDraw);opDebt+=out.dr1[m];operatingDrawn+=out.dr1[m];
-      const deliveryRelease=R.relreq[m],reimbRelease=d.pidrep?R.pid[m]:0,required=deliveryRelease+reimbRelease;
+      /* Dated draws top the month up to at least the scheduled amount - never
+         down, so a month the automatic shortfall logic already covers is left
+         alone - capped by whatever facility headroom is actually left, using
+         the same revolver/non-revolver split baseHeadroom already uses above. */
+      let scheduledDraw=0;
+      for(let di=1;di<=drawCount;di++)if(m===_num(d["draw"+di+"month"],-1))scheduledDraw+=Math.max(0,_num(d["draw"+di+"amount"],0));
+      if(scheduledDraw>1e-9&&facilityAvailable){
+        const roomLeft=d.revolver?Math.max(0,operatingCommit-opDebt):Math.max(0,operatingCommit-operatingDrawn);
+        const topUp=Math.max(0,Math.min(scheduledDraw-out.dr1[m],roomLeft));
+        if(topUp>0){out.dr1[m]+=topUp;opDebt+=topUp;operatingDrawn+=topUp}
+      }
+      let scheduledRepay=0;
+      for(let ri=1;ri<=repayCount;ri++)if(m===_num(d["repay"+ri+"month"],-1))scheduledRepay+=Math.max(0,_num(d["repay"+ri+"amount"],0));
+      const deliveryRelease=R.relreq[m],reimbRelease=d.pidrep?R.pid[m]:0;
+      /* R.lsr[m] ("lot sale receipts") is the file's own existing, escrow-aware
+         measure of actual cash collected from buyers this month - deposit at
+         contract month plus balance at delivery when not escrowed, or the
+         whole price at delivery when it is (R.lsr[m]=(d.escrow?0:R.dep[m])
+         +R.balr[m]+(d.escrow?R.escr[m]:0), set at derive time). Deliberately
+         not R.recog[m] (booked revenue recognition, always at delivery
+         regardless of when cash was actually banked) and not a hand-rolled
+         R.dep[m]+R.balr[m], which double-counts the still-escrowed deposit
+         when escrow is on. Only the manual addition is capped against it; the
+         existing settlement-driven deliveryRelease/reimbRelease are untouched. */
+      const monthCollections=R.lsr[m];
+      const scheduledRepayCapped=Math.min(scheduledRepay,Math.max(0,monthCollections-deliveryRelease-reimbRelease));
+      const required=deliveryRelease+reimbRelease+scheduledRepayCapped;
       const provisionalOpRep=Math.min(opDebt,required),remainingProvisional=Math.max(0,required-provisionalOpRep),provisionalIntRep=Math.min(intDebt,remainingProvisional),closingOpPre=Math.max(0,opDebt-provisionalOpRep),closingIntPre=Math.max(0,intDebt-provisionalIntRep),closingPre=closingOpPre+closingIntPre,basis=d.intconv===0?opening:d.intconv===2?closingPre:(opening+closingPre)/2;
       out.intbase[m]=Math.max(0,basis);
       out.intr[m]=d.rate/100/12*out.intbase[m];
@@ -5606,6 +5667,11 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       out.dr2[m]=d.fundi?Math.min(financeCost,Math.max(0,reserveCap-cumFinanceDraw),financeHeadroom):0;intDebt+=out.dr2[m];cumFinanceDraw+=out.dr2[m];out.icash[m]=financeCost-out.dr2[m];
       let repay=Math.min(opDebt+intDebt,required),opRep=Math.min(opDebt,repay);opDebt-=opRep;repay-=opRep;const intRep=Math.min(intDebt,repay);intDebt-=intRep;out.oprep[m]=opRep;out.intrep[m]=intRep;out.rep[m]=opRep+intRep;
       if(noFuture&&m>=lastDlv&&(!d.pidrep||pid<=0||m>=finalReimb)){out.oprep[m]+=opDebt;out.intrep[m]+=intDebt;out.rep[m]+=opDebt+intDebt;opDebt=0;intDebt=0}
+      /* A chosen "repay in full by fiscal year N" assumption, not a spend-driven
+         payoff: same unconditional, cash-agnostic zero-out as the branch above,
+         just triggered by the fiscal year ending rather than by running out of
+         future eligible spend. d.debtRepayYear===0 (the default) never fires. */
+      if(d.debtRepayYear>0&&fyOf(m,d)===d.debtRepayYear&&(m===NM||fyOf(m,d)!==fyOf(m+1,d))){out.oprep[m]+=opDebt;out.intrep[m]+=intDebt;out.rep[m]+=opDebt+intDebt;opDebt=0;intDebt=0}
       out.opcl[m]=opDebt;out.intcl[m]=intDebt;const closingDebt=opDebt+intDebt;out.lcl[m]=closingDebt;
       availableCash=Math.max(0,cashBefore+out.dr1[m]+out.dr2[m]-out.intr[m]-out.pf[m]-out.lf[m]-out.rep[m]);cumDraw+=out.dr1[m]+out.dr2[m];out.cumd[m]=cumDraw;
     }
@@ -6017,6 +6083,7 @@ const LEV=[
  {k:"comm",  n:"Brokerage and incentive", u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
  {k:"gnapc", n:"General and admin",       u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
  {k:"staffpc",n:"Staff and manpower",     u:"% rev", lo:0,    hi:15,    st:.25,  f:v=>M0(v,2)+"%", grp:"Selling"},
+ {k:"combrokerlag",n:"Brokerage payment delay",u:"mth",  lo:0, hi:24,    st:1,    f:v=>M0(v),       grp:"Selling"},
  {k:"pidel", n:"Eligible share",          u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Reimbursement"},
  {k:"pidrt", n:"Reimbursement rate",      u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Reimbursement"},
  {k:"vpid",  n:"Reimbursement received",  u:"$",     lo:0,    hi:120e6, st:5e5,  f:v=>"$"+M0(v),   grp:"Reimbursement",
@@ -6389,6 +6456,8 @@ const SELECT_OPTIONS={
   infracurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
   buildcurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
   facmode:[[1,"Fixed operating facility amount"],[0,"LTC on eligible development cost"],[2,"Share of land and works, capped at the works"]],
+  drawcount:[[0,"Off"],[1,"1 draw"],[2,"2 draws"],[3,"3 draws"],[4,"4 draws"],[5,"5 draws"]],
+  repaycount:[[0,"Off"],[1,"1 lump"],[2,"2 lumps"],[3,"3 lumps"],[4,"4 lumps"],[5,"5 lumps"]],
   distmode:[[1,"Once, on completion"],[0,"Monthly, as each sale settles"]],
   drawmode:[[0,"Only what the month's shortfall needs"],[1,"In full against cost as it is incurred"]],
   finbase:[[0,"All development cost"],[1,"Construction and infrastructure only"],[2,"Everything except the land"],[3,"The land only"]],
@@ -6745,7 +6814,7 @@ function buildFormCore(){
             buildForm();buildScaffold();showNav();render();
             return;
           }
-          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","lagcomm","vlag","modelmo","buildmo","facstart","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
+          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
           if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           if(k==="landpaycount"){
             /* Picking a count fills in shares that add up, so the choice stands
