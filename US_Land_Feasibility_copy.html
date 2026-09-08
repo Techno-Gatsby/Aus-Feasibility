@@ -15524,15 +15524,69 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
   }
   function plTable(A,d){const S=window.projectPlData?window.projectPlData(A,d):null;if(S&&window.projectPlRows)return{title:"Profit and Loss Account",headers:["S.No","Particulars",...S.years.map(y=>"FY "+y),"Total"],rows:window.projectPlRows(S).map(r=>({cells:r.c,kind:tableKind(r.cls)})),foot:"All amounts in USD. Revenue and project surplus follow the active project model."};return fallbackProjectPlTable(A,d)}
   function fallbackProjectPlTable(A,d){return{title:"Profit and Loss Account",headers:["Particulars","Amount"],rows:[["Total revenue",money(A.revenue)],["Direct cost",money(A.direct)],["Gross profit",money(A.gross)],["Operating overhead",money(A.operatingOverhead)],["Finance cost",money(A.finance)],["Tax",money(A.tax)],["Net profit",money(A.npat)]].map(x=>({cells:x})),foot:""}}
+  /* Shared by cashTable (Cashflow & P&L PDF) and _boardPdfCashTemplateRows
+     (Board PDF Appendix) - was two independently-maintained, row-for-row copies
+     that had drifted from the on-screen Cashflow tab (renderProjectCashflow):
+     Franchise Tax and Corporate Tax were missing entirely, Real Estate Property
+     Tax was folded into Land Costs instead of its own Taxes section, and the
+     Homes Sold count row was never added to either export. One definition now,
+     copied verbatim from the on-screen row list so it cannot drift again - each
+     caller supplies its own cell formatting. isCount marks the one row (Homes
+     Sold) that is a unit count, not a dollar amount. */
+  function cashFlowRowDefs(b,years){
+    const anyY=fn=>years.some(y=>Math.abs(fn(y))>.5);
+    const netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),
+      landCost=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),
+      taxCost=y=>b("cfrefholding",y)+b("cfreffranchisetax",y)+b("cfrefcorporatetax",y),
+      developmentCost=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),
+      sellingCost=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),
+      debtSchedule=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),
+      financeCost=y=>b("pf",y)+b("intr",y)+b("lf",y);
+    return [
+      ["","Homes Sold",y=>b("ctr",y),"",true],
+      ["1","Net Revenue",netRevenue,"sub"],
+      ["1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)],
+      ["1.2","Other Income",y=>b("cfrefotherincome",y)],
+      ...(anyY(y=>b("cfrefsut",y))?[["1.3","Less: Sales & Use Tax",y=>-b("cfrefsut",y)]]:[]),
+      ["2","Land & Acquisition Costs",landCost,"sub"],
+      ["2.1","Land Costs",y=>b("cfrefland",y)],
+      ...(anyY(y=>b("cfrefxfertax",y))?[["2.2","Transfer and Recording Tax",y=>b("cfrefxfertax",y)]]:[]),
+      ...(anyY(y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y))?[["2.3","Other Acquisition Costs",y=>b("cfrefacqfee",y)+b("cfreflandsurcharge",y)]]:[]),
+      ["3","Development Costs",developmentCost,"sub"],
+      ["3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y)],
+      ["3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y)],
+      ["3.3","Design Costs",y=>b("cfrefdesigncost",y)],
+      ["3.4","Construction Costs",y=>b("cfrefbuildcost",y)],
+      ["3.5","Soft Costs",y=>b("cfrefsoftcost",y)],
+      ["3.6","Authority & Statutory Costs",y=>b("cfrefstatutory",y)],
+      ["3.7","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y)],
+      ["4","Selling Costs",sellingCost,"sub"],
+      ["4.1","Brokerage Costs",y=>b("cfrefbrokerage",y)],
+      ["4.2","Selling Expenses",y=>b("cfrefselling",y)],
+      ["4.3","Marketing & Advertising",y=>b("cfrefmarketing",y)],
+      ["5","Taxes",taxCost,"sub"],
+      ["5.1","Real Estate Property Tax",y=>b("cfrefholding",y)],
+      ["5.2","Franchise Tax",y=>b("cfreffranchisetax",y)],
+      ["5.3","Corporate Tax",y=>b("cfrefcorporatetax",y)],
+      ["6","Sales & Use Tax Recovered",y=>b("cfsutrefund",y),"sub"],
+      ["7","Net Cash Flow",y=>b("cfrefnetcash",y),"res"],
+      ["8","Debt Schedule",debtSchedule,"sub"],
+      ["8.1","(-) Debt Raised",y=>-b("dr1",y)],
+      ["8.2","(-) Debt Raised to Service Debt",y=>-b("dr2",y)],
+      ["8.3","(+) Debt Repayment",y=>b("rep",y)],
+      ["9","Finance Costs",financeCost,"sub"],
+      ["9.1","Processing Fee",y=>b("pf",y)],
+      ["9.2","Interest",y=>b("intr",y)],
+      ["9.3","Line Fee",y=>b("lf",y)],
+      ["10","Equity Needed",y=>b("cfrefequity",y),"res"],
+      ["11","Net Surplus",y=>b("cfrefsurplus",y),"res"],
+      ["12","Profit (11 - 10)",y=>b("cfrefprofit",y),"res"]
+    ];
+  }
   function cashTable(A,d){
-    const activity=["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"],fys=(A.fys||[]).filter(y=>activity.some(k=>Math.abs(num(A.B[k]&&A.B[k][y]))>.5)),b=(k,y)=>num(A.B[k]&&A.B[k][y]),row=(ref,label,fn,kind)=>({kind,cells:[ref,label,...fys.map(y=>money(fn(y))),money(fys.reduce((a,y)=>a+fn(y),0))]});
-    const netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),land=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefholding",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),dev=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sell=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debt=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),fin=y=>b("pf",y)+b("intr",y)+b("lf",y);
-    return{title:"Project Cash Flow Statement",headers:["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows:[
-      row("1","Net Revenue",netRevenue,"sub"),row("1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)),row("1.2","Interest Income",y=>b("cfrefinterestincome",y)),
-      row("2","Land Costs",land,"sub"),row("2.1","Land Costs",y=>b("cfrefland",y)),row("2.2","Real Estate Property Tax",y=>b("cfrefholding",y)),
-      row("3","Development Costs",dev,"sub"),row("3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y)),row("3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y)),row("3.3","Soft Costs",y=>b("cfrefsoftcost",y)),row("3.4","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y)),row("3.7","Authority & Statutory Costs",y=>b("cfrefstatutory",y)),row("3.5","Design Costs",y=>b("cfrefdesigncost",y)),row("3.6","Construction Costs",y=>b("cfrefbuildcost",y)),
-      row("4","Selling Costs",sell,"sub"),row("4.1","Brokerage Costs",y=>b("cfrefbrokerage",y)),row("4.2","Selling Expenses",y=>b("cfrefselling",y)),row("4.3","Marketing & Advertising",y=>b("cfrefmarketing",y)),row("5","Sales and use tax recovered",y=>b("cfsutrefund",y),"sub"),row("6","Net Cash Flow",y=>b("cfrefnetcash",y),"res"),
-      row("7","Debt Schedule",debt,"sub"),row("7.1","(-) Debt Raised",y=>-b("dr1",y)),row("7.2","(-) Debt Raised to Service Debt",y=>-b("dr2",y)),row("7.3","(+) Debt Repayment",y=>b("rep",y)),row("8","Finance Costs",fin,"sub"),row("8.1","Processing Fee",y=>b("pf",y)),row("8.2","Interest",y=>b("intr",y)),row("8.3","Line fee",y=>b("lf",y)),row("9","Equity Needed",y=>b("cfrefequity",y),"res"),row("10","Net Surplus",y=>b("cfrefsurplus",y),"res"),row("11","Profit (10 - 9)",y=>b("cfrefprofit",y),"res")],foot:"Positive Net Cash Flow is a funding requirement. Income tax, if enabled, is included in line 6 because the supplied reference structure has no separate income-tax row."}
+    const activity=["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"],fys=(A.fys||[]).filter(y=>activity.some(k=>Math.abs(num(A.B[k]&&A.B[k][y]))>.5)),b=(k,y)=>num(A.B[k]&&A.B[k][y]);
+    const rows=cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount])=>{const f=isCount?M0:money;return {kind,cells:[ref,label,...fys.map(y=>f(fn(y))),f(fys.reduce((a,y)=>a+fn(y),0))]}});
+    return{title:"Project Cash Flow Statement",headers:["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,foot:"Positive Net Cash Flow is a funding requirement. Income tax, if enabled, is included in line 7 because the supplied reference structure has no separate income-tax row. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under line 5, Taxes."}
   }
   function monthlyTable(A,d,titleText,rowDefs){const last=Math.max(0,...rowDefs.flatMap(r=>r.values.map((v,i)=>Math.abs(num(v))>.5?i:0))),months=Array.from({length:last+1},(_,m)=>m);return{title:titleText,headers:["Sl. No.","Particulars",...months.map(m=>mLabel(m,d))],rows:rowDefs.map((r,i)=>({kind:r.kind||"",cells:[r.ref||String(i+1),r.label,...months.map(m=>money(r.values[m]))]})),foot:"Monthly appendix is generated from the active project cashflow engine."}}
   /* Split into what the schedules are and how they are drawn, so the workbook
@@ -15975,16 +16029,11 @@ function _boardPdfAnnualTableRows(R,years,type,C){
   return projectPlRows(full,fmt).map(r=>{const cls=String(r.cls||''),green=/bp-result|\bres\b/.test(cls),grey=/bp-qualified|bp-section|bp-total|\bsub\b/.test(cls);return {cells:r.c,bold:green||grey,fill:green?C.paleGreen:(grey?C.row2:undefined)}});
 }
 function _boardPdfCashTemplateRows(R,years,C){
-  const b=(k,y)=>Number(R.A.B[k]&&R.A.B[k][y]||0),vals=fn=>years.map(fn),sum=a=>a.reduce((x,y)=>x+y,0),mk=(ref,label,fn,kind="")=>{const a=vals(fn),fill=kind==="res"?C.paleGreen:(kind==="sub"?C.row2:undefined),bold=kind==="res"||kind==="sub";return {cells:[ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":_boardPdfShort(v),{color:v<0?C.red:C.text})),_boardPdfCell(_boardPdfShort(sum(a)),{bold})],fill,bold}};
-  const net=y=>b("cfrefresrev",y)-b("cfrefsut",y),land=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefholding",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),dev=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sell=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debt=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),fin=y=>b("pf",y)+b("intr",y)+b("lf",y);
-  return [
-    mk("1","Net Revenue",net,"sub"),mk("1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)),mk("1.2","Interest Income",y=>b("cfrefinterestincome",y)),
-    mk("2","Land Costs",land,"sub"),mk("2.1","Land Costs",y=>b("cfrefland",y)),mk("2.2","Real Estate Property Tax",y=>b("cfrefholding",y)),
-    mk("3","Development Costs",dev,"sub"),mk("3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y)),mk("3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y)),mk("3.3","Soft Costs",y=>b("cfrefsoftcost",y)),mk("3.4","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y)),mk("3.7","Authority & Statutory Costs",y=>b("cfrefstatutory",y)),mk("3.5","Design Costs",y=>b("cfrefdesigncost",y)),mk("3.6","Construction Costs",y=>b("cfrefbuildcost",y)),
-    mk("4","Selling Costs",sell,"sub"),mk("4.1","Brokerage Costs",y=>b("cfrefbrokerage",y)),mk("4.2","Selling Expenses",y=>b("cfrefselling",y)),mk("4.3","Marketing & Advertising",y=>b("cfrefmarketing",y)),mk("5","Sales and use tax recovered",y=>b("cfsutrefund",y),"sub"),mk("6","Net Cash Flow",y=>b("cfrefnetcash",y),"res"),
-    mk("7","Debt Schedule",debt,"sub"),mk("7.1","(-) Debt Raised",y=>-b("dr1",y)),mk("7.2","(-) Debt Raised to Service Debt",y=>-b("dr2",y)),mk("7.3","(+) Debt Repayment",y=>b("rep",y)),
-    mk("8","Finance Costs",fin,"sub"),mk("8.1","Processing Fee",y=>b("pf",y)),mk("8.2","Interest",y=>b("intr",y)),mk("8.3","Line fee",y=>b("lf",y)),mk("9","Equity Needed",y=>b("cfrefequity",y),"res"),mk("10","Net Surplus",y=>b("cfrefsurplus",y),"res"),mk("11","Profit (10 - 9)",y=>b("cfrefprofit",y),"res")
-  ]
+  const b=(k,y)=>Number(R.A.B[k]&&R.A.B[k][y]||0),vals=fn=>years.map(fn),sum=a=>a.reduce((x,y)=>x+y,0);
+  return cashFlowRowDefs(b,years).map(([ref,label,fn,kind="",isCount])=>{
+    const a=vals(fn),fmt=v=>isCount?M0(v):_boardPdfShort(v),fill=kind==="res"?C.paleGreen:(kind==="sub"?C.row2:undefined),bold=kind==="res"||kind==="sub";
+    return {cells:[ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":fmt(v),{color:!isCount&&v<0?C.red:C.text})),_boardPdfCell(fmt(sum(a)),{bold})],fill,bold};
+  });
 }
 function _boardPdfPage9(pages,R,C,dateText,project){
   const ctx=_boardPdfNewPage(pages.length+1,project,'Appendix - Annual P&L',dateText,C),s=ctx.stream,x=36,w=540,S=projectPlData(R.A,R.d),years=S.years;let y=_boardPdfIntro(s,'Appendix','Annual Profit and Loss Account','The annual P&L follows the same Business Plan line sequence as the on-screen individual and consolidated P&L.',x,710,w,C);
