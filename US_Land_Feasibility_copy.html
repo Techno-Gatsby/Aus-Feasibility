@@ -573,6 +573,8 @@ header{
   flex:1 1 0;
   min-width:0;
   white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
   min-height:31px;
   padding:6px 8px;
   color:#1766CB;
@@ -2534,15 +2536,16 @@ nav.tabs button:focus-visible,
   margin:10px 0 0;padding:9px 11px;border:1px solid #E4E9F1;border-radius:var(--r);
   background:#FBFCFE;color:#6B7A94;font-size:10.5px;line-height:1.5
 ;}
-#form .site-yield-ref .f{min-width:0;}
-#form .site-yield-ref .f label{min-width:0;overflow-wrap:normal!important;}
-#form .site-yield-ref .f input,#form .site-yield-ref .f select{min-width:0;width:100%;}
-#form .site-yield-ref .f .u{min-width:0;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;}
+#form .site-yield-ref .f{grid-template-columns:minmax(0,1fr) 96px 38px!important;gap:7px!important;margin:2px 0!important;}
+#form .site-yield-ref .f label{min-width:0;font-size:11.9px;color:#12305E;overflow-wrap:normal!important;}
+#form .site-yield-ref .f input,#form .site-yield-ref .f select{min-width:0;width:100%;height:30px;font-size:12px;}
+#form .site-yield-ref .f .u{min-width:0;font-size:9.5px;line-height:1.2!important;white-space:nowrap!important;color:#6B7A94;overflow:visible!important;text-overflow:clip!important;}
+#form .site-yield-ref .f.calc input{background:#F4F6FA;color:#42506B;}
 
 #form .site-yield-ref .site-total-units input{background:#fff!important;color:#12305E!important;font-weight:650!important;border-color:#C9D2E1!important;}
 #form .site-yield-ref .site-total-units{background:transparent;}
-@media(max-width:1250px){}
-@media(max-width:760px){}
+@media(max-width:1250px){#form .site-yield-ref .f{grid-template-columns:minmax(0,1fr) 92px 38px!important;gap:6px!important;}}
+@media(max-width:760px){#form .site-yield-ref .f{grid-template-columns:minmax(0,1fr) 96px 38px!important;gap:7px!important;}}
 /* Keep labels, values and units readable at the normal input-rail width. */
 @media screen {
   .rail{
@@ -3958,6 +3961,7 @@ nav.tabs button{letter-spacing:.02em;}
     <button class="hbtn" id="btnXls">Download Excel (.xlsx)</button>
     <button class="hbtn" id="btnStmtPdf">Cashflow &amp; P&amp;L PDF</button>
     <button class="hbtn solid" id="btnPrint">Download PDF</button>
+    <button class="hbtn" id="btnSignOut" title="Sign out">Sign out</button>
   </div>
   <div class="parcels" id="parcels"></div>
 </header>
@@ -3965,7 +3969,7 @@ nav.tabs button{letter-spacing:.02em;}
   <aside class="rail">
     <div class="railhead"><span class="rail-title">Inputs</span><span class="spacer"></span><button type="button" id="btnCollapseInputs" class="rail-collapse-btn" aria-pressed="false" title="Collapse all input sections">Collapse all</button><button type="button" id="btnRailToggle" class="rail-toggle" aria-expanded="true" aria-label="Collapse input panel" title="Collapse input panel"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="io">
-      <button id="btnSave">Save</button><button id="btnLoad">Open</button><button id="btnCloudSave" title="Save this appraisal to the shared store">Save to server</button><button id="btnCloudOpen" title="Open an appraisal from the shared store">Open from server</button><button id="btnReset">Reset</button><button id="btnResync" style="display:none">Resync</button>
+      <button id="btnLoad">Open</button><button id="btnCloudSave" title="Save this appraisal to the shared store">Save project</button><button id="btnCloudOpen" title="Open an appraisal from the shared store">Open cloud</button><button id="btnReset">Reset</button><button id="btnResync" style="display:none">Resync</button>
       <input type="file" id="fileIn" accept=".json" hidden="">
     </div>
     <div id="form"></div>
@@ -4151,7 +4155,7 @@ function _normalizedForDerive(raw){
   ["startMonth","fyEnd"].forEach(k=>o[k]=_clamp(Math.round(_num(o[k],1)),1,12));
   ["phm","buildmo","landdur"].forEach(k=>o[k]=Math.max(1,Math.round(_num(o[k],1))));
   ["ddur","entdur"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
-  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","vlag","modelmo","taxlag","taxqlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
+  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","lagcomm","vlag","modelmo","taxlag","taxqlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
   o._lagAnchor=Math.round(_num(o._lagAnchor,-1));
   o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,2);
   o.landpaycount=_clamp(Math.round(_num(o.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS);
@@ -4364,15 +4368,15 @@ const GROUPS=[
   /* Sales volume is either a steady rate, or a figure typed in for each year of
      selling and spread evenly across that year's twelve months. */
   ["salesmode","Sales volume basis","flag",0,"n"],
-  ["salesy1","Sales year 1 — lots / units sold","no.",0,"n"],
-  ["salesy2","Sales year 2 — lots / units sold","no.",0,"n"],
-  ["salesy3","Sales year 3 — lots / units sold","no.",0,"n"],
-  ["salesy4","Sales year 4 — lots / units sold","no.",0,"n"],
-  ["salesy5","Sales year 5 — lots / units sold","no.",0,"n"],
-  ["salesy6","Sales year 6 — lots / units sold","no.",0,"n"],
-  ["salesy7","Sales year 7 — lots / units sold","no.",0,"n"],
-  ["salesy8","Sales year 8 — lots / units sold","no.",0,"n"],
-  ["_salestot","Total lots / units in the sales schedule","no.",null,"c",d=>{let t=0;for(let i=1;i<=8;i++)t+=Math.max(0,_num(d["salesy"+i],0));return t}],
+  ["salesy1","Sales year 1 — units sold","no.",0,"n"],
+  ["salesy2","Sales year 2 — units sold","no.",0,"n"],
+  ["salesy3","Sales year 3 — units sold","no.",0,"n"],
+  ["salesy4","Sales year 4 — units sold","no.",0,"n"],
+  ["salesy5","Sales year 5 — units sold","no.",0,"n"],
+  ["salesy6","Sales year 6 — units sold","no.",0,"n"],
+  ["salesy7","Sales year 7 — units sold","no.",0,"n"],
+  ["salesy8","Sales year 8 — units sold","no.",0,"n"],
+  ["_salestot","Total units in the sales schedule","no.",null,"c",d=>{let t=0;for(let i=1;i<=8;i++)t+=Math.max(0,_num(d["salesy"+i],0));return t}],
   ["esc","Price escalation","% p.a. sale price",6,"p"],
   ["depo","Deposit on contract","% sale price",10,"p"],
   ["escrow","Deposit held in escrow until closing","flag",1,"n"],
@@ -4459,13 +4463,13 @@ const GROUPS=[
   ["sfstart","Soft cost — starts month","mth",1,"n"],
   ["sfdur","Soft cost — paid across","mth",0,"n"],
   ["lagsf","Soft cost — starts after closing","mth",1,"n"],
-  ["dmpc","Development management fees — combined","% COC",3,"p"],
+  ["dmpc","Development management fees — combined","% COC",0,"p"],
   ["sfengpc","Civil engineering","% COC",2,"p"],
   ["sfarchpc","Architecture / design","% COC",1,"p"],
   ["sfplanpc","Planning, platting and entitlement","% COC",0.5,"p"],
   ["sfcostpc","Cost consultant / estimating","% COC",0.5,"p"],
   ["sflegalpc","Legal / commercial consultants","% COC",0,"p"],
-  ["sfdmpc","Development management","% COC",3,"p"],
+  ["sfdmpc","Development management","% COC",0,"p"],
   ["sfotherpc","Other soft cost","% COC",0,"p"],
   ["_profpc","Professional soft-cost rate","% COC",null,"c",d=>d.softmode===1?d.sfengpc+d.sfarchpc+d.sfplanpc+d.sfcostpc+d.sflegalpc+d.sfotherpc:d.sfpc],
   ["_dmpc","Development-management rate","% COC",null,"c",d=>d.softmode===1?d.sfdmpc:d.dmpc],
@@ -4552,6 +4556,7 @@ const GROUPS=[
   ["comm","Brokerage and incentive","% gross sales",3,"p"],
   ["sellingpc","Selling / closing expenses","% gross sales",0,"p"],
   ["commbookpc","Brokerage and selling cost paid at booking","% total selling cost",0,"p"],
+  ["lagcomm","Brokerage payment — months after collection","mth",0,"n"],
   ["gnapc","General & administrative expenses","% net revenue",3,"p"],
   ["gnasharedpc","Shared-service G&A allocation","% net revenue",0,"p"],
   ["staffpc","Staff / manpower expenses","% net revenue",2,"p"],
@@ -4858,7 +4863,12 @@ const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow",
 const DEBT_ALL_FIELDS=new Set((GROUPS.find(g=>g.g==="Debt")||{f:[]}).f.map(f=>f[0]));
 const TAX_ALL_FIELDS=new Set((GROUPS.find(g=>g.g==="Tax and return")||{f:[]}).f.map(f=>f[0]));
 const SALES_ALL_FIELDS=new Set((GROUPS.find(g=>g.g==="Sales and receipts")||{f:[]}).f.map(f=>f[0]));
-const LAG_DERIVED_FIELDS=new Set(["ddend","close","landdepmonth","closingmonth","ddstart",
+/* ddstart is deliberately NOT in this set: unlike its 5 "starts after closing"
+   siblings below (all true outputs of applyLagTiming, computed FROM close),
+   ddstart is the ROOT anchor close itself derives from - nothing ever
+   recomputes it, so hiding it as if it were derived left it permanently
+   frozen at its raw default with no way to change it. */
+const LAG_DERIVED_FIELDS=new Set(["ddend","close","landdepmonth","closingmonth",
   "otherstart","infrastart","sfstart","dsgnstart","permstart","salesstart","_lagAnchor"]);
 /* The facility month is no longer worked out and withheld: it is offered on the
    panel and a month entered there supersedes the lag. */
@@ -4891,6 +4901,25 @@ function lagFieldOff(k){
   if(need&&!(Number(_num(d[need],0))>0))
     return "This cost is not spread over any month, so the lag has nothing to move.";
   return "";
+}
+/* dur -> its paired lag field, the reverse of LAG_NEEDS_COST. Editing a "dur"
+   field (e.g. infradur) changes whether its sibling lag field (laginfra) is
+   tagged "off," but a plain edit never triggers buildForm() (it's not in
+   RESHAPES_PANEL, and forcing a full rebuild on every keystroke just to
+   refresh one badge would be overkill) - so that badge went stale, showing
+   whatever was true at the last full rebuild. Repaint just that one badge
+   instead of the whole panel. */
+const DUR_TO_LAG=Object.fromEntries(Object.entries(LAG_NEEDS_COST).map(([lag,dur])=>[dur,lag]));
+function repaintLagBadge(lagKey){
+  const input=document.getElementById("i_"+lagKey);if(!input)return;
+  const label=input.closest(".f")&&input.closest(".f").querySelector("label");if(!label)return;
+  label.querySelectorAll(".tagref,.tagoff").forEach(n=>n.remove());
+  const off=lagFieldOff(lagKey);
+  if(off){
+    const span=document.createElement("span");
+    span.className="tagoff";span.title=off;span.textContent="off";
+    label.appendChild(span);
+  }
 }
 /* Changing any of these changes which rows belong on the panel, so each one has
    to rebuild it. Keep this in step with fieldShown and lagFieldHidden below. */
@@ -5102,7 +5131,7 @@ function _runUncached(din,ov){
   [/* Both of these carry an explicit zero branch in the engine - the cost lands as
      a single payment instead of being spread - so zero is a real answer, not a
      value to be refused. */
-   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",0,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
+   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",0,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["lagcomm",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
   const binaryFlags=["taxwhen","salesrecog","drawmode","distmode","buildstagger","softbase","vert","escrow","staxrecover","xfertaxmode","fundingmode","permtiming","finland","findd","finhoriz","finvert","fincapex","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
   for(let p=1;p<=MAX_PRODUCTS;p++)binaryFlags.push(`hpsf${p}ovr`,`buildpsf${p}ovr`,`buildmo${p}ovr`);
   binaryFlags.forEach(k=>{if(Number(raw[k])!==0&&Number(raw[k])!==1)throw new Error(`${k} must be entered as 0 or 1.`)});
@@ -5364,9 +5393,11 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     if(d.pidacct)R.pidcogs[Math.max(u.delivery,phaseComplete[u.phase]+d.pidlag)]-=pidReduction;
     const brokerageTotal=d.comm/100*u.salePrice,sellingExpenseTotal=d.sellingpc/100*u.salePrice,totalCommission=brokerageTotal+sellingExpenseTotal,payAtBooking=d.commbookpc/100;
     const brokerageBooking=brokerageTotal*payAtBooking,sellingBooking=sellingExpenseTotal*payAtBooking;
-    R.brokeragecash[u.contractMonth]+=brokerageBooking;R.brokeragecash[u.delivery]+=brokerageTotal-brokerageBooking;
+    const commLag=Math.max(0,Math.round(_num(d.lagcomm,0))),brokBookMo=Math.min(NM,u.contractMonth+commLag),brokDelMo=Math.min(NM,u.delivery+commLag);
+    R.brokeragecash[brokBookMo]+=brokerageBooking;R.brokeragecash[brokDelMo]+=brokerageTotal-brokerageBooking;
     R.sellingexpensecash[u.contractMonth]+=sellingBooking;R.sellingexpensecash[u.delivery]+=sellingExpenseTotal-sellingBooking;
-    R.sellcash[u.contractMonth]+=brokerageBooking+sellingBooking;R.sellcash[u.delivery]+=totalCommission-brokerageBooking-sellingBooking;
+    R.sellcash[brokBookMo]+=brokerageBooking;R.sellcash[brokDelMo]+=brokerageTotal-brokerageBooking;
+    R.sellcash[u.contractMonth]+=sellingBooking;R.sellcash[u.delivery]+=sellingExpenseTotal-sellingBooking;
     R.sell[u.delivery]+=totalCommission;
     u.eligibleCost=(d.finland?landC:0)+(d.findd?otherC:0)+(d.finhoriz?(phaseActual[u.phase]*pw+d.impact):0)+(d.finvert?vertC:0);
     R.relbase[u.delivery]+=u.eligibleCost;
@@ -6289,7 +6320,7 @@ function buildParcels(){
     const p=P0();
     const revenue=projectSalesRevenue(p.inputs);
     if(!(revenue>0)){alert("This project has no sales revenue yet, so there is no land price to carry into a vertical stage.");return}
-    const np=newParcel(p.name+" - vertical",p.loc,verticalStageInputs(p.inputs,revenue));
+    const np=newParcel(p.name+" - vertical",p.loc,verticalStageInputs(p.inputs,revenue,p.name));
     pushParcel(np,p);
     afterParcelChange();
   };
@@ -6714,7 +6745,7 @@ function buildFormCore(){
             buildForm();buildScaffold();showNav();render();
             return;
           }
-          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
+          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","lagcomm","vlag","modelmo","buildmo","facstart","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
           if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           if(k==="landpaycount"){
             /* Picking a count fills in shares that add up, so the choice stands
@@ -6727,6 +6758,7 @@ function buildFormCore(){
           }
           D[k]=k==="landpaycount"?_clamp(v,0,MAX_LAND_INTERIM_PAYMENTS):v;
           if(RESHAPES_PANEL.has(k)||/^ph[1-6]ovr$/.test(k)){buildForm();buildScaffold();showNav();render();return}
+          if(DUR_TO_LAG[k])repaintLagBadge(DUR_TO_LAG[k]);
           syncSliders();render()}}
     });
     if(sec.g==="Vertical development"&&D.vert)buildVerticalProductEditor(g);
@@ -7287,7 +7319,15 @@ function render(){
     renderFrame=requestAnimationFrame(()=>{renderFrame=0;paintCalc();
       setTimeout(()=>{const pane=activePane();if(pane==="port")schedulePortfolioResults(80);if(CONTEXT_PANES.has(pane))scheduleActiveContext(pane==="cf"?20:50);else queuePanePaint(pane)},0)});
   }catch(e){return showModelError(e)}
-  if(undoneMessage){const box=modelErrorBox();box.style.display="block";box.textContent=undoneMessage}
+  if(undoneMessage){
+    const box=modelErrorBox();box.style.display="block";box.textContent=undoneMessage;
+    /* The text box sits above the panes and is easy to miss/scroll past,
+       especially right after an edit made further down the input rail - a
+       reverted edit with no obvious feedback reads as "I can't edit this
+       field" rather than "that value was rejected, here's why." A toast is
+       hard to miss regardless of scroll position. */
+    try{toast(undoneMessage,5000)}catch(_){}
+  }
 }
 let tmr=null,tmr2=null,fastPaintFrame=0,fastPaintPane="";
 function schedule(){clearTimeout(tmr);tmr=setTimeout(render,24)}
@@ -7918,20 +7958,20 @@ function portfolioData(){
   APP.parcels.forEach(p=>{if(!selected.has(p.id))return;try{const A=run(p.inputs);runs.push({p,A,d:A.d||derive(p.inputs),start:portfolioAbsStart(A.d||derive(p.inputs))})}catch(e){errors.push({p,e})}});
   if(!runs.length)return memoPortfolio(memoKey,{runs,errors,fyEnd:_clamp(Math.round(_num(APP.portfolioFyEnd,6)),1,12)});
   const minAbs=Math.min(...runs.map(r=>r.start)),maxAbs=Math.max(...runs.map(r=>r.start+r.A.NM)),N=maxAbs-minAbs+1;
-  const z=()=>new Array(N).fill(0),plKeys=["grossRev","outputSut","rev","landCost","transferTax","landSurcharge","acqFeeCost","acquisitionCost","constructionCost","professionalFees","developmentManagementFees","statutoryCost","contingencyCost","holdingCost","brokerage","sellingCost","marketing","capitalisedFinanceCost","otherDirectCost","inputSutCredit","dc","gp","gna","gnaShared","staff","staffShared","corpOverhead","oh","fin","da","totalOverhead","otherIncome","interestIncome","npbt","tax","npat"],PLM={};plKeys.forEach(k=>PLM[k]=z());
+  const z=()=>new Array(N).fill(0),plKeys=["grossRev","outputSut","rev","landCost","transferTax","landSurcharge","acqFeeCost","acquisitionCost","constructionCost","professionalFees","dueDiligenceFees","developmentManagementFees","statutoryCost","contingencyCost","holdingCost","brokerage","sellingCost","marketing","capitalisedFinanceCost","otherDirectCost","inputSutCredit","dc","gp","gna","gnaShared","staff","staffShared","corpOverhead","oh","fin","da","totalOverhead","otherIncome","interestIncome","npbt","tax","npat"],PLM={};plKeys.forEach(k=>PLM[k]=z());
   const cfKeys=["cfequity","dr1","dr2","salescash","escin","cfsutrefund","pid","cfotherincome","cfinterestincome","cfrefinterestincome","cfland","cfinfra","cfpiddebt","cfcapex","cfconstruction","cfdesign","cfauthority","cfbrokerage","cfretax","cfohpaid","cfoutputsut","cftaxpaid","pf","intr","lf","cffinance","cfdebtrepaid","cfequitydist","cfinputsutpaid","cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfrefnetcash","cfrefdebt","cfrefdebtfinance","cfrefrepayment","cfrefprocessing","cfrefinterest","cfreflifetime","cfrefequity","cfrefsurplus","cfrefprofit","cfreffranchisetax","cfrefcorporatetax","cfrefotherincome"],CFM={};cfKeys.forEach(k=>CFM[k]=z());
   const projectTimeline=[];
   runs.forEach(r=>{
     const {A,d,start}=r,R=A.R,landBase=landConsiderationBase(d),acqOther=d.acquisitionfee+d.otheracq+d.rollback+d.closingpc/100*landBase;
     const acqDen=Math.max(1,A.land+A.transferTax+A.landSurcharge+A.acqFeeCost+acqOther),baseInfra=d.infl*A.lots;
-    const professionalTotal=d.ddpc/100*landBase+(A.professionalTotal||0)+(A.designTot||0),dmTotal=A.developmentManagementTotal||0,designDen=Math.max(1,professionalTotal+dmTotal),constructionDen=Math.max(1,A.infTot+A.contTot),sellingDen=Math.max(1e-9,d.comm+d.sellingpc);
+    const dueDiligenceTotal=d.ddpc/100*landBase,professionalTotal=dueDiligenceTotal+(A.professionalTotal||0)+(A.designTot||0),dmTotal=A.developmentManagementTotal||0,designDen=Math.max(1,professionalTotal+dmTotal),constructionDen=Math.max(1,A.infTot+A.contTot),sellingDen=Math.max(1e-9,d.comm+d.sellingpc);
     let first=null,last=null;
     for(let m=0;m<=A.NM;m++){
       const i=start+m-minAbs,get=k=>(R[k]&&R[k][m])||0;
       const landAllocated=get("landbasecogs"),infraNet=get("infracogs")+get("pidcogs"),constructionPL=get("constructioncogs")+get("insurancecaprel")+get("insuranceexp"),designAllocated=get("designcogs"),selling=get("sell"),rev=get("recog")-get("outputsut");
       const vals={grossRev:get("recog"),outputSut:get("outputsut"),rev,
         landCost:landAllocated*A.land/acqDen,transferTax:landAllocated*A.transferTax/acqDen,landSurcharge:landAllocated*A.landSurcharge/acqDen,acqFeeCost:landAllocated*A.acqFeeCost/acqDen,acquisitionCost:landAllocated*acqOther/acqDen,
-        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:designAllocated*professionalTotal/designDen,developmentManagementFees:designAllocated*dmTotal/designDen,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),brokerage:selling*d.comm/sellingDen,sellingCost:selling*d.sellingpc/sellingDen,marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
+        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:designAllocated*professionalTotal/designDen,dueDiligenceFees:designAllocated*dueDiligenceTotal/designDen,developmentManagementFees:designAllocated*dmTotal/designDen,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),brokerage:selling*d.comm/sellingDen,sellingCost:selling*d.sellingpc/sellingDen,marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
         gna:get("gna")+get("hoaexppl")+get("hoacaprel"),gnaShared:get("gnashared"),staff:get("staff"),staffShared:get("staffshared"),corpOverhead:get("corpovh"),fin:get("pf")+get("intr")+get("lf"),da:get("da"),otherIncome:get("otherincome"),interestIncome:get("intincome")};
       vals.capitalisedFinanceCost=0;
       vals.dc=vals.landCost+vals.transferTax+vals.landSurcharge+vals.acqFeeCost+vals.acquisitionCost+vals.constructionCost+vals.professionalFees+vals.developmentManagementFees+vals.statutoryCost+vals.contingencyCost+vals.holdingCost+vals.brokerage+vals.sellingCost+vals.marketing+vals.capitalisedFinanceCost+vals.otherDirectCost+vals.inputSutCredit;
@@ -8458,7 +8498,7 @@ function renderProjectCashflow({A,d},hostId){
   const activityRows=["cfrefresrev","cfrefinterestincome","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"];
   const fys=A.fys.filter(y=>activityRows.some(k=>Math.abs((A.B[k]&&A.B[k][y])||0)>.5));
   const b=(key,y)=>_num(A.B[key]&&A.B[key][y]),sum=(fn)=>fys.reduce((a,y)=>a+fn(y),0);
-  const L=(sr,lab,fn,cls,totalFn)=>({sr:1,cls:cls||"",c:[sr,lab,...fys.map(y=>$z(fn(y))),$z(totalFn?totalFn():sum(fn))]});
+  const L=(sr,lab,fn,cls,totalFn,fmt)=>{const f=fmt||$z;return {sr:1,cls:cls||"",c:[sr,lab,...fys.map(y=>f(fn(y))),f(totalFn?totalFn():sum(fn))]}};
   const netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),landCost=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),
     taxCost=y=>b("cfrefholding",y)+b("cfreffranchisetax",y)+b("cfrefcorporatetax",y),developmentCost=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sellingCost=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debtSchedule=y=>-b("dr1",y)-b("dr2",y)+b("rep",y),financeCost=y=>b("pf",y)+b("intr",y)+b("lf",y);
   const anyY=fn=>fys.some(y=>Math.abs(fn(y))>.5);
@@ -8469,6 +8509,7 @@ function renderProjectCashflow({A,d},hostId){
   if(reimbTotal>0)noteBits.push("Council/infrastructure reimbursements are reported in 1.2 Other Income.");
   noteBits.push(d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered in line 6 after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned in line 6 after the refund lag.");
   const rows=[
+    L("","Homes Sold",y=>b("ctr",y),"",null,M0),
     L("1","Net Revenue",netRevenue,"sub"),
     L("1.1","Revenue - Residential",y=>b("cfrefresrev",y)-b("cfrefotherincome",y)),
     L("1.2","Other Income",y=>b("cfrefotherincome",y)),
@@ -8519,6 +8560,7 @@ PANE.monthly=function({A,d},hostId){
   const R=A.R;let last=0;["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"].forEach(k=>(R[k]||[]).forEach((v,i)=>{if(Math.abs(v)>.5)last=Math.max(last,i)}));
   const mm=Array.from({length:last+1},(_,m)=>m),add=(...xs)=>mm.map((_,m)=>xs.reduce((a,x)=>a+_num((x||[])[m]),0)),sub=(a,b)=>mm.map((_,m)=>_num((a||[])[m])-_num((b||[])[m])),anyA=a=>(a||[]).some(v=>Math.abs(_num(v))>.5),neg=a=>mm.map((_,m)=>-_num((a||[])[m]));
   const rows=[
+    ["","Homes Sold",A.contractCounts,"",M0],
     ["","Net Qualified Sales",R.cfrefqualifiedsales],
     ["1","Net Revenue",sub(R.cfrefresrev,R.cfrefsut),"sub"],["1.1","Revenue - Residential",sub(R.cfrefresrev,R.cfrefotherincome)],["1.2","Other Income",R.cfrefotherincome],
     ...(anyA(R.cfrefsut)?[["1.3","Less: Sales & Use Tax",neg(R.cfrefsut)]]:[]),
@@ -8533,8 +8575,8 @@ PANE.monthly=function({A,d},hostId){
     ["9","Finance Costs",add(R.cfrefprocessing,R.cfrefinterest,R.cfreflifetime),"sub"],["9.1","Processing Fee",R.cfrefprocessing],["9.2","Interest",R.cfrefinterest],["9.3","Line Fee",R.cfreflifetime],
     ["10","Equity Needed",R.cfrefequity,"res"],["11","Net Surplus",R.cfrefsurplus,"res"],["12","Profit (11 - 10)",R.cfrefprofit,"res"]
   ];
-  const tableRows=rows.map(([ref,label,arr,cls])=>({sr:1,cls:cls||"",
-    c:[ref,label,...mm.map(m=>$z(arr[m])),$z(mm.reduce((a,m)=>a+_num(arr[m],0),0))]}));
+  const tableRows=rows.map(([ref,label,arr,cls,fmt])=>{const f=fmt||$z;return {sr:1,cls:cls||"",
+    c:[ref,label,...mm.map(m=>f(arr[m])),f(mm.reduce((a,m)=>a+_num(arr[m],0),0))]}});
   set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Same line sequence as the annual cashflow. Positive line 7 is a cash requirement; line 12 is Net Surplus less Equity Needed. Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
 };
 /* ═══════════════════ SENSITIVITY / HEAT / OFFER ═══════════════════ */
@@ -8872,6 +8914,7 @@ function wire(){
 document.getElementById("btnPrint").onclick=()=>exportPdf(); /* exportPdf is registered by the Board PDF module below. */
 document.getElementById("btnStmtPdf").onclick=()=>exportStatementsPdf();
 document.getElementById("btnXls").onclick=()=>buildExcel();
+document.getElementById("btnSignOut").onclick=()=>{fetch("/api/logout",{method:"POST",cache:"no-store"}).catch(()=>{}).then(()=>{location.href="/login"})};
 /* Save and load, once. The file buttons and the server buttons both go through
    these two, so a stored appraisal and a saved .json can never diverge - which
    is the only thing that makes the server copy trustworthy.
@@ -8900,8 +8943,6 @@ function applyEnvelope(j){
     APP.portfolioBasis="dynamic";D=P0().inputs;normalizeModeState();
     buildParcels();buildForm();buildScaffold();showNav();render()
 }
-document.getElementById("btnSave").onclick=()=>{
-  dl(new Blob([JSON.stringify(buildEnvelope(),null,2)],{type:"application/json"}),fname(P0().name)+".json")};
 document.getElementById("btnLoad").onclick=()=>document.getElementById("fileIn").click();
 document.getElementById("fileIn").onchange=e=>{const f=e.target.files[0];if(!f)return;
   const rd=new FileReader();rd.onload=()=>{try{applyEnvelope(JSON.parse(rd.result))}
@@ -9382,10 +9423,10 @@ function collectRows(keys){return keys.map(rowByKey).filter(Boolean)}
     const acquisition=sectionByName("Land acquisition cost"),programme=sectionByName("Programme");
     if(acquisition){
       rebuildGroupInSequence(acquisition.querySelector(".grp"),[
-        ["Purchase",["pr","_land","landsut"]],
+        ["Purchase",["pr","_land","_landpsf","landsut"]],
         ["Payment terms",["landdepo","landdeposit","_landdepositamt","landdepmonth","landpaycount","landpay1","landpay1month","landpay2","landpay2month","landpay3","landpay3month","landpay4","landpay4month","landpay5","landpay5month","_landpresettlementamt","_landbalanceamt","close"]],
         ["Costs at closing",["closingmonth","closingpc","rollback"]],
-        ["Due diligence",["ddpc","_ddamt","ddur","ddend"]],
+        ["Due diligence",["ddpc","_ddamt","ddstart","ddur","ddend"]],
         ["Other acquisition",["otherdirect","allocbasis"]]
       ]);
     }
@@ -9499,13 +9540,12 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
     const years=(A.fys||[]).filter(y=>activity.some(k=>Math.abs(b(k,y))>.5)||Math.abs(pl("tax",y))>.5);
     const closeParts=Math.max(0,n(A.transferTax))+Math.max(0,n(A.landSurcharge))+Math.max(0,n(A.acquisitionCost));
     const splitClose=(amount,y)=>closeParts>0?b("closing",y)*Math.max(0,n(amount))/closeParts:0;
-    const sellDen=Math.max(1e-9,n(d.comm)+n(d.sellingpc));
     const map={};
     years.forEach(y=>{
       const grossRevenue=b("recog",y),outputSut=-b("outputsut",y),netRevenue=grossRevenue+outputSut,interestIncome=pl("interestIncome",y),franchiseTax=pl("franchise",y),corporateTax=pl("corporateTax",y);
       const landPurchase=b("land",y),transferTax=splitClose(A.transferTax,y),surchargeCost=splitClose(A.landSurcharge,y),acqfee=b("acqfee",y),acquisitionCost=splitClose(A.acquisitionCost,y),holdingCost=b("retax",y);
       const constructionCost=b("build",y)+b("infra",y)+b("otherdirect",y)+b("pidprocess",y),professionalFees=b("dd",y)+b("professionalfee",y)+b("design",y),developmentManagement=b("dmfee",y),statutoryCost=b("munic",y)+b("impact",y)+b("permit",y),contingencyCost=b("cont",y),projectCapex=b("capex",y);
-      const sellingCash=b("sellcash",y),brokerage=sellingCash*n(d.comm)/sellDen,sellingCost=sellingCash*n(d.sellingpc)/sellDen,marketing=b("marketing",y),
+      const brokerage=b("brokeragecash",y),sellingCost=b("sellingexpensecash",y),marketing=b("marketing",y),
         /* P&L credit, not the cash refund. With tax-inclusive cost inputs the two
            are equal, but with tax-exclusive inputs the cost rows are already net, so
            deducting the refund counted the recovery twice. sutcogs carries the
@@ -9559,15 +9599,24 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       {sr:1,cls:"sub bp-section",c:["2","Direct Costs",...blank()]},
       {sr:1,c:["2.1","Land Costs",pc("landCost"),...vals("landCost"),total("landCost")]},
       {sr:1,c:["2.2",buildLabel,pc("constructionCost"),...vals("constructionCost"),total("constructionCost")]},
-      {sr:1,c:["2.3","Brokerage & Incentive",pc("brokerage"),...vals("brokerage"),total("brokerage")]},
-      {sr:1,c:["2.4","Other Direct Costs",pc("otherDirectCost"),...vals("otherDirectCost"),total("otherDirectCost")]},
-      {sr:1,cls:"sub bp-total",c:["2","Direct Costs (2.1 to 2.4)",pc("directCost"),...vals("directCost"),total("directCost")]},
+      {sr:1,cls:"sub bp-section",c:["2.3","Other Direct Costs",...blank()]},
+      {sr:1,c:["2.3.1","Due Diligence & Ancillary Fees",pc("dueDiligence"),...vals("dueDiligence"),total("dueDiligence")]},
+      {sr:1,c:["2.3.2","Soft Costs",pc("softCosts"),...vals("softCosts"),total("softCosts")]},
+      {sr:1,c:["2.3.3","Authority & Statutory Costs",pc("statutoryCosts"),...vals("statutoryCosts"),total("statutoryCosts")]},
+      {sr:1,c:["2.3.4","Other Costs",pc("otherCostsOther"),...vals("otherCostsOther"),total("otherCostsOther")]},
+      {sr:1,cls:"sub bp-total",c:["2.3","Other Direct Costs (2.3.1 to 2.3.4)",pc("otherDirectCost"),...vals("otherDirectCost"),total("otherDirectCost")]},
+      {sr:1,cls:"sub bp-total",c:["2","Direct Costs (2.1 to 2.3)",pc("directCost"),...vals("directCost"),total("directCost")]},
       {sr:1,cls:"res bp-result",c:["3","Gross Profit (1 - 2)",pc("grossProfit"),...vals("grossProfit"),total("grossProfit")]},
+      {sr:1,c:["3.1","Brokerage & Incentive",pc("brokerage"),...vals("brokerage"),total("brokerage")]},
+      {sr:1,c:["3.2","Marketing & Advertising",pc("marketing"),...vals("marketing"),total("marketing")]},
+      {sr:1,cls:"sub bp-total",c:["3.3","Total Sales and Marketing Expenses (3.1 + 3.2)",pc("salesMarketingCost"),...vals("salesMarketingCost"),total("salesMarketingCost")]},
+      {sr:1,cls:"res bp-result",c:["3.4","Net Gross Profit (3 - 3.3)",pc("netGrossProfit"),...vals("netGrossProfit"),total("netGrossProfit")]},
       {sr:1,cls:"sub bp-section",c:["4","Overhead Costs",...blank()]},
       {sr:1,c:["4.1","General & Admin Expenses",pc("gna"),...vals("gna"),total("gna")]},
       {sr:1,c:["4.2","Staff / Manpower",pc("staff"),...vals("staff"),total("staff")]},
       {sr:1,c:["4.3","Corporate Overhead Allocation",pc("corp"),...vals("corp"),total("corp")]},
-      {sr:1,cls:"sub bp-total",c:["4","Overhead Costs (4.1 to 4.3)",pc("overheadCost"),...vals("overheadCost"),total("overheadCost")]},
+      {sr:1,c:["4.4","Real Estate Property Tax",pc("realEstateTax"),...vals("realEstateTax"),total("realEstateTax")]},
+      {sr:1,cls:"sub bp-total",c:["4","Overhead Costs (4.1 to 4.4)",pc("overheadCost"),...vals("overheadCost"),total("overheadCost")]},
       {sr:1,c:["5","External Finance Costs (net of finance income)",pc("financeCost"),...vals("financeCost"),total("financeCost")]},
       {sr:1,cls:"sub bp-total",c:["6","Total Overhead and Finance Costs (4 + 5)",pc("totalOverheadCost"),...vals("totalOverheadCost"),total("totalOverheadCost")]},
       {sr:1,cls:"res bp-result",c:["7","Net Profit before Bonus, Charity and taxes",pc("preOtherIncomeProfit"),...vals("preOtherIncomeProfit"),total("preOtherIncomeProfit")]},
@@ -9586,21 +9635,54 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       const p=A.PL&&A.PL[y]||{};
       return Math.abs(b("sval",y))+["rev","dc","gp","oh","fin","da","otherIncome","npbt","tax","npat"].reduce((a,k)=>a+Math.abs(n(p[k])),0)>.5;
     });
+    /* Due diligence shares one ratio-allocated bucket with soft cost (and, in
+       vertical mode, per-unit design cost) - see professionalFees inside
+       run()'s PL[y] assignment. Its own share of that same bucket is rebuilt
+       here with the identical ratio, from totals the engine already exposes
+       (A.professionalTotal, A.designTot, A.developmentManagementTotal)
+       against the same fiscal-year accrual source (A.B.designcogs) - so this
+       is a lossless split of professionalFees, not an independent figure,
+       and ties out exactly, year by year. A.B.dd (the cash-timed due-
+       diligence schedule the Cash Flow statement uses) is not used here -
+       it pays out on a different timetable and carries a sales/use-tax
+       gross-up professionalFees does not, which would stop this section's
+       rows adding up in any individual year. */
+    const dIn=A.d||d,landBase=landConsiderationBase(dIn),dueDiligenceTotal=n(dIn.ddpc)/100*landBase,
+      designDen=Math.max(1,dueDiligenceTotal+n(A.professionalTotal)+n(A.designTot)+n(A.developmentManagementTotal));
     const map={};
     years.forEach(y=>{
-      const landCost=pl("landCost",y)+pl("transferTax",y)+pl("landSurcharge",y)+pl("acqFeeCost",y)+pl("acquisitionCost",y)+pl("holdingCost",y);
+      const landCost=pl("landCost",y)+pl("transferTax",y)+pl("landSurcharge",y)+pl("acqFeeCost",y)+pl("acquisitionCost",y);
       /* Business Plan presentation: Construction Cost is hard construction only.
          Other direct development and selling classifications remain in Direct Cost but are
          presented under Other Direct Cost so the four-row statement still reconciles. */
       const constructionCost=pl("constructionCost",y);
-      const brokerage=pl("brokerage",y),otherDirectCost=pl("otherDirectCost",y)+pl("sellingCost",y)+pl("marketing",y)+pl("professionalFees",y)+pl("developmentManagementFees",y)+pl("statutoryCost",y)+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y);
+      const brokerage=pl("brokerage",y),marketing=pl("marketing",y);
+      const designAllocated=b("designcogs",y),
+        dueDiligence=designAllocated*dueDiligenceTotal/designDen,
+        professionalFeesTotal=pl("professionalFees",y),
+        softCosts=professionalFeesTotal-dueDiligence,
+        statutoryCosts=pl("statutoryCost",y),
+        /* Everything else that has always been folded into Other Direct Cost
+           and is not being given its own row. Brokerage and marketing show
+           below Gross Profit instead, so neither term belongs here. */
+        otherCostsOther=pl("otherDirectCost",y)+pl("sellingCost",y)+pl("developmentManagementFees",y)+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y),
+        /* Built from its own displayed children so 2.3's subtotal can never
+           silently drift from the sum of 2.3.1-2.3.4. */
+        otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
+      const realEstateTax=pl("holdingCost",y);
+      const directCost=landCost+constructionCost+otherDirectCost,
+        grossProfit=pl("rev",y)-directCost,
+        /* Sales & Marketing (brokerage + marketing) sits below Gross Profit;
+           Net Gross Profit nets it back out and so equals the old, pre-split
+           Gross Profit exactly - see preOtherIncomeProfit below. */
+        salesMarketingCost=brokerage+marketing,netGrossProfit=grossProfit-salesMarketingCost;
       const gna=pl("gna",y)+pl("gnaShared",y)+pl("da",y),staff=pl("staff",y)+pl("staffShared",y),corp=pl("corpOverhead",y);
-      const overheadCost=gna+staff+corp,financeCost=pl("fin",y),totalOverheadCost=overheadCost+financeCost,grossProfit=pl("gp",y),
+      const overheadCost=gna+staff+corp+realEstateTax,financeCost=pl("fin",y),totalOverheadCost=overheadCost+financeCost,
         /* Interest earned and any district reimbursement are income the project
            makes without selling anything. District reimbursement is already
            recognised against development cost, so only interest is added here. */
         otherIncome=pl("otherIncome",y)+b("intincome",y);
-      map[y]={qualifiedSales:b("sval",y),totalRevenue:pl("rev",y),landCost,constructionCost,brokerage,otherDirectCost,directCost:pl("dc",y),grossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:grossProfit-totalOverheadCost,otherIncome,npbt:pl("npbt",y),tax:pl("tax",y),franchiseTax:pl("franchise",y),corporateTax:pl("tax",y)-pl("franchise",y),npat:pl("npat",y)};
+      map[y]={qualifiedSales:b("sval",y),totalRevenue:pl("rev",y),landCost,constructionCost,brokerage,marketing,dueDiligence,softCosts,statutoryCosts,otherCostsOther,otherDirectCost,realEstateTax,directCost,grossProfit,salesMarketingCost,netGrossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:netGrossProfit-totalOverheadCost,otherIncome,npbt:pl("npbt",y),tax:pl("tax",y),franchiseTax:pl("franchise",y),corporateTax:pl("tax",y)-pl("franchise",y),npat:pl("npat",y)};
     });
     const value=(y,k)=>n(map[y]&&map[y][k]),total=k=>years.reduce((a,y)=>a+value(y,k),0);
     return {years,map,value,total,vert:!!(d&&Math.round(n(d.vert))===1)};
@@ -9616,12 +9698,22 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
   function portfolioPlData(Q){
     const qSales=dynamicPortfolioQualifiedSales(Q),yearSet=new Set(Q.plFys||[]);Object.keys(qSales).forEach(y=>yearSet.add(Number(y)));const years=[...yearSet].sort((a,b)=>a-b),sy=(k,y)=>Q.sumFy(Q.PLM[k],y),map={};
     years.forEach(y=>{
-      const landCost=sy("landCost",y)+sy("transferTax",y)+sy("landSurcharge",y)+sy("acqFeeCost",y)+sy("acquisitionCost",y)+sy("holdingCost",y);
+      const landCost=sy("landCost",y)+sy("transferTax",y)+sy("landSurcharge",y)+sy("acqFeeCost",y)+sy("acquisitionCost",y);
       const constructionCost=sy("constructionCost",y);
-      const brokerage=sy("brokerage",y),otherDirectCost=sy("otherDirectCost",y)+sy("sellingCost",y)+sy("marketing",y)+sy("professionalFees",y)+sy("developmentManagementFees",y)+sy("statutoryCost",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y);
+      const brokerage=sy("brokerage",y),marketing=sy("marketing",y);
+      const dueDiligence=sy("dueDiligenceFees",y),
+        professionalFeesTotal=sy("professionalFees",y),
+        softCosts=professionalFeesTotal-dueDiligence,
+        statutoryCosts=sy("statutoryCost",y),
+        otherCostsOther=sy("otherDirectCost",y)+sy("sellingCost",y)+sy("developmentManagementFees",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y),
+        otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
+      const realEstateTax=sy("holdingCost",y);
+      const directCost=landCost+constructionCost+otherDirectCost,
+        grossProfit=sy("rev",y)-directCost,
+        salesMarketingCost=brokerage+marketing,netGrossProfit=grossProfit-salesMarketingCost;
       const gna=sy("gna",y)+sy("gnaShared",y)+sy("da",y),staff=sy("staff",y)+sy("staffShared",y),corp=sy("corpOverhead",y);
-      const overheadCost=gna+staff+corp,financeCost=sy("fin",y),totalOverheadCost=overheadCost+financeCost,grossProfit=sy("gp",y),otherIncome=sy("otherIncome",y);
-      map[y]={qualifiedSales:n(qSales[y]),totalRevenue:sy("rev",y),landCost,constructionCost,brokerage,otherDirectCost,directCost:sy("dc",y),grossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:grossProfit-totalOverheadCost,otherIncome,npbt:sy("npbt",y),tax:sy("tax",y),npat:sy("npat",y)};
+      const overheadCost=gna+staff+corp+realEstateTax,financeCost=sy("fin",y),totalOverheadCost=overheadCost+financeCost,otherIncome=sy("otherIncome",y);
+      map[y]={qualifiedSales:n(qSales[y]),totalRevenue:sy("rev",y),landCost,constructionCost,brokerage,marketing,dueDiligence,softCosts,statutoryCosts,otherCostsOther,otherDirectCost,realEstateTax,directCost,grossProfit,salesMarketingCost,netGrossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:netGrossProfit-totalOverheadCost,otherIncome,npbt:sy("npbt",y),tax:sy("tax",y),npat:sy("npat",y)};
     });
     const value=(y,k)=>n(map[y]&&map[y][k]),total=k=>years.reduce((a,y)=>a+value(y,k),0);return {years,map,value,total};
   }
@@ -10384,7 +10476,32 @@ function loadScript(src,id){return new Promise((resolve,reject)=>{if(id&&documen
 function ensureMapLibre(){if(AM.ready)return AM.ready;AM.ready=(async()=>{if(!document.getElementById("aumap-maplibre-css")){const l=document.createElement("link");l.id="aumap-maplibre-css";l.rel="stylesheet";l.href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css";l.onerror=()=>{l.href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"};document.head.appendChild(l)}if(!window.maplibregl){try{await loadScript("https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js","aumap-maplibre-js")}catch(e){const bad=document.getElementById("aumap-maplibre-js");if(bad)bad.remove();await loadScript("https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js","aumap-maplibre-unpkg")}}return true})();return AM.ready}
 function ensureContourLib(){if(window.mlcontour&&window.mlcontour.DemSource)return Promise.resolve(true);if(AM.contourReady)return AM.contourReady;AM.contourReady=(async()=>{try{await loadScript("https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js","aumap-contour-js")}catch(e){const bad=document.getElementById("aumap-contour-js");if(bad)bad.remove();await loadScript("https://cdn.jsdelivr.net/npm/maplibre-contour@0.1.0/dist/index.min.js","aumap-contour-js-cdn")}if(!window.mlcontour||!window.mlcontour.DemSource)throw new Error("Contour engine could not load");return true})().catch(e=>{AM.contourReady=null;throw e});return AM.contourReady}
 function busy(on,text){AM.busy=Math.max(0,AM.busy+(on?1:-1));const dot=document.getElementById("aumap_live_dot"),lab=document.getElementById("aumap_live_text");if(dot)dot.className="aumap-status-dot "+(AM.busy?"busy":"live");if(lab)lab.textContent=AM.busy?(text||"Loading live data"):(state().base==="satellite"?"Satellite + live U.S. data":"OSM + live U.S. data")}
-function toast(text,ms=1800){const t=document.getElementById("aumap_toast");if(!t)return;t.textContent=text;t.classList.add("on");clearTimeout(AM.timers.toast);AM.timers.toast=setTimeout(()=>t.classList.remove("on"),ms)}
+/* The map-pane toast (#aumap_toast) only exists once the Map tab has rendered
+   at least once - calling this from any other tab (the Inputs rail's Resync
+   button, for one) silently no-op'd with no visible feedback at all. Falls
+   back to a lazily-created, always-available toast of its own so a caller on
+   any tab gets seen, styled to match rather than reusing the map-scoped CSS
+   (which is scoped under #p_map and would not apply outside it anyway). */
+let _fallbackToast=null;
+function fallbackToastEl(){
+  if(_fallbackToast&&_fallbackToast.isConnected)return _fallbackToast;
+  const t=document.createElement("div");
+  t.id="_globalToast";
+  t.style.cssText="position:fixed;z-index:9999;top:16px;left:50%;transform:translateX(-50%);"+
+    "display:none;max-width:75%;padding:7px 11px;border:1px solid #E4E9F1;border-radius:17px;"+
+    "background:rgba(255,255,255,.96);box-shadow:0 3px 12px rgba(18,47,86,.12);color:#42506B;"+
+    "font:650 9.5px/1.35 var(--sans, Arial, sans-serif);white-space:normal;overflow-wrap:anywhere;pointer-events:none;";
+  document.body.appendChild(t);
+  _fallbackToast=t;
+  return t;
+}
+function toast(text,ms=1800){
+  const t=document.getElementById("aumap_toast")||fallbackToastEl();
+  t.textContent=text;
+  t.style.display="block";t.classList.add("on");
+  clearTimeout(AM.timers.toast);
+  AM.timers.toast=setTimeout(()=>{t.classList.remove("on");t.style.display="none"},ms);
+}
 /* An instruction with nothing to instruct is clutter, so an empty hint hides
    rather than sitting there as an empty box. */
 function hint(text){
@@ -17251,8 +17368,12 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
   /* A healthy load needs no banner - the appraisal itself is the evidence. */
   function clearSay(){if(bar&&bar.parentNode)bar.parentNode.removeChild(bar);bar=null}
 
+  /* One consistent label regardless of new-vs-existing, matching the AU
+     app's "Save project" - the tooltip still says which one will actually
+     happen, since that distinction is real (PUT vs POST) even though the
+     button text no longer calls it out. */
   function relabel(){
-    saveBtn.textContent=openId?"Save to server":"Save as new";
+    saveBtn.textContent="Save project";
     saveBtn.title=openId
       ?("Saves over “"+openName+"” in the shared store, version "+openVersion+".")
       :"Adds this appraisal to the shared store.";
@@ -17266,7 +17387,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       const list=(await call("?region="+encodeURIComponent(APPRAISAL_REGION))).appraisals||[];
       if(!list.length){
         say("warn","Nothing in the shared store yet",
-          "The store is reachable but empty. Open a saved appraisal from a file and press Save as new to add the first one.",true);
+          "The store is reachable but empty. Open a saved appraisal from a file and press Save project to add the first one.",true);
         return;
       }
       /* The list comes back most-recently-saved first, so the page opens on
