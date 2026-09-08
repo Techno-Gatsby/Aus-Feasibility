@@ -9042,7 +9042,7 @@ document.getElementById("btnSignOut").onclick=()=>{fetch("/api/logout",{method:"
 
    `region` guards against the other model's envelopes: both write v:7 over
    different DEF keys, so the version number alone cannot tell them apart. */
-const ENVELOPE_V=7,APPRAISAL_REGION="US";
+const ENVELOPE_V=8,APPRAISAL_REGION="US";
 function buildEnvelope(){
   return {v:ENVELOPE_V,region:APPRAISAL_REGION,parcels:APP.parcels,active:APP.active,scn:APP.scn,scnAuto:APP.scnAuto,
     cols:APP.cols,mets:APP.mets,portfolioRate:APP.portfolioRate,portfolioMode:APP.portfolioMode,portfolioSelected:APP.portfolioSelected,portfolioFyEnd:APP.portfolioFyEnd,portfolioBasis:APP.portfolioBasis};
@@ -9051,7 +9051,13 @@ function buildEnvelope(){
    the file load and the server load, so a parcel cannot arrive two ways - and
    in particular cannot arrive without enforceAccountingPolicy, which would run
    the model on the wrong policy rather than fail. */
-function normalizeParcel(p,envV){const inputs={...DEF,...cleanStoredInputs(p.inputs)};inputs.pmode=Number(inputs.pmode)===1?1:0;if(Number(envV||0)<6){inputs.distlock=0;if(Number(inputs.ovhmode)===0)inputs.ovhmode=2}enforceAccountingPolicy(inputs);return {id:p.id||("p"+Math.random().toString(36).slice(2,8)),name:p.name||"New parcel",loc:cleanProjectLocation(p.loc),inputs,gis:p.gis&&typeof p.gis==="object"?p.gis:undefined}}
+function normalizeParcel(p,envV){const inputs={...DEF,...cleanStoredInputs(p.inputs)};inputs.pmode=Number(inputs.pmode)===1?1:0;if(Number(envV||0)<6){inputs.distlock=0;if(Number(inputs.ovhmode)===0)inputs.ovhmode=2}
+  /* One-time cleanup: a stray non-zero "Development management fees - combined"
+     value was found sitting on a saved project even though the shipped default
+     has always been 0, silently inflating Total soft cost. Zero it once for any
+     envelope saved before this fix; a value entered again after that sticks. */
+  if(Number(envV||0)<8)inputs.dmpc=0;
+  enforceAccountingPolicy(inputs);return {id:p.id||("p"+Math.random().toString(36).slice(2,8)),name:p.name||"New parcel",loc:cleanProjectLocation(p.loc),inputs,gis:p.gis&&typeof p.gis==="object"?p.gis:undefined}}
 function applyEnvelope(j){
   if(j&&j.region&&j.region!==APPRAISAL_REGION){const e=new Error("That appraisal was saved in the "+j.region+" model and cannot be opened here.");e.wrongRegion=true;throw e}
   if(j.parcels&&j.parcels.length){APP.parcels=j.parcels.map(p=>normalizeParcel(p,j.v));
