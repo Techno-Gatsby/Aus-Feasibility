@@ -4157,7 +4157,7 @@ function _normalizedForDerive(raw){
   ["startMonth","fyEnd"].forEach(k=>o[k]=_clamp(Math.round(_num(o[k],1)),1,12));
   ["phm","buildmo","landdur"].forEach(k=>o[k]=Math.max(1,Math.round(_num(o[k],1))));
   ["ddur","entdur"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
-  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","vlag","modelmo","taxlag","taxqlag","combrokerlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
+  ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","vlag","modelmo","taxlag","taxqlag","taxsettlelag","combrokerlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
   o._lagAnchor=Math.round(_num(o._lagAnchor,-1));
   o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,2);
   o.landpaycount=_clamp(Math.round(_num(o.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS);
@@ -4663,6 +4663,7 @@ const GROUPS=[
   ["pidacct","Reimbursement accounting treatment","flag",1,"n"],
   ["ovhmode","Overhead timing","flag",2,"n"],
   ["taxwhen","Income tax settled","flag",1,"n"],
+  ["taxsettlelag","Once-off tax settlement lag after last sale","mth",2,"n"],
   ["taxlag","Annual tax true-up lag after financial year end","mth",4,"n"],
   ["r","Cost of capital","% p.a. project cash flow",7.25,"p"],
   ["hurdle","Target equity IRR","% p.a. equity cash flow",20,"p"],
@@ -4878,7 +4879,7 @@ const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","minc
   "facmode","relmode","relpc","relsalespc",
   "drawcount","draw1month","draw1amount","draw2month","draw2amount","draw3month","draw3amount","draw4month","draw4amount","draw5month","draw5amount",
   "repaycount","repay1month","repay1amount","repay2month","repay2amount","repay3month","repay3amount","repay4month","repay4amount","repay5month","repay5amount"]);
-const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ftax","stax","staxbase","taxwhen","taxlag","r","hurdle","tmoic"]);
+const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic"]);
 const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc"]);
 const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart",
   "salesmode","salesy1","salesy2","salesy3","salesy4","salesy5","salesy6","salesy7","salesy8","_salestot"]);
@@ -5794,7 +5795,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   let taxSettleMonth=-1;
   if(Math.round(_num(d.taxwhen,1))===1){
     for(let m=0;m<=NM;m++)if(Math.abs(R.recog[m])>.5)taxSettleMonth=m;
-    if(taxSettleMonth>=0)taxSettleMonth=Math.min(NM,taxSettleMonth+1);
+    if(taxSettleMonth>=0)taxSettleMonth=Math.min(NM,taxSettleMonth+Math.max(1,Math.round(_num(d.taxsettlelag,2))));
   }
   fys.forEach(y=>{
     const months=[];for(let m=0;m<=NM;m++)if(fyOf(m,d)===y)months.push(m);if(!months.length)return;
@@ -6817,7 +6818,7 @@ function buildFormCore(){
             buildForm();buildScaffold();showNav();render();
             return;
           }
-          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
+          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","taxsettlelag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
           if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           if(k==="landpaycount"){
             /* Picking a count fills in shares that add up, so the choice stands
@@ -6854,7 +6855,7 @@ const NAV=[
  {id:"verdict",lab:"Summary",     panes:[["verdict","Summary"]]},
  {id:"map",    lab:"MAP",         panes:[["map","Site intelligence"]]},
  {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
- {id:"sens",   lab:"Sensitivity", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
+ {id:"sens",   lab:"Manual Inputs", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
  {id:"scn",    lab:"Scenarios",   panes:[["scn","Scenario lab"]]},
  {id:"opt",    lab:"Optimiser",   panes:[["opt","Optimiser"]]},
  {id:"offer",  lab:"Land value",  panes:[["offer","Offer price"]]},
