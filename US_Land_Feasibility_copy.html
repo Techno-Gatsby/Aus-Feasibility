@@ -4158,6 +4158,10 @@ function _normalizedForDerive(raw){
   ["phm","buildmo","landdur"].forEach(k=>o[k]=Math.max(1,Math.round(_num(o[k],1))));
   ["ddur","entdur"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
   ["ddend","close","landdepmonth","closingmonth","sutlag","dellag","pidlag","vlag","modelmo","taxlag","taxqlag","taxsettlelag","combrokerlag"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
+  /* Own fallback (2, not the 0 every other lag above falls back to) so a
+     parcel that never touched this field still gets the intended default
+     dissolution lag, not an immediate same-month distribution. */
+  o.eqdistlag=Math.max(0,Math.round(_num(o.eqdistlag,2)));
   o._lagAnchor=Math.round(_num(o._lagAnchor,-1));
   o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,2);
   o.landpaycount=_clamp(Math.round(_num(o.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS);
@@ -4644,6 +4648,7 @@ const GROUPS=[
   ["pidrep","Reimbursement repays loan","flag",1,"n"],
   ["mincash","Minimum unrestricted project cash","$",0,"n"],
   ["distmode","Surplus cash returned","flag",1,"n"],
+  ["eqdistlag","Equity distribution — dissolution lag after completion","mth",2,"n"],
   /* Cash sitting in the project account earns interest. Entered as an annual
      rate and applied to the opening balance each month, the way the treasury
      statement computes it. Zero switches it off. */
@@ -5837,9 +5842,19 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     months.forEach((m,i)=>{cumulativeProxy+=proxy[i];if(!quarterEnds.includes(m))return;const target=PL[y].cashTax>0&&totalProxy>0?PL[y].cashTax*cumulativeProxy/totalProxy:0,payment=target-paid;if(Math.abs(payment)>1e-9){const pay=m+d.taxqlag;if(pay>NM)throw new Error("Quarterly tax payment falls beyond the model horizon.");R.taxm[pay]+=payment;splitTax(y,pay,payment)};paid+=payment});
     const trueUp=PL[y].cashTax-paid;if(Math.abs(trueUp)>1e-9){const pay=yearEnd+d.taxlag;if(pay>NM)throw new Error("Tax true-up falls beyond the model horizon.");R.taxm[pay]+=trueUp;splitTax(y,pay,trueUp)}
   });B.taxm=by(R.taxm);B.staxm=by(R.staxm);B.corptaxm=by(R.corptaxm);
-  const baseCF=R.net.map((v,m)=>v-R.taxm[m]+R.dr1[m]+R.dr2[m]-R.rep[m]-R.intr[m]-R.pf[m]-R.lf[m]);let finalObligation=0;baseCF.forEach((v,i)=>{if(Math.abs(v)>1e-6||R.lcl[i]>1e-6)finalObligation=i});let completion=0;baseCF.forEach((v,i)=>{if(v>1e-6)completion=i});const reserveReq=new Array(NM+1).fill(0);for(let m=NM-1;m>=0;m--){const min=m<finalObligation?minimumCash:0;reserveReq[m]=Math.max(min,reserveReq[m+1]-baseCF[m+1])}let cash=0,equityOutstanding=0,reimbCapacity=0,peakEquity=0,peakEquityMonth=0;for(let m=0;m<=NM;m++){let before=cash+baseCF[m],minimum=m<finalObligation?minimumCash:0;if(before<minimum){R.eqin[m]=minimum-before;before=minimum}equityOutstanding+=R.eqin[m];reimbCapacity+=R.eqreimbcap[m];const free=Math.max(0,before-reserveReq[m]);const debtCleared=R.lcl[m]<=1e-6;let allowed=!d.distlock||debtCleared?free:Math.min(free,reimbCapacity,equityOutstanding);if(Math.round(_num(d.distmode,0))===1&&m<completion)allowed=0;R.eqout[m]=Math.max(0,allowed);if(!debtCleared&&d.distlock)reimbCapacity=Math.max(0,reimbCapacity-R.eqout[m]);cash=before-R.eqout[m];R.cash[m]=cash;R.eqcf[m]=R.eqout[m]-R.eqin[m];equityOutstanding=Math.max(0,equityOutstanding-R.eqout[m]);if(equityOutstanding>peakEquity){peakEquity=equityOutstanding;peakEquityMonth=m}}B.eqcf=by(R.eqcf);B.eqin=by(R.eqin);B.eqout=by(R.eqout);B.cash=by(R.cash);
-  const buildEquitySeries=base=>{const req=new Array(NM+1).fill(0);let last=0,done=0;base.forEach((v,i)=>{if(Math.abs(v)>1e-6||R.lcl[i]>1e-6)last=i;if(v>1e-6)done=i});for(let m=NM-1;m>=0;m--){const min=m<last?minimumCash:0;req[m]=Math.max(min,req[m+1]-base[m+1])}const cf=new Array(NM+1).fill(0),ein=new Array(NM+1).fill(0),eout=new Array(NM+1).fill(0);let cash=0,outstanding=0,reimb=0,peak=0;for(let m=0;m<=NM;m++){let before=cash+base[m],minimum=m<last?minimumCash:0;if(before<minimum){ein[m]=minimum-before;before=minimum}outstanding+=ein[m];reimb+=R.eqreimbcap[m];const free=Math.max(0,before-req[m]),debtCleared=R.lcl[m]<=1e-6;let allowed=!d.distlock||debtCleared?free:Math.min(free,reimb,outstanding);
-    if(Math.round(_num(d.distmode,0))===1&&m<done)allowed=0;eout[m]=Math.max(0,allowed);if(!debtCleared&&d.distlock)reimb=Math.max(0,reimb-eout[m]);cash=before-eout[m];cf[m]=eout[m]-ein[m];outstanding=Math.max(0,outstanding-eout[m]);peak=Math.max(peak,outstanding)}return {cf,ein,eout,peak,inj:ein.reduce((a,b)=>a+b,0),ret:eout.reduce((a,b)=>a+b,0)}};
+  /* Equity is returned once, in a single month, rather than trickling out
+     whenever monthly surplus happens to clear the reserve: distmode===1
+     ("Once, on completion") withholds every dollar of "allowed" release
+     until payoutMonth, so it all lands there together (the existing
+     free/reserveReq/distlock gating still caps what CAN move that month -
+     a lender cash-trap still defers the balance rather than breaching it).
+     Anchored on activityEnd (the model's own single source for "last
+     physical/contractual activity", not the ad-hoc last-positive-cashflow
+     month this used to key off) plus eqdistlag, the dissolution lag. */
+  const payoutMonth=Math.min(NM,activityEnd+Math.max(0,Math.round(_num(d.eqdistlag,2))));
+  const baseCF=R.net.map((v,m)=>v-R.taxm[m]+R.dr1[m]+R.dr2[m]-R.rep[m]-R.intr[m]-R.pf[m]-R.lf[m]);let finalObligation=0;baseCF.forEach((v,i)=>{if(Math.abs(v)>1e-6||R.lcl[i]>1e-6)finalObligation=i});const reserveReq=new Array(NM+1).fill(0);for(let m=NM-1;m>=0;m--){const min=m<finalObligation?minimumCash:0;reserveReq[m]=Math.max(min,reserveReq[m+1]-baseCF[m+1])}let cash=0,equityOutstanding=0,reimbCapacity=0,peakEquity=0,peakEquityMonth=0;for(let m=0;m<=NM;m++){let before=cash+baseCF[m],minimum=m<finalObligation?minimumCash:0;if(before<minimum){R.eqin[m]=minimum-before;before=minimum}equityOutstanding+=R.eqin[m];reimbCapacity+=R.eqreimbcap[m];const free=Math.max(0,before-reserveReq[m]);const debtCleared=R.lcl[m]<=1e-6;let allowed=!d.distlock||debtCleared?free:Math.min(free,reimbCapacity,equityOutstanding);if(Math.round(_num(d.distmode,0))===1&&m<payoutMonth)allowed=0;R.eqout[m]=Math.max(0,allowed);if(!debtCleared&&d.distlock)reimbCapacity=Math.max(0,reimbCapacity-R.eqout[m]);cash=before-R.eqout[m];R.cash[m]=cash;R.eqcf[m]=R.eqout[m]-R.eqin[m];equityOutstanding=Math.max(0,equityOutstanding-R.eqout[m]);if(equityOutstanding>peakEquity){peakEquity=equityOutstanding;peakEquityMonth=m}}B.eqcf=by(R.eqcf);B.eqin=by(R.eqin);B.eqout=by(R.eqout);B.cash=by(R.cash);
+  const buildEquitySeries=base=>{const req=new Array(NM+1).fill(0);let last=0;base.forEach((v,i)=>{if(Math.abs(v)>1e-6||R.lcl[i]>1e-6)last=i});for(let m=NM-1;m>=0;m--){const min=m<last?minimumCash:0;req[m]=Math.max(min,req[m+1]-base[m+1])}const cf=new Array(NM+1).fill(0),ein=new Array(NM+1).fill(0),eout=new Array(NM+1).fill(0);let cash=0,outstanding=0,reimb=0,peak=0;for(let m=0;m<=NM;m++){let before=cash+base[m],minimum=m<last?minimumCash:0;if(before<minimum){ein[m]=minimum-before;before=minimum}outstanding+=ein[m];reimb+=R.eqreimbcap[m];const free=Math.max(0,before-req[m]),debtCleared=R.lcl[m]<=1e-6;let allowed=!d.distlock||debtCleared?free:Math.min(free,reimb,outstanding);
+    if(Math.round(_num(d.distmode,0))===1&&m<payoutMonth)allowed=0;eout[m]=Math.max(0,allowed);if(!debtCleared&&d.distlock)reimb=Math.max(0,reimb-eout[m]);cash=before-eout[m];cf[m]=eout[m]-ein[m];outstanding=Math.max(0,outstanding-eout[m]);peak=Math.max(peak,outstanding)}return {cf,ein,eout,peak,inj:ein.reduce((a,b)=>a+b,0),ret:eout.reduce((a,b)=>a+b,0)}};
   const preTaxBaseCF=R.net.map((v,m)=>v+R.dr1[m]+R.dr2[m]-R.rep[m]-R.intr[m]-R.pf[m]-R.lf[m]),preTaxEquity=buildEquitySeries(preTaxBaseCF);
   const cfKeys=["cfrefqualifiedsales","salescash","escin","cashtotal","cfsutrefund","cfoutputsut","cfinterestincome","cfrefinterestincome","cfland","cfinfra","cfpiddebt","cfcapex","cfconstruction","cfdesign","cfauthority","cfbrokerage","cfretax","cfohpaid","cftaxpaid","cffinance","cfdebtrepaid","cfdebtraised","cfequity","cfotherincome","cfequitydist","cfinputsutpaid",
     "cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfrefnetcash","cfrefdebt","cfrefdebtfinance","cfrefrepayment","cfrefprocessing","cfrefinterest","cfreflifetime","cfreffundingneed","cfrefequity","cfrefsurplus","cfrefprofit","cfreffranchisetax","cfrefcorporatetax","cfrefotherincome"];
@@ -6098,6 +6113,11 @@ const DATE_RANGE_FIELDS={
               extraOff:d=>Math.round(_num(d.permtiming,1))===1},
 };
 const DATE_RANGE_DUR_KEYS=new Set(Object.values(DATE_RANGE_FIELDS).map(f=>f.durKey));
+/* The Start picker already writes lagKey directly (see renderDateRangeField
+   below) - the raw lag field must not ALSO render as its own row, or the same
+   "starts after closing" offset shows up twice: once as a date, once as a
+   number. */
+const DATE_RANGE_LAG_KEYS=new Set(Object.values(DATE_RANGE_FIELDS).map(f=>f.lagKey).filter(Boolean));
 /* Renders the Start/End month pickers for one date-range field. Writing the
    Start picker adjusts the lag (lag mode on) or the absolute field directly
    (lag mode off) so applyLagTiming's cascade keeps working unchanged; writing
@@ -6814,7 +6834,7 @@ function buildFormCore(){
     if(sec.g==="Sales and use tax"){buildGstEditor(g);fs.appendChild(g);host.appendChild(fs);return}
     if(sec.g==="Phase-by-product unit matrix (optional)")return;
     sec.f.forEach(([k,lab,unit,,t])=>{
-      if(DATE_RANGE_DUR_KEYS.has(k))return;
+      if(DATE_RANGE_DUR_KEYS.has(k)||DATE_RANGE_LAG_KEYS.has(k))return;
       if(DATE_RANGE_FIELDS[k]){
         const drf=DATE_RANGE_FIELDS[k];
         if(drf.extraOff&&drf.extraOff(D))return;
@@ -6937,7 +6957,7 @@ function buildFormCore(){
             buildForm();buildScaffold();showNav();render();
             return;
           }
-          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","taxsettlelag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
+          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","taxsettlelag","eqdistlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
           if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           if(k==="landpaycount"){
             /* Picking a count fills in shares that add up, so the choice stands
@@ -8747,8 +8767,7 @@ function renderProjectCashflow({A,d},hostId){
     const f=isCount?M0:$z;
     return {sr:1,cls:kind||"",c:[ref,label,...fys.map(y=>f(fn(y))),f(isBal?fn(fys[fys.length-1]):sum(fn))]};
   });
-  const note="A real cash roll-forward: Opening Balance plus Total Cash Inflows (Equity Infused and Debt Raised included) less Total Cash Outflows equals Closing Balance. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under Total Overheads and Other Payments. "+
-    (d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered in Sales and Use Tax Recovered after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned in Sales and Use Tax Recovered after the refund lag.");
+  const note=(d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered in Sales and Use Tax Recovered after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned in Sales and Use Tax Recovered after the refund lag.");
   const cfHtml=`<div class="scrollx">`+tbl("Project Cash Flow Statement",["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,note,"totalfirst")+`</div>`;
   set(host,cfHtml);if(own)cacheSetLRU(_projectCashflowHtml,cfKey,cfHtml,8);
 };
@@ -8760,7 +8779,7 @@ PANE.monthly=function({A,d},hostId){
     const f=isCount?M0:$z;
     return {sr:1,cls:kind||"",c:[ref,label,...mm.map(m=>f(fn(m))),f(isBal?fn(mm[mm.length-1]):mm.reduce((a,m)=>a+fn(m),0))]};
   });
-  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Same line sequence as the annual cashflow: a real cash roll-forward from Opening to Closing Balance. Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
+  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
 };
 /* ═══════════════════ SENSITIVITY / HEAT / OFFER ═══════════════════ */
 function renderSensitivitySync({d},runFn=run,solveLandFn=solveLand){
@@ -9793,7 +9812,14 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       {sr:1,c:["2.2",buildLabel,pc("constructionCost"),...vals("constructionCost"),total("constructionCost")]},
       {sr:1,cls:"sub bp-section",c:["2.3","Other Direct Costs",...blank()]},
       {sr:1,c:["2.3.1","Due Diligence & Ancillary Fees",pc("dueDiligence"),...vals("dueDiligence"),total("dueDiligence")]},
-      {sr:1,c:["2.3.2","Soft Costs",pc("softCosts"),...vals("softCosts"),total("softCosts")]},
+      /* Labelled to match what this row actually is: due diligence, soft cost
+         and design cost all settle through one pooled COGS bucket
+         (R.designcogs) once a unit closes, so "Soft Costs" here is really
+         (soft cost + design cost)'s share of that pool, net of Due
+         Diligence's own share above - see the allocation comment below. A
+         true standalone Soft Cost row would need the engine to track its
+         COGS separately from Design Cost's, which it does not today. */
+      {sr:1,c:["2.3.2","Soft & Design Costs",pc("softCosts"),...vals("softCosts"),total("softCosts")]},
       {sr:1,c:["2.3.3","Authority & Statutory Costs",pc("statutoryCosts"),...vals("statutoryCosts"),total("statutoryCosts")]},
       {sr:1,c:["2.3.4","Other Costs",pc("otherCostsOther"),...vals("otherCostsOther"),total("otherCostsOther")]},
       {sr:1,cls:"sub bp-total",c:["2.3","Other Direct Costs (2.3.1 to 2.3.4)",pc("otherDirectCost"),...vals("otherDirectCost"),total("otherDirectCost")]},
@@ -9848,16 +9874,21 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
          Other direct development and selling classifications remain in Direct Cost but are
          presented under Other Direct Cost so the four-row statement still reconciles. */
       const constructionCost=pl("constructionCost",y);
-      const brokerage=pl("brokerage",y),marketing=pl("marketing",y);
+      /* Selling Cost shares its source pool with Brokerage (both are rate-splits
+         of the same R.sell cash - see the brokerage/sellingCost split in
+         run()'s PL[y] assignment) and reads as a marketing-type expense, so it
+         is folded into Marketing & Advertising rather than Other Costs. */
+      const brokerage=pl("brokerage",y),marketing=pl("marketing",y)+pl("sellingCost",y);
       const designAllocated=b("designcogs",y),
         dueDiligence=designAllocated*dueDiligenceTotal/designDen,
         professionalFeesTotal=pl("professionalFees",y),
         softCosts=professionalFeesTotal-dueDiligence,
         statutoryCosts=pl("statutoryCost",y),
         /* Everything else that has always been folded into Other Direct Cost
-           and is not being given its own row. Brokerage and marketing show
-           below Gross Profit instead, so neither term belongs here. */
-        otherCostsOther=pl("otherDirectCost",y)+pl("sellingCost",y)+pl("developmentManagementFees",y)+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y),
+           and is not being given its own row. Brokerage, Marketing and Selling
+           Cost show below Gross Profit instead, so none of those terms
+           belong here. */
+        otherCostsOther=pl("otherDirectCost",y)+pl("developmentManagementFees",y)+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y),
         /* Built from its own displayed children so 2.3's subtotal can never
            silently drift from the sum of 2.3.1-2.3.4. */
         otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
@@ -9902,12 +9933,12 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
     years.forEach(y=>{
       const landCost=sy("landCost",y)+sy("transferTax",y)+sy("landSurcharge",y)+sy("acqFeeCost",y)+sy("acquisitionCost",y);
       const constructionCost=sy("constructionCost",y);
-      const brokerage=sy("brokerage",y),marketing=sy("marketing",y);
+      const brokerage=sy("brokerage",y),marketing=sy("marketing",y)+sy("sellingCost",y);
       const dueDiligence=sy("dueDiligenceFees",y),
         professionalFeesTotal=sy("professionalFees",y),
         softCosts=professionalFeesTotal-dueDiligence,
         statutoryCosts=sy("statutoryCost",y),
-        otherCostsOther=sy("otherDirectCost",y)+sy("sellingCost",y)+sy("developmentManagementFees",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y),
+        otherCostsOther=sy("otherDirectCost",y)+sy("developmentManagementFees",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y),
         otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
       const realEstateTax=sy("holdingCost",y);
       const directCost=landCost+constructionCost+otherDirectCost,
@@ -10135,6 +10166,9 @@ function cleanStatementHost(id){
     rows.push({sr:1,c:[String(sr+9),"Equity IRR (after tax)","",A.eirr!=null?P(A.eirr,2):"-",""]});
     return {rows,check:{pbt,npbt:T("npbt")}};
   }
+  /* board-pdf-export-runtime (a separate IIFE) reuses this for the
+     Consolidation Statements' Project P&L page. */
+  window.summaryRows=summaryRows;
   PANE.ppl=function(C,hostId){
     const A=C&&C.A,d=C&&C.d,host=hostId||"o_ppl";
     const x=summaryRows(A,d),pd=document.querySelector("#p_"+host.replace(/^o_/,"")+" .pd");
@@ -15580,8 +15614,20 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     })}
     return {pages,finish,page,rect,line,text,textBlock,card,miniTable,hbarChart,lineBarChart,drawTable,setY:v=>{y=v},getY:()=>y};
   }
-  function plTable(A,d){const S=window.projectPlData?window.projectPlData(A,d):null;if(S&&window.projectPlRows)return{title:"Profit and Loss Account",headers:["S.No","Particulars",...S.years.map(y=>"FY "+y),"Total"],rows:window.projectPlRows(S).map(r=>({cells:r.c,kind:tableKind(r.cls)})),foot:"All amounts in USD. Revenue and project surplus follow the active project model."};return fallbackProjectPlTable(A,d)}
-  function fallbackProjectPlTable(A,d){return{title:"Profit and Loss Account",headers:["Particulars","Amount"],rows:[["Total revenue",money(A.revenue)],["Direct cost",money(A.direct)],["Gross profit",money(A.gross)],["Operating overhead",money(A.operatingOverhead)],["Finance cost",money(A.finance)],["Tax",money(A.tax)],["Net profit",money(A.npat)]].map(x=>({cells:x})),foot:""}}
+  /* bpPlRows/cashFlowRowDefs-shaped rows read [sr,label,...middle,total] - the
+     on-screen tables (tbl() with the "totalfirst" class) already move that
+     trailing total to sit right after label; PDF tables built directly
+     (plTable/cashTable/board PDF) need the same lift so Sl.No/Particulars/
+     Total/%-of-Revenue/years matches what's on screen instead of leaving
+     Total last where a header/row cell-count mismatch silently drops it. */
+  function liftTotalFirst(arr){if(!Array.isArray(arr)||arr.length<4)return arr;const c=arr.slice(),t=c.pop();c.splice(2,0,t);return c}
+  /* This script block is an IIFE - board-pdf-export-runtime (a separate block)
+     also needs this for its own P&L/Cashflow tables, so it must be reached via
+     window like every other cross-block helper here (projectPlData,
+     cashFlowRowDefs, projectPlRows). */
+  window.liftTotalFirst=liftTotalFirst;
+  function plTable(A,d){const S=window.projectPlData?window.projectPlData(A,d):null;if(S&&window.projectPlRows)return{title:"Project P&L Account",headers:liftTotalFirst(["S.No","Particulars","% of Revenue",...S.years.map(y=>"FY "+y),"Total"]),rows:window.projectPlRows(S).map(r=>({cells:liftTotalFirst(r.c),kind:tableKind(r.cls)})),foot:"All amounts in USD. Revenue and project surplus follow the active project model."};return fallbackProjectPlTable(A,d)}
+  function fallbackProjectPlTable(A,d){return{title:"Project P&L Account",headers:["Particulars","Amount"],rows:[["Total revenue",money(A.revenue)],["Direct cost",money(A.direct)],["Gross profit",money(A.gross)],["Operating overhead",money(A.operatingOverhead)],["Finance cost",money(A.finance)],["Tax",money(A.tax)],["Net profit",money(A.npat)]].map(x=>({cells:x})),foot:""}}
   /* Shared by cashTable (Cashflow & P&L PDF) and _boardPdfCashTemplateRows
      (Board PDF Appendix) - was two independently-maintained, row-for-row copies
      that had drifted from the on-screen Cashflow tab (renderProjectCashflow):
@@ -15671,9 +15717,9 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
        stand at the end". */
     const rows=cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount,isBal])=>{
       const f=isCount?M0:money,vals=fys.map(fn);
-      return {kind,cells:[ref,label,...vals.map(f),f(isBal?vals[vals.length-1]:vals.reduce((a,v)=>a+v,0))]};
+      return {kind,cells:liftTotalFirst([ref,label,...vals.map(f),f(isBal?vals[vals.length-1]:vals.reduce((a,v)=>a+v,0))])};
     });
-    return{title:"Project Cash Flow Statement",headers:["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,foot:"A real cash roll-forward: Opening Balance plus Total Cash Inflows (Equity Infused and Debt Raised included) less Total Cash Outflows equals Closing Balance. Real Estate Property Tax, Franchise Tax and Corporate Tax are grouped under Total Overheads and Other Payments."}
+    return{title:"Project Cash Flow Statement",headers:liftTotalFirst(["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"]),rows,foot:""}
   }
   function monthlyTable(A,d,titleText,rowDefs){const last=Math.max(0,...rowDefs.flatMap(r=>r.values.map((v,i)=>Math.abs(num(v))>.5?i:0))),months=Array.from({length:last+1},(_,m)=>m);return{title:titleText,headers:["Sl. No.","Particulars",...months.map(m=>mLabel(m,d))],rows:rowDefs.map((r,i)=>{const f=r.isCount?M0:money;return {kind:r.kind||"",cells:[r.ref!=null?r.ref:String(i+1),r.label,...months.map(m=>f(r.values[m]))]}}),foot:"Monthly appendix is generated from the active project cashflow engine."}}
   /* Split into what the schedules are and how they are drawn, so the workbook
@@ -15763,7 +15809,6 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     const add=(node,title)=>{const t=tableFromNode(node,title);if(t)out.push(t)};
     add(paintPane("exp"),"Exposure Statement");
     add(paintPane("eqsch"),"Equity Schedule");
-    add(paintPane("salesov"),"Sales Overview");
     return out;
   }
   function statementSections(A,d){
@@ -15920,7 +15965,13 @@ function _boardPdfTable(stream,headers,rows,x,top,w,C,opts={}){
   let headH=baseHead;
   if(baseHead>0){const headLines=headers.map((h,i)=>_boardPdfWrap(String(h||"").toUpperCase(),widths[i]-pad*2,headFont,2,3));headH=Math.max(baseHead,...headLines.map(a=>a.length*(headFont*1.16)+10));headers.forEach((h,i)=>{_pdfRect(stream,xx,y-headH,widths[i],headH,C.navy,C.navy,.1);_boardPdfFit(stream,String(h||"").toUpperCase(),xx+pad,y-headH/2-2.2,headFont,C.white,aligns[i],widths[i]-pad*2,3,4.4);xx+=widths[i]});y-=headH}
   (rows||[]).forEach((rawRow,ri)=>{
-    const obj=Array.isArray(rawRow)?{cells:rawRow}:rawRow,cells=(obj.cells||[]).map(v=>typeof v==="object"&&v&&Object.prototype.hasOwnProperty.call(v,"text")?v:_boardPdfCell(v)),lineSets=cells.map((c,i)=>{const fs=c.fontSize||font;return _boardPdfWrap(c.text,widths[i]-pad*2,fs,c.font||1,maxLines)}),rh=Math.max(rowH,...lineSets.map((a,i)=>{const fs=cells[i].fontSize||font;return a.length*(fs*1.22)+vPad})),fill=obj.fill||((ri%2)?C.white:C.row);xx=x;
+    const obj=Array.isArray(rawRow)?{cells:rawRow}:rawRow;
+    if(obj.band){
+      _pdfRect(stream,x,y-rowH,w,rowH,C.row2,C.grid,.4);
+      _boardPdfText(stream,String(obj.band).toUpperCase(),x+pad,y-rowH/2-2.2,font,C.navy,"left",w-pad*2,2);
+      y-=rowH;return;
+    }
+    const cells=(obj.cells||[]).map(v=>typeof v==="object"&&v&&Object.prototype.hasOwnProperty.call(v,"text")?v:_boardPdfCell(v)),lineSets=cells.map((c,i)=>{const fs=c.fontSize||font;return _boardPdfWrap(c.text,widths[i]-pad*2,fs,c.font||1,maxLines)}),rh=Math.max(rowH,...lineSets.map((a,i)=>{const fs=cells[i].fontSize||font;return a.length*(fs*1.22)+vPad})),fill=obj.fill||((ri%2)?C.white:C.row);xx=x;
     cells.forEach((c,i)=>{
       _pdfRect(stream,xx,y-rh,widths[i],rh,c.fill||fill,C.grid,.4);const al=c.align||aligns[i]||"left";
       if(c.pill){const ps=4.1,pw=Math.min(widths[i]-12,Math.max(40,_boardPdfTextWidth(c.text.toUpperCase(),ps,true,2)+20)),ph=14,px=al==="right"?xx+widths[i]-pw-6:xx+6,py=y-rh/2-ph/2;_boardPdfRound(stream,px,py,pw,ph,7,c.pill,c.pill,.1);_boardPdfText(stream,c.text.toUpperCase(),px+5,py+4.5,ps,C.white,"center",pw-10,2)}else{
@@ -16116,35 +16167,35 @@ function _boardPdfAnnualTableRows(R,years,type,C){
   if(type!=="pl")return [];
   const S=projectPlData(R.A,R.d),use=years&&years.length?years:S.years,full={years:use,value:(y,k)=>S.value(y,k),total:k=>use.reduce((a,y)=>a+S.value(y,k),0)};
   const fmt=v=>Math.abs(Number(v)||0)<.5?"-":_boardPdfShort(v);
-  return projectPlRows(full,fmt).map(r=>{const cls=String(r.cls||''),green=/bp-result|\bres\b/.test(cls),grey=/bp-qualified|bp-section|bp-total|\bsub\b/.test(cls);return {cells:r.c,bold:green||grey,fill:green?C.paleGreen:(grey?C.row2:undefined)}});
+  return projectPlRows(full,fmt).map(r=>{const cls=String(r.cls||''),green=/bp-result|\bres\b/.test(cls),grey=/bp-qualified|bp-section|bp-total|\bsub\b/.test(cls);return {cells:liftTotalFirst(r.c),bold:green||grey,fill:green?C.paleGreen:(grey?C.row2:undefined)}});
 }
 function _boardPdfCashTemplateRows(R,years,C){
   const b=(k,y)=>Number(R.A.B[k]&&R.A.B[k][y]||0),vals=fn=>years.map(fn),sum=a=>a.reduce((x,y)=>x+y,0);
   return cashFlowRowDefs(b,years).map(([ref,label,fn,kind="",isCount,isBal])=>{
     const a=vals(fn),fmt=v=>isCount?M0(v):_boardPdfShort(v),fill=kind==="res"?C.paleGreen:(kind==="sub"?C.row2:undefined),bold=kind==="res"||kind==="sub",
       total=isBal?(a.length?a[a.length-1]:0):sum(a);
-    return {cells:[ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":fmt(v),{color:!isCount&&v<0?C.red:C.text})),_boardPdfCell(fmt(total),{bold})],fill,bold};
+    return {cells:liftTotalFirst([ref,label,...a.map(v=>_boardPdfCell(Math.abs(v)<.5?"-":fmt(v),{color:!isCount&&v<0?C.red:C.text})),_boardPdfCell(fmt(total),{bold})]),fill,bold};
   });
 }
 function _boardPdfPage9(pages,R,C,dateText,project){
-  const ctx=_boardPdfNewPage(pages.length+1,project,'Appendix - Annual P&L',dateText,C),s=ctx.stream,x=36,w=540,S=projectPlData(R.A,R.d),years=S.years;let y=_boardPdfIntro(s,'Appendix','Annual Profit and Loss Account','The annual P&L follows the same Business Plan line sequence as the on-screen individual and consolidated P&L.',x,710,w,C);
+  const ctx=_boardPdfNewPage(pages.length+1,project,'Appendix - Annual P&L',dateText,C),s=ctx.stream,x=36,w=540,S=projectPlData(R.A,R.d),years=S.years;let y=_boardPdfIntro(s,'Appendix','Annual Project P&L Account','The annual P&L follows the same Business Plan line sequence as the on-screen individual and consolidated P&L.',x,710,w,C);
   /* The P&L rows carry a share-of-revenue column. This header list did not, so
      every row handed the table one more cell than there were column widths, and
      the width lookup came back undefined - which threw before a single page was
      written and is why this report has been producing nothing at all. */
-  const hdr=['Sl. No.','Description','% of Rev',...years.map(v=>'FY '+String(v).slice(-2)),'Total'],
+  const hdr=['Sl. No.','Description','Total','% of Rev',...years.map(v=>'FY '+String(v).slice(-2))],
     first=.055,second=.235,pctW=.08,rest=(1-first-second-pctW)/(years.length+1),
-    widths=[first,second,pctW,...Array(years.length+1).fill(rest)];
-  y=_boardPdfSectionTitle(s,1,'Profit and Loss Account',x,y,w,C);
+    widths=[first,second,rest,pctW,...Array(years.length).fill(rest)];
+  y=_boardPdfSectionTitle(s,1,'Project P&L Account',x,y,w,C);
   _boardPdfTable(s,hdr,_boardPdfAnnualTableRows(R,years,'pl',C),x,y,w,C,
     {widths,rowH:15.2,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,
-     aligns:['center','left','right',...Array(years.length+1).fill('right')]});
+     aligns:['center','left','right','right',...Array(years.length).fill('right')]});
   _boardPdfCallout(s,x,27,w,49,'P&L convention','Net Qualified Sales follow contract timing. Total Revenue and all profit lines follow the active project accounting-recognition schedule. The four Direct Cost lines are complete classifications that reconcile exactly to model Direct Cost.',C);_boardPdfPush(ctx,pages)
 }
 function _boardPdfPage10(pages,R,C,dateText,project){
   const ctx=_boardPdfNewPage(pages.length+1,project,"Appendix - Annual Cashflow",dateText,C),s=ctx.stream,x=36,w=540,years=_boardPdfYearsData(R.A);let y=_boardPdfIntro(s,"Appendix","Annual project cashflow","The cashflow uses the same line sequence, sign convention and annual values as the individual project Cashflow tab and the Cashflow & P&L PDF export.",x,710,w,C);
-  const hdr=["Sl. No.","Particulars",...years.map(v=>"FY "+String(v).slice(-2)),"Total"],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,...Array(years.length+1).fill(rest)];y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);_boardPdfTable(s,hdr,_boardPdfCashTemplateRows(R,years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left",...Array(years.length+1).fill("right")]});
-  _boardPdfCallout(s,x,27,w,49,"Cashflow convention","Positive Net Cash Flow is a pre-financing funding requirement. Debt draws reduce that requirement; debt repayment and finance costs increase it. Profit is Net Surplus less Equity Needed.",C);_boardPdfPush(ctx,pages)
+  const hdr=["Sl. No.","Particulars","Total",...years.map(v=>"FY "+String(v).slice(-2))],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,rest,...Array(years.length).fill(rest)];y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);_boardPdfTable(s,hdr,_boardPdfCashTemplateRows(R,years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left","right",...Array(years.length).fill("right")]});
+  _boardPdfPush(ctx,pages)
 }
 /* ---- site page: the map, the 3D view and what the polygon measures ---------
    MapLibre throws its drawing buffer away after each frame unless asked not to,
@@ -16286,8 +16337,61 @@ function _boardPdfPagesIntel(pages,R,C,dateText,project){
   close();
   return true;
 }
+/* Consolidation Statements: Landowner Co + Homebuilder Co as one business,
+   intercompany land sale eliminated - window.combinedStatementContext() is
+   the same pure {A,d} source the on-screen Consolidation Statements tab
+   reads (see combinedContext()), so these pages cannot drift from it. Only
+   added when a linked pair exists AND the parcel this report was generated
+   for is actually part of that pair - a report for an unrelated parcel must
+   not carry someone else's consolidated figures. */
+function _boardPdfPageConsolidationDivider(pages,C,dateText,project){
+  const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation Statements",dateText,C),s=ctx.stream,x=36,w=540;
+  _boardPdfIntro(s,"Consolidation","Consolidation Statements","Landowner Co and Homebuilder Co treated as one business that bought the land, developed it and sold the homes, with the intercompany land sale eliminated. The following pages are drawn from the same on-screen Consolidation Statements tab.",x,710,w,C);
+  _boardPdfPush(ctx,pages)
+}
+function _boardPdfPageConsolidatedProjectPl(pages,C,dateText,project,combined){
+  const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation - Project P&L",dateText,C),s=ctx.stream,x=36,w=540;
+  let y=_boardPdfIntro(s,"Consolidation","Project P&L","Single-page summary of the combined business, same layout as the individual Project P&L tab.",x,710,w,C);
+  const sr=summaryRows(combined.A,combined.d),hdr=["Sr No.","Particulars","Rate / UoM","Value (USD)","% of Revenue"],widths=[.08,.42,.16,.17,.17];
+  y=_boardPdfSectionTitle(s,1,"Project P&L",x,y,w,C);
+  _boardPdfTable(s,hdr,sr.rows.map(r=>r.band?{band:r.band}:{cells:r.c,bold:r.cls==="res"}),x,y,w,C,
+    {widths,rowH:13.6,font:4.6,headFont:4.4,pad:3,vPad:5,maxLines:2,aligns:["center","left","right","right","right"]});
+  _boardPdfPush(ctx,pages)
+}
+function _boardPdfPageConsolidatedPl(pages,C,dateText,project,combined){
+  const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation - Annual P&L",dateText,C),s=ctx.stream,x=36,w=540,S=projectPlData(combined.A,combined.d),years=S.years;
+  let y=_boardPdfIntro(s,"Consolidation","Annual Project P&L Account","The annual P&L follows the same Business Plan line sequence as the individual project statements.",x,710,w,C);
+  const hdr=["Sl. No.","Description","Total","% of Rev",...years.map(v=>"FY "+String(v).slice(-2))],
+    first=.055,second=.235,pctW=.08,rest=(1-first-second-pctW)/(years.length+1),
+    widths=[first,second,rest,pctW,...Array(years.length).fill(rest)];
+  y=_boardPdfSectionTitle(s,1,"Project P&L Account",x,y,w,C);
+  _boardPdfTable(s,hdr,_boardPdfAnnualTableRows({A:combined.A,d:combined.d},years,"pl",C),x,y,w,C,
+    {widths,rowH:15.2,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,
+     aligns:["center","left","right","right",...Array(years.length).fill("right")]});
+  _boardPdfPush(ctx,pages)
+}
+function _boardPdfPageConsolidatedCf(pages,C,dateText,project,combined){
+  const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation - Annual Cashflow",dateText,C),s=ctx.stream,x=36,w=540,years=_boardPdfYearsData(combined.A);
+  let y=_boardPdfIntro(s,"Consolidation","Annual Project Cashflow","The cashflow uses the same line sequence and sign convention as the individual project Cashflow tab.",x,710,w,C);
+  const hdr=["Sl. No.","Particulars","Total",...years.map(v=>"FY "+String(v).slice(-2))],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,rest,...Array(years.length).fill(rest)];
+  y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);
+  _boardPdfTable(s,hdr,_boardPdfCashTemplateRows({A:combined.A},years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left","right",...Array(years.length).fill("right")]});
+  _boardPdfPush(ctx,pages)
+}
+function _boardPdfConsolidationPages(pages,C,dateText,project){
+  let combined=null;
+  try{
+    const pair=typeof linkedPair==="function"?linkedPair():null,active=P0();
+    if(pair&&(pair.h===active||pair.v===active))combined=window.combinedStatementContext&&window.combinedStatementContext();
+  }catch(e){}
+  if(!combined)return;
+  _boardPdfPageConsolidationDivider(pages,C,dateText,project);
+  _boardPdfPageConsolidatedProjectPl(pages,C,dateText,project,combined);
+  _boardPdfPageConsolidatedPl(pages,C,dateText,project,combined);
+  _boardPdfPageConsolidatedCf(pages,C,dateText,project,combined);
+}
 function _boardPdfBuildPages(R){
-  const pages=[],C=_boardPdfColors(),dateText=_boardPdfDate(),project=_boardPdfProjectFull(R.meta.name,R.meta.loc);_boardPdfCover(pages,R,C,dateText,project);_boardPdfPage3(pages,R,C,dateText,project);_boardPdfPageSite(pages,R,C,dateText,project);_boardPdfPagesIntel(pages,R,C,dateText,project);_boardPdfPage2(pages,R,C,dateText,project);_boardPdfPage4(pages,R,C,dateText,project);_boardPdfPage5(pages,R,C,dateText,project);_boardPdfPage6(pages,R,C,dateText,project);_boardPdfPage7(pages,R,C,dateText,project);_boardPdfPage8(pages,R,C,dateText,project);_boardPdfPage9(pages,R,C,dateText,project);_boardPdfPage10(pages,R,C,dateText,project);return pages
+  const pages=[],C=_boardPdfColors(),dateText=_boardPdfDate(),project=_boardPdfProjectFull(R.meta.name,R.meta.loc);_boardPdfCover(pages,R,C,dateText,project);_boardPdfPage3(pages,R,C,dateText,project);_boardPdfPageSite(pages,R,C,dateText,project);_boardPdfPagesIntel(pages,R,C,dateText,project);_boardPdfPage2(pages,R,C,dateText,project);_boardPdfPage4(pages,R,C,dateText,project);_boardPdfPage5(pages,R,C,dateText,project);_boardPdfPage6(pages,R,C,dateText,project);_boardPdfPage7(pages,R,C,dateText,project);_boardPdfPage8(pages,R,C,dateText,project);_boardPdfPage9(pages,R,C,dateText,project);_boardPdfPage10(pages,R,C,dateText,project);_boardPdfConsolidationPages(pages,C,dateText,project);return pages
 }
 /* Add Times fonts for the board-report serif heading treatment. Existing exports
    continue to use Helvetica exactly as before. */
@@ -17463,6 +17567,11 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     }
     return null;
   }
+  /* board-pdf-export-runtime (a separate IIFE) needs this to decide whether the
+     report being generated is for a parcel that is part of a linked pair -
+     without this it would silently never find one and the Consolidation
+     Statements section would never appear, with no error to notice. */
+  window.linkedPair=linkedPair;
 
   let cacheKey="",cacheVal=null;
   function combinedContext(){
