@@ -4189,7 +4189,11 @@ function _normalizedForDerive(raw){
   o.landcurve=0;o.landdur=1;
   o.infracurve=_clamp(Math.round(_num(o.infracurve,0)),0,4);
   o.buildcurve=_clamp(Math.round(_num(o.buildcurve,0)),0,4);
-  o.relmode=_clamp(Math.round(_num(o.relmode,0)),0,2);
+  /* Default is 100% of sale proceeds swept to debt (deposit released the
+     moment it is receivable at contract, balance at delivery - see relmode===1
+     below) - not the cost-release multiple, which used to be the fallback for
+     any project that never touched this field. */
+  o.relmode=_clamp(Math.round(_num(o.relmode,1)),0,2);
   o.hoastart=_clamp(Math.round(_num(o.hoastart,1)),0,2);
   o.modelphase=_clamp(Math.round(_num(o.modelphase,0)),0,6);
   o.taxcarrybackyrs=Math.max(0,Math.round(_num(o.taxcarrybackyrs,0)));
@@ -4594,6 +4598,7 @@ const GROUPS=[
   ["drawmode","Facility drawn","flag",0,"n"],
   ["facmode","Facility sizing basis","flag",0,"n"],
   ["facilityfixed","Fixed operating facility amount","$",0,"n"],
+  ["debtcap","Maximum debt / facility ceiling (0 = no cap)","$",0,"n"],
   ["fundingmode","Funding sequence","flag",0,"n"],
   ["equitypc","Equity-first contribution","% eligible development cost",20,"p"],
   ["equityfixed","Fixed equity-first amount","$",0,"n"],
@@ -4616,7 +4621,7 @@ const GROUPS=[
   ["linefbasis","Line fee charged on","",0,"i"],
   ["financefixed","Reference finance-cost budget (does not override dynamic model)","$",0,"n"],
   ["relpc","Lot / unit release price","x pro-rata",1.10,"n"],
-  ["relmode","Debt release basis","flag",0,"n"],
+  ["relmode","Debt release basis","flag",1,"n"],
   ["relsalespc","Release share of sale proceeds","% sale proceeds",100,"p"],
   ["relfixed1","Product 1 fixed release","$/unit",0,"n"],
   ["relfixed2","Product 2 fixed release","$/unit",0,"n"],
@@ -4881,7 +4886,7 @@ const VERT_ONLY_FIELDS=["vert","buildbua","_plotratio","_effic","bua1","bua2","b
   "buildstagger","permitbase","buildpsf","buildpsf1","buildpsf2","buildpsf3","buildpsf1ovr","buildpsf2ovr","buildpsf3ovr","hpsf1ovr","hpsf2ovr","hpsf3ovr","vel1","vel2","vel3","buildmo1ovr","buildmo2ovr","buildmo3ovr","modelphase","dsgnpc"];
 /* The funding selectors all stayed on one setting across every scheme, so the
    figures are asked for and the policy behind them is left as it stands. */
-const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facilityfixed",
+const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facilityfixed","debtcap",
   "facmode","relmode","relpc","relsalespc",
   "drawcount","draw1month","draw1amount","draw2month","draw2amount","draw3month","draw3amount","draw4month","draw4amount","draw5month","draw5amount",
   "repaycount","repay1month","repay1amount","repay2month","repay2amount","repay3month","repay3amount","repay4month","repay4amount","repay5month","repay5amount"]);
@@ -5608,9 +5613,14 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const pnlGstAdjustment=-totalLandCredit+(d.costsutbasis===1?-totalDevCredit:Math.max(0,totalDevGstPaid-totalDevCredit));
   for(let m=0;m<=NM;m++)R.sutcogs[m]=pnlGstAdjustment*R.recog[m]/totalRecognised;
   for(let m=0;m<=NM;m++)R.net[m]=R.lsr[m]+R.pid[m]+R.otherincome[m]+R.sutrefund[m]-R.outputsut[m]-R.devc[m]-R.capex[m]-R.sellcash[m]-R.ovh[m]-R.marketing[m]-R.carry[m]-R.inputsutpaid[m];
-  const finBase=(d.finland?land+closing+rollback+acqfee:0)+(d.findd?dd+soft+d.pidcost+otherDirect:0)+(d.fincapex?d.dacapex:0)+(d.finhoriz?infTot+contTot+munic+impactTotal:0)+(d.finvert?actualBuild+designTot+vertContTot+actualPermit+modelCost:0),ltcCommit=Math.round(_num(d.facmode,0))===2
+  const finBase=(d.finland?land+closing+rollback+acqfee:0)+(d.findd?dd+soft+d.pidcost+otherDirect:0)+(d.fincapex?d.dacapex:0)+(d.finhoriz?infTot+contTot+munic+impactTotal:0)+(d.finvert?actualBuild+designTot+vertContTot+actualPermit+modelCost:0),
+    /* Whatever the sizing method works out to, a positive debtcap is an absolute
+       ceiling on top of it - a lender's "up to X% of cost, but never more than
+       $Y regardless" - not a third sizing mode of its own. */
+    ltcCommitRaw=Math.round(_num(d.facmode,0))===2
       ?Math.min(d.ltc/100*(land+infTot),infTot)
-      :(d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase);
+      :(d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase),
+    ltcCommit=_num(d.debtcap,0)>0?Math.min(ltcCommitRaw,d.debtcap):ltcCommitRaw;
   const futureEligible=new Array(NM+2).fill(0);for(let m=NM;m>=0;m--)futureEligible[m]=futureEligible[m+1]+Math.max(0,R.fdev[m]);
   const firstEligibleSpend=R.fdev.findIndex(v=>v>1e-6),facilityStart=d.facstart>=0?d.facstart:Math.max(close,firstEligibleSpend>=0?firstEligibleSpend:close);
   if(facilityStart>NM)throw new Error("Facility commitment month falls beyond the model horizon.");
