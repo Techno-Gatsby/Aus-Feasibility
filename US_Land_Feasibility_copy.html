@@ -4696,10 +4696,16 @@ function spreadWindow(row,total,start,dur,NM){
 }
 /* Re-times a line that has already been produced, without changing what it
    totals. Used where the amount comes from the phase or unit programme but the
-   timing is being taken over by an explicit window. */
-function retimeWindow(rows,start,dur,NM){
-  if(Math.max(0,Math.round(_num(dur,0)))<1)return false;
-  rows.forEach(row=>{const t=row.reduce((a,b)=>a+b,0);row.fill(0);spreadWindow(row,t,start,dur,NM)});
+   timing is being taken over by an explicit window. Keeps the line's spend
+   profile (curveMode, same codes as _spendWeights) rather than flattening it -
+   an explicit window says WHEN the spend happens, not that it should suddenly
+   go flat. */
+function retimeWindow(rows,start,dur,NM,curveMode){
+  const n=Math.max(0,Math.round(_num(dur,0)));if(n<1)return false;
+  const s=Math.max(0,Math.round(_num(start,1))-1);
+  const weights=_spendWeights(n,curveMode||0);
+  rows.forEach(row=>{const t=row.reduce((a,b)=>a+b,0);row.fill(0);
+    for(let i=0;i<n;i++)row[Math.min(NM,s+i)]+=t*weights[i]});
   return true;
 }
 /* The monthly land payments a linked parcel inherits from its seller. Anything
@@ -5379,7 +5385,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   let escrowBalance=0;for(let m=0;m<=NM;m++){escrowBalance+=d.escrow?R.dep[m]-R.escr[m]:0;R.escbal[m]=escrowBalance}
   const phaseActual=ph.counts.map(()=>0),phaseEligible=ph.counts.map(()=>0),phaseReimb=ph.counts.map(()=>0);
   ph.durations.forEach((dur,i)=>{const phaseBase=infBase*ph.costWeights[i],phaseMunic=munic*ph.costWeights[i],weights=_spendWeights(dur,d.infracurve);for(let k=0;k<dur;k++){const m=phaseStart[i]+k,infraSpend=phaseBase*weights[k]*Math.pow(1+d.infesc/100,m/12),municSpend=phaseMunic*weights[k],contSpend=infraSpend*d.contpc/100+d.contfixed*ph.costWeights[i]*weights[k];R.cinf[m]+=infraSpend;R.munic[m]+=municSpend;R.cont[m]+=contSpend;phaseEligible[i]+=infraSpend+contSpend;phaseActual[i]+=infraSpend+contSpend+municSpend}const rm=phaseComplete[i]+d.pidlag;phaseReimb[i]=phaseEligible[i]*d.pidel/100*d.pidrt/100;if(rm<=NM)R.pid[rm]+=phaseReimb[i]});
-  retimeWindow([R.cinf,R.cont],d.infrastart,d.infradur,NM);
+  retimeWindow([R.cinf,R.cont],d.infrastart,d.infradur,NM,d.infracurve);
   const infTot=R.cinf.reduce((a,b)=>a+b,0),contTot=R.cont.reduce((a,b)=>a+b,0),pid=R.pid.reduce((a,b)=>a+b,0);
   const buaTot=products.reduce((a,p)=>a+p.count*p.bua,0),baseBuildTot=V?verticalBaseBuild:0,modelCost=V?d.modelcost:0,vst=modelAnchor+d.vlag,vopen=vst+d.modelmo;
   if(V&&baseBuildTot>0){
@@ -5388,7 +5394,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   }
   if(V&&modelCost>0){if(d.modelmo>0)for(let m=vst;m<vopen&&m<=NM;m++)R.model[m]+=modelCost/d.modelmo;else R.model[vst]+=modelCost}
   unitRecords.forEach(u=>{const p=products[u.product];if(V){const buildWeights=_spendWeights(p.buildMonths,d.buildcurve);for(let k=0;k<p.buildMonths;k++){const m=u.buildStart+k,c=u.baseBuild*buildWeights[k]*Math.pow(1+d.infesc/100,m/12);R.build[m]+=c;const dsg=c*_num(d.dsgnpc,0)/100;R.design[m]+=dsg;u.designCost=(u.designCost||0)+dsg;const cc=c*d.contpc/100;R.cont[m]+=cc;u.buildCost+=c+cc}u.permitCost=d.permpc/100*(d.permitbase?u.buildCost:u.baseBuild*Math.pow(1+d.infesc/100,u.contractMonth/12));R.permit[u.contractMonth]+=u.permitCost}});
-  retimeWindow([R.design],d.dsgnstart,d.dsgndur,NM);
+  retimeWindow([R.design],d.dsgnstart,d.dsgndur,NM,d.buildcurve);
   if(Math.round(_num(d.permtiming,1))===1){
     const permTot=R.permit.reduce((a,b)=>a+b,0),recogTot=R.recog.reduce((a,b)=>a+b,0);
     if(permTot>1e-9&&recogTot>1e-9)for(let m=0;m<=NM;m++)R.permit[m]=permTot*R.recog[m]/recogTot;
@@ -6038,6 +6044,85 @@ const X=v=>v==null||isNaN(v)?"–":v.toFixed(2)+"x";
 const Mn=v=>v==null||isNaN(v)?"–":(v<0?"-$":"$")+(Math.abs(v)/1e6).toFixed(2)+"m";
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const mLabel=(m,d)=>{const i=(d.startMonth-1)+m;return MON[i%12]+"-"+String(d.startYear+Math.floor(i/12)).slice(2)};
+/* Calendar view onto a start(+duration) input pair for the Inputs panel's date
+   fields (see DATE_RANGE_FIELDS below): the engine still only ever sees a month
+   offset (1 = the model's own first month, same convention as ddstart etc.) -
+   these just convert what the user picks to/from that offset, anchored on
+   startMonth/startYear the same way mLabel is. */
+function offsetToMonthStr(v,d){
+  const i=(d.startMonth-1)+(Math.round(_num(v,1))-1);
+  const y=d.startYear+Math.floor(i/12),m=((i%12)+12)%12+1;
+  return y+"-"+String(m).padStart(2,"0");
+}
+function monthStrToOffset(s,d){
+  const mm=/^(\d{4})-(\d{2})$/.exec(String(s||""));if(!mm)return null;
+  return (+mm[1]-d.startYear)*12+(+mm[2]-d.startMonth)+1;
+}
+/* Fields that switch to a lag-computed value under lag mode (LAG_DERIVED_FIELDS
+   / applyLagTiming) still need a real date here: resolve through applyLagTiming
+   on a throwaway copy - cheap, pure month arithmetic, no engine run - rather
+   than showing the stale raw field the form otherwise hides. */
+function dateRangeEffectiveStart(startKey,cfg,d){
+  if(cfg.computeStart)return _num(cfg.computeStart(d),1);
+  if(cfg.lagKey&&Number(_num(d._lagmode,0)))return _num(applyLagTiming({...d})[startKey],1);
+  return _num(d[startKey],1);
+}
+/* Vertical build has no raw "start" input at all - every unit's build start is
+   whatever the phase programme works out (phaseStart[i], or later still if
+   buildstagger paces construction off each unit's own sale). Phase 1's start is
+   the representative anchor: the same buildmo duration applies to every phase,
+   just starting at each phase's own point, so anchoring on phase 1 and solving
+   buildmo from its End date keeps every other phase's construction the same
+   length, only its calendar position differs (unchanged behaviour). run() is
+   signature-cached, so this is a cache hit whenever d has not changed since the
+   last read anywhere else this render pass. */
+const BUILDMO_DATE_CFG={durKey:"buildmo",startReadOnly:true,label:"Construction cost (vertical build)",
+  computeStart:d=>{try{const ps=run(d).phaseSchedule;if(ps&&ps[0]&&Number.isFinite(ps[0].start))return ps[0].start}catch(e){}return 1}};
+const DATE_RANGE_FIELDS={
+  ddstart:   {durKey:"ddur",    label:"Due diligence"},
+  sfstart:   {durKey:"sfdur",   lagKey:"lagsf",    label:"Soft cost"},
+  otherstart:{durKey:"otherdur",lagKey:"lagother", label:"Other land-acquisition cost"},
+  infrastart:{durKey:"infradur",lagKey:"laginfra", label:"Infrastructure cost"},
+  dsgnstart: {durKey:"dsgndur", lagKey:"lagdsgn",  label:"Design cost"},
+  permstart: {durKey:"permdur", lagKey:"lagperm",  label:"Authority costs",
+              extraOff:d=>Math.round(_num(d.permtiming,1))===1},
+};
+const DATE_RANGE_DUR_KEYS=new Set(Object.values(DATE_RANGE_FIELDS).map(f=>f.durKey));
+/* Renders the Start/End month pickers for one date-range field. Writing the
+   Start picker adjusts the lag (lag mode on) or the absolute field directly
+   (lag mode off) so applyLagTiming's cascade keeps working unchanged; writing
+   End always solves back to a plain duration - duration fields are never
+   lag-derived. */
+function renderDateRangeField(g,startKey,cfg,d){
+  const durKey=cfg.durKey,lagKey=cfg.lagKey;
+  [["start","Start"],["end","End"]].forEach(([which,sub])=>{
+    const readOnly=which==="start"&&cfg.startReadOnly;
+    const row=document.createElement("div");row.className="f"+(readOnly?" calc":"");
+    row.innerHTML=`<label for="i_${startKey}_${which}">${cfg.label} — ${sub}</label><input id="i_${startKey}_${which}" type="month" ${readOnly?"readonly tabindex=-1":""}><span class="u"></span>`;
+    g.appendChild(row);
+    const inp=row.querySelector("input");
+    const paint=()=>{
+      const s=dateRangeEffectiveStart(startKey,cfg,d),n=Math.max(1,Math.round(_num(d[durKey],1)));
+      inp.value=offsetToMonthStr(which==="start"?s:s+n-1,d);
+    };
+    paint();
+    if(readOnly)return;
+    inp.onchange=()=>{
+      const v=monthStrToOffset(inp.value,d);
+      if(v==null){paint();return}
+      if(which==="start"){
+        if(lagKey&&Number(_num(d._lagmode,0))){
+          const eff=dateRangeEffectiveStart(startKey,cfg,d);
+          d[lagKey]=_num(d[lagKey],0)+(v-eff);
+        }else d[startKey]=v;
+      }else{
+        const s=dateRangeEffectiveStart(startKey,cfg,d);
+        d[durKey]=Math.max(1,v-s+1);
+      }
+      buildForm();buildScaffold();showNav();render();
+    };
+  });
+}
 const esc_=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
 function inputDisplay(k,lab,unit,d){
   /* "$/price basis" tells the reader nothing. Name the basis that is switched on. */
@@ -6719,6 +6804,29 @@ function buildFormCore(){
     if(sec.g==="Sales and use tax"){buildGstEditor(g);fs.appendChild(g);host.appendChild(fs);return}
     if(sec.g==="Phase-by-product unit matrix (optional)")return;
     sec.f.forEach(([k,lab,unit,,t])=>{
+      if(DATE_RANGE_DUR_KEYS.has(k))return;
+      if(DATE_RANGE_FIELDS[k]){
+        const drf=DATE_RANGE_FIELDS[k];
+        if(drf.extraOff&&drf.extraOff(D))return;
+        renderDateRangeField(g,k,drf,D);
+        return;
+      }
+      if(k==="startYear")return;
+      if(k==="startMonth"){
+        const row=document.createElement("div");row.className="f";
+        row.innerHTML=`<label for="i_startMonth">${lab}</label><input type="month" id="i_startMonth"><span class="u"></span>`;
+        g.appendChild(row);
+        const inp=row.querySelector("input");
+        const paint=()=>{inp.value=D.startYear+"-"+String(D.startMonth).padStart(2,"0")};
+        paint();
+        inp.onchange=()=>{
+          const mm=/^(\d{4})-(\d{2})$/.exec(inp.value);
+          if(!mm){paint();return}
+          D.startYear=+mm[1];D.startMonth=+mm[2];
+          buildForm();buildScaffold();showNav();render();
+        };
+        return;
+      }
       if(sec.g==="Programme"&&/^ph[1-6]dur$/.test(k))return;
       if(sec.g==="Vertical development"&&(/^(?:bua|hpsf|buildpsf|vel|buildmo)\d+(?:ovr)?$/.test(k)||["buildpsf","buildpsf_legacy","designbase","buildesc","vel"].includes(k)))return;
       if(sec.g==="Debt"&&/^relfixed\d+$/.test(k))return;
@@ -6727,6 +6835,7 @@ function buildFormCore(){
         addEditorRow(g,"vel","Sales velocity","units/m");return;
       }
       if(!fieldShown(k,!!D.vert))return;
+      if(k==="buildmo"){renderDateRangeField(g,"buildmo",BUILDMO_DATE_CFG,D);return;}
       /* Mandatory accounting flags stay read-only inputs; a select cannot be readOnly. */
       const isTextField=unit==="text";
       const isFlagField=unit==="flag"&&!MANDATORY_ACCOUNTING_FIELDS.has(k);
@@ -9553,16 +9662,6 @@ function collectRows(keys){return keys.map(rowByKey).filter(Boolean)}
       });
       if(count){
         bucketFs.appendChild(group);
-        /* A per-section shortcut to the one real save mechanism (btnCloudSave /
-           the appraisal-store block) - not a separate partial-save, just saves
-           someone a scroll back to the toolbar after editing this bucket. */
-        const saveRow=document.createElement("div");saveRow.className="input-bucket-save";
-        saveRow.style.cssText="display:flex;justify-content:flex-end;padding:8px 4px 2px";
-        const saveBtn=document.createElement("button");saveBtn.type="button";saveBtn.className="sec-save-btn";
-        saveBtn.style.cssText="min-height:0;padding:5px 12px;font-size:11.5px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised);color:var(--text2);cursor:pointer";
-        saveBtn.textContent="Save changes";
-        saveBtn.onclick=()=>document.getElementById("btnCloudSave")?.click();
-        saveRow.appendChild(saveBtn);bucketFs.appendChild(saveRow);
         frag.appendChild(bucketFs);
       }
     });
