@@ -4033,6 +4033,7 @@ function actualContingencyTotal(d){return Math.max(0,_num(d.contpc))/100*baseCon
 function actualReimbursementTotal(raw){const d=_normalizedForDerive(raw);return (actualInfrastructureTotal(d)+actualContingencyTotal(d))*d.pidel/100*d.pidrt/100}
 const MAX_LAND_INTERIM_PAYMENTS=5;
 const MAX_COST_PAYMENTS=8;
+const MAX_DRAW_OVERRIDES=8;
 /* Statutory charges and holding costs fall due as a few dated payments in the
    source workbooks, not as a spend spread across a window. A schedule replaces
    the window for that cost when one is entered, and is inert when it is not. */
@@ -4368,6 +4369,7 @@ const GROUPS=[
   ["finbase","Facility drawn against","flag",0,"n"],
   ["facmode","Facility sizing basis","flag",1,"n"],
   ["facilityfixed","Fixed operating facility amount","A$",566162365,"n"],
+  ["debtceiling","Maximum debt ceiling (0 = no cap)","A$",0,"n"],
   ["fundingmode","Funding sequence","flag",1,"n"],
   ["equitypc","Equity-first contribution","% eligible development cost",20,"p"],
   ["equityfixed","Fixed equity-first amount","A$",180508845,"n"],
@@ -4406,6 +4408,7 @@ const GROUPS=[
   ["distmode","Surplus cash returned","flag",1,"n"],
   ["distmodeoverride","Let this project's own distmode override the standard policy","flag",0,"n"],
   ["fundingoverride","Let this project's own cash-recycling flags override the standard policy","flag",0,"n"],
+  ["relmodeoverride","Let this project's own debt release basis override the standard sweep-all policy","flag",0,"n"],
   ["drawmode","Facility drawn","flag",0,"n"],
   ["drawshare","Share of the shortfall drawn in the facility’s first month","% shortfall",100,"p"],
   ["drawphasecount","Draw-rate schedule phases","count",0,"n"],
@@ -4426,7 +4429,23 @@ const GROUPS=[
   ["intres","Finance-cost reserve","A$",0,"n"],
   ["intresout","Interest reserve outside LTC cap","flag",1,"n"],
   ["intconv","Interest charged on","flag",1,"n"],
-  ["distlock","Lender cash trap until debt is repaid","flag",0,"n"]]},
+  ["distlock","Lender cash trap until debt is repaid","flag",0,"n"],
+  /* The facility formulas (equity-first threshold, pro-rata of spend) are a rule -
+     some source workbooks draw against a bespoke schedule of their own that neither
+     rule reproduces, especially for a single large lump cost like land settlement.
+     A dated override replaces the formula's draw for that month only; every other
+     month keeps drawing off the normal rule against the resulting balance. Inert
+     until switched on, so no existing parcel is affected. */
+  ["drawoverride","Facility draws follow a dated override schedule","flag",0,"n"],
+  ["drawoverridecount","Number of dated draw overrides","no.",0,"n"],
+  ["drawover1","Draw override 1 amount","A$",0,"n"],["drawover1month","Draw override 1 month","mth",0,"n"],
+  ["drawover2","Draw override 2 amount","A$",0,"n"],["drawover2month","Draw override 2 month","mth",0,"n"],
+  ["drawover3","Draw override 3 amount","A$",0,"n"],["drawover3month","Draw override 3 month","mth",0,"n"],
+  ["drawover4","Draw override 4 amount","A$",0,"n"],["drawover4month","Draw override 4 month","mth",0,"n"],
+  ["drawover5","Draw override 5 amount","A$",0,"n"],["drawover5month","Draw override 5 month","mth",0,"n"],
+  ["drawover6","Draw override 6 amount","A$",0,"n"],["drawover6month","Draw override 6 month","mth",0,"n"],
+  ["drawover7","Draw override 7 amount","A$",0,"n"],["drawover7month","Draw override 7 month","mth",0,"n"],
+  ["drawover8","Draw override 8 amount","A$",0,"n"],["drawover8month","Draw override 8 month","mth",0,"n"]]},
  {g:"Tax and return",f:[
   ["ftax","Corporate income tax","% profit",0,"p"],
   ["stax","State / franchise tax","% selected tax base",0,"p"],
@@ -4675,6 +4694,12 @@ function fieldShown(k,vert){
   const landPayMatch=String(k).match(/^landpay([1-5])(?:month)?$/);if(landPayMatch&&Number(landPayMatch[1])>_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS))return false;
   const costPayMatch=String(k).match(/^(statpay|holdpay)([1-8])(?:month)?$/);
   if(costPayMatch&&Number(costPayMatch[2])>costPaymentCount(D,costPayMatch[1]))return false;
+  /* The dated draw override is an advanced, opt-in escape hatch from the two
+     funding-sequence formulas - off screen until switched on, and only as many
+     slots shown as are in use once it is. */
+  if(!D.drawoverride&&(k==="drawoverridecount"||/^drawover[1-8](?:month)?$/.test(k)))return false;
+  const drawOverMatch=String(k).match(/^drawover([1-8])(?:month)?$/);
+  if(drawOverMatch&&Number(drawOverMatch[1])>_clamp(Math.round(_num(D.drawoverridecount,0)),0,MAX_DRAW_OVERRIDES))return false;
   if(k==="facilityfixed"&&Math.round(_num(D.facmode,0))!==1)return false;
   if(k==="gstmarginbase"&&Math.round(_num(D.gstmode,0))!==1)return false;
   /* Duty is entered as a fixed dollar figure or a rate against land value - never both. */
@@ -4799,23 +4824,28 @@ const SIMPLE_BACKUP_POLICY={
   staxbase:1, taxloss:0, taxcarrybackyrs:0, taxlossexp:0, taxlossutil:100,
   staxdeduct:1, taxfreq:0, taxqlag:1, capcarry:1, capfin:1, pidacct:1,
   taxlag:3, presales:1,
-  drawmode:0, distmode:2
+  drawmode:0, distmode:2,
+  /* Debt repayment sweeps every dollar of surplus cash - which in practice means
+     sale proceeds as they settle, since that is where the surplus comes from -
+     to the facility first, by default. A parcel whose real facility agreement
+     genuinely does not work this way opts out with relmodeoverride. */
+  relmode:3
 };
 function _runUncached(din,ov){
   const raw=enforceAccountingPolicy({...DEF,...cleanStoredInputs(din),...(ov||{})});
-  {let backup={...SIMPLE_BACKUP_POLICY};if(raw.distmodeoverride)delete backup.distmode;if(raw.fundingoverride){delete backup.cashfungible;delete backup.equityreimb;delete backup.drawmode}Object.assign(raw,backup)}
+  {let backup={...SIMPLE_BACKUP_POLICY};if(raw.distmodeoverride)delete backup.distmode;if(raw.fundingoverride){delete backup.cashfungible;delete backup.equityreimb;delete backup.drawmode}if(raw.relmodeoverride)delete backup.relmode;Object.assign(raw,backup)}
   // The accounting-policy fields are fixed centrally and cannot be overridden by scenarios or saved files.
   enforceAccountingPolicy(raw);
   Object.keys(DEF).forEach(k=>{if(!Number.isFinite(Number(raw[k])))throw new Error(`${k} must be a finite number.`)});
   const requireInteger=(k,min,max)=>{const v=Number(raw[k]);if(!Number.isInteger(v)||v<min||(max!=null&&v>max))throw new Error(`${k} must be a whole number between ${min} and ${max==null?"the permitted maximum":max}.`)};
   requireInteger("startMonth",1,12);requireInteger("startYear",1900,9999);requireInteger("fyEnd",1,12);requireInteger("nprod",1,MAX_PRODUCTS);
-  [["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["firbmonth",0,null],["dutymonth",0,null],["gstlag",0,null],["close",0,null],["landpaycount",0,5],["landpay1month",0,null],["landpay2month",0,null],["landpay3month",0,null],["landpay4month",0,null],["landpay5month",0,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
-  const binaryFlags=["setmode","drawmode","vert","escrow","stampmode","fundingmode","facmode","finland","findd","finhoriz","finvert","fincapex","finsell","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","distmodeoverride","fundingoverride","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
+  [["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["firbmonth",0,null],["dutymonth",0,null],["gstlag",0,null],["close",0,null],["landpaycount",0,5],["landpay1month",0,null],["landpay2month",0,null],["landpay3month",0,null],["landpay4month",0,null],["landpay5month",0,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6],["drawoverridecount",0,MAX_DRAW_OVERRIDES],["drawover1month",0,null],["drawover2month",0,null],["drawover3month",0,null],["drawover4month",0,null],["drawover5month",0,null],["drawover6month",0,null],["drawover7month",0,null],["drawover8month",0,null]].forEach(x=>requireInteger(...x));
+  const binaryFlags=["setmode","drawmode","vert","escrow","stampmode","fundingmode","facmode","finland","findd","finhoriz","finvert","fincapex","finsell","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","distmodeoverride","fundingoverride","relmodeoverride","drawoverride","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
   for(let p=1;p<=MAX_PRODUCTS;p++)binaryFlags.push(`hpsf${p}ovr`,`buildpsf${p}ovr`,`buildmo${p}ovr`);
   binaryFlags.forEach(k=>{if(Number(raw[k])!==0&&Number(raw[k])!==1)throw new Error(`${k} must be entered as 0 or 1.`)});
   [["pmode",0,1],["intconv",0,2],["staxbase",0,2],["finbase",0,3],["allocbasis",0,3],["ovhmode",0,2],["salesmode",0,1],["distmode",0,2],["gstmode",0,1],["costgstbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["buildcurve",0,4],["relmode",0,3],["hoastart",0,2]].forEach(x=>requireInteger(...x));
   if(!Number.isInteger(Number(raw.facstart))||Number(raw.facstart)<-1)throw new Error("Facility commitment month must be -1 or a non-negative whole month.");
-  const nonNegative=["acresGross","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landgst","landdepo","stampfixed","stamprt","foreignsurcharge","firbfee","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","foreignlandtax","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","gst","inputgst","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","outputgstfixed","gstcreditfixed","gstmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","financefixed","relpc","mincash","intres","relsalespc","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic"];
+  const nonNegative=["acresGross","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landgst","landdepo","stampfixed","stamprt","foreignsurcharge","firbfee","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","foreignlandtax","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","gst","inputgst","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","outputgstfixed","gstcreditfixed","gstmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","financefixed","relpc","mincash","intres","relsalespc","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic","drawover1","drawover2","drawover3","drawover4","drawover5","drawover6","drawover7","drawover8","debtceiling"];
   for(let p=1;p<=MAX_PRODUCTS;p++)nonNegative.push(`n${p}`,`w${p}`,`d${p}`,`p${p}`,`bua${p}`,`hpsf${p}`,`buildpsf${p}`,`vel${p}`,`buildmo${p}`,`relfixed${p}`);
   nonNegative.forEach(k=>{if(_num(raw[k])<0)throw new Error(`${k} cannot be negative.`)});
   for(let p=1;p<=productCount(raw);p++)if(!Number.isInteger(_num(raw[`n${p}`])))throw new Error(`Product ${p} unit count must be a whole number.`);
@@ -4941,13 +4971,18 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     /* A rate that steps up once a year, compounding on the year before. */
     if(salesGrowth)return projectRate*Math.pow(1+salesGrowth/100,Math.floor(Math.max(0,m-globalOpen)/12));
     if(!manualSales)return projectRate;
-    const yr=Math.floor(Math.max(0,m-globalOpen)/12);
+    /* Year buckets follow the model's own financial year (fyOf), not a rolling
+       12 months from whenever sales happen to open - so a project opening
+       sales mid FY26 has a SHORT first year that ends at the same FY cutoff
+       every other statement in this file uses, not one that rolls into FY27. */
+    const y0=fyOf(globalOpen,d),yr=m<=globalOpen?0:fyOf(m,d)-y0;
     /* Past the grid the balance is released, so the loop always terminates. */
     if(yr>=salesYears)return L;
+    const c0=((d.startMonth-1+globalOpen)%12)+1,monthsInYear0=c0<=d.fyEnd?(d.fyEnd-c0+1):(12-c0+1+d.fyEnd),monthsThisYear=yr===0?monthsInYear0:12;
     /* A year with a figure uses it; a year left blank takes an equal share of what
        the typed years have not accounted for, so an untouched grid is the whole
        scheme spread over its selling life rather than a single month. */
-    return (salesYearUnits[yr]>0?salesYearUnits[yr]:salesPerBlankYear)/12;
+    return (salesYearUnits[yr]>0?salesYearUnits[yr]:salesPerBlankYear)/monthsThisYear;
   };
   /* Sales are project-wide for both finished lots and vertical units. Construction
      phase allocations identify the physical inventory and cost / product mix only;
@@ -5246,7 +5281,12 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   for(let m=0;m<=NM;m++)R.net[m]=R.lsr[m]+R.pid[m]+R.otherincome[m]+R.gstrefund[m]-R.outputgst[m]-R.devc[m]-R.capex[m]-R.sellcash[m]-R.ovh[m]-R.marketing[m]-R.carry[m]-R.inputgstpaid[m];
   if(d.finsell)for(let m=0;m<=NM;m++)R.fdev[m]+=R.sellcash[m]+R.marketing[m];
   const sellFinanced=d.finsell?R.sellcash.reduce((a,b)=>a+b,0)+R.marketing.reduce((a,b)=>a+b,0):0;
-  const finBase=sellFinanced+(d.finland?land+closing+rollback+firb:0)+(d.findd?dd+soft+d.pidcost+otherDirect:0)+(d.fincapex?d.dacapex:0)+(d.finhoriz?infTot+contTot+munic+impactTotal:0)+(d.finvert?actualBuild+vertContTot+actualPermit+modelCost:0),ltcCommit=Math.max(0,_num(d.facrel,0))>0?(d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase)/Math.max(.05,1-_clamp(_num(d.facrel,0),0,95)/100):d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase;
+  const finBase=sellFinanced+(d.finland?land+closing+rollback+firb:0)+(d.findd?dd+soft+d.pidcost+otherDirect:0)+(d.fincapex?d.dacapex:0)+(d.finhoriz?infTot+contTot+munic+impactTotal:0)+(d.finvert?actualBuild+vertContTot+actualPermit+modelCost:0);
+  let ltcCommit=Math.max(0,_num(d.facrel,0))>0?(d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase)/Math.max(.05,1-_clamp(_num(d.facrel,0),0,95)/100):d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase;
+  /* A hard ceiling independent of how the facility is sized - a percent-of-cost or
+     fixed-facility figure can still come out larger than what a lender will actually
+     commit to. Zero leaves every project exactly as it priced without one. */
+  if(_num(d.debtceiling,0)>0)ltcCommit=Math.min(ltcCommit,_num(d.debtceiling));
   const futureEligible=new Array(NM+2).fill(0);for(let m=NM;m>=0;m--)futureEligible[m]=futureEligible[m+1]+Math.max(0,R.fdev[m]);
   const firstEligibleSpend=R.fdev.findIndex(v=>v>1e-6),facilityStart=d.facstart>=0?d.facstart:Math.max(close,(firstEligibleSpend>=0?firstEligibleSpend:close)+Math.max(0,Math.round(_num(d.lagfac,0))));
   if(facilityStart>NM)throw new Error("Facility commitment month falls beyond the model horizon.");
@@ -5270,7 +5310,12 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       let phaseRatePct=_num(d.drawshare,100);
       for(let pi=1;pi<=drawPhaseCount;pi++)if(m>=_num(d["drawphase"+pi+"month"],0))phaseRatePct=_num(d["drawphase"+pi+"rate"],100);
       const drawCap=drawPhaseCount>0?deficit*_clamp(phaseRatePct,0,100)/100:(firstDrawTaken?entitlement:deficit*_clamp(_num(d.drawshare,100),0,100)/100);
-      const normalDraw=Math.min(Math.round(_num(d.drawmode,0))===1?entitlement:Math.min(deficit,entitlement),drawCap),
+      let overrideDraw=null;
+      if(d.drawoverride){
+        const overrideCount=Math.round(_num(d.drawoverridecount,0));
+        for(let oi=1;oi<=overrideCount;oi++)if(m===Math.round(_num(d[`drawover${oi}month`],-1))){overrideDraw=Math.max(0,Math.min(_num(d[`drawover${oi}`],0),Math.max(0,totalLimit-opDebt-intDebt)));break}
+      }
+      const normalDraw=overrideDraw!=null?overrideDraw:Math.min(Math.round(_num(d.drawmode,0))===1?entitlement:Math.min(deficit,entitlement),drawCap),
             remainingDeficit=Math.max(0,deficit-normalDraw);
       unreimbursedEquity+=remainingDeficit;
       const reimbursementCapacity=Math.max(0,Math.min(baseHeadroom-normalDraw,monthlyEligible-normalDraw,drawCap-normalDraw));
@@ -5792,6 +5837,9 @@ const APP={
   portfolioSelected:[],
   portfolioFyEnd:12,
   portfolioBasis:"model",
+  /* Corporate head-office cost, entered once and applied flat across every
+     consolidated year - not a per-project figure, so it has no home in DEF. */
+  consolOverhead:{gna:0,staff:0,corp:0},
   sourceIncludeHoldco:false,
   sourceEditTarget:"consolidatedPL",
   sourceData:cloneSourceData(SOURCE_BP_DEFAULT),
@@ -6059,6 +6107,7 @@ const SELECT_OPTIONS={
   softmode:[[0,"Combined soft-cost rates"],[1,"Split by cost type"]],
   softbase:[[1,"% of land price"],[0,"% of construction cost"]],
   landpaycount:[[0,"0"],[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"]],
+  drawoverridecount:Array.from({length:MAX_DRAW_OVERRIDES+1},(_,i)=>[i,`${i}`]),
   landcurve:[[0,"Deposit + settlement balance"],[1,"Straight line"],[2,"S-curve"],[3,"Milestone / back-ended"],[4,"Front-loaded"],[5,"Back-loaded"]],
   infracurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
   buildcurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
@@ -6375,7 +6424,7 @@ function paintAuRefFields(){
     if(inp)inp.value=numFieldFormat(D[k]);
   });
 }
-["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
+["vert","finland","findd","fincapex","finhoriz","finvert","revolver","cashfungible","equityreimb","fundi","pidrep","intresout","distlock","capcarry","capfin","staxdeduct","drawoverride"].forEach(k=>SELECT_OPTIONS[k]=[[1,"Yes"],[0,"No"]]);
 /* Boolean fields carry "flag" as their unit. Without an entry in SELECT_OPTIONS they
    rendered as a bare number box showing 0 or 1, which reads as a value to type rather
    than a choice to make. Any flag without its own wording falls back to Yes / No. */
@@ -6573,14 +6622,14 @@ function buildFormCore(){
             return;
           }
           const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","firbmonth","dutymonth","gstlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","taxlag","taxqlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase"]);
-          if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
+          if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||/^drawover[1-8]month$/.test(k)||k==="drawoverridecount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           D[k]=k==="landpaycount"?_clamp(v,0,MAX_LAND_INTERIM_PAYMENTS):v;
           /* Every key here decides which OTHER fields belong on screen, so the form
              has to be rebuilt rather than just re-run. salesmode was the omission that
              made "Sales volume basis" look dead: the mode flipped but the yearly boxes
              it reveals were never drawn. statpaycount, holdpaycount and holdingfixed
              gate fields the same way and were missing for the same reason. */
-          if(k==="salesmode"||k==="statpaycount"||k==="holdpaycount"||k==="holdingfixed"||k==="ovhmode"||k==="softmode"||k==="facmode"||k==="gstmode"||k==="costgstbasis"||k==="landpaycount"||k==="stampmode"){buildForm();buildScaffold();showNav();render();return}
+          if(k==="salesmode"||k==="statpaycount"||k==="holdpaycount"||k==="holdingfixed"||k==="ovhmode"||k==="softmode"||k==="facmode"||k==="gstmode"||k==="costgstbasis"||k==="landpaycount"||k==="stampmode"||k==="drawoverride"||k==="drawoverridecount"){buildForm();buildScaffold();showNav();render();return}
           syncSliders();render()}}
     });
     if(sec.g==="Vertical development"&&D.vert)buildVerticalProductEditor(g);
@@ -7677,6 +7726,11 @@ function portfolioControlHtml(){
       <span class="cons-summary portfolio-range" data-portfolio-range></span>
       <button type="button" class="cbtn" data-pf-action="none">Clear selection</button>
     </div>`}
+    <div class="ctl portfolio-controls"><span class="cl" title="Corporate head-office cost - not carried by any single project - applied flat across every consolidated year">Consolidation overhead / year</span>
+      <span class="cl">G&amp;A</span><input id="consol_oh_gna" class="ni" type="number" min="0" step="1000" value="${M0(APP.consolOverhead.gna,0)}">
+      <span class="cl">Staff</span><input id="consol_oh_staff" class="ni" type="number" min="0" step="1000" value="${M0(APP.consolOverhead.staff,0)}">
+      <span class="cl">Corporate allocation</span><input id="consol_oh_corp" class="ni" type="number" min="0" step="1000" value="${M0(APP.consolOverhead.corp,0)}">
+    </div>
   </div>`;
 }
 let portfolioUiTimer=0;
@@ -7700,6 +7754,9 @@ function bindPortfolioControls(){
   document.querySelectorAll('#portfolio_fy_end').forEach(e=>e.onchange=()=>{APP.portfolioFyEnd=_clamp(Math.round(_num(e.value,6)),1,12);repaintPortfolio('fy',20)});
   document.querySelectorAll('#portfolio_view').forEach(e=>e.onchange=()=>{APP.portfolioView=e.value==='monthly'?'monthly':'fy';markPortfolioDirty('view');const pane=activePane();if(pane==='ccf')queuePanePaint('ccf')});
   document.querySelectorAll('#portfolio_rate').forEach(e=>e.onchange=()=>{const v=Number(e.value);if(Number.isFinite(v)&&v>=0){APP.portfolioRate=v;markPortfolioDirty('rate');const pane=activePane();if(pane==='cpl'||pane==='port')queuePanePaint(pane)}});
+  [["consol_oh_gna","gna"],["consol_oh_staff","staff"],["consol_oh_corp","corp"]].forEach(([id,key])=>{
+    document.querySelectorAll('#'+id).forEach(e=>e.onchange=()=>{const v=Number(e.value);if(Number.isFinite(v)&&v>=0){APP.consolOverhead={...APP.consolOverhead,[key]:v};repaintPortfolio('overhead',20)}});
+  });
 }
 function portfolioAbsStart(d){return d.startYear*12+(d.startMonth-1)}
 function portfolioMonthLabel(abs){return MON[((abs%12)+12)%12]+"-"+String(Math.floor(abs/12)).slice(2)}
@@ -8659,7 +8716,7 @@ document.getElementById("btnSignOut").onclick=()=>{fetch("/api/logout",{method:"
 const ENVELOPE_V=7,APPRAISAL_REGION="AU";
 function buildEnvelope(){
   return {v:ENVELOPE_V,region:APPRAISAL_REGION,parcels:APP.parcels,active:APP.active,scn:APP.scn,scnAuto:APP.scnAuto,
-    cols:APP.cols,mets:APP.mets,portfolioRate:APP.portfolioRate,portfolioMode:APP.portfolioMode,portfolioSelected:APP.portfolioSelected,portfolioFyEnd:APP.portfolioFyEnd,portfolioBasis:APP.portfolioBasis,sourceIncludeHoldco:APP.sourceIncludeHoldco,sourceEditTarget:APP.sourceEditTarget,sourceData:APP.sourceData};
+    cols:APP.cols,mets:APP.mets,portfolioRate:APP.portfolioRate,portfolioMode:APP.portfolioMode,portfolioSelected:APP.portfolioSelected,portfolioFyEnd:APP.portfolioFyEnd,portfolioBasis:APP.portfolioBasis,consolOverhead:APP.consolOverhead,sourceIncludeHoldco:APP.sourceIncludeHoldco,sourceEditTarget:APP.sourceEditTarget,sourceData:APP.sourceData};
 }
 /* One parcel, from its stored form into the shape the model runs on. Shared by
    the file load and the server load, so a parcel cannot arrive two ways - and
@@ -8675,6 +8732,7 @@ function applyEnvelope(j){
     if(j.portfolioRate!=null&&Number.isFinite(Number(j.portfolioRate))&&Number(j.portfolioRate)>=0)APP.portfolioRate=Number(j.portfolioRate);
     APP.portfolioMode=j.portfolioMode==="selected"?"selected":"all";APP.portfolioSelected=Array.isArray(j.portfolioSelected)?j.portfolioSelected:[];
     if(j.portfolioFyEnd!=null)APP.portfolioFyEnd=_clamp(Math.round(_num(j.portfolioFyEnd,6)),1,12);
+    if(j.consolOverhead&&typeof j.consolOverhead==="object")APP.consolOverhead={gna:Math.max(0,_num(j.consolOverhead.gna,0)),staff:Math.max(0,_num(j.consolOverhead.staff,0)),corp:Math.max(0,_num(j.consolOverhead.corp,0))};
     APP.portfolioBasis="source";APP.sourceIncludeHoldco=true;APP.sourceEditTarget=j.sourceEditTarget||"consolidatedPL";APP.sourceData=j.sourceData&&j.sourceData.projects?j.sourceData:cloneSourceData(SOURCE_BP_DEFAULT);
     D=P0().inputs;normalizeModeState();
     buildParcels();buildForm();buildScaffold();showNav();render()
@@ -9330,6 +9388,11 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
     const value=(y,k)=>n(map[y]&&map[y][k]),total=k=>years.reduce((a,y)=>a+value(y,k),0);
     return {years,map,value,total};
   }
+  /* Flat per year, on purpose: the corporate overhead schedule in the reference
+     business plan varies year to year, but asking for a full annual table here
+     is a second business plan to maintain. One steady figure per category is the
+     honest floor - close enough to size the gap, not a claim of exact timing. */
+  function consolOverheadFor(y){const c=APP.consolOverhead||{};return {gna:Math.max(0,_num(c.gna,0)),staff:Math.max(0,_num(c.staff,0)),corp:Math.max(0,_num(c.corp,0))}}
   function dynamicPortfolioQualifiedSales(Q){
     const out={};
     (Q.runs||[]).forEach(r=>{
@@ -9349,9 +9412,14 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       const landCost=sy("landCost",y)+sy("stampDuty",y)+sy("foreignPurchaserSurcharge",y)+sy("firbCost",y)+sy("acquisitionCost",y)+sy("holdingCost",y);
       const constructionCost=sy("constructionCost",y);
       const brokerage=sy("brokerage",y),otherDirectCost=sy("otherDirectCost",y)+sy("sellingCost",y)+sy("marketing",y)+sy("professionalFees",y)+sy("developmentManagementFees",y)+sy("statutoryCost",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputGstCredit",y);
-      const gna=sy("gna",y)+sy("gnaShared",y)+sy("da",y),staff=sy("staff",y)+sy("staffShared",y),corp=sy("corpOverhead",y);
-      const overheadCost=gna+staff+corp,financeCost=sy("fin",y),totalOverheadCost=overheadCost+financeCost,grossProfit=sy("gp",y),otherIncome=sy("otherIncome",y);
-      map[y]={qualifiedSales:n(qSales[y]),totalRevenue:sy("rev",y),landCost,constructionCost,brokerage,otherDirectCost,directCost:sy("dc",y),grossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:grossProfit-totalOverheadCost,otherIncome,npbt:sy("npbt",y),tax:sy("tax",y),npat:sy("npat",y)};
+      /* No parcel carries Sobha's own head-office cost - it isn't a project expense,
+         it's the cost of running the business the projects sit inside. Consolidation
+         overhead is entered once, per year, and added on top of what the selected
+         parcels themselves report, so a project-only view stays exact. */
+      const co=consolOverheadFor(y);
+      const gna=sy("gna",y)+sy("gnaShared",y)+sy("da",y)+co.gna,staff=sy("staff",y)+sy("staffShared",y)+co.staff,corp=sy("corpOverhead",y)+co.corp;
+      const overheadCost=gna+staff+corp,financeCost=sy("fin",y),totalOverheadCost=overheadCost+financeCost,grossProfit=sy("gp",y),otherIncome=sy("otherIncome",y),coTotal=co.gna+co.staff+co.corp;
+      map[y]={qualifiedSales:n(qSales[y]),totalRevenue:sy("rev",y),landCost,constructionCost,brokerage,otherDirectCost,directCost:sy("dc",y),grossProfit,gna,staff,corp,overheadCost,financeCost,totalOverheadCost,preOtherIncomeProfit:grossProfit-totalOverheadCost,otherIncome,npbt:sy("npbt",y)-coTotal,tax:sy("tax",y),npat:sy("npat",y)-coTotal};
     });
     const value=(y,k)=>n(map[y]&&map[y][k]),total=k=>years.reduce((a,y)=>a+value(y,k),0);return {years,map,value,total};
   }
@@ -10126,7 +10194,29 @@ const QLD_ZONING_PROVIDERS=[
  {key:"toowoomba",match:/toowoomba/i,kind:"arcgis",agency:"Toowoomba Regional Council",status:"Official Toowoomba Regional Council Planning Scheme GIS",instrument:"Toowoomba Regional Planning Scheme",zoneUrl:"https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/170",precinctUrls:["https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/167"],heritageUrls:["https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/152"],sourceUrl:"https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_PlanningScheme/MapServer/170",minZoom:9},
  {key:"rockhampton",match:/rockhampton/i,kind:"arcgis",agency:"Rockhampton Regional Council",status:"Official Rockhampton Region Planning Scheme land-use zoning GIS",instrument:"Rockhampton Region Planning Scheme",zoneUrl:"https://services-ap1.arcgis.com/hx2J5p82likyGt5G/ArcGIS/rest/services/Land_Use_Zones/FeatureServer/0",sourceUrl:"https://services-ap1.arcgis.com/hx2J5p82likyGt5G/ArcGIS/rest/services/Land_Use_Zones/FeatureServer/0",dataCurrency:"Live layer last edited 24 Mar 2026",minZoom:9},
  {key:"townsville",match:/townsville/i,kind:"arcgis",agency:"Townsville City Council",status:"Official Townsville City Council live City Plan GIS",instrument:"Townsville City Plan 2014",zoneUrl:"https://services6.arcgis.com/3VCE6mezZtwKJeIR/arcgis/rest/services/TCC_City_Planning_Scheme_Zoning_GDA2020/FeatureServer/0",sourceUrl:"https://services6.arcgis.com/3VCE6mezZtwKJeIR/arcgis/rest/services/TCC_City_Planning_Scheme_Zoning_GDA2020/FeatureServer/0",minZoom:9},
- {key:"scenic-rim",match:/scenic rim/i,kind:"arcgis",agency:"Scenic Rim Regional Council",status:"Official Scenic Rim Regional Council Planning Scheme GIS",instrument:"Scenic Rim Planning Scheme 2020",zoneUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",sourceUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",minZoom:9}
+ {key:"scenic-rim",match:/scenic rim/i,kind:"arcgis",agency:"Scenic Rim Regional Council",status:"Official Scenic Rim Regional Council Planning Scheme GIS",instrument:"Scenic Rim Planning Scheme 2020",zoneUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",sourceUrl:"https://esriprod.scenicrim.qld.gov.au/arcgis/rest/services/PlanningXchange_base/MapServer/7",minZoom:9},
+ {key:"noosa",match:/noosa/i,kind:"arcgis",agency:"Noosa Shire Council",status:"Official Noosa Shire Council Planning Scheme GIS (council waives attribution for this layer)",instrument:"Noosa Plan 2020",zoneUrl:"https://services2.arcgis.com/tQg86iShPXJPWQWw/arcgis/rest/services/DSP_Noosa_Plan_Zones/FeatureServer/0",sourceUrl:"https://services2.arcgis.com/tQg86iShPXJPWQWw/arcgis/rest/services/DSP_Noosa_Plan_Zones/FeatureServer/0",minZoom:9},
+ {key:"bundaberg",match:/bundaberg/i,kind:"arcgis",agency:"Bundaberg Regional Council",status:"Official Bundaberg Regional Council Planning Scheme zoning GIS",instrument:"Bundaberg Planning Scheme 2015",zoneUrl:"https://mappingdata.bundaberg.qld.gov.au/arcgis/rest/services/2015_Adopted_Planning_Scheme_Zoning/MapServer/6",sourceUrl:"https://mappingdata.bundaberg.qld.gov.au/arcgis/rest/services/2015_Adopted_Planning_Scheme_Zoning/MapServer/6",minZoom:9},
+ {key:"ipswich",match:/ipswich/i,kind:"arcgis",agency:"Ipswich City Council (unofficial mirror)",status:"Unofficial: hosted on a personal ArcGIS Online account, not an Ipswich City Council domain. Zone content and extent match Ipswich's real planning scheme, but the layer was last edited 2 Aug 2019 - confirm against council before relying on it for a live deal.",instrument:"Ipswich Planning Scheme",zoneUrl:"https://services9.arcgis.com/KAS2Ol4X7Ca0Dta5/arcgis/rest/services/Ipswich_Australia_City_Zoning/FeatureServer/3",sourceUrl:"https://services9.arcgis.com/KAS2Ol4X7Ca0Dta5/arcgis/rest/services/Ipswich_Australia_City_Zoning/FeatureServer/3",dataCurrency:"2 Aug 2019 (unofficial source)",minZoom:9},
+ {key:"gladstone",match:/gladstone/i,kind:"arcgis",agency:"Gladstone Regional Council",status:"Official Gladstone Regional Council Planning Scheme GIS",instrument:"Gladstone Regional Council Planning Scheme Version 2.1",zoneUrl:"https://arcgisonpremise.gladstone.qld.gov.au/arcserver/rest/services/FeatureServices/ZoningV2_1/MapServer/0",sourceUrl:"https://arcgisonpremise.gladstone.qld.gov.au/arcserver/rest/services/FeatureServices/ZoningV2_1/MapServer/0",minZoom:10},
+ {key:"livingstone",match:/livingstone/i,kind:"arcgis",agency:"Livingstone Shire Council",status:"Official Livingstone Shire Council Planning Scheme GIS",instrument:"Livingstone Planning Scheme 2018",zoneUrl:"https://services6.arcgis.com/0feS4n90HMqhF4HA/arcgis/rest/services/PS_Property_Info/FeatureServer/0",sourceUrl:"https://services6.arcgis.com/0feS4n90HMqhF4HA/arcgis/rest/services/PS_Property_Info/FeatureServer/0",minZoom:10},
+ {key:"hinchinbrook",match:/hinchinbrook/i,kind:"arcgis",agency:"Hinchinbrook Shire Council",status:"Official Hinchinbrook Shire Council Planning Scheme GIS",instrument:"Hinchinbrook Shire Council Planning Scheme 2017",zoneUrl:"https://services-ap1.arcgis.com/NjDnGlEZKSqtp6VA/arcgis/rest/services/Planning_Scheme_and_Overlays_2018_view/FeatureServer/25",sourceUrl:"https://services-ap1.arcgis.com/NjDnGlEZKSqtp6VA/arcgis/rest/services/Planning_Scheme_and_Overlays_2018_view/FeatureServer/25",minZoom:10},
+ {key:"mount-isa",match:/mount isa/i,kind:"arcgis",agency:"Mount Isa City Council",status:"Official City of Mount Isa Planning Scheme GIS",instrument:"City of Mount Isa Planning Scheme 2020",zoneUrl:"https://services8.arcgis.com/g9mppFwSsmIw9E0Z/arcgis/rest/services/Zones/FeatureServer/0",sourceUrl:"https://services8.arcgis.com/g9mppFwSsmIw9E0Z/arcgis/rest/services/Zones/FeatureServer/0",minZoom:11},
+ {key:"longreach",match:/longreach/i,kind:"arcgis",agency:"Longreach Regional Council",status:"Official Longreach Regional Council Planning Scheme GIS",instrument:"Longreach Region Planning Scheme",zoneUrl:"https://services6.arcgis.com/k54NPlNs4d6eJkht/arcgis/rest/services/Zoning/FeatureServer/0",sourceUrl:"https://services6.arcgis.com/k54NPlNs4d6eJkht/arcgis/rest/services/Zoning/FeatureServer/0",minZoom:10},
+ {key:"balonne",match:/balonne/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Balonne Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Balonne's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Balonne Shire Planning Scheme (adopted 18 Jan 2024)",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Balonne_Oct2024/FeatureServer/9",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Balonne_Oct2024/FeatureServer/9",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:10},
+ {key:"mckinlay",match:/mckinlay/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for McKinlay Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of McKinlay's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"McKinlay Shire Planning Scheme 2019",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_McKinlay_Nov2024/FeatureServer/5",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_McKinlay_Nov2024/FeatureServer/5",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:10},
+ {key:"murweh",match:/murweh/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Murweh Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Murweh's planning scheme zoning, not the council's own GIS. Cadastre last synced 6 Mar 2015 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Murweh Shire Council Planning Scheme (gazetted 17 Nov 2017)",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Murweh_Nov2024/FeatureServer/5",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Murweh_Nov2024/FeatureServer/5",dataCurrency:"Cadastre synced 6 Mar 2015",minZoom:10},
+ {key:"burke",match:/\bburke\b/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Burke Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Burke's planning scheme zoning, not the council's own GIS. Cadastre last synced February 2019 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Burke Shire Planning Scheme 2020",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Burke_Nov2024/FeatureServer/6",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Burke_Nov2024/FeatureServer/6",dataCurrency:"Cadastre synced February 2019",minZoom:10},
+ {key:"etheridge",match:/etheridge/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Etheridge Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Etheridge's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Etheridge Shire Planning Scheme (adopted 2020)",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Etheridge_DRAFT/FeatureServer/4",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Etheridge_DRAFT/FeatureServer/4",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:10},
+ {key:"paroo",match:/paroo/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Paroo Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Paroo's planning scheme zoning, not the council's own GIS. Cadastre last synced 7 Dec 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Paroo Shire Planning Scheme 2019",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Paroo_Nov2024/FeatureServer/6",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Paroo_Nov2024/FeatureServer/6",dataCurrency:"Cadastre synced 7 Dec 2017",minZoom:10},
+ {key:"bulloo",match:/bulloo/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Bulloo Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Bulloo's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Bulloo Shire Planning Scheme (commenced 1 Feb 2019)",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Bulloo_Nov2024/FeatureServer/4",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Bulloo_Nov2024/FeatureServer/4",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:9},
+ {key:"winton",match:/winton/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Winton Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Winton's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Winton Shire Council Planning Scheme 2020",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Winton_Nov2024/FeatureServer/4",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Winton_Nov2024/FeatureServer/4",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:9},
+ {key:"blackall-tambo",match:/blackall.?tambo/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Blackall-Tambo Regional Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Blackall-Tambo's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Blackall-Tambo Region Planning Scheme 2020",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_BlackallTambo_Oct2024/FeatureServer/5",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_BlackallTambo_Oct2024/FeatureServer/5",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:10},
+ {key:"quilpie",match:/quilpie/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Quilpie Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Quilpie's planning scheme zoning, not the council's own GIS. Cadastre last synced 18 Aug 2016 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Quilpie Shire Planning Scheme 2018",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_QuilpieSC_Nov2024/FeatureServer/3",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_QuilpieSC_Nov2024/FeatureServer/3",dataCurrency:"Cadastre synced 18 Aug 2016",minZoom:9},
+ {key:"croydon",match:/croydon/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Croydon Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Croydon's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Croydon Shire Planning Scheme 2019",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Croydon_Nov2024/FeatureServer/3",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Croydon_Nov2024/FeatureServer/3",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:10},
+ {key:"boulia",match:/boulia/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Boulia Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Boulia's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Boulia Shire Planning Scheme 2020",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Boulia_Nov2024/FeatureServer/4",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_Boulia_Nov2024/FeatureServer/4",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:9},
+ {key:"barcoo",match:/barcoo/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Barcoo Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Barcoo's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Barcoo Shire Planning Scheme 2020",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_BarcooSC_Oct2024/FeatureServer/5",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_BarcooSC_Oct2024/FeatureServer/5",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:9},
+ {key:"diamantina",match:/diamantina/i,kind:"arcgis",agency:"Queensland Government (DSDIP) - draft digitisation for Diamantina Shire Council",status:"Queensland Government (DSDIP) hosted draft digitisation of Diamantina's planning scheme zoning, not the council's own GIS. Cadastre last synced 5 Oct 2017 - treat zone boundaries as indicative pending confirmation against the current scheme.",instrument:"Diamantina Shire Council Planning Scheme 2021",zoneUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_DiamantinaShire_Oct2024/FeatureServer/4",sourceUrl:"https://services6.arcgis.com/Y1eHlY9NRfVWoL8v/arcgis/rest/services/PlanningScheme_DiamantinaShire_Oct2024/FeatureServer/4",dataCurrency:"Cadastre synced 5 Oct 2017",minZoom:9}
 ];
 function qldZoningProvider(lga){const t=String(lga||"");return QLD_ZONING_PROVIDERS.find(p=>p.match.test(t))||null}
 const LAYERS={states:{kind:"vector"},poa:{kind:"vector"},sa2sales:{kind:"vector",label:"SA2 sales",source:"Cotality monthly market trends by SA2, joined to ABS SA2 boundaries"},lgasales:{kind:"vector",label:"LGA sales",source:"Cotality monthly market trends by LGA, joined to ABS LGA boundaries"},contours:{kind:"contour",label:"Contours",source:"Tile-cached elevation contours"},zoning:{kind:"vector",label:"Zoning",source:"Official Australian state, territory and local-government planning GIS sources"},population:{kind:"vector"},age:{kind:"vector"},income:{kind:"vector"}};
@@ -10176,7 +10266,7 @@ function uniqueText(a,limit=8){const out=[];for(const v of a||[]){const t=String
 function arcGeometryParams(lng,lat,feature){if(feature&&feature.geometry&&/Polygon/.test(feature.geometry.type)){return {geometry:JSON.stringify({rings:feature.geometry.coordinates,spatialReference:{wkid:4326}}),geometryType:"esriGeometryPolygon"}}return {geometry:`${lng},${lat}`,geometryType:"esriGeometryPoint"}}
 async function arcFeatures(url,lng,lat,feature,max=50){if(!url)return[];const gp=arcGeometryParams(lng,lat,feature),p=new URLSearchParams({where:"1=1",geometry:gp.geometry,geometryType:gp.geometryType,inSR:"4326",outSR:"4326",spatialRel:"esriSpatialRelIntersects",outFields:"*",returnGeometry:"false",resultRecordCount:String(max),f:"json"}),j=await fetchJson(url+"/query?"+p.toString(),null,14000);return (j.features||[]).map(x=>x&&x.attributes||{}).filter(Boolean)}
 async function saIdentify(lng,lat){const cfg=ZONING.SA;if(!cfg.identifyRoot)return[];const dx=.004,dy=.004,p=new URLSearchParams({geometry:`${lng},${lat}`,geometryType:"esriGeometryPoint",sr:"4326",layers:"all:0",tolerance:"2",mapExtent:`${lng-dx},${lat-dy},${lng+dx},${lat+dy}`,imageDisplay:"800,600,96",returnGeometry:"false",f:"json"});try{const j=await fetchJson(cfg.identifyRoot+"/identify?"+p.toString(),null,14000);return j.results||[]}catch(_){return[]}}
-function normalizeZoneAttrs(sc,a,ctx={},provider=null){a=a||{};let code="",name="",scheme="",authority="",date="",url="",subzone="";if(sc==="NSW"){code=prop(a,["SYM_CODE"]);name=prop(a,["LAY_CLASS","LABEL"]);scheme=prop(a,["EPI_NAME"]);authority=prop(a,["LGA_NAME"]);date=prop(a,["CURRENCY_DATE","COMMENCED_DATE","PUBLISHED_DATE"])}else if(sc==="VIC"){code=prop(a,["ZONE_CODE"]);name=prop(a,["ZONE_DESCRIPTION","ZONE_CODE_GROUP_LABEL"]);scheme=prop(a,["SCHEME_CODE"]);authority=prop(a,["LGA"]);date=prop(a,["GAZ_BEGIN_DATE","UFI_CREATED"])}else if(sc==="QLD"){const k=provider&&provider.key||"";scheme=provider&&provider.instrument||ZONING.QLD.instrument;authority=provider&&provider.agency||ctx.lga||"Relevant Queensland local government";if(k==="brisbane"){code=prop(a,["zone_code"]);name=prop(a,["lvl2_zone","lvl1_zone"]);subzone=prop(a,["zone_prec_desc","zone_prec"]);date=prop(a,["amd_date","gaz_date","cad_ver"])}else if(k==="gold-coast"){code=prop(a,["ZONE_CODE","zone_code"]);name=prop(a,["ZONE","LVL1_ZONE","ZONE_NAME"]);subzone=prop(a,["ZONE_PRECINCT"]);date=prop(a,["last_edited_date","CAD_VER"])}else if(k==="sunshine-coast"){code=prop(a,["ZONE_CODE","CODE"]);name=prop(a,["LABEL","DESCRIPT","HEADING"]);subzone=prop(a,["PRECINCT","LABEL2"]);date=prop(a,["EDIT_DATE","LAST_EDITED_DATE"])}else if(k==="moreton-bay"){code=prop(a,["ZONE_CODE","ZONE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE","ZONE_NAME","ZONE"]);subzone=prop(a,["ZONE_PREC","ZONE_PRECINCT"]);date=prop(a,["AMD_DATE","GAZ_DATE","CAD_VER"])}else if(k==="logan"){code=prop(a,["Zone_Code","ZONE_CODE"]);name=prop(a,["Zone"]);date=prop(a,["EditDate"])}else if(k==="redland"){code=prop(a,["QPP_Zone"]);name=prop(a,["QPP_Description"]);subzone=prop(a,["QPP_Precinct"]);date=provider&&provider.dataCurrency}else if(k==="toowoomba"){code=prop(a,["ZONE_CODE","Zone_Code"]);name=prop(a,["TRPS_Zones","FEAT_NAME","ZONE"]);subzone=prop(a,["PRECINCT"])}else if(k==="rockhampton"){code=prop(a,["Zone_prefix","ZONE_CODE","GISREF"]);name=prop(a,["Zone_Lable","Zone","DESCRIPTION"]);subzone=prop(a,["Split_Zone","Former_PS_Precinct"]);scheme=prop(a,["SCHEME"])||scheme;date=prop(a,["PUBLISH_DATE","GAZETTE_DATE"])}else if(k==="scenic-rim"){code=prop(a,["ZONE_CODE","zone_new"]);name=prop(a,["EPlan_TxtZ","New_Zone_A"]);subzone=prop(a,["EPlan_TxtP","ZONE_PREC_"])}else if(k==="townsville"){code=prop(a,["TCC_CODE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["GAZ_DATE","CAD_DATE"])}if(!date&&provider&&provider.dataCurrency)date=provider.dataCurrency}else if(sc==="WA"){code=prop(a,["LABEL","ZONE_CATEGORY"]);name=prop(a,["ZONE_RESOLVED","ZONE","LABEL_DESC"]);scheme=prop(a,["SCHEME_NAME","LPSCHEME_ID"]);authority=prop(a,["LGA"]);date=prop(a,["LAST_EDITED_DATE","AMEND_GAZ_DATE","GAZETTAL_DATE"]);url=prop(a,["URL"])}else if(sc==="SA"){code=prop(a,["VALUE","ZONE"]);name=prop(a,["NAME","ZONE_MEANING","DESCRIPTION"]);scheme=ZONING.SA.instrument;date=prop(a,["DELIVERYDATE","STARTDATE","LEGALSTARTDATE"])}else if(sc==="TAS"){code=prop(a,["ZONE_ABB","ZONE_NO"]);name=prop(a,["ZONE"]);scheme=prop(a,["LPS"]);date=prop(a,["LPSDATE","CREATED_ON"])}else if(sc==="ACT"){code=prop(a,["LAND_USE_ZONE_CODE_ID"]);name=prop(a,["DESCRIPTION","LAND_USE_POLICY_DESC"]);scheme=ZONING.ACT.instrument;authority="ACT Territory Planning Authority";date=prop(a,["GAZETTAL_DATE"])}return {code:String(code||"").trim(),name:String(name||"").trim(),scheme:String(scheme||"").trim(),authority:String(authority||ctx.lga||"").trim(),date:planDate(date),url:String(url||"").trim(),subzone:String(subzone||"").trim()}}
+function normalizeZoneAttrs(sc,a,ctx={},provider=null){a=a||{};let code="",name="",scheme="",authority="",date="",url="",subzone="";if(sc==="NSW"){code=prop(a,["SYM_CODE"]);name=prop(a,["LAY_CLASS","LABEL"]);scheme=prop(a,["EPI_NAME"]);authority=prop(a,["LGA_NAME"]);date=prop(a,["CURRENCY_DATE","COMMENCED_DATE","PUBLISHED_DATE"])}else if(sc==="VIC"){code=prop(a,["ZONE_CODE"]);name=prop(a,["ZONE_DESCRIPTION","ZONE_CODE_GROUP_LABEL"]);scheme=prop(a,["SCHEME_CODE"]);authority=prop(a,["LGA"]);date=prop(a,["GAZ_BEGIN_DATE","UFI_CREATED"])}else if(sc==="QLD"){const k=provider&&provider.key||"";scheme=provider&&provider.instrument||ZONING.QLD.instrument;authority=provider&&provider.agency||ctx.lga||"Relevant Queensland local government";if(k==="brisbane"){code=prop(a,["zone_code"]);name=prop(a,["lvl2_zone","lvl1_zone"]);subzone=prop(a,["zone_prec_desc","zone_prec"]);date=prop(a,["amd_date","gaz_date","cad_ver"])}else if(k==="gold-coast"){code=prop(a,["ZONE_CODE","zone_code"]);name=prop(a,["ZONE","LVL1_ZONE","ZONE_NAME"]);subzone=prop(a,["ZONE_PRECINCT"]);date=prop(a,["last_edited_date","CAD_VER"])}else if(k==="sunshine-coast"){code=prop(a,["ZONE_CODE","CODE"]);name=prop(a,["LABEL","DESCRIPT","HEADING"]);subzone=prop(a,["PRECINCT","LABEL2"]);date=prop(a,["EDIT_DATE","LAST_EDITED_DATE"])}else if(k==="moreton-bay"){code=prop(a,["ZONE_CODE","ZONE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE","ZONE_NAME","ZONE"]);subzone=prop(a,["ZONE_PREC","ZONE_PRECINCT"]);date=prop(a,["AMD_DATE","GAZ_DATE","CAD_VER"])}else if(k==="logan"){code=prop(a,["Zone_Code","ZONE_CODE"]);name=prop(a,["Zone"]);date=prop(a,["EditDate"])}else if(k==="redland"){code=prop(a,["QPP_Zone"]);name=prop(a,["QPP_Description"]);subzone=prop(a,["QPP_Precinct"]);date=provider&&provider.dataCurrency}else if(k==="toowoomba"){code=prop(a,["ZONE_CODE","Zone_Code"]);name=prop(a,["TRPS_Zones","FEAT_NAME","ZONE"]);subzone=prop(a,["PRECINCT"])}else if(k==="rockhampton"){code=prop(a,["Zone_prefix","ZONE_CODE","GISREF"]);name=prop(a,["Zone_Lable","Zone","DESCRIPTION"]);subzone=prop(a,["Split_Zone","Former_PS_Precinct"]);scheme=prop(a,["SCHEME"])||scheme;date=prop(a,["PUBLISH_DATE","GAZETTE_DATE"])}else if(k==="scenic-rim"){code=prop(a,["ZONE_CODE","zone_new"]);name=prop(a,["EPlan_TxtZ","New_Zone_A"]);subzone=prop(a,["EPlan_TxtP","ZONE_PREC_"])}else if(k==="townsville"){code=prop(a,["TCC_CODE"]);name=prop(a,["LVL2_ZONE","LVL1_ZONE"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["GAZ_DATE","CAD_DATE"])}else if(k==="noosa"){name=prop(a,["New_Noosa_Plan_Zones"]);date=prop(a,["Version"])}else if(k==="bundaberg"){name=prop(a,["ZONE"]);subzone=prop(a,["Zone_Precincts"]);date=prop(a,["Amendment"])}else if(k==="ipswich"){code=prop(a,["CODE"]);name=prop(a,["NAME"]);date=prop(a,["DATE_PUBLI"])}else if(k==="gladstone"){name=prop(a,["GRCZones"]);subzone=prop(a,["Precinct"])}else if(k==="livingstone"){name=prop(a,["Zone"])}else if(k==="hinchinbrook"){code=prop(a,["LVL2_ZONE"]);name=prop(a,["LVL1_ZONE"])}else if(k==="mount-isa"){name=prop(a,["LVL2_Zone","LVL1_Zone"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["AMD_DATE"])}else if(k==="longreach"){name=prop(a,["Zone"])}else if(k==="murweh"){name=prop(a,["LVL1_ZONE"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["CAD_VER"])}else if(k==="quilpie"){name=prop(a,["ZONE"]);subzone=prop(a,["ZONE_PREC"]);date=prop(a,["CAD_VER"])}else if(["balonne","mckinlay","burke","etheridge","paroo","bulloo","winton","blackall-tambo","croydon","boulia","barcoo","diamantina"].includes(k)){name=prop(a,["ZONE"]);subzone=prop(a,["PRECINCT"]);date=prop(a,["CAD_VER"])}if(!date&&provider&&provider.dataCurrency)date=provider.dataCurrency}else if(sc==="WA"){code=prop(a,["LABEL","ZONE_CATEGORY"]);name=prop(a,["ZONE_RESOLVED","ZONE","LABEL_DESC"]);scheme=prop(a,["SCHEME_NAME","LPSCHEME_ID"]);authority=prop(a,["LGA"]);date=prop(a,["LAST_EDITED_DATE","AMEND_GAZ_DATE","GAZETTAL_DATE"]);url=prop(a,["URL"])}else if(sc==="SA"){code=prop(a,["VALUE","ZONE"]);name=prop(a,["NAME","ZONE_MEANING","DESCRIPTION"]);scheme=ZONING.SA.instrument;date=prop(a,["DELIVERYDATE","STARTDATE","LEGALSTARTDATE"])}else if(sc==="TAS"){code=prop(a,["ZONE_ABB","ZONE_NO"]);name=prop(a,["ZONE"]);scheme=prop(a,["LPS"]);date=prop(a,["LPSDATE","CREATED_ON"])}else if(sc==="ACT"){code=prop(a,["LAND_USE_ZONE_CODE_ID"]);name=prop(a,["DESCRIPTION","LAND_USE_POLICY_DESC"]);scheme=ZONING.ACT.instrument;authority="ACT Territory Planning Authority";date=prop(a,["GAZETTAL_DATE"])}return {code:String(code||"").trim(),name:String(name||"").trim(),scheme:String(scheme||"").trim(),authority:String(authority||ctx.lga||"").trim(),date:planDate(date),url:String(url||"").trim(),subzone:String(subzone||"").trim()}}
 /* state().jurisdiction only gets (re)written by a full "Analyse site" run
    (queryPlanning's own caller already has a fresh ctx.state in hand then and
    never reaches the fallback below at all - see queryPlanning's `stateCode(
@@ -11063,7 +11153,7 @@ function renderSiteIntelligence(){
   try{enhanceIntelSections()}catch(e){}
   return r;
 }
-function renderSiteIntelligenceCore(){const host=document.getElementById("aumap_site_intelligence");if(!host)return;const f=featureById(AM.selectedId)||primary(),m=metrics(f),g=state(),x=g.siteIntel,loading=g.siteIntelLoading&&g.siteIntelLoading.active,valid=!!(f&&m&&m.kind==="Polygon"&&x&&String(x.featureId)===String(f.id)&&x.geometrySignature===geometrySignature(f));if(!f||!m||m.kind!=="Polygon"){host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Draw a polygon to derive location, zoning, demographics and 3S proximity.</span></div><span class="aumap-siteintel-status">Waiting</span></div>`;return}if(loading&&!valid){const l=g.siteIntelLoading||{};host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Site intelligence and official planning controls are being collected from the polygon footprint.</span></div><span class="aumap-siteintel-status loading">Working</span></div><div class="aumap-siteintel-loading"><b>${esc(l.message||'Working on site intelligence')}</b>${l.detail?`<br>${esc(l.detail)}`:''}</div><div class="aumap-siteintel-body"><div class="aumap-siteintel-grid"><section class="aumap-siteintel-section aumap-3s-section"><div class="aumap-siteintel-title">Proximity</div><div class="aumap-siteintel-rows"><div class="aumap-3s-grid">${proximityColumn('Station / transport',[{name:'Searching...'}],1,PROX_BY_KEY.transport.colour)}${proximityColumn('School',[{name:'Searching...'}],1,PROX_BY_KEY.school.colour)}${proximityColumn('Shopping',[{name:'Searching...'}],1,PROX_BY_KEY.shopping.colour)}${proximityColumn('Hospital',[{name:'Searching...'}],1,PROX_BY_KEY.hospital.colour)}</div></div></section><section class="aumap-siteintel-section aumap-zoning-section"><div class="aumap-siteintel-title">Zoning / planning controls</div><div class="aumap-siteintel-rows">${intelRow('Official zoning','Querying government planning source...')}</div></section></div></div>`;return}if(!valid){const err=g.siteIntelError;host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>${err?"Site intelligence encountered an error. Re-run Analyse site.":x&&String(x.featureId)===String(f.id)?"The polygon changed after the last analysis. Re-run Analyse site.":"Run Analyse site to populate site intelligence and zoning."}</span></div><span class="aumap-siteintel-status partial">${err?"Retry":"Needs analysis"}</span></div>${err?`<div class="aumap-siteintel-loading"><b>Site intelligence error</b><br>${esc(err)}</div>`:""}<div class="aumap-siteintel-body"></div>`;return}const loc=x.location||{},dem=x.demographics||{},plan=x.planning||{},prox=x.proximity||{},avail=x.availability||{},ready=avail.context&&avail.proximity&&!!plan.live,status=loading?"loading":ready?"ready":"partial",statusText=loading?"Working":ready?"Ready":"Partial",delta=m.area-Number(D.acresGross||0),growth=Number.isFinite(Number(dem.popGrowth))?fmt(dem.popGrowth,2)+"%":"Not returned",popText=v=>Number.isFinite(Number(v))?fmt(v,0):"Not returned",pop=Number.isFinite(Number(dem.population))?fmt(dem.population,0):"Not returned",income=Number.isFinite(Number(dem.medianIncome))?"A$"+fmt(dem.medianIncome,0)+" p.a.":"Not returned",loadingBar=loading?`<div class="aumap-siteintel-loading"><b>${esc(g.siteIntelLoading.message||'Refreshing site intelligence')}</b>${g.siteIntelLoading.detail?`<br>${esc(g.siteIntelLoading.detail)}`:''}</div>`:"";const zoningRows=intelRow("State / Territory",plan.state||loc.state)+intelRow("Zone Code",plan.zoneCode,true)+intelRow("Zone Name",plan.zoneName)+intelRow("Planning Scheme / Instrument",plan.instrument)+intelRow("Instrument Date / Data Currency",plan.dataCurrency)+intelRow("Coverage",plan.sourceStatus)+intelRow("Maximum Building Height",plan.maxHeight)+intelRow("Floor Space Ratio",plan.fsr)+intelRow("Minimum Lot Size",plan.minLotSize)+intelRow("Density / R-Code",plan.densityRCode)+intelRow("Subzone",plan.subzone)+intelRow("Overlays",plan.overlays)+intelRow("Heritage",plan.heritage)+intelRow("Other mapped planning controls",plan.otherControls),zoningRowsBalanced=zoningRows+(((zoningRows.match(/aumap-siteintel-row/g)||[]).length%2)?'<div class="aumap-siteintel-row" aria-hidden="true"><span></span><strong></strong></div>':"");host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Derived from the polygon footprint. Planning controls use official government spatial sources where a stable query service is available. Last refreshed ${new Date(x.updatedAt).toLocaleString("en-AU")}.</span></div><span class="aumap-siteintel-status ${status}">${statusText}</span></div>${loadingBar}<div class="aumap-siteintel-body"><div class="aumap-siteintel-grid"><section class="aumap-siteintel-section"><div class="aumap-siteintel-title">Location</div><div class="aumap-siteintel-rows">${intelRow("Locality",loc.suburb||loc.label)}${intelRow("State / territory",loc.state)}${intelRow("LGA (ASGS 2025)",loc.lga)}${intelRow("LGA code",loc.lgaCode,true)}${intelRow("Postcode / POA",loc.postcode,true)}${intelRow("SA2",loc.sa2)}</div></section><section class="aumap-siteintel-section"><div class="aumap-siteintel-title">Demographics</div><div class="aumap-siteintel-rows">${intelRow("Australia population 2025",popText(dem.countryPop),true)}${intelRow((dem.stateName||loc.state||"State")+" population 2025",popText(dem.statePop),true)}${intelRow((dem.cityName||"Greater capital city")+" population 2025",popText(dem.cityPop),true)}${intelRow((loc.sa2||"Site SA2")+" population 2025",pop,true)}${intelRow("Population change 2024-25",growth,true)}${intelRow("Median personal income 2022-23",income,true)}${intelRow("Median income indexed to "+incomeIndexTarget()+" (estimate)",Number.isFinite(Number(dem.medianIncome))?"A$"+fmt(incomeIndexed(dem.medianIncome),0)+" p.a.":"Not returned",true)}${intelRow("Income earners 2022-23",Number.isFinite(Number(dem.incomeEarners))?fmt(dem.incomeEarners,0)+(Number.isFinite(Number(dem.incomeEarnersGrowth))?" ("+(dem.incomeEarnersGrowth>0?"+":"")+fmt(dem.incomeEarnersGrowth,1)+"% vs 2021-22)":""):"Not returned",true)}</div></section><section class="aumap-siteintel-section aumap-3s-section"><div class="aumap-siteintel-title">Proximity</div><div class="aumap-siteintel-rows">${proximityRows(prox)}</div></section><section class="aumap-siteintel-section aumap-zoning-section"><div class="aumap-siteintel-title">Zoning / planning controls</div><div class="aumap-siteintel-rows">${zoningRowsBalanced}</div></section></div>${Math.abs(delta)>=1?`<div class="aumap-area-delta">Polygon ${fmt(m.area,0)} sqm vs model ${fmt(D.acresGross,0)} sqm &middot; <b>${delta>=0?"+":""}${fmt(delta,0)} sqm</b> &middot; use <em>Apply area to model</em> in Site to sync.</div>`:""}</div>`}
+function renderSiteIntelligenceCore(){const host=document.getElementById("aumap_site_intelligence");if(!host)return;const f=featureById(AM.selectedId)||primary(),m=metrics(f),g=state(),x=g.siteIntel,loading=g.siteIntelLoading&&g.siteIntelLoading.active,valid=!!(f&&m&&m.kind==="Polygon"&&x&&String(x.featureId)===String(f.id)&&x.geometrySignature===geometrySignature(f));if(!f||!m||m.kind!=="Polygon"){host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Draw a polygon to derive location, zoning, demographics and 3S proximity.</span></div><span class="aumap-siteintel-status">Waiting</span></div>`;return}if(loading&&!valid){const l=g.siteIntelLoading||{};host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Site intelligence and official planning controls are being collected from the polygon footprint.</span></div><span class="aumap-siteintel-status loading">Working</span></div><div class="aumap-siteintel-loading"><b>${esc(l.message||'Working on site intelligence')}</b>${l.detail?`<br>${esc(l.detail)}`:''}</div><div class="aumap-siteintel-body"><div class="aumap-siteintel-grid"><section class="aumap-siteintel-section aumap-3s-section"><div class="aumap-siteintel-title">Proximity</div><div class="aumap-siteintel-rows"><div class="aumap-3s-grid">${proximityColumn('Station / transport',[{name:'Searching...'}],1,PROX_BY_KEY.transport.colour)}${proximityColumn('School',[{name:'Searching...'}],1,PROX_BY_KEY.school.colour)}${proximityColumn('Shopping',[{name:'Searching...'}],1,PROX_BY_KEY.shopping.colour)}${proximityColumn('Hospital',[{name:'Searching...'}],1,PROX_BY_KEY.hospital.colour)}</div></div></section><section class="aumap-siteintel-section aumap-zoning-section"><div class="aumap-siteintel-title">Zoning / planning controls</div><div class="aumap-siteintel-rows">${intelRow('Official zoning','Querying government planning source...')}</div></section></div></div>`;return}if(!valid){const err=g.siteIntelError;host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>${err?"Site intelligence encountered an error. Re-run Analyse site.":x&&String(x.featureId)===String(f.id)?"The polygon changed after the last analysis. Re-run Analyse site.":"Run Analyse site to populate site intelligence and zoning."}</span></div><span class="aumap-siteintel-status partial">${err?"Retry":"Needs analysis"}</span></div>${err?`<div class="aumap-siteintel-loading"><b>Site intelligence error</b><br>${esc(err)}</div>`:""}<div class="aumap-siteintel-body"></div>`;return}const loc=x.location||{},dem=x.demographics||{},plan=x.planning||{},prox=x.proximity||{},avail=x.availability||{},ready=avail.context&&avail.proximity&&!!plan.live,status=loading?"loading":ready?"ready":"partial",statusText=loading?"Working":ready?"Ready":"Partial",growth=Number.isFinite(Number(dem.popGrowth))?fmt(dem.popGrowth,2)+"%":"Not returned",popText=v=>Number.isFinite(Number(v))?fmt(v,0):"Not returned",pop=Number.isFinite(Number(dem.population))?fmt(dem.population,0):"Not returned",income=Number.isFinite(Number(dem.medianIncome))?"A$"+fmt(dem.medianIncome,0)+" p.a.":"Not returned",loadingBar=loading?`<div class="aumap-siteintel-loading"><b>${esc(g.siteIntelLoading.message||'Refreshing site intelligence')}</b>${g.siteIntelLoading.detail?`<br>${esc(g.siteIntelLoading.detail)}`:''}</div>`:"";const zoningRows=intelRow("State / Territory",plan.state||loc.state)+intelRow("Zone Code",plan.zoneCode,true)+intelRow("Zone Name",plan.zoneName)+intelRow("Planning Scheme / Instrument",plan.instrument)+intelRow("Instrument Date / Data Currency",plan.dataCurrency)+intelRow("Coverage",plan.sourceStatus)+intelRow("Maximum Building Height",plan.maxHeight)+intelRow("Floor Space Ratio",plan.fsr)+intelRow("Minimum Lot Size",plan.minLotSize)+intelRow("Density / R-Code",plan.densityRCode)+intelRow("Subzone",plan.subzone)+intelRow("Overlays",plan.overlays)+intelRow("Heritage",plan.heritage)+intelRow("Other mapped planning controls",plan.otherControls),zoningRowsBalanced=zoningRows+(((zoningRows.match(/aumap-siteintel-row/g)||[]).length%2)?'<div class="aumap-siteintel-row" aria-hidden="true"><span></span><strong></strong></div>':"");host.innerHTML=`<div class="aumap-siteintel-head"><div><strong>Polygon-driven site intelligence</strong><span>Derived from the polygon footprint. Planning controls use official government spatial sources where a stable query service is available. Last refreshed ${new Date(x.updatedAt).toLocaleString("en-AU")}.</span></div><span class="aumap-siteintel-status ${status}">${statusText}</span></div>${loadingBar}<div class="aumap-siteintel-body"><div class="aumap-siteintel-grid"><section class="aumap-siteintel-section"><div class="aumap-siteintel-title">Location</div><div class="aumap-siteintel-rows">${intelRow("Locality",loc.suburb||loc.label)}${intelRow("State / territory",loc.state)}${intelRow("LGA (ASGS 2025)",loc.lga)}${intelRow("LGA code",loc.lgaCode,true)}${intelRow("Postcode / POA",loc.postcode,true)}${intelRow("SA2",loc.sa2)}</div></section><section class="aumap-siteintel-section"><div class="aumap-siteintel-title">Demographics</div><div class="aumap-siteintel-rows">${intelRow("Australia population 2025",popText(dem.countryPop),true)}${intelRow((dem.stateName||loc.state||"State")+" population 2025",popText(dem.statePop),true)}${intelRow((dem.cityName||"Greater capital city")+" population 2025",popText(dem.cityPop),true)}${intelRow((loc.sa2||"Site SA2")+" population 2025",pop,true)}${intelRow("Population change 2024-25",growth,true)}${intelRow("Median personal income 2022-23",income,true)}${intelRow("Median income indexed to "+incomeIndexTarget()+" (estimate)",Number.isFinite(Number(dem.medianIncome))?"A$"+fmt(incomeIndexed(dem.medianIncome),0)+" p.a.":"Not returned",true)}${intelRow("Income earners 2022-23",Number.isFinite(Number(dem.incomeEarners))?fmt(dem.incomeEarners,0)+(Number.isFinite(Number(dem.incomeEarnersGrowth))?" ("+(dem.incomeEarnersGrowth>0?"+":"")+fmt(dem.incomeEarnersGrowth,1)+"% vs 2021-22)":""):"Not returned",true)}</div></section><section class="aumap-siteintel-section aumap-3s-section"><div class="aumap-siteintel-title">Proximity</div><div class="aumap-siteintel-rows">${proximityRows(prox)}</div></section><section class="aumap-siteintel-section aumap-zoning-section"><div class="aumap-siteintel-title">Zoning / planning controls</div><div class="aumap-siteintel-rows">${zoningRowsBalanced}</div></section></div></div>`}
 function deleteSite(){const g=state(),f=savedSite();if(!f||!f.geometry||!/Polygon/.test(f.geometry.type)){toast("No saved site polygon to delete",1800);return}if(!confirm("Delete the saved site polygon and its derived site intelligence?"))return;const id=String(f.id);g.features.features=g.features.features.filter(x=>String(x.id)!==id);if(String(g.primaryId)===id)g.primaryId=null;if(String(g.savedSiteId)===id)g.savedSiteId=null;g.terrainStats=null;g.siteIntel=null;g.siteIntelLoading=null;g.siteIntelError=null;g.jurisdiction=null;delete g.sitePoint;if(String(AM.selectedId)===id)AM.selectedId=null;syncDrawings();renderContext();renderMetrics();renderSiteIntelligence();toast("Saved site polygon deleted",2000)}
 function applySiteArea(){const f=featureById(AM.selectedId)||primary(),m=metrics(f);if(!f||!m||m.kind!=="Polygon"){toast("Select a site polygon first",1600);return}const old=Number(D.acresGross)||0;D.acresGross=Math.round(m.area*100)/100;if(Number(D._acresNet)>D.acresGross)D._acresNet=D.acresGross;try{buildForm();render()}catch(e){schedule()}renderMetrics();toast(`Gross site area updated: ${fmt(old,0)} -> ${fmt(D.acresGross,0)} sqm`,2600)}
 function pointQuery(cfg,lng,lat){const p=new URLSearchParams({where:"1=1",geometry:`${lng},${lat}`,geometryType:"esriGeometryPoint",inSR:"4326",spatialRel:"esriSpatialRelIntersects",outFields:cfg.fields||"*",returnGeometry:"false",resultRecordCount:"1",f:"json"});return fetchJson(cfg.url+"/query?"+p.toString(),null,16000).then(j=>j.features&&j.features[0]&&j.features[0].attributes||null)}
@@ -13680,7 +13770,23 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
      note:"Brisbane City only.", caveat:"Brisbane City Council only. Elsewhere in Queensland no statewide bushfire layer can be queried, so a nil here is not clearance."},
     {st:"QLD", ly:"flood",     url:BNE+"/Flood_overlay_Brisbane_River_flood_planning_area/FeatureServer/0", field:"OVL2_DESC", minZoom:11,
      agency:"Brisbane City Council", area:"Brisbane City", coverage:"Brisbane City only",
-     note:"Brisbane City only.", caveat:"Brisbane River flooding only. Creek and overland flow are not covered."},
+     note:"Brisbane City only.", caveat:"Brisbane River flooding only. Creek and overland flow are not covered.",
+     /* Brisbane's own overlay is precise but narrow - Brisbane River only - so
+        a "none" from it is not proof there is no flood record at all. QLD's
+        FloodCheck service (Dept of Resources) is genuinely statewide and
+        queryable, confirmed live outside Brisbane (Rockhampton, Townsville,
+        Cairns, Mackay, Toowoomba, Gold Coast), but it is a flood-STUDY
+        coverage index, not a hazard rating: a hit means a named study exists
+        for that catchment, by whom and when - not that the site is
+        flood-affected or clear. A miss can also just mean no study is
+        logged yet, not that the site is safe. queryPurpose() and
+        loadPurposeLayer() both retry here only when the primary def comes
+        back empty, and the caveat above is what keeps that distinction from
+        getting lost in the card. */
+     fallback:{url:QLDS+"/FloodCheck/ComprehensiveStudies/MapServer/0", field:"studyname", minZoom:9,
+       agency:"Queensland FloodCheck (Department of Resources)", coverage:"statewide",
+       note:"FloodCheck ComprehensiveStudies layer - statewide flood-study coverage index.",
+       caveat:"Study coverage, not a hazard rating - a hit means a study was logged, not that the site is flood-affected."}},
     {st:"QLD", ly:"heritage",  url:QLDS+"/Boundaries/AdminBoundariesFramework/MapServer/78", field:null, minZoom:11,
      agency:"Queensland Heritage Register", coverage:"statewide",
      note:"State-listed places only. Local heritage sits in each council's planning scheme."},
@@ -13920,6 +14026,33 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
     return inside;
   }
   /* ── one purpose, for the analysed site ───────────────────────────── */
+  /* Point + small-envelope resolution for one def, extracted out of
+     queryPurpose so a fallback def (a broader but coarser source, e.g. QLD's
+     statewide FloodCheck behind Brisbane's own flood overlay) can be resolved
+     with the exact same logic as the primary one. */
+  function queryPointDef(def, lng, lat) {
+    return atPoint(def, lng, lat).then(function (fs) {
+      var hit = fs.filter(function (f) { return matches(def, f.attributes); });
+      if (hit.length) {
+        return { status: "hit", agency: def.agency, note: def.note || null, caveat: def.caveat || null,
+                 value: displayValue(def, hit[0].attributes), count: hit.length, attrs: hit[0].attributes };
+      }
+      // A point can fall in a gap the polygon does not cover, so check a small
+      // envelope before reporting absence. An empty array is not proof.
+      var pad = 0.0015;
+      return inEnvelope(def, [lng - pad, lat - pad, lng + pad, lat + pad], 8).then(function (nb) {
+        var near = nb.filter(function (f) { return matches(def, f.attributes); });
+        return {
+          status: near.length ? "near" : "none",
+          agency: def.agency, note: def.note || null, caveat: def.caveat || null,
+          value: near.length ? displayValue(def, near[0].attributes) : null,
+          attrs: near.length ? near[0].attributes : null
+        };
+      }).catch(function () {
+        return { status: "none", agency: def.agency, note: def.note || null, caveat: def.caveat || null };
+      });
+    });
+  }
   function ringOf(feature) {
     var c = feature && feature.geometry && feature.geometry.coordinates;
     return (Array.isArray(c) && Array.isArray(c[0])) ? c[0] : [];
@@ -13997,26 +14130,14 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
         return { status: "error", note: String(e && e.message || e), agency: def.agency };
       });
     }
-    return atPoint(def, lng, lat).then(function (fs) {
-      var hit = fs.filter(function (f) { return matches(def, f.attributes); });
-      if (hit.length) {
-        return { status: "hit", agency: def.agency, note: def.note || null, caveat: def.caveat || null,
-                 value: displayValue(def, hit[0].attributes), count: hit.length, attrs: hit[0].attributes };
-      }
-      // A point can fall in a gap the polygon does not cover, so check a small
-      // envelope before reporting absence. An empty array is not proof.
-      var pad = 0.0015;
-      return inEnvelope(def, [lng - pad, lat - pad, lng + pad, lat + pad], 8).then(function (nb) {
-        var near = nb.filter(function (f) { return matches(def, f.attributes); });
-        return {
-          status: near.length ? "near" : "none",
-          agency: def.agency, note: def.note || null, caveat: def.caveat || null,
-          value: near.length ? displayValue(def, near[0].attributes) : null,
-          attrs: near.length ? near[0].attributes : null
-        };
-      }).catch(function () {
-        return { status: "none", agency: def.agency, note: def.note || null, caveat: def.caveat || null };
-      });
+    return queryPointDef(def, lng, lat).then(function (r) {
+      /* A council-scoped source can be precise but narrow (Brisbane's flood
+         overlay covers the Brisbane River only). "none" from it is not proof
+         nothing is published anywhere - retry a broader fallback, when one is
+         configured, before reporting absence. Only one hop: a fallback is not
+         itself given a fallback, so this cannot loop. */
+      if (r.status === "none" && def.fallback) return queryPointDef(def.fallback, lng, lat);
+      return r;
     }).catch(function (e) {
       return { status: "error", agency: def.agency, note: String(e && e.message || e) };
     });
@@ -14105,9 +14226,24 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
   function cadastreRaster(def) {
     var m = /^(.*\/MapServer)\/(\d+)$/.exec(def.url || "");
     if (!m) return null;
+    var lyr = Number(m[2]);
+    /* Each state's own default cadastre symbology is wildly inconsistent - NSW's
+       SIX draws a bold amber line by default, Queensland Spatial's draws a
+       near-invisible 1px grey line that vanishes against a busy basemap. A
+       dynamicLayers renderer override forces the SAME bold, transparent-fill /
+       coloured-outline look on every state's export regardless of what that
+       service would otherwise draw. Confirmed live against NSW, QLD and WA
+       before shipping - all three honour dynamicLayers and none error on it. */
+    var dynamicLayers = encodeURIComponent(JSON.stringify([{
+      id: lyr, source: { type: "mapLayer", mapLayerId: lyr },
+      drawingInfo: { renderer: { type: "simple", symbol: {
+        type: "esriSFS", style: "esriSFSNull",
+        outline: { type: "esriSLS", style: "esriSLSSolid", color: [255, 204, 0, 255], width: 1.6 }
+      } } }
+    }]));
     return m[1] + "/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857" +
       "&size=512,512&dpi=96&format=png32&transparent=true" +
-      "&layers=show:" + m[2] + "&f=image";
+      "&layers=show:" + lyr + "&dynamicLayers=" + dynamicLayers + "&f=image";
   }
   function addCadastreRaster(def) {
     var map = AM.map, sid = "aumap-cadastre", url = cadastreRaster(def);
@@ -14269,9 +14405,15 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
       var view = currentBBox(.01), rt = AM.runtime[key];
       if (rt && rt.state === sc && rt.bbox && bboxContains(rt.bbox, view) && Math.abs(rt.zoom - z) < 2) {
         addPurposeVector(key, rt.data);
+        /* rt.agency, not def.agency: when a fallback answered because the
+           primary source came back empty (see below), the cached data is the
+           fallback's, and re-labelling it with the primary's agency on a
+           cache-hit replay would say Brisbane City Council over a QLD
+           FloodCheck feature. */
+        var cachedAgency = rt.agency || def.agency;
         buttonState(key, rt.count ? "" : "warn",
-          rt.count ? (def.agency + " - " + rt.count + " feature(s)")
-                   : (EMPTY_LAYER_NOTE[key] || (def.agency + " - nothing published for this area")));
+          rt.count ? (cachedAgency + " - " + rt.count + " feature(s)")
+                   : (cachedAgency + " - nothing published for this area"));
         return;
       }
       /* A tight box and only the labelling field. The cadastre in particular
@@ -14283,13 +14425,28 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
          keeps a dense inner-city block inside a couple of seconds. */
       var tight = key === "cadastre";
       var bb = currentBBox(tight ? .004 : .05);
-      var data = await arcViewportGeojson(def.url, bb, z, tight ? 180 : 700,
-        def.field ? "OBJECTID," + def.field : "OBJECTID");
-      if (!data || data.type !== "FeatureCollection") throw new Error("Service returned no usable geometry");
-      if (def.match) {
-        data = { type: "FeatureCollection", features: (data.features || []).filter(function (f) {
-          return matches(def, f.properties);
-        }) };
+      var useDef = def;
+      var fetchVector = async function (d) {
+        var fs = await arcViewportGeojson(d.url, bb, z, tight ? 180 : 700,
+          d.field ? "OBJECTID," + d.field : "OBJECTID");
+        if (!fs || fs.type !== "FeatureCollection") throw new Error("Service returned no usable geometry");
+        if (d.match) {
+          fs = { type: "FeatureCollection", features: (fs.features || []).filter(function (f) {
+            return matches(d, f.properties);
+          }) };
+        }
+        return fs;
+      };
+      var data = await fetchVector(useDef);
+      /* Same narrow-primary/broader-fallback cascade as queryPurpose() (the
+         "Analyse site" card) - without this the toggle would say "nothing
+         published" for exactly the area the card just reported a real hit
+         for, e.g. Brisbane's flood overlay in view but zero features drawn
+         because this particular viewport has none of the Brisbane River's
+         flood extent in it, while QLD's statewide FloodCheck fallback does. */
+      if (!data.features.length && def.fallback) {
+        useDef = def.fallback;
+        data = await fetchVector(useDef);
       }
       addPurposeVector(key, data);
       var n = (data.features || []).length;
@@ -14299,14 +14456,11 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
       // is mapped in the area on screen.
       if (n) {
         buttonState(key, "", PURPOSE_BY_KEY[key].title + ": " + n.toLocaleString("en-AU") +
-          " mapped area" + (n === 1 ? "" : "s") + " in view. Source: " + def.agency);
+          " mapped area" + (n === 1 ? "" : "s") + " in view. Source: " + useDef.agency);
       } else {
-        buttonState(key, "warn", (EMPTY_LAYER_NOTE[key] ? EMPTY_LAYER_NOTE[key] : ("No " +
-          PURPOSE_BY_KEY[key].title.toLowerCase() + " is mapped in the area on screen. " +
-          "The service answered normally; there is simply nothing published here. Source: " + def.agency)));
-        toast(EMPTY_LAYER_NOTE[key] ? "No " + PURPOSE_BY_KEY[key].label.toLowerCase() +
-          " published for this council - see the layer tooltip" :
-          "No " + PURPOSE_BY_KEY[key].label.toLowerCase() + " mapped in this view", 3200);
+        buttonState(key, "warn", "No " + PURPOSE_BY_KEY[key].title.toLowerCase() + " is mapped in the area on screen. " +
+          "The service answered normally; there is simply nothing published here. Source: " + useDef.agency);
+        toast("No " + PURPOSE_BY_KEY[key].label.toLowerCase() + " mapped in this view", 3200);
       }
     } catch (e) {
       buttonState(key, "bad", String(e && e.message || e));
@@ -14471,6 +14625,15 @@ function renderMap(){const host=document.getElementById("p_map");if(!host)return
     // the whole answer.
     var caveat = (r && r.caveat) || "";
     if (r && (r.status === "unpublished" || r.status === "unwired")) caveat = r.note || caveat;
+    /* caveat was computed above and, until this line existed, discarded: a
+       card could carry a warning as pointed as NSW biodiversity's "routinely
+       the largest unbudgeted line on a greenfield deal" and never once show
+       it. Only worth surfacing when there is a live hit to qualify - "Not
+       affected" needs no asterisk, and unpublished/unwired already folded
+       their explanation into v via the branches above. */
+    if (caveat && (r.status === "hit" || r.status === "near")) {
+      sub = sub ? sub + " - " + caveat : caveat;
+    }
     /* Rendered in the same key/value shape as Location and Demographics so the
        three read as one row of cards rather than one card plus a wide grid. */
     return intelRow(p.title, v + (sub ? " - " + sub : ""));

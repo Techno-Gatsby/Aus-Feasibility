@@ -68,6 +68,10 @@ probe)
   ;;
 push)
   what="${2:-all}"
+  if [ "$what" = australia ]; then
+    echo "australia only:"
+    put "$REPO/Australia_Land_Feasibility_.html" australia.html
+  fi
   if [ "$what" = static ] || [ "$what" = all ]; then
     echo "static:"
     put "$REPO/US_Land_Feasibility_copy.html"  us.html
