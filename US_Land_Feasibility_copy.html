@@ -4163,8 +4163,7 @@ function applyLagTiming(o){
   const w=(k,d)=>Math.max(0,Math.round(_num(o[k],d||0)));
   const anchor=Math.round(_num(o._lagAnchor,-1));
   const ddFrom=Math.max(0,Math.round(_num(o.ddstart,1))-1);
-  const ddEnd=anchor>=0?anchor:Math.max(0,ddFrom+w("ddur")-1);
-  o.ddend=ddEnd;
+  let ddEnd=anchor>=0?anchor:Math.max(0,ddFrom+w("ddur")-1);
   /* Two independent overrides landed on this same date, so both are honoured -
      landstart is checked first since it is the more recently added, purpose-
      built control; a month entered directly into close itself (>=0) still
@@ -4173,6 +4172,14 @@ function applyLagTiming(o){
      Due-diligence + closing-lag cascade above untouched. */
   const landStartOvr=Math.round(_num(o.landstart,-1)),closeOverride=Math.round(_num(o.close,-1));
   const close=landStartOvr>=0?landStartOvr:closeOverride>=0?Math.max(0,closeOverride):(anchor>=0?anchor:ddFrom)+w("lagclose");
+  /* Pinning a closing date earlier than the ddur/ddstart cascade would
+     otherwise finish due diligence on is not a conflict to reject - closing
+     is real-world proof due diligence concluded by then, whatever ddur says.
+     Only the marker other stages anchor off is capped; ddur/ddstart
+     themselves are left as entered, so the due-diligence cost spread below
+     (which reads ddur directly, not ddend) is unaffected. */
+  if((landStartOvr>=0||closeOverride>=0)&&close<ddEnd)ddEnd=close;
+  o.ddend=ddEnd;
   o.close=close;
   o.landdepmonth=Math.max(0,close-w("lagdep"));
   o.closingmonth=close+w("lagclosing");
@@ -6861,6 +6868,8 @@ function applyLagWrite(d,lagKey,delta){
   d.startYear=Math.floor(ai/12);d.startMonth=((ai%12)+12)%12+1;
   d[lagKey]=0;
 }
+const BUILDMO_DATE_CFG={durKey:"buildmo",startReadOnly:true,label:"Construction cost (vertical build)",
+  computeStart:d=>{try{const ps=run(d).phaseSchedule;if(ps&&ps[0]&&Number.isFinite(ps[0].start))return ps[0].start}catch(e){}return 1}};
 const DATE_RANGE_FIELDS={
   ddstart:   {durKey:"ddur",    label:"Due diligence"},
   sfstart:   {durKey:"sfdur",   lagKey:"lagsf",    label:"Soft cost"},
