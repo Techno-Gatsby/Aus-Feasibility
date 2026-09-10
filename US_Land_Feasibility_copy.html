@@ -9225,14 +9225,17 @@ function portfolioData(){
   runs.forEach(r=>{
     const {A,d,start}=r,R=A.R,landBase=landConsiderationBase(d),acqOther=d.acquisitionfee+d.otheracq+d.rollback+d.closingpc/100*landBase;
     const acqDen=Math.max(1,A.land+A.transferTax+A.landSurcharge+A.acqFeeCost+acqOther),baseInfra=d.infl*A.lots;
-    const constructionDen=Math.max(1,A.infTot+A.contTot),sellingDen=Math.max(1e-9,d.comm+d.sellingpc);
+    const constructionDen=Math.max(1,A.infTot+A.contTot);
     let first=null,last=null;
     for(let m=0;m<=A.NM;m++){
       const i=start+m-minAbs,get=k=>(R[k]&&R[k][m])||0;
-      const landAllocated=get("landbasecogs"),infraNet=get("infracogs")+get("pidcogs"),constructionPL=get("constructioncogs")+get("insurancecaprel")+get("insuranceexp"),designAllocated=get("designcogs"),ddAllocated=get("ddcogs"),softAllocated=get("softcogs"),dmAllocated=get("dmcogs"),selling=get("sell"),rev=get("recog")-get("outputsut");
+      const landAllocated=get("landbasecogs"),infraNet=get("infracogs")+get("pidcogs"),constructionPL=get("constructioncogs")+get("insurancecaprel")+get("insuranceexp"),designAllocated=get("designcogs"),ddAllocated=get("ddcogs"),softAllocated=get("softcogs"),dmAllocated=get("dmcogs"),rev=get("recog")-get("outputsut");
       const vals={grossRev:get("recog"),outputSut:get("outputsut"),rev,
         landCost:landAllocated*A.land/acqDen,transferTax:landAllocated*A.transferTax/acqDen,landSurcharge:landAllocated*A.landSurcharge/acqDen,acqFeeCost:landAllocated*A.acqFeeCost/acqDen,acquisitionCost:landAllocated*acqOther/acqDen,
-        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:ddAllocated+softAllocated+designAllocated,dueDiligenceFees:ddAllocated,softCostFees:softAllocated,developmentManagementFees:dmAllocated,designCost:designAllocated,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),brokerage:selling*d.comm/sellingDen,sellingCost:selling*d.sellingpc/sellingDen,marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
+        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:ddAllocated+softAllocated+designAllocated,dueDiligenceFees:ddAllocated,softCostFees:softAllocated,developmentManagementFees:dmAllocated,designCost:designAllocated,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),/* Exact reads of the two true buckets (see the retiming comment beside
+           R.sell/R.sellingexpense in run()) rather than a rate-split of one
+           pooled figure - same fix as run()'s own PL[y] assignment. */
+        brokerage:get("sell"),sellingCost:get("sellingexpense"),marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
         gna:get("gna")+get("hoaexppl")+get("hoacaprel"),gnaShared:get("gnashared"),staff:get("staff"),staffShared:get("staffshared"),corpOverhead:get("corpovh"),fin:get("pf")+get("intr")+get("lf"),da:get("da"),otherIncome:get("otherincome"),interestIncome:get("intincome")};
       vals.capitalisedFinanceCost=0;
       vals.dc=vals.landCost+vals.transferTax+vals.landSurcharge+vals.acqFeeCost+vals.acquisitionCost+vals.constructionCost+vals.professionalFees+vals.developmentManagementFees+vals.statutoryCost+vals.contingencyCost+vals.holdingCost+vals.brokerage+vals.sellingCost+vals.marketing+vals.capitalisedFinanceCost+vals.otherDirectCost+vals.inputSutCredit;
@@ -10977,10 +10980,13 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
          Other direct development and selling classifications remain in Direct Cost but are
          presented under Other Direct Cost so the four-row statement still reconciles. */
       const constructionCost=pl("constructionCost",y);
-      /* Selling Cost shares its source pool with Brokerage (both are rate-splits
-         of the same R.sell cash - see the brokerage/sellingCost split in
-         run()'s PL[y] assignment) and reads as a marketing-type expense, so it
-         is folded into Marketing & Advertising rather than Other Costs. */
+      /* Selling Cost settles through its own true bucket now (R.sellingexpense,
+         timed to the contract month) rather than a rate-split of the combined
+         R.sell figure it used to share with Brokerage (R.sell, timed to
+         delivery) - see the retiming comment beside R.sell/R.sellingexpense in
+         run()'s unit loop and the exact read in run()'s PL[y] assignment. It
+         still reads as a marketing-type expense here, so it stays folded into
+         Marketing & Advertising rather than Other Costs. */
       const brokerage=pl("brokerage",y),marketing=pl("marketing",y)+pl("sellingCost",y);
       /* dueDiligence/softCosts are now exact reads (ddcogs/softcogs each
          settle in their own true bucket) rather than a cash-basis ratio
