@@ -2321,6 +2321,12 @@ nav.tabs button:focus-visible,
 #p_port .portfolio-kpis .d{margin-top:7px!important;color:#6B7A94!important;font:500 10.5px/1.3 var(--sans)!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
 #p_salesov .kpis .kpi{--kpi-accent:#1766CB;--kpi-icon-bg:#EAF2FD;--kpi-icon-border:#E4E9F1;position:relative;padding:16px 16px 14px 66px;border:1px solid #E4E9F1;border-top:3px solid var(--kpi-accent);box-shadow:0 3px 10px rgba(18,47,86,.06);text-align:left;}
 #p_salesov .kpis .kpi::before{display:grid;content:attr(data-icon);position:absolute;left:14px;top:17px;width:36px;height:36px;place-items:center;border:1px solid var(--kpi-icon-border);border-radius:50%;background:var(--kpi-icon-bg);color:var(--kpi-accent);font:750 14px/1 var(--sans);}
+/* Exposure Statement, Equity Schedule and Sales Overview: let each column be
+   dragged wider/narrower from its header, like a spreadsheet. Print/PDF/Excel
+   exports read the underlying data, not the rendered width, so this is purely
+   an on-screen convenience. */
+:is(#p_exp,#p_eqsch,#p_salesov) .table-scroll table{table-layout:fixed;}
+:is(#p_exp,#p_eqsch,#p_salesov) .table-scroll table th{overflow:hidden;resize:horizontal;min-width:64px;max-width:640px;}
 #p_port .portfolio-dashboard-charts{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:16px!important;margin:0 0 16px!important;}
 #p_port .portfolio-dashboard-charts .chart{min-width:0!important;margin:0!important;border:1px solid #C9D2E1!important;border-radius:var(--r)!important;background:#fff!important;box-shadow:0 4px 14px rgba(18,47,86,.07)!important;overflow:hidden!important;}
 #p_port .portfolio-dashboard-charts .chart .ch{min-width:0!important;min-height:46px!important;display:flex!important;align-items:center!important;padding:13px 16px!important;border-bottom:1px solid #E4E9F1!important;background:#fff!important;color:#12305E!important;font:750 12px/1.2 var(--sans)!important;text-transform:none!important;letter-spacing:0!important;}
@@ -4125,7 +4131,12 @@ function applyLagTiming(o){
   const ddFrom=Math.max(0,Math.round(_num(o.ddstart,1))-1);
   const ddEnd=anchor>=0?anchor:Math.max(0,ddFrom+w("ddur")-1);
   o.ddend=ddEnd;
-  const close=(anchor>=0?anchor:ddFrom)+w("lagclose");
+  /* A month entered directly here (>=0) supersedes the lag, the same way
+     facstart already works below - the field is offered on the panel, not
+     withheld, so a user can pin an exact closing date (e.g. the actual land
+     settlement date) without it being silently recomputed from lagclose. */
+  const closeOverride=Math.round(_num(o.close,-1));
+  const close=closeOverride>=0?Math.max(0,closeOverride):(anchor>=0?anchor:ddFrom)+w("lagclose");
   o.close=close;
   o.landdepmonth=Math.max(0,close-w("lagdep"));
   o.closingmonth=close+w("lagclosing");
@@ -4163,7 +4174,7 @@ function _normalizedForDerive(raw){
      dissolution lag, not an immediate same-month distribution. */
   o.eqdistlag=Math.max(0,Math.round(_num(o.eqdistlag,2)));
   o._lagAnchor=Math.round(_num(o._lagAnchor,-1));
-  o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,2);
+  o.facmode=_clamp(Math.round(_num(o.facmode,0)),0,3);
   o.landpaycount=_clamp(Math.round(_num(o.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS);
   o.landpaystart=Math.max(1,Math.round(_num(o.landpaystart,1)));
   o.landpaygap=Math.max(1,Math.round(_num(o.landpaygap,1)));
@@ -4387,6 +4398,12 @@ const GROUPS=[
   ["salesy7","Sales year 7 — units sold","no.",0,"n"],
   ["salesy8","Sales year 8 — units sold","no.",0,"n"],
   ["_salestot","Total units in the sales schedule","no.",null,"c",d=>{let t=0;for(let i=1;i<=8;i++)t+=Math.max(0,_num(d["salesy"+i],0));return t}],
+  /* A second, independent manual-sales path keyed straight off the fiscal
+     year (not a period count since sales open) so the Sales Overview tab can
+     let someone type units directly against the fiscal years it already
+     shows, without disturbing the period-based grid above. */
+  ["salesFYMode","Sales units by fiscal year (override)","flag",0,"n"],
+  ["salesUnitsFY","Sales units by fiscal year — JSON {fy:units}","json","","n"],
   ["esc","Price escalation","% p.a. sale price",6,"p"],
   ["depo","Deposit on contract","% sale price",10,"p"],
   ["escrow","Deposit held in escrow until closing","flag",1,"n"],
@@ -4401,7 +4418,7 @@ const GROUPS=[
   ["ddur","Due diligence spend period","mth",6,"n"],
   ["ddend","Due diligence completes","mth",5,"n"],
   ["landdepmonth","Land deposit payment","mth",0,"n"],
-  ["close","Land closing / balance payment","mth",5,"n"],
+  ["close","Land closing / balance payment","mth",-1,"n"],
   ["closingmonth","Closing-cost payment month","mth",5,"n"],
   ["entdur","Entitlement and platting duration after DD","mth",12,"n"],
   ["_ent","Entitlement complete","mth",null,"c",d=>d.ddend+d.entdur],
@@ -4550,7 +4567,7 @@ const GROUPS=[
   ["vel1","Product 1 sales velocity","units/m",0,"n"],
   ["vel2","Product 2 sales velocity","units/m",0,"n"],
   ["vel3","Product 3 sales velocity","units/m",0,"n"],
-  ["buildstagger","Build starts","flag",0,"n"],
+  ["buildstagger","Build starts","flag",1,"n"],
   ["buildmo","Default vertical unit build / closing duration","mth",6,"n"],
   ["buildmo1","Product 1 — build duration","mth",0,"n"],["buildmo1ovr","Product 1 — use build-duration override","flag",0,"n"],
   ["buildmo2","Product 2 — build duration","mth",0,"n"],["buildmo2ovr","Product 2 — use build-duration override","flag",0,"n"],
@@ -4603,6 +4620,7 @@ const GROUPS=[
   ["facmode","Facility sizing basis","flag",0,"n"],
   ["facilityfixed","Fixed operating facility amount","$",0,"n"],
   ["debtcap","Maximum debt / facility ceiling (0 = no cap)","$",0,"n"],
+  ["presaledebtpc","Additional debt against pre-sold units (% of eligible cost)","%",0,"p"],
   ["fundingmode","Funding sequence","flag",0,"n"],
   ["equitypc","Equity-first contribution","% eligible development cost",20,"p"],
   ["equityfixed","Fixed equity-first amount","$",0,"n"],
@@ -4613,6 +4631,7 @@ const GROUPS=[
   ["finvert","Vertical construction financed","flag",1,"n"],
   ["rate","All-in interest rate","% p.a. debt balance",8.5,"p"],
   ["facstart","Facility start month","mth",-1,"n"],
+  ["facend","Facility end month — forces full repayment (-1 = off)","mth",-1,"n"],
   ["drawcount","Number of dated facility draws","no.",0,"n"],
   ["draw1month","Draw 1 month","mth",0,"n"],["draw1amount","Draw 1 amount","$",0,"n"],
   ["draw2month","Draw 2 month","mth",0,"n"],["draw2amount","Draw 2 amount","$",0,"n"],
@@ -4781,7 +4800,7 @@ function neutralDefaultFor(k){
   if(k==="ph1start")return 0;
   if(/^ph[2-6]start$/.test(k))return -1;
   if(/^ph[1-6](?:depo|dellag)$/.test(k))return -1;
-  if(k==="facstart")return -1;
+  if(k==="facstart"||k==="facend")return -1;
   if(k==="relsalespc"||k==="taxlossutil")return 100;
   return 0;
 }
@@ -4891,12 +4910,12 @@ const VERT_ONLY_FIELDS=["vert","buildbua","_plotratio","_effic","bua1","bua2","b
   "buildstagger","permitbase","buildpsf","buildpsf1","buildpsf2","buildpsf3","buildpsf1ovr","buildpsf2ovr","buildpsf3ovr","hpsf1ovr","hpsf2ovr","hpsf3ovr","vel1","vel2","vel3","buildmo1ovr","buildmo2ovr","buildmo3ovr","modelphase","dsgnpc"];
 /* The funding selectors all stayed on one setting across every scheme, so the
    figures are asked for and the policy behind them is left as it stands. */
-const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facilityfixed","debtcap",
+const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","mincash","cashrate","facstart","facend","facilityfixed","debtcap",
   "facmode","relmode","relpc","relsalespc",
   "drawcount","draw1month","draw1amount","draw2month","draw2amount","draw3month","draw3amount","draw4month","draw4amount","draw5month","draw5amount",
   "repaycount","repay1month","repay1amount","repay2month","repay2amount","repay3month","repay3amount","repay4month","repay4amount","repay5month","repay5amount"]);
 const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic"]);
-const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc"]);
+const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc","salesUnitsFY"]);
 const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart",
   "salesmode","salesy1","salesy2","salesy3","salesy4","salesy5","salesy6","salesy7","salesy8","_salestot"]);
 const DEBT_ALL_FIELDS=new Set((GROUPS.find(g=>g.g==="Debt")||{f:[]}).f.map(f=>f[0]));
@@ -4907,7 +4926,7 @@ const SALES_ALL_FIELDS=new Set((GROUPS.find(g=>g.g==="Sales and receipts")||{f:[
    ddstart is the ROOT anchor close itself derives from - nothing ever
    recomputes it, so hiding it as if it were derived left it permanently
    frozen at its raw default with no way to change it. */
-const LAG_DERIVED_FIELDS=new Set(["ddend","close","landdepmonth","closingmonth",
+const LAG_DERIVED_FIELDS=new Set(["ddend","landdepmonth","closingmonth",
   "otherstart","infrastart","sfstart","dsgnstart","permstart","salesstart","_lagAnchor"]);
 /* The facility month is no longer worked out and withheld: it is offered on the
    panel and a month entered there supersedes the lag. */
@@ -4972,6 +4991,8 @@ function fieldShown(k,vert){
      enter the same cost. They stay in the schema so a project saved with a figure
      in either of them still adds up. */
   const hidden=new Set(["buildpsf_legacy","designbase","buildesc","_buildTot","landsched",
+    /* Set only from the Sales Overview tab's inline unit editor, not typed here. */
+    "salesFYMode","salesUnitsFY",
     /* The land cost is typed as one figure, so the rate and the basis it is
        quoted on are two more ways of entering what the total already says. */
     "prmode","pr",
@@ -5174,17 +5195,17 @@ function _runUncached(din,ov){
   [/* Both of these carry an explicit zero branch in the engine - the cost lands as
      a single payment instead of being spread - so zero is a real answer, not a
      value to be refused. */
-   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",0,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["drawcount",0,5],["repaycount",0,5],["draw1month",0,null],["draw2month",0,null],["draw3month",0,null],["draw4month",0,null],["draw5month",0,null],["repay1month",0,null],["repay2month",0,null],["repay3month",0,null],["repay4month",0,null],["repay5month",0,null],["debtRepayYear",0,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["combrokerlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
+   ["ddur",0,null],["ddend",0,null],["landdepmonth",0,null],["closingmonth",0,null],["sutlag",0,null],["close",-1,null],["landpaycount",0,5],["landpaystart",1,null],["landpaygap",1,null],["drawcount",0,5],["repaycount",0,5],["draw1month",0,null],["draw2month",0,null],["draw3month",0,null],["draw4month",0,null],["draw5month",0,null],["repay1month",0,null],["repay2month",0,null],["repay3month",0,null],["repay4month",0,null],["repay5month",0,null],["debtRepayYear",0,null],["entdur",0,null],["landdur",1,null],["nph",1,6],["phm",1,null],["dellag",0,null],["pidlag",0,null],["combrokerlag",0,null],["vlag",0,null],["modelmo",0,null],["buildmo",1,null],["taxlag",0,null],["taxqlag",0,null],["otherincmonth",0,null],["taxcarrybackyrs",0,20],["taxlossexp",0,null],["modelphase",0,6]].forEach(x=>requireInteger(...x));
   const binaryFlags=["taxwhen","salesrecog","drawmode","distmode","buildstagger","softbase","vert","escrow","staxrecover","xfertaxmode","fundingmode","permtiming","finland","findd","finhoriz","finvert","fincapex","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
   for(let p=1;p<=MAX_PRODUCTS;p++)binaryFlags.push(`hpsf${p}ovr`,`buildpsf${p}ovr`,`buildmo${p}ovr`);
   binaryFlags.forEach(k=>{if(Number(raw[k])!==0&&Number(raw[k])!==1)throw new Error(`${k} must be entered as 0 or 1.`)});
-  [["facmode",0,2],["prmode",0,2],["pmode",0,1],["intconv",0,2],["staxbase",0,5],["finbase",0,3],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["buildcurve",0,4],["relmode",0,2],["hoastart",0,2]].forEach(x=>requireInteger(...x));
+  [["facmode",0,3],["prmode",0,2],["pmode",0,1],["intconv",0,2],["staxbase",0,5],["finbase",0,3],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["buildcurve",0,4],["relmode",0,2],["hoastart",0,2]].forEach(x=>requireInteger(...x));
   if(!Number.isInteger(Number(raw.facstart))||Number(raw.facstart)<-1)throw new Error("Facility commitment month must be -1 or a non-negative whole month.");
   const nonNegative=["acresGross","acresDed","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landsut","landdepo","xfertaxfixed","xfertaxrt","landsurchargert","acqfeefixed","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","districtlevy","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","sutoutfixed","sutcreditfixed","sutmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","financefixed","relpc","mincash","intres","relsalespc","draw1amount","draw2amount","draw3amount","draw4amount","draw5amount","repay1amount","repay2amount","repay3amount","repay4amount","repay5amount","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic"];
   for(let p=1;p<=MAX_PRODUCTS;p++)nonNegative.push(`n${p}`,`w${p}`,`d${p}`,`p${p}`,`bua${p}`,`hpsf${p}`,`buildpsf${p}`,`vel${p}`,`buildmo${p}`,`relfixed${p}`);
   nonNegative.forEach(k=>{if(_num(raw[k])<0)throw new Error(`${k} cannot be negative.`)});
   for(let p=1;p<=productCount(raw);p++)if(!Number.isInteger(_num(raw[`n${p}`])))throw new Error(`Product ${p} unit count must be a whole number.`);
-  const boundedPct=["ddpc","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","contpc","landsut","landdepo","xfertaxrt","landsurchargert","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","marketingpc","otherincpc","pidel","pidrt","depo","dsgnpc","permpc","ltc","equitypc","procf","linef","relsalespc","taxlossutil","ftax","stax"];
+  const boundedPct=["ddpc","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","contpc","landsut","landdepo","xfertaxrt","landsurchargert","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","marketingpc","otherincpc","pidel","pidrt","depo","dsgnpc","permpc","ltc","equitypc","procf","linef","relsalespc","taxlossutil","ftax","stax","presaledebtpc"];
   boundedPct.forEach(k=>{if(_num(raw[k])>100)throw new Error(`${k} cannot exceed 100%.`)});
   ["infesc","esc","buildesc"].forEach(k=>{if(_num(raw[k])<=-100)throw new Error(`${k} must be greater than -100%.`)});
   const requestedVertical=_num(raw.vert,0)>=.5;
@@ -5216,6 +5237,7 @@ function _runUncached(din,ov){
   let priorLandMonth=d.landdepmonth;
   for(let i=1;i<=d.landpaycount;i++){const amt=d[`landpay${i}`],m=d[`landpay${i}month`];if(!(amt>0))throw new Error(`Interim land payment ${i} must be a share greater than zero.`);if(m<=priorLandMonth)throw new Error(`Interim land payment ${i} month must be after the previous land payment month.`);if(m>=d.close)throw new Error(`Interim land payment ${i} month must be before final settlement.`);priorLandMonth=m;}
   if(d.facstart>=0&&d.facstart<(landDepositAmount(d)>0?Math.min(Math.max(0,Math.round(_num(d.landdepmonth,0))),d.close):d.close))throw new Error("Facility commitment cannot occur before the land payment month.");
+  if(d.facend>=0&&d.facstart>=0&&d.facend<d.facstart)throw new Error("Facility end month cannot be before the facility start month.");
   if(d.otherinc>0&&d.otherincmonth<d.close)throw new Error("Fixed other income cannot be recognised or collected before the land payment month.");
   if(d.dacapex>0){if(!Number.isInteger(Number(raw.dastart))||d.dastart<d.close)throw new Error("Depreciable capex must be placed in service on or after land payment using a whole model month.");if(!Number.isInteger(Number(raw.dalife))||d.dalife<1)throw new Error("D&A useful life must be a positive whole number of years.");}
   if(d.vert)for(let p=1;p<=productCount(d);p++){if(d[`buildmo${p}ovr`]&&d[`buildmo${p}`]<1)throw new Error(`Product ${p} build duration must be at least one month when its override is enabled.`);if(d[`buildmo${p}ovr`]&&!Number.isInteger(Number(raw[`buildmo${p}`])))throw new Error(`Product ${p} build duration must be a whole number.`)}
@@ -5294,7 +5316,31 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
      terminates even if the yearly figures do not add up to the unit count. */
   const manualSales=Math.round(_num(d.salesmode,0))===1;
   const salesYearUnits=Array.from({length:8},(_,i)=>Math.max(0,_num(d["salesy"+(i+1)],0)));
+  /* A second, independent manual-sales override keyed straight off the fiscal
+     year rather than a period count since sales open - lets the Sales Overview
+     tab set units directly against the fiscal years it already shows. Takes
+     priority over the period-based grid above when turned on; each fiscal
+     year's month count is measured from the run itself, not assumed to be 12,
+     so a short first/last project year still spreads its figure correctly. */
+  const salesFYMode=Math.round(_num(d.salesFYMode,0))===1;
+  let salesUnitsFYMap=null;
+  if(salesFYMode){
+    try{const o=JSON.parse(d.salesUnitsFY||"null");salesUnitsFYMap=o&&typeof o==="object"?o:{}}
+    catch(e){salesUnitsFYMap={}}
+  }
+  /* First fiscal year of the whole model can be short; every year after it
+     runs a full 12 months (same simplification the period-based grid above
+     already makes for its own first year). */
+  const fyModelFirst=fyOf(0,d),
+    fyFirstC0=((d.startMonth-1)%12)+1,
+    fyFirstMonths=fyFirstC0<=d.fyEnd?(d.fyEnd-fyFirstC0+1):(12-fyFirstC0+1+d.fyEnd);
   const salesRateAt=m=>{
+    if(salesFYMode){
+      const y=fyOf(m,d),months=y===fyModelFirst?fyFirstMonths:12,v=Math.max(0,_num(salesUnitsFYMap[y],0));
+      if(v>0)return v/months;
+      const anyFuture=Object.keys(salesUnitsFYMap).some(k=>Number(k)>y&&_num(salesUnitsFYMap[k],0)>0);
+      return anyFuture?0:L;
+    }
     if(!manualSales)return projectRate;
     /* Year buckets follow the model's own financial year (fyOf), not a rolling
        12 months from whenever sales happen to open - so a project opening
@@ -5386,7 +5432,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const landSpendEnd=close;
   const activityEnd=Math.max(1,lastPlannedDelivery,lastBuildEnd,finalReimb,landSpendEnd,close,ent,Math.max(0,Math.round(d.otherincmonth)),Math.max(0,Math.round(d.dastart)),daEnd);
   const NM=activityEnd+Math.max(d.taxlag,d.taxqlag)+24;
-  const K=["build","design","permit","vert1","land","closing","acqfee","dd","soft","supervision","professionalfee","dmfee","pidprocess","otherdirect","munic","impact","infra","cont","devc","fdev","sval","recog","dep","escr","escbal","balr","lsr","pid","sell","sellcash","brokeragecash","sellingexpensecash","outputsut","sutrefund","landsutrefund","devsutrefund","inputsutpaid","sutcogs","capex","ovh","fixovh","gna","gnashared","staff","staffshared","corpovh","marketing","da","otherincome","carry","retax","hoaexp","insurance","retaxcapadd","retaxcaprel","retaxexp","hoacapadd","hoacaprel","hoaexppl","insurancecapadd","insurancecaprel","insuranceexp","pf","pfamort","lf","lop","dr1","dr2","cumd","intr","icash","rep","lcl","net","taxm","eqcf","eqin","eqout","eqreimbcap","cash","price","cinf","model","landcogs","concogs","vertcogs","othcogs","landbasecogs","infracogs","designcogs","authoritycogs","constructioncogs","otherdirectcogs","finexp","fincapadd","fincaprel","relbase","relreq","pidcogs","bradd","brcomplete","intincome","staxm","corptaxm"];
+  const K=["build","design","permit","vert1","land","closing","acqfee","dd","soft","supervision","professionalfee","dmfee","pidprocess","otherdirect","munic","impact","infra","cont","devc","fdev","sval","recog","dep","escr","escbal","balr","lsr","pid","sell","sellcash","brokeragecash","sellingexpensecash","outputsut","sutrefund","landsutrefund","devsutrefund","inputsutpaid","sutcogs","capex","ovh","fixovh","gna","gnashared","staff","staffshared","corpovh","marketing","da","otherincome","carry","retax","hoaexp","insurance","retaxcapadd","retaxcaprel","retaxexp","hoacapadd","hoacaprel","hoaexppl","insurancecapadd","insurancecaprel","insuranceexp","pf","pfamort","lf","lop","dr1","dr2","cumd","intr","icash","rep","lcl","net","taxm","eqcf","eqin","eqout","eqreimbcap","cash","price","cinf","model","landcogs","concogs","vertcogs","othcogs","landbasecogs","infracogs","ddcogs","softcogs","dmcogs","designcogs","authoritycogs","constructioncogs","otherdirectcogs","finexp","fincapadd","fincaprel","relbase","relreq","pidcogs","bradd","brcomplete","intincome","staxm","corptaxm"];
   const R={};K.forEach(k=>R[k]=new Array(NM+1).fill(0));const ctr=new Array(NM+1).fill(0),dlv=new Array(NM+1).fill(0),unitRecords=planned;
   const unitsByPhase=Array.from({length:ph.count},()=>[]),productCtr=Array.from({length:PCOUNT},()=>new Array(NM+1).fill(0));
   unitRecords.forEach(u=>{unitsByPhase[u.phase].push(u);ctr[u.contractMonth]++;productCtr[u.product][u.contractMonth]++;dlv[u.delivery]++;R.sval[u.contractMonth]+=u.salePrice;R.dep[u.contractMonth]+=u.depositPct/100*u.salePrice;R.recog[u.delivery]+=u.salePrice;R.balr[u.delivery]+=(1-u.depositPct/100)*u.salePrice;R.escr[u.delivery]+=u.depositPct/100*u.salePrice});
@@ -5416,7 +5462,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   unitRecords.forEach(u=>{
     const w=allocMetric(u)/totalAlloc,pw=allocMetric(u)/Math.max(1,phaseAlloc[u.phase]);
     const landBaseC=land*w,acquisitionOtherC=(closing+rollback+acqfee+dd+otherDirect)*w;
-    const horizontalDesignC=soft*w,districtAuthorityC=d.pidcost*w;
+    const districtAuthorityC=d.pidcost*w;
     const infraC=phaseEligible[u.phase]*pw;
     const horizontalAuthorityC=Math.max(0,phaseActual[u.phase]-phaseEligible[u.phase])*pw+d.impact;
     /* Design is a fixed share of this unit's own construction spend, so it is
@@ -5431,10 +5477,18 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const hardRiskC=phaseEligible[u.phase]*pw+(V?u.buildCost+modelC:0),pidReduction=phaseReimb[u.phase]*pw;
     u.inventoryCost=landC+otherC+conC+vertC;u.pidReduction=pidReduction;
     R.landcogs[u.delivery]+=landC;R.othcogs[u.delivery]+=otherC;R.concogs[u.delivery]+=conC;R.vertcogs[u.delivery]+=vertC;
-    /* Named P&L buckets: acquisition closing/rollback stay with land; DD and soft cost stay with design/supervision; only the explicit manual input feeds Other Direct Cost. */
+    /* Named P&L buckets: acquisition closing/rollback stay with land; only the
+       explicit manual input feeds Other Direct Cost. Due diligence, soft cost
+       and development management now settle through their own true buckets
+       (previously all three, plus vertical design, were pooled into
+       designcogs and split back apart downstream by a cash-basis ratio
+       estimate) - designcogs is pure vertical design cost from here on. */
     R.landbasecogs[u.delivery]+=landC;
     R.infracogs[u.delivery]+=infraC;
-    R.designcogs[u.delivery]+=dd*w+horizontalDesignC+verticalDesignC;
+    R.ddcogs[u.delivery]+=dd*w;
+    R.softcogs[u.delivery]+=professional*w;
+    R.dmcogs[u.delivery]+=developmentManagement*w;
+    R.designcogs[u.delivery]+=verticalDesignC;
     R.authoritycogs[u.delivery]+=districtAuthorityC+horizontalAuthorityC+permitAuthorityC;
     R.constructioncogs[u.delivery]+=constructionC;
     R.otherdirectcogs[u.delivery]+=otherDirect*w;
@@ -5624,9 +5678,32 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
        $Y regardless" - not a third sizing mode of its own. */
     ltcCommitRaw=Math.round(_num(d.facmode,0))===2
       ?Math.min(d.ltc/100*(land+infTot),infTot)
+      :Math.round(_num(d.facmode,0))===3
+      /* Landowner and Vertical are always separate blocks/runs, each with its
+         own d.ltc, so one rate field already gives each entity its own
+         effective rate - only the cost base it applies to differs: land+
+         infra for the Landowner's own books, or land (as booked in the
+         Vertical company, i.e. this block's own land input) + construction +
+         design/supervision + authority for the Vertical's. */
+      ?d.ltc/100*(d.vert?(land+actualBuild+designTot+actualPermit):(land+infTot))
       :(d.facmode&&d.facilityfixed>0?d.facilityfixed:d.ltc/100*finBase),
     ltcCommit=_num(d.debtcap,0)>0?Math.min(ltcCommitRaw,d.debtcap):ltcCommitRaw;
   const futureEligible=new Array(NM+2).fill(0);for(let m=NM;m>=0;m--)futureEligible[m]=futureEligible[m+1]+Math.max(0,R.fdev[m]);
+  /* A pre-sold unit is real collateral a lender will often advance against
+     even once the base facility is exhausted - presoldEligibleCost[m] is the
+     running total of every unit's own eligibleCost (same land/soft/
+     infra-authority/vertical-design basis the fin* flags already define,
+     the same figure the debt-release calc uses) for units under contract by
+     month m. presaledebtpc turns a share of that into EXTRA draw headroom,
+     on top of the facility - not a replacement for it, and only for the
+     dr1 development-cost draw: fees, the interest-funding draw (dr2) and the
+     line-fee "unused commitment" base are deliberately left reading the
+     unexpanded operatingCommit, since a presale is security for financing
+     construction, not grounds for a bigger commitment charge. */
+  const presoldEligibleCost=new Array(NM+2).fill(0);
+  unitRecords.forEach(u=>{const cm=Math.min(NM+1,Math.max(0,Math.round(u.contractMonth)));presoldEligibleCost[cm]+=u.eligibleCost});
+  for(let m=1;m<=NM+1;m++)presoldEligibleCost[m]+=presoldEligibleCost[m-1];
+  const presaleDebtPc=_num(d.presaledebtpc,0)/100;
   const firstEligibleSpend=R.fdev.findIndex(v=>v>1e-6),facilityStart=d.facstart>=0?d.facstart:Math.max(close,firstEligibleSpend>=0?firstEligibleSpend:close);
   if(facilityStart>NM)throw new Error("Facility commitment month falls beyond the model horizon.");
   /* Capital-stack logic: the facility may be fixed or LTC-derived. Funding may
@@ -5643,7 +5720,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
          opening balance rather than the closing one so the figure does not depend
          on what the same month's draw decides to do. */
       out.cashint[m]=m<=activityEnd?d.cashrate/100/12*Math.max(0,availableCash):0;
-      const facilityAvailable=m>=facilityStart,proRataBase=drawPc/100*cumEligible,equityFirstBase=Math.max(0,cumEligible-equityFirstTarget),opBase=facilityAvailable?Math.min(operatingCommit,d.fundingmode?equityFirstBase:proRataBase):0,cashBefore=availableCash+R.net[m]+out.cashint[m],deficit=Math.max(0,-cashBefore),baseHeadroom=facilityAvailable?(d.revolver?Math.max(0,opBase-opDebt):Math.max(0,Math.min(opBase,operatingCommit-operatingDrawn))):0,monthlyEligible=facilityAvailable?(d.fundingmode||d.cashfungible?Infinity:drawPc/100*Math.max(0,R.fdev[m])):0;
+      const facilityAvailable=m>=facilityStart,presaleHeadroom=facilityAvailable?presaleDebtPc*presoldEligibleCost[m]:0,operatingCommitWithPresale=operatingCommit+presaleHeadroom,proRataBase=drawPc/100*cumEligible+presaleHeadroom,equityFirstBase=Math.max(0,cumEligible-equityFirstTarget)+presaleHeadroom,opBase=facilityAvailable?Math.min(operatingCommitWithPresale,d.fundingmode?equityFirstBase:proRataBase):0,cashBefore=availableCash+R.net[m]+out.cashint[m],deficit=Math.max(0,-cashBefore),baseHeadroom=facilityAvailable?(d.revolver?Math.max(0,opBase-opDebt):Math.max(0,Math.min(opBase,operatingCommitWithPresale-operatingDrawn))):0,monthlyEligible=facilityAvailable?(d.fundingmode||d.cashfungible?Infinity:drawPc/100*Math.max(0,R.fdev[m])):0;
       /* The entitlement is the lesser of this month's share of eligible cost and
          what is left under the running capacity. Drawing in full ignores the
          shortfall; drawing to need is capped by it. */
@@ -5661,7 +5738,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       let scheduledDraw=0;
       for(let di=1;di<=drawCount;di++)if(m===_num(d["draw"+di+"month"],-1))scheduledDraw+=Math.max(0,_num(d["draw"+di+"amount"],0));
       if(scheduledDraw>1e-9&&facilityAvailable){
-        const roomLeft=d.revolver?Math.max(0,operatingCommit-opDebt):Math.max(0,operatingCommit-operatingDrawn);
+        const roomLeft=d.revolver?Math.max(0,operatingCommitWithPresale-opDebt):Math.max(0,operatingCommitWithPresale-operatingDrawn);
         const topUp=Math.max(0,Math.min(scheduledDraw-out.dr1[m],roomLeft));
         if(topUp>0){out.dr1[m]+=topUp;opDebt+=topUp;operatingDrawn+=topUp}
       }
@@ -5688,8 +5765,11 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       out.pf[m]+=d.procfrate/100/12*out.intbase[m];
       const noFuture=futureEligible[m+1]<=1e-6,active=operatingCommit>0&&m>=facilityStart&&(closingOpPre>1e-6||!noFuture),avgOp=(openingOp+closingOpPre)/2;out.opavg[m]=avgOp;out.opunused[m]=active?Math.max(0,operatingCommit-avgOp):0;out.opcommit[m]=active?operatingCommit:0;
       out.lf[m]=d.linef/100/12*(Number(d.linefbasis)===2?out.intbase[m]:Number(d.linefbasis)===1?out.opcommit[m]:out.opunused[m]);
-      const financeCost=out.intr[m]+out.pf[m]+out.lf[m],financeHeadroom=Math.max(0,totalLimit-opDebt-intDebt);
-      out.dr2[m]=d.fundi?Math.min(financeCost,Math.max(0,reserveCap-cumFinanceDraw),financeHeadroom):0;intDebt+=out.dr2[m];cumFinanceDraw+=out.dr2[m];out.icash[m]=financeCost-out.dr2[m];
+      /* Processing/establishment fee is always equity-funded, never drawn from
+         the facility - only interest and the line fee are eligible for dr2,
+         so pf always falls through to icash regardless of fundi. */
+      const debtFundedFinance=out.intr[m]+out.lf[m],financeCost=debtFundedFinance+out.pf[m],financeHeadroom=Math.max(0,totalLimit-opDebt-intDebt);
+      out.dr2[m]=d.fundi?Math.min(debtFundedFinance,Math.max(0,reserveCap-cumFinanceDraw),financeHeadroom):0;intDebt+=out.dr2[m];cumFinanceDraw+=out.dr2[m];out.icash[m]=financeCost-out.dr2[m];
       let repay=Math.min(opDebt+intDebt,required),opRep=Math.min(opDebt,repay);opDebt-=opRep;repay-=opRep;const intRep=Math.min(intDebt,repay);intDebt-=intRep;out.oprep[m]=opRep;out.intrep[m]=intRep;out.rep[m]=opRep+intRep;
       if(noFuture&&m>=lastDlv&&(!d.pidrep||pid<=0||m>=finalReimb)){out.oprep[m]+=opDebt;out.intrep[m]+=intDebt;out.rep[m]+=opDebt+intDebt;opDebt=0;intDebt=0}
       /* A chosen "repay in full by fiscal year N" assumption, not a spend-driven
@@ -5697,11 +5777,20 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
          just triggered by the fiscal year ending rather than by running out of
          future eligible spend. d.debtRepayYear===0 (the default) never fires. */
       if(d.debtRepayYear>0&&fyOf(m,d)===d.debtRepayYear&&(m===NM||fyOf(m,d)!==fyOf(m+1,d))){out.oprep[m]+=opDebt;out.intrep[m]+=intDebt;out.rep[m]+=opDebt+intDebt;opDebt=0;intDebt=0}
+      /* facend is the month-precise sibling of debtRepayYear (fiscal-year
+         precise) - same unconditional zero-out, just keyed to an exact month
+         so the facility close date can be pinned rather than only a FY end. */
+      if(d.facend>=0&&m===Math.round(d.facend)){out.oprep[m]+=opDebt;out.intrep[m]+=intDebt;out.rep[m]+=opDebt+intDebt;opDebt=0;intDebt=0}
       out.opcl[m]=opDebt;out.intcl[m]=intDebt;const closingDebt=opDebt+intDebt;out.lcl[m]=closingDebt;
       availableCash=Math.max(0,cashBefore+out.dr1[m]+out.dr2[m]-out.intr[m]-out.pf[m]-out.lf[m]-out.rep[m]);cumDraw+=out.dr1[m]+out.dr2[m];out.cumd[m]=cumDraw;
     }
     const totalInterest=out.intr.reduce((a,b)=>a+b,0),totalFees=out.pf.reduce((a,b)=>a+b,0)+out.lf.reduce((a,b)=>a+b,0);
-    return {out,totalLimit,operatingCommit,reserveCap,equityFirstTarget,totalInterest,totalFees,totalFinanceCost:totalInterest+totalFees,financeDraw:out.dr2.reduce((a,b)=>a+b,0)}
+    /* presoldEligibleCost only grows, so its largest value (at NM+1) is the
+       most presale headroom ever unlocked - reported here so the peak-debt
+       self-check below is measured against the ceiling draws could actually
+       reach, not just the base facility. */
+    const maxTotalLimit=totalLimit+presaleDebtPc*presoldEligibleCost[NM+1];
+    return {out,totalLimit:maxTotalLimit,operatingCommit,reserveCap,equityFirstTarget,totalInterest,totalFees,totalFinanceCost:totalInterest+totalFees,financeDraw:out.dr2.reduce((a,b)=>a+b,0)}
   };
   let reserve=d.fundi?(d.intres>0?d.intres:Math.max(0,ltcCommit*.05)):0,debtResult,reserveGap=0;for(let i=0;i<24;i++){debtResult=simulateDebt(reserve);if(!d.fundi||d.intres>0)break;const wanted=debtResult.totalFinanceCost;reserveGap=wanted-reserve;if(Math.abs(reserveGap)<1)break;reserve=.5*reserve+.5*wanted}
   /* The reserve is solved by repeated substitution and settles in a few passes on
@@ -5756,7 +5845,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const netRevenueMonthly=R.recog.map((v,m)=>v-R.outputsut[m]);
   const rows={
     grossRev:by(R.recog),outputSut:by(R.outputsut),rec:by(netRevenueMonthly),gstCredit:by(R.sutcogs),pid:by(R.pid),otherIncomeManual:by(R.otherincome),
-    land:by(R.landbasecogs),infra:by(infraNet),design:by(R.designcogs),authority:by(R.authoritycogs),construction:by(constructionPL),capitalisedFinance:by(capitalisedFinancePL),otherDirect:by(otherDirectPL),sell:by(R.sell),
+    land:by(R.landbasecogs),infra:by(infraNet),dd:by(R.ddcogs),soft:by(R.softcogs),dm:by(R.dmcogs),design:by(R.designcogs),authority:by(R.authoritycogs),construction:by(constructionPL),capitalisedFinance:by(capitalisedFinancePL),otherDirect:by(otherDirectPL),sell:by(R.sell),
     gna:by(gnaPL),gnaShared:by(R.gnashared),staff:by(R.staff),staffShared:by(R.staffshared),corp:by(R.corpovh),
     fin:by(financePL),da:by(R.da),marketing:by(R.marketing),realEstateTax:by(realEstateTaxPL),
     retaxCapitalised:by(R.retaxcaprel),hoaCapitalised:by(R.hoacaprel)
@@ -5772,12 +5861,14 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const pidIncome=0,interestIncome=B.intincome[y]||0,otherIncome=pidIncome+rows.otherIncomeManual[y];
     const acquisitionTotal=Math.max(1,land+closing+rollback+acqfee),landAllocated=rows.land[y];
     const landCost=landAllocated*land/acquisitionTotal,transferTax=landAllocated*xfertax/acquisitionTotal,landSurcharge=landAllocated*landsurcharge/acquisitionTotal,acqFeeCost=landAllocated*acqfee/acquisitionTotal,acquisitionCost=landAllocated*(acquisition+rollback+d.closingpc/100*landBase)/acquisitionTotal;
-    /* Design is a professional fee and now has a real total, so it has to sit in
-       the denominator that splits the design/supervision bucket. Without it, a
-       scheme with design but no due diligence or soft cost dropped the whole
-       bucket out of direct cost and stopped reconciling. */
-    const professionalTotal=dd+professional+designTot,dmTotal=developmentManagement,designTotal=Math.max(1,professionalTotal+dmTotal);
-    const professionalFees=rows.design[y]*professionalTotal/designTotal,developmentManagementFees=rows.design[y]*dmTotal/designTotal;
+    /* Due diligence, soft cost and development management each settle through
+       their own true bucket now (ddcogs/softcogs/dmcogs), so this is an exact
+       read, not a cash-basis ratio estimate of a pooled figure. professionalFees
+       keeps its existing meaning (due diligence + soft cost + design combined,
+       everything downstream - dc, directCostClassification - already sums it
+       that way) so nothing else has to change to stay reconciled. */
+    const dueDiligenceFees=rows.dd[y],softCostFees=rows.soft[y],developmentManagementFees=rows.dm[y];
+    const professionalFees=dueDiligenceFees+softCostFees+rows.design[y];
     const constructionAndCont=Math.max(1,infTot+contTot),constructionCost=rows.infra[y]*infTot/constructionAndCont+rows.construction[y],contingencyCost=rows.infra[y]*contTot/constructionAndCont;
     const statutoryCost=rows.authority[y],capitalisedFinanceCost=rows.capitalisedFinance[y],otherDirectCost=rows.otherDirect[y];
     const sellingTotalRate=Math.max(1e-9,d.comm+d.sellingpc),brokerage=rows.sell[y]*d.comm/sellingTotalRate,sellingCost=rows.sell[y]*d.sellingpc/sellingTotalRate;
@@ -5806,7 +5897,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const totalOverhead=oh+fin+da,totalTax=corpTax+franchise;
     taxCorporate[y]=corpTax;taxState[y]=franchise;
     PL[y]={grossRev:rows.grossRev[y],outputSut:rows.outputSut[y],rev:rows.rec[y],inputSutCredit,pidIncome,interestIncome,otherIncomeManual:rows.otherIncomeManual[y],otherIncome,
-      landCost,transferTax,landSurcharge,acqFeeCost,acquisitionCost,constructionCost,professionalFees,developmentManagementFees,statutoryCost,contingencyCost,holdingCost,capitalisedFinanceCost,otherDirectCost,brokerage,sellingCost,marketing,dc,gp,
+      landCost,transferTax,landSurcharge,acqFeeCost,acquisitionCost,constructionCost,professionalFees,dueDiligenceFees,softCostFees,developmentManagementFees,statutoryCost,contingencyCost,holdingCost,capitalisedFinanceCost,otherDirectCost,brokerage,sellingCost,marketing,dc,gp,
       gna,gnaShared,staff,staffShared,corpOverhead,oh,fin,da,realEstateTax,franchise,totalOverhead,
       npbt,corporateTax:corpTax,tax:totalTax,cashTax:totalTax,npat:npbt-totalTax,ratio:L?B.dlv[y]/L:0}
   });
@@ -5949,7 +6040,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     landCashAtClosing:R.land.every((v,m)=>landPaymentMonths(d).has(m)||Math.abs(v)<=1e-6)&&R.closing.every((v,m)=>m===close||m===d.closingmonth||Math.abs(v)<=1e-6)&&R.acqfee.every((v,m)=>m===d.closingmonth||Math.abs(v)<=1e-6),
     unitChronology:unitRecords.every(u=>u.contractMonth>=close&&u.delivery>=u.contractMonth&&(recogOnSale||u.delivery>=phaseComplete[u.phase])&&(!V||u.buildStart>=st)),
     infrastructureAfterEntitlement:[R.cinf,R.cont,R.munic].every(row=>noActivityBefore(row,st)),
-    unitsContracted:Math.abs(ctr.reduce((a,b)=>a+b,0)-L)<1e-6,unitsDelivered:Math.abs(dlv.reduce((a,b)=>a+b,0)-L)<1e-6,revenueRecognised:Math.abs(sum("recog")-sum("sval"))<1,collectionsEqualRevenue:Math.abs(sum("lsr")-sum("recog"))<1,operatingDebtRollForward:R.opcl.every((v,m)=>Math.abs(v-((m?R.opcl[m-1]:0)+R.dr1[m]-R.oprep[m]))<1),interestReserveDebtRollForward:R.intcl.every((v,m)=>Math.abs(v-((m?R.intcl[m-1]:0)+R.dr2[m]-R.intrep[m]))<1),debtComponents:R.lcl.every((v,m)=>Math.abs(v-R.opcl[m]-R.intcl[m])<1)&&R.rep.every((v,m)=>Math.abs(v-R.oprep[m]-R.intrep[m])<1),debtRollForward:R.lcl.every((v,m)=>Math.abs(v-((m?R.lcl[m-1]:0)+R.dr1[m]+R.dr2[m]-R.rep[m]))<1),interestReserveLimit:sum("dr2")<=reserve+1&&Math.max(...R.intcl)<=reserve+1,processingFeeBase:Math.abs(sum("pf")-((debtResult.operatingCommit>0?d.procf/100*debtResult.operatingCommit:0)+R.intbase.reduce((a,b)=>a+d.procfrate/100/12*b,0)))<1,unusedLineFeeBase:R.lf.every((v,m)=>Math.abs(v-d.linef/100/12*(Number(d.linefbasis)===2?R.intbase[m]:Number(d.linefbasis)===1?R.opcommit[m]:R.opunused[m]))<1),cashRollForward:R.cash.every((v,m)=>Math.abs(v-((m?R.cash[m-1]:0)+baseCF[m]+R.eqin[m]-R.eqout[m]))<1),profitToEquity:Math.abs((ret-inj)-(S("npat")+S("da")-sum("capex")))<1,developmentCostRecognition:Math.abs(sum("landcogs")+sum("concogs")+sum("pidcogs")+sum("vertcogs")+sum("othcogs")-(sum("devc")-pid))<1,financeRecognition:Math.abs(sum("fincaprel")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationMandatory:d.capfin===1,financeCapitalisationIncurred:Math.abs(sum("fincapadd")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationReleased:Math.abs(sum("fincaprel")-sum("fincapadd"))<1,financeCapitalisationCutoff:R.fincapadd.every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u))),carryCapitalisationMandatory:d.capcarry===1,carryCostIncurred:Math.abs(sum("retaxcapadd")+sum("retaxexp")-sum("retax"))<1&&Math.abs(sum("hoacapadd")+sum("hoaexppl")-sum("hoaexp"))<1&&Math.abs(sum("insurancecapadd")+sum("insuranceexp")-sum("insurance"))<1,carryCostReleased:Math.abs(sum("retaxcaprel")-sum("retaxcapadd"))<1&&Math.abs(sum("hoacaprel")-sum("hoacapadd"))<1&&Math.abs(sum("insurancecaprel")-sum("insurancecapadd"))<1,carryCapitalisationCutoff:["retaxcapadd","hoacapadd","insurancecapadd"].every(k=>R[k].every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u)))),eligibleBasisRecognition:Math.abs(sum("relbase")-finBase)<1,phaseUnitAllocation:ph.counts.reduce((a,b)=>a+b,0)===L,phaseCostAllocation:Math.abs(phaseActual.reduce((a,b)=>a+b,0)-(infTot+contTot+munic))<1,validNumbers:Object.values(R).every(row=>row.every(Number.isFinite)),facilityLimit:Math.max(...R.lcl)<=lim+1,phaseSalesReleased:unitRecords.every(u=>u.contractMonth>=globalOpen),phaseSettlementAfterCompletion:unitStaggeredBuild?unitRecords.every(u=>u.delivery>=u.buildStart+Math.max(0,products[u.product].buildMonths-1)):unitRecords.every(u=>u.delivery>=phaseComplete[u.phase]),phaseSettlementCadencePreserved:activePhases.every(i=>{const us=unitsByPhase[i];if(!us.length)return true;if(V){const lag=Math.max(0,Math.round(d.dellag)),phaseLag=d[`ph${i+1}dellag`]>=0?Math.max(0,Math.round(d[`ph${i+1}dellag`])):0;const baseOf=u=>unitStaggeredBuild?Math.max(u.contractMonth+lag,u.buildStart+Math.max(1,products[u.product].buildMonths)):Math.max(phaseComplete[i],u.contractMonth)+lag;const shift=Math.max(0,phaseComplete[i]+phaseLag-Math.min(...us.map(baseOf)));if(unitStaggeredBuild)return us.every(u=>u.buildStart===Math.max(phaseStart[i],u.contractMonth)&&u.delivery===baseOf(u)+shift);return us.every(u=>u.buildStart===phaseStart[i]&&u.delivery===baseOf(u)+shift)}if(recogOnSale)return us.every(u=>u.delivery===u.contractMonth);const lag=Math.max(0,Math.round(d.dellag)),firstBase=Math.min(...us.map(u=>u.contractMonth+lag)),shift=Math.max(0,phaseComplete[i]-firstBase);return us.every(u=>u.delivery===u.contractMonth+lag+shift)}),globalSalesVelocity:manualSales?true:ctr.every(v=>v<=Math.ceil(projectRate)+1e-6),projectWideSalesContinuity:manualSales?true:ctr.every((v,m)=>{if(m<globalOpen)return v===0;const prior=Math.min(L,Math.floor(Math.max(0,m-globalOpen)*projectRate+1e-9)),through=Math.min(L,Math.floor(Math.max(0,m-globalOpen+1)*projectRate+1e-9));return v===through-prior}),productAssignment:unitRecords.length===L&&unitRecords.every(u=>u.product>=0&&u.product<products.length&&Number.isFinite(u.contractMonth)),distributionLock:!d.distlock||R.eqout.every((v,m)=>v<=1e-6||R.lcl[m]<=1e-6||R.eqreimbcap.slice(0,m+1).reduce((a,b)=>a+b,0)+1>=R.eqout.slice(0,m+1).reduce((a,b)=>a+b,0)),pidInventoryMatching:Math.abs(sum("pidcogs")+pid)<1,
+    unitsContracted:Math.abs(ctr.reduce((a,b)=>a+b,0)-L)<1e-6,unitsDelivered:Math.abs(dlv.reduce((a,b)=>a+b,0)-L)<1e-6,revenueRecognised:Math.abs(sum("recog")-sum("sval"))<1,collectionsEqualRevenue:Math.abs(sum("lsr")-sum("recog"))<1,operatingDebtRollForward:R.opcl.every((v,m)=>Math.abs(v-((m?R.opcl[m-1]:0)+R.dr1[m]-R.oprep[m]))<1),interestReserveDebtRollForward:R.intcl.every((v,m)=>Math.abs(v-((m?R.intcl[m-1]:0)+R.dr2[m]-R.intrep[m]))<1),debtComponents:R.lcl.every((v,m)=>Math.abs(v-R.opcl[m]-R.intcl[m])<1)&&R.rep.every((v,m)=>Math.abs(v-R.oprep[m]-R.intrep[m])<1),debtRollForward:R.lcl.every((v,m)=>Math.abs(v-((m?R.lcl[m-1]:0)+R.dr1[m]+R.dr2[m]-R.rep[m]))<1),interestReserveLimit:sum("dr2")<=reserve+1&&Math.max(...R.intcl)<=reserve+1,processingFeeBase:Math.abs(sum("pf")-((debtResult.operatingCommit>0?d.procf/100*debtResult.operatingCommit:0)+R.intbase.reduce((a,b)=>a+d.procfrate/100/12*b,0)))<1,unusedLineFeeBase:R.lf.every((v,m)=>Math.abs(v-d.linef/100/12*(Number(d.linefbasis)===2?R.intbase[m]:Number(d.linefbasis)===1?R.opcommit[m]:R.opunused[m]))<1),cashRollForward:R.cash.every((v,m)=>Math.abs(v-((m?R.cash[m-1]:0)+baseCF[m]+R.eqin[m]-R.eqout[m]))<1),profitToEquity:Math.abs((ret-inj)-(S("npat")+S("da")-sum("capex")))<1,developmentCostRecognition:Math.abs(sum("landcogs")+sum("concogs")+sum("pidcogs")+sum("vertcogs")+sum("othcogs")-(sum("devc")-pid))<1,financeRecognition:Math.abs(sum("fincaprel")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationMandatory:d.capfin===1,financeCapitalisationIncurred:Math.abs(sum("fincapadd")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationReleased:Math.abs(sum("fincaprel")-sum("fincapadd"))<1,financeCapitalisationCutoff:R.fincapadd.every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u))),carryCapitalisationMandatory:d.capcarry===1,carryCostIncurred:Math.abs(sum("retaxcapadd")+sum("retaxexp")-sum("retax"))<1&&Math.abs(sum("hoacapadd")+sum("hoaexppl")-sum("hoaexp"))<1&&Math.abs(sum("insurancecapadd")+sum("insuranceexp")-sum("insurance"))<1,carryCostReleased:Math.abs(sum("retaxcaprel")-sum("retaxcapadd"))<1&&Math.abs(sum("hoacaprel")-sum("hoacapadd"))<1&&Math.abs(sum("insurancecaprel")-sum("insurancecapadd"))<1,carryCapitalisationCutoff:["retaxcapadd","hoacapadd","insurancecapadd"].every(k=>R[k].every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u)))),eligibleBasisRecognition:Math.abs(sum("relbase")-finBase)<1,phaseUnitAllocation:ph.counts.reduce((a,b)=>a+b,0)===L,phaseCostAllocation:Math.abs(phaseActual.reduce((a,b)=>a+b,0)-(infTot+contTot+munic))<1,validNumbers:Object.values(R).every(row=>row.every(Number.isFinite)),facilityLimit:Math.max(...R.lcl)<=lim+1,phaseSalesReleased:unitRecords.every(u=>u.contractMonth>=globalOpen),phaseSettlementAfterCompletion:unitStaggeredBuild?unitRecords.every(u=>u.delivery>=u.buildStart+Math.max(0,products[u.product].buildMonths-1)):unitRecords.every(u=>u.delivery>=phaseComplete[u.phase]),phaseSettlementCadencePreserved:activePhases.every(i=>{const us=unitsByPhase[i];if(!us.length)return true;if(V){const lag=Math.max(0,Math.round(d.dellag)),phaseLag=d[`ph${i+1}dellag`]>=0?Math.max(0,Math.round(d[`ph${i+1}dellag`])):0;const baseOf=u=>unitStaggeredBuild?Math.max(u.contractMonth+lag,u.buildStart+Math.max(1,products[u.product].buildMonths)):Math.max(phaseComplete[i],u.contractMonth)+lag;const shift=Math.max(0,phaseComplete[i]+phaseLag-Math.min(...us.map(baseOf)));if(unitStaggeredBuild)return us.every(u=>u.buildStart===Math.max(phaseStart[i],u.contractMonth)&&u.delivery===baseOf(u)+shift);return us.every(u=>u.buildStart===phaseStart[i]&&u.delivery===baseOf(u)+shift)}if(recogOnSale)return us.every(u=>u.delivery===u.contractMonth);const lag=Math.max(0,Math.round(d.dellag)),firstBase=Math.min(...us.map(u=>u.contractMonth+lag)),shift=Math.max(0,phaseComplete[i]-firstBase);return us.every(u=>u.delivery===u.contractMonth+lag+shift)}),globalSalesVelocity:(manualSales||salesFYMode)?true:ctr.every(v=>v<=Math.ceil(projectRate)+1e-6),projectWideSalesContinuity:(manualSales||salesFYMode)?true:ctr.every((v,m)=>{if(m<globalOpen)return v===0;const prior=Math.min(L,Math.floor(Math.max(0,m-globalOpen)*projectRate+1e-9)),through=Math.min(L,Math.floor(Math.max(0,m-globalOpen+1)*projectRate+1e-9));return v===through-prior}),productAssignment:unitRecords.length===L&&unitRecords.every(u=>u.product>=0&&u.product<products.length&&Number.isFinite(u.contractMonth)),distributionLock:!d.distlock||R.eqout.every((v,m)=>v<=1e-6||R.lcl[m]<=1e-6||R.eqreimbcap.slice(0,m+1).reduce((a,b)=>a+b,0)+1>=R.eqout.slice(0,m+1).reduce((a,b)=>a+b,0)),pidInventoryMatching:Math.abs(sum("pidcogs")+pid)<1,
     cashflowStatement:cashflowStatementCheck,
     referenceCashflowMapping:R.cfrefnetcash.every((v,m)=>Math.abs(v-(-R.net[m]+R.taxm[m]))<1),
     annualTaxSettlesInOneMonth:(()=>{
@@ -5990,7 +6081,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     grossProfitIdentity:Math.abs(S("gp")-(S("rev")-S("dc")))<1,
     overheadClassification:Math.abs(S("totalOverhead")-(S("oh")+S("fin")+S("da")))<1,
     pnlClassification:Math.abs(S("npat")-(S("rev")-S("dc")-S("totalOverhead")+S("otherIncome")+S("interestIncome")-S("tax")))<1,
-    directCostClassification:Math.abs(S("dc")-(sum("landbasecogs")+sum("infracogs")+sum("pidcogs")+sum("designcogs")+sum("authoritycogs")+sum("constructioncogs")+sum("insurancecaprel")+sum("insuranceexp")+sum("fincaprel")+sum("otherdirectcogs")+sum("sell")+sum("marketing")+sum("retaxcaprel")+sum("retaxexp")+sum("sutcogs")))<1,
+    directCostClassification:Math.abs(S("dc")-(sum("landbasecogs")+sum("infracogs")+sum("pidcogs")+sum("ddcogs")+sum("softcogs")+sum("dmcogs")+sum("designcogs")+sum("authoritycogs")+sum("constructioncogs")+sum("insurancecaprel")+sum("insuranceexp")+sum("fincaprel")+sum("otherdirectcogs")+sum("sell")+sum("marketing")+sum("retaxcaprel")+sum("retaxexp")+sum("sutcogs")))<1,
     brokeragePLMatching:Math.abs(sum("sell")-(d.comm+d.sellingpc)/100*sum("recog"))<1,
     brokerageCashMatching:Math.abs(sum("sellcash")-sum("sell"))<1,
     capexCashMapping:Math.abs(sum("cfcapex")-sum("capex"))<1,
@@ -6082,6 +6173,24 @@ function offsetToMonthStr(v,d){
 function monthStrToOffset(s,d){
   const mm=/^(\d{4})-(\d{2})$/.exec(String(s||""));if(!mm)return null;
   return (+mm[1]-d.startYear)*12+(+mm[2]-d.startMonth)+1;
+}
+/* A single point-in-time calendar picker (not a start/duration pair like
+   DATE_RANGE_FIELDS) for fields whose raw value is a plain month offset with
+   -1 meaning "unset, let the engine work it out" - facstart/facend. Blank
+   input <-> -1, same AUTO_BLANK_FIELDS convention the numeric form already
+   uses for these two fields. */
+function renderPointDateField(g,key,label,d){
+  const row=document.createElement("div");row.className="f";
+  row.innerHTML=`<label for="i_${key}">${esc_(label)}</label><input id="i_${key}" type="month"><span class="u"></span>`;
+  g.appendChild(row);
+  const inp=row.querySelector("input");
+  const raw=Math.round(_num(d[key],-1));
+  inp.value=raw>=0?offsetToMonthStr(raw,d):"";
+  inp.onchange=()=>{
+    const off=inp.value?monthStrToOffset(inp.value,d):null;
+    D[key]=off==null?-1:Math.max(0,off);
+    buildForm();render();
+  };
 }
 /* Fields that switch to a lag-computed value under lag mode (LAG_DERIVED_FIELDS
    / applyLagTiming) still need a real date here: resolve through applyLagTiming
@@ -6574,7 +6683,7 @@ const SELECT_OPTIONS={
   landcurve:[[0,"Deposit + closing balance"],[1,"Straight line"],[2,"S-curve"],[3,"Milestone / back-ended"],[4,"Front-loaded"],[5,"Back-loaded"]],
   infracurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
   buildcurve:[[0,"Straight line"],[1,"S-curve"],[2,"Milestone / back-ended"],[3,"Front-loaded"],[4,"Back-loaded"]],
-  facmode:[[1,"Fixed operating facility amount"],[0,"LTC on eligible development cost"],[2,"Share of land and works, capped at the works"]],
+  facmode:[[1,"Fixed operating facility amount"],[0,"LTC on eligible development cost"],[2,"Share of land and works, capped at the works"],[3,"Segregated by entity — Landowner: land+infra · Vertical: land+construction+design+authority"]],
   drawcount:[[0,"Off"],[1,"1 draw"],[2,"2 draws"],[3,"3 draws"],[4,"4 draws"],[5,"5 draws"]],
   repaycount:[[0,"Off"],[1,"1 lump"],[2,"2 lumps"],[3,"3 lumps"],[4,"4 lumps"],[5,"5 lumps"]],
   distmode:[[1,"Once, on completion"],[0,"Monthly, as each sale settles"]],
@@ -6609,7 +6718,7 @@ function phaseOptions(selected){return Array.from({length:_clamp(Math.round(_num
 /* A month left blank means "let the model choose it". Storing that as -1 is an
    implementation detail, so the box shows an empty field marked Automatic and
    an empty box is read back as -1. */
-const AUTO_BLANK_FIELDS=new Set(["facstart","ph1start","ph2start","ph3start","ph4start","ph5start","ph6start"]);
+const AUTO_BLANK_FIELDS=new Set(["facstart","facend","ph1start","ph2start","ph3start","ph4start","ph5start","ph6start"]);
 function autoBlankApply(el,key,value){
   bindNumberFormatting(el);
   if(!AUTO_BLANK_FIELDS.has(key)){el.value=Number.isFinite(Number(value))?numFieldFormat(value,PLAIN_NUMBER_FIELDS.has(key)):"";return}
@@ -6866,6 +6975,7 @@ function buildFormCore(){
       }
       if(!fieldShown(k,!!D.vert))return;
       if(k==="buildmo"){renderDateRangeField(g,"buildmo",BUILDMO_DATE_CFG,D);return;}
+      if(k==="facstart"||k==="facend"){renderPointDateField(g,k,lab,D);return;}
       /* Mandatory accounting flags stay read-only inputs; a select cannot be readOnly. */
       const isTextField=unit==="text";
       const isFlagField=unit==="flag"&&!MANDATORY_ACCOUNTING_FIELDS.has(k);
@@ -6957,7 +7067,7 @@ function buildFormCore(){
             buildForm();buildScaffold();showNav();render();
             return;
           }
-          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","combrokerlag","taxlag","taxqlag","taxsettlelag","eqdistlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
+          const wholeMonthFields=new Set(["startMonth","startYear","fyEnd","ddur","ddend","landdepmonth","closingmonth","sutlag","close","entdur","landdur","phm","dellag","pidlag","vlag","modelmo","buildmo","facstart","facend","combrokerlag","taxlag","taxqlag","taxsettlelag","eqdistlag","otherincmonth","taxcarrybackyrs","taxlossexp","dastart","dalife","modelphase","landpaystart","landpaygap"]);
           if(/^ph[1-6](?:dur|start|saleslag|dellag)$/.test(k)||/^landpay[1-5]month$/.test(k)||k==="landpaycount"||wholeMonthFields.has(k)){if(!Number.isInteger(v)){alert(`${lab} must be entered as a whole number.`);inp.value=D[k];return}}
           if(k==="landpaycount"){
             /* Picking a count fills in shares that add up, so the choice stands
@@ -6994,8 +7104,8 @@ const NAV=[
  {id:"verdict",lab:"Summary",     panes:[["verdict","Summary"]]},
  {id:"map",    lab:"MAP",         panes:[["map","Site intelligence"]]},
  {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
- {id:"sens",   lab:"Manual Inputs", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
- {id:"scn",    lab:"Scenarios",   panes:[["scn","Scenario lab"]]},
+ {id:"sens",   lab:"Sensitivity", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
+ {id:"scn",    lab:"Manual Inputs",   panes:[["scn","Scenario lab"]]},
  {id:"opt",    lab:"Optimiser",   panes:[["opt","Optimiser"]]},
  {id:"offer",  lab:"Land value",  panes:[["offer","Offer price"]]},
  {id:"port",   lab:"Consolidation", panes:[["cpl","Consolidated P&L"],["ccf","Consolidated cashflow"],["port","Project comparison"],["cexp","Exposure"],["ceqsch","Equity Schedule"],["csalesov","Sales Overview"]]},
@@ -8181,20 +8291,20 @@ function portfolioData(){
   APP.parcels.forEach(p=>{if(!selected.has(p.id))return;try{const A=run(p.inputs);runs.push({p,A,d:A.d||derive(p.inputs),start:portfolioAbsStart(A.d||derive(p.inputs))})}catch(e){errors.push({p,e})}});
   if(!runs.length)return memoPortfolio(memoKey,{runs,errors,fyEnd:_clamp(Math.round(_num(APP.portfolioFyEnd,6)),1,12)});
   const minAbs=Math.min(...runs.map(r=>r.start)),maxAbs=Math.max(...runs.map(r=>r.start+r.A.NM)),N=maxAbs-minAbs+1;
-  const z=()=>new Array(N).fill(0),plKeys=["grossRev","outputSut","rev","landCost","transferTax","landSurcharge","acqFeeCost","acquisitionCost","constructionCost","professionalFees","dueDiligenceFees","developmentManagementFees","statutoryCost","contingencyCost","holdingCost","brokerage","sellingCost","marketing","capitalisedFinanceCost","otherDirectCost","inputSutCredit","dc","gp","gna","gnaShared","staff","staffShared","corpOverhead","oh","fin","da","totalOverhead","otherIncome","interestIncome","npbt","tax","npat"],PLM={};plKeys.forEach(k=>PLM[k]=z());
+  const z=()=>new Array(N).fill(0),plKeys=["grossRev","outputSut","rev","landCost","transferTax","landSurcharge","acqFeeCost","acquisitionCost","constructionCost","professionalFees","dueDiligenceFees","softCostFees","developmentManagementFees","designCost","statutoryCost","contingencyCost","holdingCost","brokerage","sellingCost","marketing","capitalisedFinanceCost","otherDirectCost","inputSutCredit","dc","gp","gna","gnaShared","staff","staffShared","corpOverhead","oh","fin","da","totalOverhead","otherIncome","interestIncome","npbt","tax","npat"],PLM={};plKeys.forEach(k=>PLM[k]=z());
   const cfKeys=["cfequity","dr1","dr2","salescash","escin","cfsutrefund","pid","cfotherincome","cfinterestincome","cfrefinterestincome","cfland","cfinfra","cfpiddebt","cfcapex","cfconstruction","cfdesign","cfauthority","cfbrokerage","cfretax","cfohpaid","cfoutputsut","cftaxpaid","pf","intr","lf","cffinance","cfdebtrepaid","cfequitydist","cfinputsutpaid","cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefxfertax","cfrefholding","cfrefacqfee","cfreflandsurcharge","cfrefduediligence","cfrefsoftcost","cfrefdesigncost","cfrefinfrastructure","cfrefbuildcost","cfrefothercost","cfrefconstruction","cfrefprofessional","cfrefdm","cfrefstatutory","cfrefcontingency","cfrefbrokerage","cfrefselling","cfrefmarketing","cfrefnetcash","cfrefdebt","cfrefdebtfinance","cfrefrepayment","cfrefprocessing","cfrefinterest","cfreflifetime","cfrefequity","cfrefsurplus","cfrefprofit","cfreffranchisetax","cfrefcorporatetax","cfrefotherincome"],CFM={};cfKeys.forEach(k=>CFM[k]=z());
   const projectTimeline=[];
   runs.forEach(r=>{
     const {A,d,start}=r,R=A.R,landBase=landConsiderationBase(d),acqOther=d.acquisitionfee+d.otheracq+d.rollback+d.closingpc/100*landBase;
     const acqDen=Math.max(1,A.land+A.transferTax+A.landSurcharge+A.acqFeeCost+acqOther),baseInfra=d.infl*A.lots;
-    const dueDiligenceTotal=d.ddpc/100*landBase,professionalTotal=dueDiligenceTotal+(A.professionalTotal||0)+(A.designTot||0),dmTotal=A.developmentManagementTotal||0,designDen=Math.max(1,professionalTotal+dmTotal),constructionDen=Math.max(1,A.infTot+A.contTot),sellingDen=Math.max(1e-9,d.comm+d.sellingpc);
+    const constructionDen=Math.max(1,A.infTot+A.contTot),sellingDen=Math.max(1e-9,d.comm+d.sellingpc);
     let first=null,last=null;
     for(let m=0;m<=A.NM;m++){
       const i=start+m-minAbs,get=k=>(R[k]&&R[k][m])||0;
-      const landAllocated=get("landbasecogs"),infraNet=get("infracogs")+get("pidcogs"),constructionPL=get("constructioncogs")+get("insurancecaprel")+get("insuranceexp"),designAllocated=get("designcogs"),selling=get("sell"),rev=get("recog")-get("outputsut");
+      const landAllocated=get("landbasecogs"),infraNet=get("infracogs")+get("pidcogs"),constructionPL=get("constructioncogs")+get("insurancecaprel")+get("insuranceexp"),designAllocated=get("designcogs"),ddAllocated=get("ddcogs"),softAllocated=get("softcogs"),dmAllocated=get("dmcogs"),selling=get("sell"),rev=get("recog")-get("outputsut");
       const vals={grossRev:get("recog"),outputSut:get("outputsut"),rev,
         landCost:landAllocated*A.land/acqDen,transferTax:landAllocated*A.transferTax/acqDen,landSurcharge:landAllocated*A.landSurcharge/acqDen,acqFeeCost:landAllocated*A.acqFeeCost/acqDen,acquisitionCost:landAllocated*acqOther/acqDen,
-        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:designAllocated*professionalTotal/designDen,dueDiligenceFees:designAllocated*dueDiligenceTotal/designDen,developmentManagementFees:designAllocated*dmTotal/designDen,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),brokerage:selling*d.comm/sellingDen,sellingCost:selling*d.sellingpc/sellingDen,marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
+        constructionCost:infraNet*A.infTot/constructionDen+constructionPL,professionalFees:ddAllocated+softAllocated+designAllocated,dueDiligenceFees:ddAllocated,softCostFees:softAllocated,developmentManagementFees:dmAllocated,designCost:designAllocated,statutoryCost:get("authoritycogs"),contingencyCost:infraNet*A.contTot/constructionDen,holdingCost:get("retaxexp")+get("retaxcaprel"),brokerage:selling*d.comm/sellingDen,sellingCost:selling*d.sellingpc/sellingDen,marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
         gna:get("gna")+get("hoaexppl")+get("hoacaprel"),gnaShared:get("gnashared"),staff:get("staff"),staffShared:get("staffshared"),corpOverhead:get("corpovh"),fin:get("pf")+get("intr")+get("lf"),da:get("da"),otherIncome:get("otherincome"),interestIncome:get("intincome")};
       vals.capitalisedFinanceCost=0;
       vals.dc=vals.landCost+vals.transferTax+vals.landSurcharge+vals.acqFeeCost+vals.acquisitionCost+vals.constructionCost+vals.professionalFees+vals.developmentManagementFees+vals.statutoryCost+vals.contingencyCost+vals.holdingCost+vals.brokerage+vals.sellingCost+vals.marketing+vals.capitalisedFinanceCost+vals.otherDirectCost+vals.inputSutCredit;
@@ -9368,9 +9478,13 @@ function styleSiteYield(){
     const total=rowFor('i__lots'), nprod=rowFor('i_nprod'), selector=rowFor('i_ui_lot_product');
     const p=Math.min(productCount(D),Math.max(1,APP.uiLotProduct||1)), product=rowFor('i_n'+p);
     const densG=rowFor('i__densG'), dens=rowFor('i__dens');
-    /* Pricing rows, pulled up so the section below can be dropped entirely. */
-    const wRow=rowFor('i_w'+p), pRow=rowFor('i_p'+p),
-          lotArea=rowFor('i__lotsqft'), gsv=rowFor('i__rev0'), avgSale=rowFor('i__avgp');
+    /* Pricing rows, pulled up so the section below can be dropped entirely. Price
+       basis and lot depth travel with them too - depth only exists in the DOM
+       when the basis is per square foot, and both were being left behind and
+       destroyed with the rest of the section below, taking with them the only
+       way to switch pricing basis or enter a depth. */
+    const basisRow=rowFor('i_pmode'), wRow=rowFor('i_w'+p), dRow=rowFor('i_d'+p), pRow=rowFor('i_p'+p),
+          lotAreaOne=rowFor('i__lotarea'), lotArea=rowFor('i__lotsqft'), gsv=rowFor('i__rev0'), avgSale=rowFor('i__avgp');
     const envelope=document.createElement('div');envelope.className='site-yield-subhead';envelope.textContent='Site envelope';sg.insertBefore(envelope,sg.firstChild);
     /* Land price and land consideration are acquisition inputs; they are no longer
        dragged into the site envelope away from the basis selector and the transfer
@@ -9411,10 +9525,16 @@ function styleSiteYield(){
     /* On a vertical parcel _rev0 and _avgp can only read zero - they are lot
        revenue, and the lot sale price is not an input there. Vertical revenue is
        _homeRev, in the Vertical development section. */
-    const priceRows=D.vert?[lotArea]:[wRow,pRow,lotArea,gsv,avgSale];
+    const priceRows=D.vert?[lotArea]:[basisRow,wRow,dRow,pRow,lotAreaOne,lotArea,gsv,avgSale];
     priceRows.filter(Boolean).forEach(r=>sg.appendChild(r));
-    if(wRow){setRowLabel(wRow,`Product ${p} — saleable area / ${D.vert?'unit':'lot'}`);setRowUnit(wRow,'sqft/'+(D.vert?'unit':'lot'))}
+    /* w is frontage in linear feet under either basis - only w x d is an area,
+       and that only exists once depth is on screen too. Tagging w itself as an
+       area regardless of basis was the unit-mismatch bug: a front-foot parcel
+       showed its frontage tagged sqft/lot next to a $/front ft price. */
+    if(wRow){setRowLabel(wRow,`Product ${p} — lot frontage`);setRowUnit(wRow,'ft')}
+    if(dRow){setRowLabel(dRow,`Product ${p} — lot depth`);setRowUnit(dRow,'ft')}
     if(pRow){setRowLabel(pRow,`Product ${p} — sale price incl. GST`)}
+    if(lotAreaOne){setRowLabel(lotAreaOne,`Product ${p} — lot area`);setRowUnit(lotAreaOne,'sqft')}
     if(lotArea){setRowLabel(lotArea,'Total saleable lot area');setRowUnit(lotArea,'sqft')}
     if(gsv){setRowLabel(gsv,'Gross sales value')}
     if(avgSale){setRowLabel(avgSale,'Average sale value')}
@@ -9812,14 +9932,11 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       {sr:1,c:["2.2",buildLabel,pc("constructionCost"),...vals("constructionCost"),total("constructionCost")]},
       {sr:1,cls:"sub bp-section",c:["2.3","Other Direct Costs",...blank()]},
       {sr:1,c:["2.3.1","Due Diligence & Ancillary Fees",pc("dueDiligence"),...vals("dueDiligence"),total("dueDiligence")]},
-      /* Labelled to match what this row actually is: due diligence, soft cost
-         and design cost all settle through one pooled COGS bucket
-         (R.designcogs) once a unit closes, so "Soft Costs" here is really
-         (soft cost + design cost)'s share of that pool, net of Due
-         Diligence's own share above - see the allocation comment below. A
-         true standalone Soft Cost row would need the engine to track its
-         COGS separately from Design Cost's, which it does not today. */
-      {sr:1,c:["2.3.2","Soft & Design Costs",pc("softCosts"),...vals("softCosts"),total("softCosts")]},
+      /* True soft cost only - due diligence and design cost each settle
+         through their own bucket now (ddcogs/designcogs), not pooled in here
+         any more. Design cost has no row of its own; it is folded into Other
+         Costs below. */
+      {sr:1,c:["2.3.2","Soft Costs",pc("softCosts"),...vals("softCosts"),total("softCosts")]},
       {sr:1,c:["2.3.3","Authority & Statutory Costs",pc("statutoryCosts"),...vals("statutoryCosts"),total("statutoryCosts")]},
       {sr:1,c:["2.3.4","Other Costs",pc("otherCostsOther"),...vals("otherCostsOther"),total("otherCostsOther")]},
       {sr:1,cls:"sub bp-total",c:["2.3","Other Direct Costs (2.3.1 to 2.3.4)",pc("otherDirectCost"),...vals("otherDirectCost"),total("otherDirectCost")]},
@@ -9853,20 +9970,6 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       const p=A.PL&&A.PL[y]||{};
       return Math.abs(b("sval",y))+["rev","dc","gp","oh","fin","da","otherIncome","npbt","tax","npat"].reduce((a,k)=>a+Math.abs(n(p[k])),0)>.5;
     });
-    /* Due diligence shares one ratio-allocated bucket with soft cost (and, in
-       vertical mode, per-unit design cost) - see professionalFees inside
-       run()'s PL[y] assignment. Its own share of that same bucket is rebuilt
-       here with the identical ratio, from totals the engine already exposes
-       (A.professionalTotal, A.designTot, A.developmentManagementTotal)
-       against the same fiscal-year accrual source (A.B.designcogs) - so this
-       is a lossless split of professionalFees, not an independent figure,
-       and ties out exactly, year by year. A.B.dd (the cash-timed due-
-       diligence schedule the Cash Flow statement uses) is not used here -
-       it pays out on a different timetable and carries a sales/use-tax
-       gross-up professionalFees does not, which would stop this section's
-       rows adding up in any individual year. */
-    const dIn=A.d||d,landBase=landConsiderationBase(dIn),dueDiligenceTotal=n(dIn.ddpc)/100*landBase,
-      designDen=Math.max(1,dueDiligenceTotal+n(A.professionalTotal)+n(A.designTot)+n(A.developmentManagementTotal));
     const map={};
     years.forEach(y=>{
       const landCost=pl("landCost",y)+pl("transferTax",y)+pl("landSurcharge",y)+pl("acqFeeCost",y)+pl("acquisitionCost",y);
@@ -9879,16 +9982,17 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
          run()'s PL[y] assignment) and reads as a marketing-type expense, so it
          is folded into Marketing & Advertising rather than Other Costs. */
       const brokerage=pl("brokerage",y),marketing=pl("marketing",y)+pl("sellingCost",y);
-      const designAllocated=b("designcogs",y),
-        dueDiligence=designAllocated*dueDiligenceTotal/designDen,
-        professionalFeesTotal=pl("professionalFees",y),
-        softCosts=professionalFeesTotal-dueDiligence,
+      /* dueDiligence/softCosts are now exact reads (ddcogs/softcogs each
+         settle in their own true bucket) rather than a cash-basis ratio
+         estimate. True vertical design cost (designcogs, pure since the
+         split) has no row of its own - folded into Other Costs alongside
+         development management, matching how this section already treats
+         everything without a dedicated line. */
+      const dueDiligence=pl("dueDiligenceFees",y),
+        softCosts=pl("softCostFees",y),
+        designCostTrue=b("designcogs",y),
         statutoryCosts=pl("statutoryCost",y),
-        /* Everything else that has always been folded into Other Direct Cost
-           and is not being given its own row. Brokerage, Marketing and Selling
-           Cost show below Gross Profit instead, so none of those terms
-           belong here. */
-        otherCostsOther=pl("otherDirectCost",y)+pl("developmentManagementFees",y)+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y),
+        otherCostsOther=pl("otherDirectCost",y)+pl("developmentManagementFees",y)+designCostTrue+pl("contingencyCost",y)+pl("capitalisedFinanceCost",y)+pl("inputSutCredit",y),
         /* Built from its own displayed children so 2.3's subtotal can never
            silently drift from the sum of 2.3.1-2.3.4. */
         otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
@@ -9935,10 +10039,9 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
       const constructionCost=sy("constructionCost",y);
       const brokerage=sy("brokerage",y),marketing=sy("marketing",y)+sy("sellingCost",y);
       const dueDiligence=sy("dueDiligenceFees",y),
-        professionalFeesTotal=sy("professionalFees",y),
-        softCosts=professionalFeesTotal-dueDiligence,
+        softCosts=sy("softCostFees",y),
         statutoryCosts=sy("statutoryCost",y),
-        otherCostsOther=sy("otherDirectCost",y)+sy("developmentManagementFees",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y),
+        otherCostsOther=sy("otherDirectCost",y)+sy("developmentManagementFees",y)+sy("designCost",y)+sy("contingencyCost",y)+sy("capitalisedFinanceCost",y)+sy("inputSutCredit",y),
         otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
       const realEstateTax=sy("holdingCost",y);
       const directCost=landCost+constructionCost+otherDirectCost,
@@ -15765,7 +15868,18 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     [].slice.call(t.querySelectorAll("tbody tr")).forEach(tr=>{
       const tds=[].slice.call(tr.children);
       if(!tds.length)return;
-      let cells=tds.map(td=>clean(td.textContent));
+      /* A cell holding a live input (e.g. Sales Overview's editable units) has
+         no text of its own to read - use the input's value, preferring a
+         data-display attribute where one is supplied for correct formatting. */
+      let cells=tds.map(td=>{
+        const inp=td.querySelector("input,select");
+        if(inp){
+          if(inp.dataset&&inp.dataset.display)return clean(inp.dataset.display);
+          if(inp.tagName==="SELECT")return clean(inp.options[inp.selectedIndex]?inp.options[inp.selectedIndex].text:"");
+          return clean(inp.value);
+        }
+        return clean(td.textContent);
+      });
       /* a band row spans the table; pad it so the columns still line up */
       if(cells.length<headers.length){
         const first=cells[0]||"";
@@ -17770,7 +17884,9 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     const line=(sr,label,vals,cls)=>({cls:cls||"",c:[sr,label,...vals.map(money)]});
     const assets=rows.map(r=>r.cash+r.esc+r.recv+r.inv);
     const liabEq=rows.map(r=>r.debt+r.esc+r.taxPayable+r.paidIn+r.retained);
+    const homesSold=years.map(y=>n(A.B&&A.B.ctr&&A.B.ctr[y]));
     const out=[
+      {cls:"",c:["","Homes Sold",...homesSold.map(v=>M0(v))]},
       {band:"Assets"},
       line("1","Corporate Cash",rows.map(r=>r.cash)),
       line("2","Escrow Cash (Restricted)",rows.map(r=>r.esc)),
@@ -17828,10 +17944,19 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       `<div class="kpi" data-icon="~"><div class="k">Average value / unit</div><div class="v">${totUnits>0?money(totSales/totUnits):"–"}</div><div class="d">blended</div></div>`
     ].join("");
     const maxSales=Math.max(1,...sales);
-    const rows=fys.map((y,i)=>{
+    /* Trailing fiscal years with no sales and no units are just padding out to
+       the model's horizon - drop them from view (but not from the KPIs/Total
+       above, which still cover the life of the project). A year that still has
+       activity ahead of it, or is the first row, is always kept. */
+    let lastActive=-1;fys.forEach((y,i)=>{if(sales[i]>0||units[i]>0)lastActive=i});
+    const shownCount=lastActive>=0?lastActive+1:Math.min(1,fys.length);
+    const shown=fys.slice(0,shownCount);
+    const rows=shown.map((y,i)=>{
       const prev=i>0?sales[i-1]:0,gr=prev>0?(sales[i]/prev-1):null;
+      const unitsDisplay=Math.round(units[i]).toLocaleString("en-US");
       return {c:[
-        "FY "+y,money(sales[i]),Math.round(units[i]).toLocaleString("en-US"),
+        "FY "+y,money(sales[i]),
+        `<input class="salesov-units-in" data-y="${y}" data-display="${unitsDisplay}" type="number" min="0" step="1" value="${units[i]?Math.round(units[i]):""}" style="width:88px;text-align:right;font:600 12px var(--mono,monospace)">`,
         gr==null?"–":(gr>=0?"+":"")+(gr*100).toFixed(0)+"%",
         `<span style="display:block;height:8px;background:var(--line,#e4e9f1);border-radius:4px"><i style="display:block;height:100%;width:${(sales[i]/maxSales*100).toFixed(1)}%;background:var(--accent,#1766cb);border-radius:4px"></i></span>`
       ]};
@@ -17839,6 +17964,22 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     rows.push({cls:"sub",c:["Total",money(totSales),Math.round(totUnits).toLocaleString("en-US"),"–",""]});
     set(host,`<div class="kpis">${kpis}</div>`+tbl("Sales Overview · "+(C.name||(APP.parcels[APP.active]&&APP.parcels[APP.active].name||"")),
       ["Fiscal year","Contracted sales (USD)",(d.vert?"Homes":"Lots")+" (units)","YoY growth","Share"],rows,null,""));
+    /* Typing a unit count here turns on the fiscal-year sales override. The
+       first edit seeds every fiscal year (not just the ones shown) from what
+       is currently driving the model, so switching modes does not silently
+       change any year the user has not touched yet - only the edited cell
+       moves until they touch another one too. */
+    document.querySelectorAll(".salesov-units-in").forEach(inp=>{
+      inp.oninput=()=>{
+        const y=+inp.dataset.y,v=parseFloat(inp.value);
+        let map=null;
+        if(Math.round(n(D.salesFYMode))===1){try{const o=JSON.parse(D.salesUnitsFY||"null");if(o&&typeof o==="object")map=o}catch(e){}}
+        if(!map){map={};fys.forEach((yy,ii)=>{map[yy]=Math.round(units[ii])})}
+        map[y]=isNaN(v)?0:Math.max(0,v);
+        D.salesFYMode=1;D.salesUnitsFY=JSON.stringify(map);
+        schedule();
+      };
+    });
   }
 
   CONTEXT_PANES.add("exp");CONTEXT_PANES.add("eqsch");CONTEXT_PANES.add("salesov");
