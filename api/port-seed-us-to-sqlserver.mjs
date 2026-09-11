@@ -23,13 +23,13 @@ body = body
            (_, d, t) => `dateadd(second, 0, cast('${d}T${t}' as datetime2(3)))`);
 
 body = body.replace(
-  /insert into dbo\.appraisal \(([\s\S]*?)\)\s*\nvalues \('([0-9a-f-]{36})',([\s\S]*?)\)\non conflict \(id\) do nothing;/g,
+  /insert into dbo\.appraisal \(([\s\S]*?)\)\s*\nvalues \('([0-9a-f-]{36})',([\s\S]*?)\)\r?\non conflict \(id\) do nothing;/g,
   (_, cols, id, rest) =>
     `if not exists (select 1 from dbo.appraisal where id = '${id}')\n` +
     `insert into dbo.appraisal (${cols})\nvalues ('${id}',${rest});`);
 
 body = body.replace(
-  /insert into dbo\.appraisal_version \(([\s\S]*?)\)\s*\nvalues \('([0-9a-f-]{36})', (\d+),([\s\S]*?)\)\non conflict \(appraisal_id, version\) do nothing;/g,
+  /insert into dbo\.appraisal_version \(([\s\S]*?)\)\s*\nvalues \('([0-9a-f-]{36})', (\d+),([\s\S]*?)\)\r?\non conflict \(appraisal_id, version\) do nothing;/g,
   (_, cols, id, ver, rest) =>
     `if not exists (select 1 from dbo.appraisal_version where appraisal_id = '${id}' and version = ${ver})\n` +
     `insert into dbo.appraisal_version (${cols})\nvalues ('${id}', ${ver},${rest});`);
@@ -56,10 +56,17 @@ const out = header + body.replace(/^\/\*[\s\S]*?\*\/\n\n/, "").replace(/\/\* Wha
 writeFileSync(ROOT + "api/seed-us.sqlserver.sql", out);
 
 const n = (re) => (out.match(re) || []).length;
+const appraisalGuards = n(/if not exists \(select 1 from dbo\.appraisal where id/g);
+const versionGuards = n(/if not exists \(select 1 from dbo\.appraisal_version where/g);
+const appraisalInserts = n(/insert into dbo\.appraisal \(/g);
+const versionInserts = n(/insert into dbo\.appraisal_version \(/g);
 const checks = [
-  ["1 appraisal guard",   n(/if not exists \(select 1 from dbo\.appraisal where id/g) === 1],
-  ["1 version guard",     n(/if not exists \(select 1 from dbo\.appraisal_version where/g) === 1],
-  ["2 inserts",           n(/insert into dbo\.appraisal/g) === 2],
+  // Counts are project-count-agnostic (seed-us.sql can hold any number of
+  // appraisals) - what must hold is that every insert got its own guard, one
+  // insert of each kind per project, and at least one project is present.
+  ["every appraisal insert guarded", appraisalGuards === appraisalInserts && appraisalInserts > 0],
+  ["every version insert guarded",   versionGuards === versionInserts && versionInserts > 0],
+  ["1 version per appraisal",        appraisalInserts === versionInserts],
   ["no dollar quoting left", !/\$j\$/.test(out)],
   ["no ::jsonb left",     !/::jsonb/.test(out)],
   ["no on conflict left", !/on conflict/.test(out)],
