@@ -4014,7 +4014,7 @@ nav.tabs button{letter-spacing:.02em;}
   <div class="rail-resizer" id="railResizer" role="separator" aria-orientation="vertical" aria-label="Resize input panel" tabindex="0" aria-valuemin="260" aria-valuemax="560" aria-valuenow="335" title="Drag to resize the input panel; double-click to reset"></div>
   <main class="canvas">
     <nav class="tabs" id="tabs" role="tablist"></nav>
-    <div id="model_error" class="goal miss" style="display: none;"></div><div id="panes"></div>
+    <div id="model_error" class="goal miss" style="display: none;"></div><div id="model_notice" class="goal" style="display: none;"></div><div id="panes"></div>
     <div id="report"></div>
     <div class="foot" id="foot"></div>
   </main>
@@ -4164,26 +4164,40 @@ function applyLagTiming(o){
   const anchor=Math.round(_num(o._lagAnchor,-1));
   const ddFrom=Math.max(0,Math.round(_num(o.ddstart,1))-1);
   let ddEnd=anchor>=0?anchor:Math.max(0,ddFrom+w("ddur")-1);
-  /* Two independent overrides landed on this same date, so both are honoured -
-     landstart is checked first since it is the more recently added, purpose-
-     built control; a month entered directly into close itself (>=0) still
-     works the way facstart already does below, so a project relying on the
-     older mechanism does not silently lose it. -1 on both leaves the
-     Due-diligence + closing-lag cascade above untouched. */
-  const landStartOvr=Math.round(_num(o.landstart,-1)),closeOverride=Math.round(_num(o.close,-1));
-  const close=landStartOvr>=0?landStartOvr:closeOverride>=0?Math.max(0,closeOverride):(anchor>=0?anchor:ddFrom)+w("lagclose");
+  /* landstart is the one real pin (a month entered directly by the user, via
+     the "Land closing / balance payment month" control). close itself is NO
+     LONGER a pin: it is a legacy delta-based fallback that the engine also
+     writes back into every parcel's own stored inputs on every derive() call
+     (see the GROUPS comment beside it), so honouring a stored close>=0 as an
+     override was a self-fulfilling trap - the very first value the engine
+     ever computed replayed back as a permanent pin on every run after,
+     freezing timing on any parcel that had already been run/saved once (e.g.
+     a seeded fixture whose stored inputs are "the evaluated value the model
+     actually used"). Dropping it, close is always recomputed live from the
+     ddstart+lagclose delta whenever landstart is left unset, exactly what a
+     fallback should do. -1 on landstart leaves the cascade above untouched. */
+  const landStartOvr=Math.round(_num(o.landstart,-1));
+  const close=landStartOvr>=0?landStartOvr:(anchor>=0?anchor:ddFrom)+w("lagclose");
   /* Pinning a closing date earlier than the ddur/ddstart cascade would
      otherwise finish due diligence on is not a conflict to reject - closing
      is real-world proof due diligence concluded by then, whatever ddur says.
      Only the marker other stages anchor off is capped; ddur/ddstart
      themselves are left as entered, so the due-diligence cost spread below
      (which reads ddur directly, not ddend) is unaffected. */
-  if((landStartOvr>=0||closeOverride>=0)&&close<ddEnd)ddEnd=close;
+  if(landStartOvr>=0&&close<ddEnd)ddEnd=close;
   o.ddend=ddEnd;
   o.close=close;
   o.landdepmonth=Math.max(0,close-w("lagdep"));
   o.closingmonth=close+w("lagclosing");
-  const st=Math.max(ddEnd+w("entdur"),close);
+  /* Due diligence and entitlement are the horizontal seller's own process -
+     the land is already entitled by the time a vertical (builder) parcel
+     acquires it, so neither belongs in ITS sales-open/design/permit/facility
+     anchor. Without this, ddur/entdur's defaults (6 + 12 months) push a
+     vertical parcel's sales-open date out by up to 18 months past its own
+     land closing for no reason tied to anything the builder is actually
+     doing. Horizontal parcels are unaffected - they ARE the ones running due
+     diligence and entitlements, so st keeps reading ddEnd+entdur for them. */
+  const st=Number(_num(o.vert,0))?close:Math.max(ddEnd+w("entdur"),close);
   o.sfstart=close+w("lagsf")+1;
   o.otherstart=close+w("lagother")+1;
   o.infrastart=st+w("laginfra")+1;
@@ -4363,13 +4377,13 @@ const GROUPS=[
   ["_landpsf","Land rate","$/sqft of site",null,"c",
     d=>{const q=Math.max(0,_num(d.acresGross))*43560;return q>0?landConsiderationBase(d)/q:0}],
   ["landsut","Sales / transfer tax on land","% land",0,"p"],
-  ["landdepo","Deposit on the land contract","% land",10,"p"],
+  ["landdepo","Land deposit","% land",10,"p"],
   /* When this parcel buys its lots from another parcel in the scheme, the seller's
      monthly sale receipts are the buyer's monthly land payments. The schedule is
      snapshot here as a month array so the two cash flows line up to the month. */
   ["landsched","Linked land payment schedule","json","","n"],
   ["landschedsrc","Land bought from","text","","n"],
-  ["landdeposit","Deposit as a fixed amount instead of the percentage","$",0,"n"],
+  ["landdeposit","Deposit as a fixed amount","$",0,"n"],
   ["_landdepositamt","Effective land deposit amount","$",null,"c",d=>landDepositAmount(d)],
   ["landpaycount","Number of interim land payments","no.",0,"n"],
   ["landpaystart","First interim payment — months after deposit","mth",1,"n"],
@@ -4501,8 +4515,14 @@ const GROUPS=[
   ["ddur","Due diligence spend period","mth",6,"n"],
   ["ddend","Due diligence completes","mth",5,"n"],
   ["landdepmonth","Land deposit payment","mth",0,"n"],
-  ["close","Land closing / balance payment","mth",-1,"n"],
-  ["landstart","Land cost timing override (blank = computed)","mth",-1,"n"],
+  /* Superseded by landstart below: a delta from due-diligence start used to be
+     the only way to set this, which meant editing DD timing later silently
+     dragged the closing date with it. landstart now pins it as an absolute
+     month instead, so this raw field stays only as the engine's internal
+     fallback (close = ddEnd + lagclose when landstart is left unset) - not
+     shown as its own input any more (2026-09-10). */
+  ["close","Land closing / balance payment (legacy delta-based fallback)","mth",-1,"n"],
+  ["landstart","Land closing / balance payment month","mth",-1,"n"],
   ["closingmonth","Closing-cost payment month","mth",5,"n"],
   ["entdur","Entitlement and platting duration after DD","mth",12,"n"],
   ["_ent","Entitlement complete","mth",null,"c",d=>d.ddend+d.entdur],
@@ -5035,10 +5055,28 @@ const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","debt
      (dr2) is off and the facility's own interest, establishment and line fees are
      funded by equity/cash instead of by drawing more debt - a real, load-bearing
      per-parcel choice with no way to see or change it while it stayed off the rail. */
-  "fundi"]);
-const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ptaxsettlelag","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic"]);
+  "fundi",
+  /* fundingmode (the land-equity-first waterfall) and finsuper were added
+     alongside tier1units/presaledebtpc/debtdepopc in the same change, but were
+     left off this allowlist while those three were correctly added - so the
+     feature itself had no way to ever be turned on. equitypc/equityfixed size
+     the equity-first tranche fundingmode=1/2 actually use (see the CONDITIONAL
+     entries for both, already written and waiting for this) - exposing
+     fundingmode without them would leave the amount stuck at its 20% default. */
+  "fundingmode","equitypc","equityfixed","finsuper"]);
+/* capfin/capcarry/pidacct/staxdeduct are permanently frozen by ACCOUNTING_POLICY
+   (enforceAccountingPolicy overwrites them on every input path - there is no
+   code path that could honour a different value even if one were entered), but
+   render code already exists (MANDATORY_ACCOUNTING_FIELDS) to show them as
+   read-only so a reader can see the policy rather than wonder if it's editable.
+   That render code was unreachable because this allowlist hid the keys before
+   it ever ran. ovhmode (percent-of-revenue vs fixed-monthly G&A/overhead) is a
+   real, still-relevant choice whose own toggle was hidden - fixing it here also
+   makes the ovhmode===1 branch in buildFormCore reachable for the first time. */
+const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ptaxsettlelag","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic",
+  "ovhmode","capfin","capcarry","pidacct","staxdeduct"]);
 const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc","salesUnitsFY"]);
-const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart",
+const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart","lagsales",
   "salesmode","salesy1","salesy2","salesy3","salesy4","salesy5","salesy6","salesy7","salesy8","_salestot",
   "salesy1start","salesy1end","salesy2start","salesy2end","salesy3start","salesy3end","salesy4start","salesy4end",
   "salesy5start","salesy5end","salesy6start","salesy6end","salesy7start","salesy7end","salesy8start","salesy8end"]);
@@ -5121,9 +5159,36 @@ function seedManualSalesDefaults(target){
   if(already>0)return;
   const tot=Math.round(_num(derive(target)._lots,0));
   if(!(tot>0))return;
-  const base=Math.floor(tot/8);
-  for(let i=1;i<=8;i++)target["salesy"+i]=base;
-  target.salesy8+=tot-base*8;
+  const n=salesYearNeededCount(target);
+  const base=Math.floor(tot/n);
+  for(let i=1;i<=n;i++)target["salesy"+i]=base;
+  target["salesy"+n]+=tot-base*n;
+}
+/* How many Sales Year rows the velocity-driven schedule would need to sell
+   out the project, same math as the driven-sales engine loop uses to size
+   its own implied year count: total units / monthly rate, rounded up to
+   years, clamped to the 1-8 rows the schema actually has. Used only to size
+   the manual-mode default seed and to decide how many rows are worth
+   showing - never to limit what the engine itself reads (salesYearUnits in
+   run() always reads all 8 slots), so a project that genuinely needs a
+   later, deliberately-placed tranche can still put one there. */
+function salesYearNeededCount(d){
+  const v=Math.max(0,_num(d&&d.vert?d.vel:d&&d.absn,0));
+  const total=sumProducts(d,p=>Math.max(0,_num(d[`n${p}`],0)));
+  return(!(v>0)||!(total>0))?8:_clamp(Math.ceil(Math.ceil(total/v)/12),1,8);
+}
+/* How many Sales Year rows to actually show: the velocity-implied count
+   above, or one more than the last row that already carries a value or an
+   explicit start/end window - whichever is larger - so a fast-selling
+   project isn't shown 8 rows it will never use, but nothing already typed
+   (including a deliberately late tranche entered via its own window) is
+   ever hidden, and there is always one blank row free to grow into. */
+function salesYearVisibleCount(d){
+  const needed=salesYearNeededCount(d);
+  let usedThrough=0;
+  for(let i=1;i<=8;i++)
+    if(_num(d[`salesy${i}`],0)>0||_num(d[`salesy${i}start`],-1)>=0||_num(d[`salesy${i}end`],-1)>=0)usedThrough=i;
+  return Math.min(8,Math.max(needed,usedThrough+1));
 }
 function fieldShown(k,vert){
   if(lagFieldHidden(k))return false;
@@ -5137,14 +5202,15 @@ function fieldShown(k,vert){
     /* The land cost is typed as one figure, so the rate and the basis it is
        quoted on are two more ways of entering what the total already says. */
     "prmode","pr",
+    /* Superseded by landstart, which pins this as an absolute month instead
+       of a due-diligence-relative delta - see the GROUPS comment beside it. */
+    "close",
     /* Restate the product table: lot area, gross sales value, the average of
        the two, and the same lot count over two different acreages. */
     "_lotsqft","_rev0","_avgp","_densG","_dens",
     "closingpc","rollback","lagdep","lagclose","lagclosing","permitbase","infl",
     /* The total restates the rates above it. */
     "_ovhpc",
-    /* Every scheme releases the whole of the sale proceeds against the debt. */
-    "relsalespc",
     /* No model home or sales centre is costed on these schemes, so the phase it
        would be built in has nothing to place. */
     "modelcost","modelphase","modelmo","_cstart","_effic","_plotratio",
@@ -5173,23 +5239,51 @@ function fieldShown(k,vert){
          acquisitionfee, otheracq -> the closing line, same as Rollback tax
          districtlevy, councilrates -> summed with landtax, same holding line
          holdingfixed -> silently superseded landtax and the property-tax rate */
-    "acquisitionfee","otheracq","districtlevy","councilrates",
+    "acquisitionfee","otheracq","districtlevy","councilrates","holdingfixed",
+    /* Restates the per-unit split of the soft-cost rate/amount already entered
+       above (softbase/sfpc/dmpc); no statement shows it as its own line. */
+    "_prof","_softpc",
+    /* Project-wide fallback only; every phase already has its own infrastructure
+       start/end (ph{n}infrastart/ph{n}infradur), which is where this is set. */
+    "infrastart",
     /* The statement carries a fixed set of cost lines. An input that cannot reach
        one of them is a number with nowhere to land, so it is off the rail:
          soft cost is a rate on gross land, like due diligence, so the basis
            selector, the itemised breakdown and the separate DM rate all go
          real estate tax is one rate, the way corporate tax is one rate
-         contingency, statutory fees, sales-and-use tax, depreciation, other
+         contingency, sales-and-use tax, depreciation, other
            income and booking-split have no line of their own */
     "softmode","softbase","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","_dmpc","_dm",
     "passess","assess","hoa","hoastart","landtax","insur",
     "contpc","contfixed","_cont",
-    "infrastructurecharge",
+    /* infrastructurecharge was swept into this same "no line of its own" list,
+       but that premise no longer holds: statutoryCost (its consolidated total,
+       via munic) already has a real, active line of its own in the Project
+       P&L, the Excel P&L export and the P&L Comparison sheet. Left hidden
+       alongside dafees/certifierfees/referralfees/qleave/munic (the true
+       sub-buckets and their echo, correctly still retired), this was the
+       ONLY way to enter a statutory/municipal fee at all - 0 of 6 fields in
+       "Statutory costs" reachable, for a cost line the engine actively
+       carries through financing eligibility, the P&L and every reconciliation
+       check that touches development cost. */
     "costsutbasis","inputsut","staxrecover","sutlag",
     "dacapex","dalife","dastart",
     "otherincpc","otherinc","otherincmonth",
     "commbookpc",
-    "gnasharedpc","staffsharedpc","gnasharedfixed","staffsharedfixed"]);
+    "gnasharedpc","staffsharedpc","gnasharedfixed","staffsharedfixed",
+    /* Re-hidden after a merge brought them back from an earlier revision: all
+       three were deliberately retired and are fully inert today.
+       marketingpc - R.marketing is hardcoded to 0 (see the comment beside it)
+       so the rate has nothing left to multiply; typing 3% moves nothing.
+       buildstagger - both staggered and non-staggered build produce byte-
+       identical output on every case tested; nothing branches on it any more.
+       distlock - its own toggle has no way to be set away from the DEF
+       default (0), and even if it could, nothing in the draw/distribution
+       simulation withholds a distribution because of it - only a passive
+       modelChecks validator reads it, which is trivially satisfied while it
+       stays 0. Exposing any of the three would imply a working control where
+       there is none. */
+    "marketingpc","buildstagger","distlock"]);
   if(hidden.has(k))return false;
   /* A fixed deposit amount replaces the percentage outright, so the percentage
      comes off the screen rather than sitting there being ignored. */
@@ -5219,7 +5313,8 @@ function fieldShown(k,vert){
   {const manual=Math.round(_num(D.salesmode,0))===1;
    if((k==="vel"||k==="absn")&&manual)return false;
    const sy=String(k).match(/^salesy(\d+)(?:start|end)?$/);
-   if((sy||k==="_salestot")&&!manual)return false;}
+   if((sy||k==="_salestot")&&!manual)return false;
+   if(sy&&manual&&Number(sy[1])>salesYearVisibleCount(D))return false;}
   if(/^landpay[1-5]month$/.test(String(k)))return false;
   if((k==="landpaystart"||k==="landpaygap")&&!(_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS)>0))return false;
   if(k==="landpaygap"&&_clamp(Math.round(_num(D.landpaycount,0)),0,MAX_LAND_INTERIM_PAYMENTS)<2)return false;
@@ -5348,11 +5443,21 @@ function _runUncached(din,ov){
   [["taxwhen",0,2],["facmode",0,3],["fundingmode",0,2],["prmode",0,2],["pmode",0,1],["intconv",0,2],["staxbase",0,5],["finbase",0,5],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["relmode",0,2],["hoastart",0,2],["tier1units",0,null]].forEach(x=>requireInteger(...x));
   if(!Number.isInteger(Number(raw.facstart))||Number(raw.facstart)<-1)throw new Error("Facility commitment month must be -1 or a non-negative whole month.");
   if(!Number.isInteger(Number(raw.facend))||Number(raw.facend)<-1)throw new Error("Facility end month must be -1 or a non-negative whole month.");
-  const nonNegative=["acresGross","acresDed","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landsut","landdepo","xfertaxfixed","xfertaxrt","landsurchargert","acqfeefixed","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","districtlevy","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","sutoutfixed","sutcreditfixed","sutmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","debtdepopc","financefixed","relpc","mincash","intres","relsalespc","draw1amount","draw2amount","draw3amount","draw4amount","draw5amount","repay1amount","repay2amount","repay3amount","repay4amount","repay5amount","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic"];
+  if(!Number.isInteger(Number(raw.landstart))||Number(raw.landstart)<-1)throw new Error("Land closing / balance payment month must be -1 or a non-negative whole month.");
+  const nonNegative=["acresGross","acresDed","_acresNet","pr","pidx","ddpc","landdeposit","landpay1","landpay2","landpay3","landpay4","landpay5","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","rollback","otherdirect","landsut","landdepo","xfertaxfixed","xfertaxrt","landsurchargert","acqfeefixed","acquisitionfee","otheracq","buildbua","infl","contpc","contfixed","infrastructurecharge","dafees","certifierfees","referralfees","qleave","impact","landtax","districtlevy","councilrates","holdingfixed","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","sutoutfixed","sutcreditfixed","sutmarginbase","gnafixed","gnasharedfixed","stafffixed","staffsharedfixed","corpfixed","marketingpc","dacapex","dalife","dastart","otherincpc","otherinc","otherincmonth","pidel","pidrt","pidcost","absn","depo","buildpsf","dsgnpc","permpc","hpsf","modelcost","vel","ltc","equitypc","equityfixed","facilityfixed","rate","procf","linef","debtdepopc","financefixed","relpc","mincash","intres","relsalespc","draw1amount","draw2amount","draw3amount","draw4amount","draw5amount","repay1amount","repay2amount","repay3amount","repay4amount","repay5amount","taxcarrybackyrs","taxlossexp","taxlossutil","ftax","stax","r","hurdle","tmoic",
+    /* Found unvalidated: a negative property tax rate turns the levy into a
+       credit, and a negative sales-open lag lets sales start before the
+       approvals it is measured from - both nonsensical, neither caught. */
+    "ptax","lagsales"];
   for(let p=1;p<=MAX_PRODUCTS;p++)nonNegative.push(`n${p}`,`w${p}`,`d${p}`,`p${p}`,`bua${p}`,`hpsf${p}`,`buildpsf${p}`,`vel${p}`,`buildmo${p}`,`relfixed${p}`);
   nonNegative.forEach(k=>{if(_num(raw[k])<0)throw new Error(`${k} cannot be negative.`)});
   for(let p=1;p<=productCount(raw);p++)if(!Number.isInteger(_num(raw[`n${p}`])))throw new Error(`Product ${p} unit count must be a whole number.`);
-  const boundedPct=["ddpc","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","contpc","landsut","landdepo","xfertaxrt","landsurchargert","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","marketingpc","otherincpc","pidel","pidrt","depo","dsgnpc","permpc","ltc","equitypc","procf","linef","relsalespc","taxlossutil","ftax","stax","presaledebtpc","debtdepopc"];
+  const boundedPct=["ddpc","sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","closingpc","contpc","landsut","landdepo","xfertaxrt","landsurchargert","insur","comm","sellingpc","commbookpc","sutrt","inputsut","gnapc","gnasharedpc","staffpc","staffsharedpc","corp","marketingpc","otherincpc","pidel","pidrt","depo","dsgnpc","permpc","ltc","equitypc","procf","linef","relsalespc","taxlossutil","ftax","stax","presaledebtpc","debtdepopc",
+    /* Found unvalidated: cashrate at 900% p.a. compounds a normal cash balance
+       into trillions of dollars of fabricated interest income. Every other
+       rate-of-a-base field in this list is capped at 100%; this one had been
+       missed. */
+    "cashrate"];
   boundedPct.forEach(k=>{if(_num(raw[k])>100)throw new Error(`${k} cannot exceed 100%.`)});
   ["infesc","esc","buildesc"].forEach(k=>{if(_num(raw[k])<=-100)throw new Error(`${k} must be greater than -100%.`)});
   const requestedVertical=_num(raw.vert,0)>=.5;
@@ -5381,6 +5486,21 @@ function _runUncached(din,ov){
     for(let p=1;p<=productCount(raw);p++)if(!Number.isInteger(_num(raw[`ph${i}p${p}`],0))||_num(raw[`ph${i}p${p}`],0)<0)throw new Error(`Phase ${i} product counts must be non-negative whole numbers.`);
   }
   const d=derive(raw);
+  /* Non-fatal, visible auto-corrections collected during this run (e.g. a
+     manual sales-year window that can't start before sales legally can) -
+     surfaced as a banner rather than blocking with a hard error. */
+  const modelNotices=[];
+  /* The UI's own checkbox handler (man_salesmode's onchange) seeds an even
+     split across all 8 periods the moment manual mode is switched on, so a
+     real interactive user never sees this - but a saved parcel or an API/SQL
+     caller can set salesmode=1 with every salesyN and window left blank,
+     which silently dumped the entire unit count into a single month instead
+     of being refused. Caught here instead of guessed at: this does not
+     auto-fill a schedule (that would be choosing numbers on the caller's
+     behalf), it just refuses to run with an unmistakable reason. */
+  if(Math.round(_num(d.salesmode,0))===1&&!Array.from({length:8},(_,i)=>i+1)
+      .some(i=>_num(d["salesy"+i],0)>0||_num(d["salesy"+i+"start"],-1)>=0||_num(d["salesy"+i+"end"],-1)>=0))
+    throw new Error("Manual sales schedule mode is selected but no yearly figures or Start/End windows have been entered - enter at least one Sales Year's units, or switch back to the driven sales velocity.");
   if(d.close<d.ddend)throw new Error(`Due diligence runs to month ${d.ddend+1} but the land is bought in month ${d.close+1}. Shorten the study or buy later.`);
   if(d.landdepmonth>d.close)throw new Error("Land deposit month cannot be after land closing.");
   const totalLandCash=landConsiderationBase(d)*(1+d.landsut/100),preSettlementLand=landDepositAmount(d)+landInterimTotal(d);
@@ -5413,7 +5533,12 @@ function _runUncached(din,ov){
   if(!d.vert&&!(d.pidx>0))throw new Error("Price index must be greater than zero.");
   if(d.vert&&!(d.buildbua>0))throw new Error("Total building area / GFA must be greater than zero: vertical construction cost is GFA x the construction rate.");
   const L=d._lots;if(!(L>0))throw new Error("Total lots must be greater than zero.");
-  const V=!!d.vert,close=d.close,entStart=d.ddend,ent=entStart+d.entdur,st=Math.max(ent,close);
+  /* Mirrors applyLagTiming's own st exactly (due diligence/entitlements are
+     the horizontal seller's process, already done by the time a vertical
+     parcel acquires the land - see the comment there) so this parcel's
+     construction/facility timing and its own sales-open month never disagree
+     on when the clock actually starts. */
+  const V=!!d.vert,close=d.close,entStart=d.ddend,ent=entStart+d.entdur,st=V?close:Math.max(ent,close);
   if(landDepositAmount(d)>0&&close>0&&d.landdepmonth>=close)throw new Error("Land deposit month must be before the land closing month.");
   if(d.closingmonth>close)throw new Error("Transfer tax, title and escrow fees and pre-closing studies must be paid no later than land closing.");
   const shareVals=Array.from({length:d.nph},(_,i)=>_num(raw[`ph${i+1}share`],0)),costVals=Array.from({length:d.nph},(_,i)=>_num(raw[`ph${i+1}cost`],0));
@@ -5487,6 +5612,43 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const fyModelFirst=fyOf(0,d),
     fyFirstC0=((d.startMonth-1)%12)+1,
     fyFirstMonths=fyFirstC0<=d.fyEnd?(d.fyEnd-fyFirstC0+1):(12-fyFirstC0+1+d.fyEnd);
+  /* Each manual sales-year row gets an absolute [lo,hi] month window: the
+     picked salesyNstart/salesyNend dates verbatim when both are set - no
+     reinterpretation and no clamping to any inferred "year" span, so the
+     exact dates typed are exactly when that row's units sell, and one row's
+     units can never spill into another row's window (2026-09-10: explicit
+     user requirement, replacing a design that counted "sales year N" from
+     globalOpen - when sales actually open, after due diligence/entitlements
+     - rather than from the dates themselves; a window that didn't happen to
+     land inside that inferred year used to get silently clamped, collapsing
+     both ends onto one boundary month and dumping the whole year's units
+     there in a single shot). A row left without an explicit window keeps the
+     prior behaviour unchanged: spread evenly across its own slot in the
+     sequence of fiscal years counted from globalOpen, so every project that
+     never touches the window fields computes byte-identical to before. */
+  const salesC0=((d.startMonth-1+globalOpen)%12)+1,salesMonthsInYear0=salesC0<=d.fyEnd?(d.fyEnd-salesC0+1):(12-salesC0+1+d.fyEnd);
+  const salesRowWindows=salesYearUnits.map((units,i)=>{
+    if(!(units>0))return null;
+    const impliedStart=i===0?globalOpen:globalOpen+salesMonthsInYear0+(i-1)*12,impliedEnd=impliedStart+(i===0?salesMonthsInYear0:12)-1;
+    const wsRaw=_num(d["salesy"+(i+1)+"start"],-1),weRaw=_num(d["salesy"+(i+1)+"end"],-1);
+    if(wsRaw>=0&&weRaw>=0){
+      const lo=Math.min(Math.round(wsRaw),Math.round(weRaw))-1,hi=Math.max(Math.round(wsRaw),Math.round(weRaw))-1;
+      /* Sales genuinely cannot happen before globalOpen, so an explicit window
+         starting earlier than that cannot be honoured verbatim. This used to
+         shift the window itself forward - reverted (2026-09-10): shifting one
+         row's window can push it into the next row's window, so the two
+         overlap and the flat, single-queue credit mechanism that sells units
+         no longer respects either row's own unit count (12/14/8 came out as
+         4/22/8) - exactly the cross-row bleed the rewrite above exists to
+         prevent. The user's own sales-year windows are never touched; the fix
+         belongs on whichever input is actually pushing globalOpen later than
+         the window - see the explicit error below. */
+      if(lo<globalOpen)throw new Error(`Sales year ${i+1}'s window (month ${lo+1} to ${hi+1}) starts before sales can open (month ${globalOpen+1}, once due diligence/entitlements complete plus the "Sales — start after approvals" lag) - move the window later, shorten that period, or reduce "Sales — start after approvals".`);
+      return{lo,hi};
+    }
+    return{lo:impliedStart,hi:impliedEnd};
+  });
+  const salesScheduleEnd=salesRowWindows.reduce((a,w)=>w?Math.max(a,w.hi):a,-1);
   const salesRateAt=m=>{
     if(salesFYMode){
       const y=fyOf(m,d),months=y===fyModelFirst?fyFirstMonths:12,v=Math.max(0,_num(salesUnitsFYMap[y],0));
@@ -5495,35 +5657,16 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       return anyFuture?0:L;
     }
     if(!manualSales)return projectRate;
-    /* Year buckets follow the model's own financial year (fyOf), not a rolling
-       12 months from whenever sales happen to open - so a project opening
-       sales mid FY26 has a SHORT first year that ends at the same FY cutoff
-       every other statement in this file uses, not one that rolls into FY27. */
-    const y0=fyOf(globalOpen,d),yr=m<=globalOpen?0:fyOf(m,d)-y0;
-    if(yr>=salesYearUnits.length)return L;
-    const c0=((d.startMonth-1+globalOpen)%12)+1,monthsInYear0=c0<=d.fyEnd?(d.fyEnd-c0+1):(12-c0+1+d.fyEnd),monthsThisYear=yr===0?monthsInYear0:12;
-    if(salesYearUnits[yr]>0){
-      /* An optional per-year window (salesyNstart/salesyNend, -1 = unset) narrows
-         the even spread to a sub-range of months inside THIS fiscal year instead
-         of the whole year. Both ends must be set (>=0) for the window to apply;
-         either one left at -1 falls straight through to the whole-year spread
-         below, byte-identical to prior behaviour. The window is clamped to this
-         year's own month range - a picked date outside the year (or reversed
-         start/end) still only ever slices this year's own units, never leaks
-         them into a neighbouring fiscal year. */
-      const yearStart=yr===0?globalOpen:globalOpen+monthsInYear0+(yr-1)*12,yearEnd=yearStart+monthsThisYear-1;
-      const wsRaw=_num(d["salesy"+(yr+1)+"start"],-1),weRaw=_num(d["salesy"+(yr+1)+"end"],-1);
-      if(wsRaw>=0&&weRaw>=0){
-        const ws=_clamp(Math.round(wsRaw)-1,yearStart,yearEnd),we=_clamp(Math.round(weRaw)-1,yearStart,yearEnd);
-        const lo=Math.min(ws,we),hi=Math.max(ws,we),winMonths=hi-lo+1;
-        return (m>=lo&&m<=hi)?salesYearUnits[yr]/winMonths:0;
-      }
-      return salesYearUnits[yr]/monthsThisYear;
-    }
-    /* A blank year inside the schedule is a genuine pause. A blank year with nothing
-       after it means the schedule has run out, so the balance is released rather than
-       waiting for the last year of the grid. */
-    return salesYearUnits.slice(yr).some(v=>v>0)?0:L;
+    /* A month matching no row's window is a genuine pause - salesRowWindows
+       only holds an entry for rows that actually have units, so a gap before
+       the schedule starts or between two active rows simply contributes
+       nothing. Once every row's own window is behind us the schedule has run
+       out, so the balance releases at once rather than waiting on a grid that
+       has nothing left to say. */
+    if(m>salesScheduleEnd)return L;
+    let rate=0;
+    salesRowWindows.forEach((w,i)=>{if(w&&m>=w.lo&&m<=w.hi)rate+=salesYearUnits[i]/(w.hi-w.lo+1)});
+    return rate;
   };
   /* Sales are project-wide for both finished lots and vertical units. Construction
      phase allocations identify the physical inventory and cost / product mix only;
@@ -5562,9 +5705,17 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
            the PHYSICAL programme only: the construction COST is incurred in full in
            u.contractMonth (see the unitRecords build loop), so a unit nobody has
            contracted yet can never carry construction cost. */
-        const deliveryLag=Math.max(0,Math.round(d.dellag)),
-              baselineBuildStart=Math.max(phaseStart[i],month),
-              baselineDelivery=Math.max(month+deliveryLag,baselineBuildStart+Math.max(1,p.buildMonths));
+        /* dellag ("Contract to closing") is the horizontal lot-sale gap between
+           signing and settlement - it has no vertical equivalent (see the
+           comment above: delivery here is build start plus build duration,
+           full stop) and was previously included in a Math.max against that,
+           so any parcel whose dellag exceeded its own buildmo (dellag
+           defaults to 10 months; buildmo is often shorter) had every unit's
+           delivery - and with it, the land-cost/COGS release matched to that
+           delivery - silently stretched out to dellag's month count instead
+           of the actual build duration (2026-09-10). */
+        const baselineBuildStart=Math.max(phaseStart[i],month),
+              baselineDelivery=baselineBuildStart+Math.max(1,p.buildMonths);
         planned.push({product,phase:i,salesPhase:null,contractMonth:month,baselineBuildStart,buildStart:baselineBuildStart,baselineDelivery,delivery:baselineDelivery,saleBase,phaseEsc,salePrice,depositPct,buildCost:0,permitCost:0,baseBuild:0});
       }else{
         /* Selling the lots on to the vertical is a transfer, not a settlement that
@@ -5607,6 +5758,19 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const daEnd=d.dacapex>0?d.dastart+d.dalife*12:0;
   const landSpendEnd=close;
   const activityEnd=Math.max(1,lastPlannedDelivery,lastBuildEnd,finalReimb,landSpendEnd,close,ent,Math.max(0,Math.round(d.otherincmonth)),Math.max(0,Math.round(d.dastart)),daEnd);
+  /* activityEnd (above) sizes NM (the model's array length): it must stretch
+     to daEnd so R.da has room to recognise the FULL depreciation schedule -
+     shortening it throws depreciationWithinAsset / leaves capex partly
+     unexpensed. But the equity PAYOUT should not wait for a non-cash book
+     amortisation schedule to finish, nor for otherincmonth/dastart placeholder
+     dates that carry no dollars (otherinc=0, or no capex at all) - those are
+     real bugs found in QA: a 30-year depreciation life deferred distribution
+     by 29 years and fabricated tens of millions in phantom interest income on
+     cash that should already have been returned. payoutAnchor is activityEnd
+     with exactly those three non-cash/moot terms excluded. */
+  const payoutAnchor=Math.max(1,lastPlannedDelivery,lastBuildEnd,finalReimb,landSpendEnd,close,ent,
+    d.otherinc?Math.max(0,Math.round(d.otherincmonth)):0,
+    d.dacapex>0?Math.max(0,Math.round(d.dastart)):0);
   const NM=activityEnd+Math.max(d.taxlag,d.taxqlag)+24;
   const K=["build","design","permit","vert1","land","closing","acqfee","dd","soft","supervision","professionalfee","dmfee","pidprocess","otherdirect","munic","impact","infra","cont","devc","fdev","sval","recog","dep","escr","escbal","balr","lsr","pid","sell","sellingexpense","sellcash","brokeragecash","sellingexpensecash","outputsut","sutrefund","landsutrefund","devsutrefund","inputsutpaid","sutcogs","capex","ovh","fixovh","gna","gnashared","staff","staffshared","corpovh","marketing","da","otherincome","carry","retax","hoaexp","insurance","retaxcapadd","retaxcaprel","retaxexp","hoacapadd","hoacaprel","hoaexppl","insurancecapadd","insurancecaprel","insuranceexp","pf","pfamort","lf","lop","dr1","dr2","cumd","intr","icash","rep","lcl","net","taxm","eqcf","eqin","eqout","eqreimbcap","cash","price","cinf","model","landcogs","concogs","vertcogs","othcogs","landbasecogs","infracogs","ddcogs","softcogs","dmcogs","designcogs","authoritycogs","constructioncogs","otherdirectcogs","finexp","fincapadd","fincaprel","relbase","relreq","pidcogs","bradd","brcomplete","intincome","staxm","corptaxm"];
   const R={};K.forEach(k=>R[k]=new Array(NM+1).fill(0));const ctr=new Array(NM+1).fill(0),dlv=new Array(NM+1).fill(0),unitRecords=planned;
@@ -6232,7 +6396,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const priorInterest=R.intincome.slice(),cashRate=d.cashrate/100/12;
     const baseCF=R.net.map((v,m)=>v-priorInterest[m]-R.taxm[m]+R.dr1[m]+R.dr2[m]-R.rep[m]-R.intr[m]-R.pf[m]-R.lf[m]-R.depplaced[m]+R.depreturn[m]);
     let finalObligation=Math.max(0,obligationFloor|0);baseCF.forEach((v,i)=>{if((Math.abs(v)>1e-6||R.lcl[i]>1e-6)&&i>finalObligation)finalObligation=i});
-    const payoutMonth=Math.min(NM,Math.max(activityEnd,finalObligation)+Math.max(0,Math.round(_num(d.eqdistlag,2))));
+    const payoutMonth=Math.min(NM,Math.max(payoutAnchor,finalObligation)+Math.max(0,Math.round(_num(d.eqdistlag,2))));
     const reserveReq=new Array(NM+1).fill(0);for(let m=NM-1;m>=0;m--){const min=m<finalObligation?minimumCash:0;reserveReq[m]=Math.max(min,reserveReq[m+1]-baseCF[m+1])}
     R.eqin.fill(0);
     let cash=0,equityOutstanding=0,peakEquity=0,peakEquityMonth=0;
@@ -6374,7 +6538,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const totalOverhead=oh+fin+da,totalTax=corpTax+franchise;
     taxCorporate[y]=corpTax;taxState[y]=franchise;
     PL[y]={grossRev:rows.grossRev[y],outputSut:rows.outputSut[y],rev:rows.rec[y],inputSutCredit,pidIncome,interestIncome,otherIncomeManual:rows.otherIncomeManual[y],otherIncome,
-      landCost,transferTax,landSurcharge,acqFeeCost,acquisitionCost,constructionCost,professionalFees,dueDiligenceFees,softCostFees,developmentManagementFees,statutoryCost,contingencyCost,holdingCost,capitalisedFinanceCost,otherDirectCost,brokerage,sellingCost,marketing,dc,gp,taxGrossProfit,
+      landCost,transferTax,landSurcharge,acqFeeCost,acquisitionCost,constructionCost,professionalFees,dueDiligenceFees,softCostFees,designCost:rows.design[y],developmentManagementFees,statutoryCost,contingencyCost,holdingCost,capitalisedFinanceCost,otherDirectCost,brokerage,sellingCost,marketing,dc,gp,taxGrossProfit,
       gna,gnaShared,staff,staffShared,corpOverhead,oh,fin,da,realEstateTax,franchise,totalOverhead,
       npbt,corporateTax:corpTax,tax:totalTax,cashTax:totalTax,npat:npbt-totalTax,ratio:L?B.dlv[y]/L:0}
   });
@@ -6458,7 +6622,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     /* Same lump-sum anchor as the main eqout series above, computed against
        this series' own base (pre-tax here) so a distmode===1 release still
        has nothing left to trickle out after it - see the comment there. */
-    const localPayoutMonth=Math.min(NM,Math.max(activityEnd,last)+Math.max(0,Math.round(_num(d.eqdistlag,2))));
+    const localPayoutMonth=Math.min(NM,Math.max(payoutAnchor,last)+Math.max(0,Math.round(_num(d.eqdistlag,2))));
     for(let m=NM-1;m>=0;m--){const min=m<last?minimumCash:0;req[m]=Math.max(min,req[m+1]-base[m+1])}const cf=new Array(NM+1).fill(0),ein=new Array(NM+1).fill(0),eout=new Array(NM+1).fill(0);let cash=0,outstanding=0,peak=0;for(let m=0;m<=NM;m++){let before=cash+base[m],minimum=m<last?minimumCash:0;if(before<minimum){ein[m]=minimum-before;before=minimum}outstanding+=ein[m];let allowed=Math.max(0,before-req[m]);
     if(Math.round(_num(d.distmode,1))===1&&m<localPayoutMonth)allowed=0;eout[m]=Math.max(0,allowed);cash=before-eout[m];cf[m]=eout[m]-ein[m];outstanding=Math.max(0,outstanding-eout[m]);peak=Math.max(peak,outstanding)}return {cf,ein,eout,peak,inj:ein.reduce((a,b)=>a+b,0),ret:eout.reduce((a,b)=>a+b,0)}};
   const preTaxBaseCF=R.net.map((v,m)=>v+R.dr1[m]+R.dr2[m]-R.rep[m]-R.intr[m]-R.pf[m]-R.lf[m]-R.depplaced[m]+R.depreturn[m]),preTaxEquity=buildEquitySeries(preTaxBaseCF);
@@ -6561,7 +6725,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     landCashAtClosing:R.land.every((v,m)=>landPaymentMonths(d).has(m)||Math.abs(v)<=1e-6)&&R.closing.every((v,m)=>m===close||m===d.closingmonth||Math.abs(v)<=1e-6)&&R.acqfee.every((v,m)=>m===d.closingmonth||Math.abs(v)<=1e-6),
     unitChronology:unitRecords.every(u=>u.contractMonth>=close&&u.delivery>=u.contractMonth&&(recogOnSale||u.delivery>=phaseComplete[u.phase])&&(!V||u.buildStart>=st)),
     infrastructureAfterEntitlement:[R.cinf,R.cont,R.munic].every(row=>noActivityBefore(row,st)),
-    unitsContracted:Math.abs(ctr.reduce((a,b)=>a+b,0)-L)<1e-6,unitsDelivered:Math.abs(dlv.reduce((a,b)=>a+b,0)-L)<1e-6,revenueRecognised:Math.abs(sum("recog")-sum("sval"))<1,collectionsEqualRevenue:Math.abs(sum("lsr")-sum("recog"))<1,operatingDebtRollForward:R.opcl.every((v,m)=>Math.abs(v-((m?R.opcl[m-1]:0)+R.dr1[m]-R.oprep[m]))<1),interestReserveDebtRollForward:R.intcl.every((v,m)=>Math.abs(v-((m?R.intcl[m-1]:0)+R.dr2[m]-R.intrep[m]))<1),debtComponents:R.lcl.every((v,m)=>Math.abs(v-R.opcl[m]-R.intcl[m])<1)&&R.rep.every((v,m)=>Math.abs(v-R.oprep[m]-R.intrep[m])<1),debtRollForward:R.lcl.every((v,m)=>Math.abs(v-((m?R.lcl[m-1]:0)+R.dr1[m]+R.dr2[m]-R.rep[m]))<1),interestReserveLimit:sum("dr2")<=reserve+1&&Math.max(...R.intcl)<=reserve+1,processingFeeBase:Math.abs(sum("pf")-((debtResult.operatingCommit>0?d.procf/100*debtResult.operatingCommit:0)+R.intbase.reduce((a,b)=>a+d.procfrate/100/12*b,0)))<1,unusedLineFeeBase:R.lf.every((v,m)=>Math.abs(v-d.linef/100/12*(Number(d.linefbasis)===2?R.intbase[m]:Number(d.linefbasis)===1?R.opcommit[m]:R.opunused[m]))<1),cashRollForward:R.cash.every((v,m)=>Math.abs(v-((m?R.cash[m-1]:0)+baseCF[m]+R.eqin[m]-R.eqout[m]))<1),profitToEquity:Math.abs((ret-inj)-(S("npat")+S("da")-sum("capex")))<1,developmentCostRecognition:Math.abs(sum("landcogs")+sum("concogs")+sum("pidcogs")+sum("vertcogs")+sum("othcogs")-(sum("devc")-pid))<1,financeRecognition:Math.abs(sum("fincaprel")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationMandatory:d.capfin===1,financeCapitalisationIncurred:Math.abs(sum("fincapadd")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationReleased:Math.abs(sum("fincaprel")-sum("fincapadd"))<1,financeCapitalisationCutoff:R.fincapadd.every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u))),carryCapitalisationMandatory:d.capcarry===1,carryCostIncurred:Math.abs(sum("retaxcapadd")+sum("retaxexp")-sum("retax"))<1&&Math.abs(sum("hoacapadd")+sum("hoaexppl")-sum("hoaexp"))<1&&Math.abs(sum("insurancecapadd")+sum("insuranceexp")-sum("insurance"))<1,carryCostReleased:Math.abs(sum("retaxcaprel")-sum("retaxcapadd"))<1&&Math.abs(sum("hoacaprel")-sum("hoacapadd"))<1&&Math.abs(sum("insurancecaprel")-sum("insurancecapadd"))<1,carryCapitalisationCutoff:["retaxcapadd","hoacapadd","insurancecapadd"].every(k=>R[k].every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u)))),eligibleBasisRecognition:Math.abs(sum("relbase")-finBase)<1,phaseUnitAllocation:ph.counts.reduce((a,b)=>a+b,0)===L,phaseCostAllocation:Math.abs(phaseActual.reduce((a,b)=>a+b,0)-(infTot+contTot+munic))<1,validNumbers:Object.values(R).every(row=>row.every(Number.isFinite)),facilityLimit:Math.max(...R.lcl)<=lim+1,phaseSalesReleased:unitRecords.every(u=>u.contractMonth>=globalOpen),phaseSettlementAfterCompletion:unitStaggeredBuild?unitRecords.every(u=>u.delivery>=u.buildStart+Math.max(0,products[u.product].buildMonths-1)):unitRecords.every(u=>u.delivery>=phaseComplete[u.phase]),phaseSettlementCadencePreserved:activePhases.every(i=>{const us=unitsByPhase[i];if(!us.length)return true;if(V){const lag=Math.max(0,Math.round(d.dellag)),phaseLag=d[`ph${i+1}dellag`]>=0?Math.max(0,Math.round(d[`ph${i+1}dellag`])):0;const baseOf=u=>unitStaggeredBuild?Math.max(u.contractMonth+lag,u.buildStart+Math.max(1,products[u.product].buildMonths)):Math.max(phaseComplete[i],u.contractMonth)+lag;const shift=Math.max(0,phaseComplete[i]+phaseLag-Math.min(...us.map(baseOf)));if(unitStaggeredBuild)return us.every(u=>u.buildStart===Math.max(phaseStart[i],u.contractMonth)&&u.delivery===baseOf(u)+shift);return us.every(u=>u.buildStart===phaseStart[i]&&u.delivery===baseOf(u)+shift)}if(recogOnSale)return us.every(u=>u.delivery===u.contractMonth);const lag=Math.max(0,Math.round(d.dellag)),firstBase=Math.min(...us.map(u=>u.contractMonth+lag)),shift=Math.max(0,phaseComplete[i]-firstBase);return us.every(u=>u.delivery===u.contractMonth+lag+shift)}),globalSalesVelocity:(manualSales||salesFYMode)?true:ctr.every(v=>v<=Math.ceil(projectRate)+1e-6),projectWideSalesContinuity:(manualSales||salesFYMode)?true:ctr.every((v,m)=>{if(m<globalOpen)return v===0;const prior=Math.min(L,Math.floor(Math.max(0,m-globalOpen)*projectRate+1e-9)),through=Math.min(L,Math.floor(Math.max(0,m-globalOpen+1)*projectRate+1e-9));return v===through-prior}),productAssignment:unitRecords.length===L&&unitRecords.every(u=>u.product>=0&&u.product<products.length&&Number.isFinite(u.contractMonth)),distributionLock:!d.distlock||R.eqout.every((v,m)=>v<=1e-6||R.lcl[m]<=1e-6||R.eqreimbcap.slice(0,m+1).reduce((a,b)=>a+b,0)+1>=R.eqout.slice(0,m+1).reduce((a,b)=>a+b,0)),pidInventoryMatching:Math.abs(sum("pidcogs")+pid)<1,
+    unitsContracted:Math.abs(ctr.reduce((a,b)=>a+b,0)-L)<1e-6,unitsDelivered:Math.abs(dlv.reduce((a,b)=>a+b,0)-L)<1e-6,revenueRecognised:Math.abs(sum("recog")-sum("sval"))<1,collectionsEqualRevenue:Math.abs(sum("lsr")-sum("recog"))<1,operatingDebtRollForward:R.opcl.every((v,m)=>Math.abs(v-((m?R.opcl[m-1]:0)+R.dr1[m]-R.oprep[m]))<1),interestReserveDebtRollForward:R.intcl.every((v,m)=>Math.abs(v-((m?R.intcl[m-1]:0)+R.dr2[m]-R.intrep[m]))<1),debtComponents:R.lcl.every((v,m)=>Math.abs(v-R.opcl[m]-R.intcl[m])<1)&&R.rep.every((v,m)=>Math.abs(v-R.oprep[m]-R.intrep[m])<1),debtRollForward:R.lcl.every((v,m)=>Math.abs(v-((m?R.lcl[m-1]:0)+R.dr1[m]+R.dr2[m]-R.rep[m]))<1),interestReserveLimit:sum("dr2")<=reserve+1&&Math.max(...R.intcl)<=reserve+1,processingFeeBase:Math.abs(sum("pf")-((debtResult.operatingCommit>0?d.procf/100*debtResult.operatingCommit:0)+R.intbase.reduce((a,b)=>a+d.procfrate/100/12*b,0)))<1,unusedLineFeeBase:R.lf.every((v,m)=>Math.abs(v-d.linef/100/12*(Number(d.linefbasis)===2?R.intbase[m]:Number(d.linefbasis)===1?R.opcommit[m]:R.opunused[m]))<1),cashRollForward:R.cash.every((v,m)=>Math.abs(v-((m?R.cash[m-1]:0)+baseCF[m]+R.eqin[m]-R.eqout[m]))<1),profitToEquity:Math.abs((ret-inj)-(S("npat")+S("da")-sum("capex")))<1,developmentCostRecognition:Math.abs(sum("landcogs")+sum("concogs")+sum("pidcogs")+sum("vertcogs")+sum("othcogs")-(sum("devc")-pid))<1,financeRecognition:Math.abs(sum("fincaprel")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationMandatory:d.capfin===1,financeCapitalisationIncurred:Math.abs(sum("fincapadd")+sum("finexp")-(sum("intr")+sum("pf")+sum("lf")))<1,financeCapitalisationReleased:Math.abs(sum("fincaprel")-sum("fincapadd"))<1,financeCapitalisationCutoff:R.fincapadd.every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u))),carryCapitalisationMandatory:d.capcarry===1,carryCostIncurred:Math.abs(sum("retaxcapadd")+sum("retaxexp")-sum("retax"))<1&&Math.abs(sum("hoacapadd")+sum("hoaexppl")-sum("hoaexp"))<1&&Math.abs(sum("insurancecapadd")+sum("insuranceexp")-sum("insurance"))<1,carryCostReleased:Math.abs(sum("retaxcaprel")-sum("retaxcapadd"))<1&&Math.abs(sum("hoacaprel")-sum("hoacapadd"))<1&&Math.abs(sum("insurancecaprel")-sum("insurancecapadd"))<1,carryCapitalisationCutoff:["retaxcapadd","hoacapadd","insurancecapadd"].every(k=>R[k].every((v,m)=>Math.abs(v)<=1e-6||unitRecords.some(u=>m<qualifyingEnd(u)))),eligibleBasisRecognition:Math.abs(sum("relbase")-finBase)<1,phaseUnitAllocation:ph.counts.reduce((a,b)=>a+b,0)===L,phaseCostAllocation:Math.abs(phaseActual.reduce((a,b)=>a+b,0)-(infTot+contTot+munic))<1,validNumbers:Object.values(R).every(row=>row.every(Number.isFinite)),facilityLimit:Math.max(...R.lcl)<=lim+1,phaseSalesReleased:unitRecords.every(u=>u.contractMonth>=globalOpen),phaseSettlementAfterCompletion:unitStaggeredBuild?unitRecords.every(u=>u.delivery>=u.buildStart+Math.max(0,products[u.product].buildMonths-1)):unitRecords.every(u=>u.delivery>=phaseComplete[u.phase]),phaseSettlementCadencePreserved:activePhases.every(i=>{const us=unitsByPhase[i];if(!us.length)return true;if(V){const phaseLag=d[`ph${i+1}dellag`]>=0?Math.max(0,Math.round(d[`ph${i+1}dellag`])):0;const baseOf=u=>unitStaggeredBuild?u.buildStart+Math.max(1,products[u.product].buildMonths):Math.max(phaseComplete[i],u.contractMonth)+Math.max(0,Math.round(d.dellag));const shift=Math.max(0,phaseComplete[i]+phaseLag-Math.min(...us.map(baseOf)));if(unitStaggeredBuild)return us.every(u=>u.buildStart===Math.max(phaseStart[i],u.contractMonth)&&u.delivery===baseOf(u)+shift);return us.every(u=>u.buildStart===phaseStart[i]&&u.delivery===baseOf(u)+shift)}if(recogOnSale)return us.every(u=>u.delivery===u.contractMonth);const lag=Math.max(0,Math.round(d.dellag)),firstBase=Math.min(...us.map(u=>u.contractMonth+lag)),shift=Math.max(0,phaseComplete[i]-firstBase);return us.every(u=>u.delivery===u.contractMonth+lag+shift)}),globalSalesVelocity:(manualSales||salesFYMode)?true:ctr.every(v=>v<=Math.ceil(projectRate)+1e-6),projectWideSalesContinuity:(manualSales||salesFYMode)?true:ctr.every((v,m)=>{if(m<globalOpen)return v===0;const prior=Math.min(L,Math.floor(Math.max(0,m-globalOpen)*projectRate+1e-9)),through=Math.min(L,Math.floor(Math.max(0,m-globalOpen+1)*projectRate+1e-9));return v===through-prior}),productAssignment:unitRecords.length===L&&unitRecords.every(u=>u.product>=0&&u.product<products.length&&Number.isFinite(u.contractMonth)),distributionLock:!d.distlock||R.eqout.every((v,m)=>v<=1e-6||R.lcl[m]<=1e-6||R.eqreimbcap.slice(0,m+1).reduce((a,b)=>a+b,0)+1>=R.eqout.slice(0,m+1).reduce((a,b)=>a+b,0)),pidInventoryMatching:Math.abs(sum("pidcogs")+pid)<1,
     cashflowStatement:cashflowStatementCheck,
     /* Lender security deposit: it rolls forward like any other balance, it is
        never more than the stated share of the draws that created it, and it can
@@ -6637,8 +6801,17 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   const failed=Object.entries(modelChecks).filter(([,v])=>!v).map(([k])=>k);if(failed.length)throw new Error("Model reconciliation failed: "+failed.join(", "));
   const debtMaturityMonth=R.lcl.reduce((a,v,i)=>v>1e-6?i:a,0),lastMonth=Math.max(lastDlv,finalObligation),fixTot=sum("fixovh"),phaseSchedule=ph.counts.map((count,i)=>{const units=unitsByPhase[i],deliveries=units.map(u=>u.delivery);return {phase:i+1,start:phaseStart[i],end:phaseEnd[i],complete:phaseComplete[i],duration:ph.durations[i],lots:count,costShare:ph.costWeights[i],salesStart:null,salesEnd:null,realisationStart:deliveries.length?Math.min(...deliveries):null,realisationEnd:deliveries.length?Math.max(...deliveries):null,realisation:deliveries.length?Math.max(...deliveries):null,realisedLots:units.length,velocity:0,configuredVelocity:projectRate,sharedVelocity:true,products:matrix[i]}});
   const projectSales={start:Math.min(...unitRecords.map(u=>u.contractMonth)),end:finalContractMonth,rate:projectRate,total:L,monthly:ctr.slice()};
-  return {d,fys,PL,R,B,NM,lim,land,infTot,contTot,pid,close,entStart,st,lastDlv,debtMaturityMonth,checks:modelChecks,vert:V,vst,vopen,vmonths:finalContractMonth-Math.min(...unitRecords.map(u=>u.contractMonth))+1,buaTot,buildBua:V?d.buildbua:0,buildTot:baseBuildTot,professionalTotal:professional,developmentManagementTotal:developmentManagement,designTot,permitTot:sum("permit"),vertTot:sum("vert1"),lag:V?Math.max(...products.map(p=>p.buildMonths)):d.dellag,revenue:sum("recog"),grossRevenue:sum("recog"),netRevenue:S("rev"),outputSut:sum("outputsut"),inputSutCredit:sum("sutrefund"),transferTax:xfertax,landSurcharge:landsurcharge,acqFeeCost:acqfee,acquisitionCost:acquisition,direct:S("dc"),gross:S("gp"),overhead:S("oh"),operatingOverhead:S("oh"),totalOperatingCost:S("totalOverhead"),finance:finTot,financeExpense:S("fin"),depreciation:S("da"),marketing:S("marketing"),realEstateTax:S("realEstateTax"),franchiseTax:S("franchise"),otherIncome:S("otherIncome"),npbt:S("npbt"),tax:S("tax"),cashTax:S("cashTax"),npat:S("npat"),margin:S("rev")?S("npat")/S("rev"):0,npv,irr:irr(R.net,12),eirr:irr(R.eqcf,12),eirrPreTax:irr(preTaxEquity.cf,12),eirrAfterTax:irr(R.eqcf,12),einjPreTax:preTaxEquity.inj,eretPreTax:preTaxEquity.ret,epeakPreTax:preTaxEquity.peak,pvl:land/Math.pow(1+rm,close),einj:inj,eret:ret,egain:ret-inj,epeak:peakEquity,epeakM:peakEquityMonth,liquidityPeak:peakEquity,cashEquityInjected:inj,cashEquityReturned:ret,moic:inj?ret/inj:0,peakdebt:Math.max(...R.lcl),loanEnd:R.lcl[NM],lots:L,fixovh:fixTot,escpeak:Math.max(...R.escbal),lastMonth,finBase,carry:sum("carry"),collections:sum("lsr"),finTot,ereqShare:finBase>0?peakEquity/finBase:0,finIncurred:finTot,interestReserve:reserve,operatingCommitment:debtResult.operatingCommit,facilityStart,financeCapitalised:sum("fincaprel"),financeCapitalisedIncurred:sum("fincapadd"),carryCapitalised:sum("retaxcaprel")+sum("hoacaprel")+sum("insurancecaprel"),actualBuild:sum("build"),actualDesign:sum("design"),actualPermit:sum("permit"),actualModel:sum("model"),landCogs:sum("landcogs"),conCogs:sum("concogs"),vertCogs:sum("vertcogs"),othCogs:sum("othcogs"),brokerCost:sum("sell")+sum("sellingexpense"),brokerCash:sum("sellcash"),depreciableCapex:sum("capex"),
-    pnlLandCost:S("landCost"),pnlInfraCost:S("infraCost"),pnlDesignCost:S("designCost"),pnlAuthorityCost:S("authorityCost"),pnlConstructionCost:S("constructionCost"),pnlCapitalisedFinanceCost:S("capitalisedFinanceCost"),pnlOtherDirectCost:S("otherDirectCost"),corporateTax:S("corporateTax"),
+  return {d,fys,PL,R,B,NM,lim,land,infTot,contTot,pid,close,entStart,st,lastDlv,debtMaturityMonth,checks:modelChecks,notices:modelNotices,vert:V,vst,vopen,vmonths:finalContractMonth-Math.min(...unitRecords.map(u=>u.contractMonth))+1,buaTot,buildBua:V?d.buildbua:0,buildTot:baseBuildTot,professionalTotal:professional,developmentManagementTotal:developmentManagement,designTot,permitTot:sum("permit"),vertTot:sum("vert1"),lag:V?Math.max(...products.map(p=>p.buildMonths)):d.dellag,revenue:sum("recog"),grossRevenue:sum("recog"),netRevenue:S("rev"),outputSut:sum("outputsut"),inputSutCredit:sum("sutrefund"),transferTax:xfertax,landSurcharge:landsurcharge,acqFeeCost:acqfee,acquisitionCost:acquisition,direct:S("dc"),gross:S("gp"),overhead:S("oh"),operatingOverhead:S("oh"),totalOperatingCost:S("totalOverhead"),finance:finTot,financeExpense:S("fin"),depreciation:S("da"),marketing:S("marketing"),realEstateTax:S("realEstateTax"),franchiseTax:S("franchise"),otherIncome:S("otherIncome"),npbt:S("npbt"),tax:S("tax"),cashTax:S("cashTax"),npat:S("npat"),margin:S("rev")?S("npat")/S("rev"):0,npv,irr:irr(R.net,12),eirr:irr(R.eqcf,12),eirrPreTax:irr(preTaxEquity.cf,12),eirrAfterTax:irr(R.eqcf,12),einjPreTax:preTaxEquity.inj,eretPreTax:preTaxEquity.ret,epeakPreTax:preTaxEquity.peak,pvl:land/Math.pow(1+rm,close),einj:inj,eret:ret,egain:ret-inj,epeak:peakEquity,epeakM:peakEquityMonth,liquidityPeak:peakEquity,cashEquityInjected:inj,cashEquityReturned:ret,moic:inj?ret/inj:0,peakdebt:Math.max(...R.lcl),loanEnd:R.lcl[NM],lots:L,fixovh:fixTot,escpeak:Math.max(...R.escbal),lastMonth,finBase,carry:sum("carry"),collections:sum("lsr"),finTot,ereqShare:finBase>0?peakEquity/finBase:0,finIncurred:finTot,interestReserve:reserve,operatingCommitment:debtResult.operatingCommit,facilityStart,financeCapitalised:sum("fincaprel"),financeCapitalisedIncurred:sum("fincapadd"),carryCapitalised:sum("retaxcaprel")+sum("hoacaprel")+sum("insurancecaprel"),actualBuild:sum("build"),actualDesign:sum("design"),actualPermit:sum("permit"),actualModel:sum("model"),landCogs:sum("landcogs"),conCogs:sum("concogs"),vertCogs:sum("vertcogs"),othCogs:sum("othcogs"),brokerCost:sum("sell")+sum("sellingexpense"),brokerCash:sum("sellcash"),depreciableCapex:sum("capex"),
+    /* infraCost/designCost/authorityCost were not real PL[y] keys - S() summed
+       undefined into NaN, and every consumer of these three totals coalesces
+       with ||0, so they silently read as zero everywhere (Excel P&L export,
+       Board PDF cost-mix chart) instead of throwing. designCost is now a real
+       PL[y] field (above); authority cost's real name is statutoryCost;
+       construction cost has no separate "infra-only" bucket to sum (the infra
+       allocation is already blended into constructionCost itself), so there
+       is nothing for a distinct pnlInfraCost to hold - it is dropped rather
+       than left pointing at nothing. */
+    pnlLandCost:S("landCost"),pnlDesignCost:S("designCost"),pnlAuthorityCost:S("statutoryCost"),pnlConstructionCost:S("constructionCost"),pnlCapitalisedFinanceCost:S("capitalisedFinanceCost"),pnlOtherDirectCost:S("otherDirectCost"),corporateTax:S("corporateTax"),
     pnlGna:S("gna"),pnlGnaShared:S("gnaShared"),pnlStaff:S("staff"),pnlStaffShared:S("staffShared"),pnlCorpOverhead:S("corpOverhead"),phaseSchedule,phaseMatrix:matrix,projectSales,contractCounts:ctr,settlementCounts:dlv,unitRecords};
 }
 /* Identical appraisals are reused across panes, parcel tabs and portfolio views.
@@ -6868,13 +7041,22 @@ function applyLagWrite(d,lagKey,delta){
   d.startYear=Math.floor(ai/12);d.startMonth=((ai%12)+12)%12+1;
   d[lagKey]=0;
 }
-const BUILDMO_DATE_CFG={durKey:"buildmo",startReadOnly:true,label:"Construction cost (vertical build)",
+/* Construction cost itself has no window any more - it lands in full at each
+   unit's own contract month (see the CONSTRUCTION COST IS INCURRED ON SALE
+   comment below). This picker times buildmo, the build/closing DURATION: Start
+   is a read-only preview of when the earliest phase's construction actually
+   begins, and End is editable - moving it changes buildmo, which shifts
+   delivery/closing dates, not the cost window. Labelled accordingly so it
+   cannot be misread as a cost start/end control. */
+const BUILDMO_DATE_CFG={durKey:"buildmo",startReadOnly:true,zeroBased:true,label:"Vertical build / closing duration",
   computeStart:d=>{try{const ps=run(d).phaseSchedule;if(ps&&ps[0]&&Number.isFinite(ps[0].start))return ps[0].start}catch(e){}return 1}};
 const DATE_RANGE_FIELDS={
   ddstart:   {durKey:"ddur",    label:"Due diligence"},
   sfstart:   {durKey:"sfdur",   lagKey:"lagsf",    label:"Soft cost"},
   otherstart:{durKey:"otherdur",lagKey:"lagother", label:"Other cost"},
-  infrastart:{durKey:"infradur",lagKey:"laginfra", label:"Infrastructure cost"},
+  /* Project-wide fallback only — every phase already has its own infrastructure
+     start/end (ph{n}infrastart/ph{n}infradur), which is where this is set. */
+  infrastart:{durKey:"infradur",lagKey:"laginfra", label:"Infrastructure cost",extraOff:()=>true},
   dsgnstart: {durKey:"dsgndur", lagKey:"lagdsgn",  label:"Design cost"},
   permstart: {durKey:"permdur", lagKey:"lagperm",  label:"Authority costs",
               extraOff:d=>Math.round(_num(d.permtiming,1))===1},
@@ -7012,8 +7194,8 @@ function phaseInfraWindow(d,ph){
 function _lagmodeOn(d){return !!Number(_num(d&&d._lagmode,1))}
 function renderPhaseInfraDateFields(g,ph,d){
   const startKey="ph"+ph+"infrastart",durKey="ph"+ph+"infradur";
-  [["start","infrastructure start (blank = project schedule)"],
-   ["end","infrastructure end (blank = project schedule)"]].forEach(([which,sub])=>{
+  [["start","infrastructure start"],
+   ["end","infrastructure end"]].forEach(([which,sub])=>{
     const id="i_"+(which==="start"?startKey:durKey);
     const row=document.createElement("div");row.className="f";
     row.innerHTML=`<label for="${id}">Phase ${ph} — ${sub}</label>${monthYearHtml(id)}<span class="u"></span>`;
@@ -7095,9 +7277,15 @@ function renderAutoSingleDateField(g,key,label,d,resolveAuto,zeroBased){
     if(monthYearGet(row)===""){d[key]=-1;buildForm();buildScaffold();showNav();render();return}
     const v=monthStrToOffset(monthYearGet(row),d);
     if(v==null){paint();return}
-    /* Never let a month at or before the model's own start fall through to -1,
-       which is this field's "not set" sentinel rather than a date. */
-    d[key]=B?Math.max(0,v-B):v;
+    /* Never let a picked month before the model's own start compute to a value
+       that collides with -1, this field's "not set" sentinel: clamp to the
+       earliest month this field's own convention can represent (0 for the
+       0-based R-index fields, 1 for salesy{n}start/end's 1-based offset)
+       instead of writing the raw negative value through. Otherwise the next
+       repaint reads it back as unset and silently blanks the field (or, for
+       salesy{n}start/end, falls back to the engine's own default placement)
+       rather than honouring "as early as possible." */
+    d[key]=Math.max(B?0:1,v-B);
     buildForm();buildScaffold();showNav();render();
   });
 }
@@ -7669,7 +7857,7 @@ function buildPhaseEditor(g){
      default on every phase) a phase keeps pooling into the single
      project-wide infrastructure window exactly as before. */
   renderPhaseInfraDateFields(g,ph,D);
-  addEditorRow(g,"ph"+ph+"infrapc","Phase "+ph+" \u2014 infrastructure cost share (blank = follows construction cost share)","% total infra cost");
+  addEditorRow(g,"ph"+ph+"infrapc","Phase "+ph+" \u2014 infrastructure cost share","% total infra cost");
   /* Whether THIS phase carries its own sales and cost terms - without this
      toggle on, the override fields below (and the per-phase sales terms
      above them) have no effect. */
@@ -7696,7 +7884,7 @@ function buildPhaseEditor(g){
   /* Phases take the project velocity, escalation, deposit and closing lag. */
   /* Optional: pin a particular product to a particular phase. Left at nil the
      products are spread across the phases in proportion to the mix. */
-  const psel=addEditorRow(g,"ui_phase_product","Pin a product to this phase (optional)","",{select:productOptions(APP.uiPhaseProduct)});
+  const psel=addEditorRow(g,"ui_phase_product","Pin a product (optional)","",{select:productOptions(APP.uiPhaseProduct)});
   psel.onchange=()=>{APP.uiPhaseProduct=Number(psel.value);buildForm()};
   const pp=APP.uiPhaseProduct;
   addEditorRow(g,"ph"+ph+"p"+pp,"Phase "+ph+" \u2014 product "+pp+" "+unitWord,"no.",{integer:true});
@@ -7844,17 +8032,35 @@ function buildFormCore(){
     lg.setAttribute("aria-expanded",openByDefault?"true":"false");
     lg.onclick=()=>{const shut=fs.classList.toggle("shut");lg.setAttribute("aria-expanded",String(!shut));updateCollapseInputsButton()};
     fs.appendChild(lg);
-    if(!sec.f.some(f=>fieldShown(f[0],!!D.vert)))return;
+    /* These three groups render through their own dedicated editor, which
+       never calls fieldShown - each decides its own field-by-field visibility
+       internally (buildGstEditor's sutmode/costsutbasis selectors, for one,
+       are always shown regardless of the group's individual fields' fieldShown
+       answers). The "does this group have anything to show" pre-check below
+       only knows about the generic per-field path, so when every field in a
+       custom-editor group happens to read false from fieldShown (as every
+       field in "Sales and use tax" now does, since csutrt/sutmode/etc. were
+       all moved into the hidden Set once buildGstEditor took over rendering
+       them), the pre-check wrongly concluded the whole section had nothing to
+       show and skipped it before buildGstEditor ever ran - the entire Sales
+       and Use Tax panel silently disappeared. Exempting these three groups
+       fixes that without changing what fieldShown means for anyone else. */
+    const CUSTOM_EDITOR_GROUPS=new Set(["Lot / unit mix and pricing","Phase programme and mix","Sales and use tax"]);
+    if(!CUSTOM_EDITOR_GROUPS.has(sec.g)&&!sec.f.some(f=>fieldShown(f[0],!!D.vert)))return;
     const g=document.createElement("div");g.className="grp";
     if(sec.g==="Lot / unit mix and pricing"){buildLotProductEditor(g);fs.appendChild(g);host.appendChild(fs);return}
     if(sec.g==="Phase programme and mix"){buildPhaseEditor(g);fs.appendChild(g);host.appendChild(fs);return}
     if(sec.g==="Sales and use tax"){buildGstEditor(g);fs.appendChild(g);host.appendChild(fs);return}
     if(sec.g==="Phase-by-product unit matrix (optional)")return;
     sec.f.forEach(([k,lab,unit,,t])=>{
-      /* close / landstart / facstart / facend are all 0-based R indices in the
-         engine, hence the trailing true - see renderSingleDateField. */
-      if(k==="close"){renderSingleDateField(g,"close","lagclose","Land closing / balance payment",D,true);return;}
-      if(k==="landstart"){renderAutoSingleDateField(g,"landstart","Land cost timing override",D,()=>{try{return applyLagTiming({...D,landstart:-1}).close}catch(e){return _num(D.close,0)}},true);return;}
+      /* landstart / facstart / facend are all 0-based R indices in the engine,
+         hence the trailing true - see renderAutoSingleDateField. close itself
+         is no longer rendered here - see the GROUPS comment beside it: picking
+         a date in this field now always pins landstart to an absolute month
+         (resolveAuto below previews the old delta-based fallback for as long
+         as landstart is left blank), so it can no longer drift when due
+         diligence timing changes later. */
+      if(k==="landstart"){renderAutoSingleDateField(g,"landstart","Land closing / balance payment month",D,()=>{try{return applyLagTiming({...D,landstart:-1}).close}catch(e){return _num(D.close,0)}},true);return;}
       if(k==="facstart"){renderAutoSingleDateField(g,"facstart","Facility start month",D,()=>{try{return Math.max(0,run(D).facilityStart)}catch(e){return _num(D.close,0)}},true);return;}
       if(k==="facend"){renderAutoSingleDateField(g,"facend","Facility end / required repayment month",D,()=>-1,true);return;}
       if(DATE_RANGE_DUR_KEYS.has(k)||DATE_RANGE_LAG_KEYS.has(k))return;
@@ -8027,7 +8233,7 @@ const NAV=[
  {id:"map",    lab:"MAP",         panes:[["map","Site intelligence"]]},
  {id:"stmt",   lab:"Statements",  panes:[["ppl","Project P&L"],["pl","Profit and loss"],["cf","Cashflow"],["monthly","Monthly engine"],["exp","Exposure"],["eqsch","Equity Schedule"],["salesov","Sales Overview"]]},
  {id:"sens",   lab:"Sensitivity", panes:[["sens","One driver"],["two","Two drivers"],["manual","Manual Inputs"]]},
- {id:"scn",    lab:"Manual Inputs",   panes:[["scn","Scenario lab"]]},
+ {id:"scn",    lab:"Scenario lab",   panes:[["scn","Scenario lab"]]},
  {id:"opt",    lab:"Optimiser",   panes:[["opt","Optimiser"]]},
  {id:"offer",  lab:"Land value",  panes:[["offer","Offer price"]]},
  {id:"port",   lab:"Consolidation", panes:[["cpl","Consolidated P&L"],["ccf","Consolidated cashflow"],["port","Project comparison"],["cexp","Exposure"],["ceqsch","Equity Schedule"],["csalesov","Sales Overview"]]},
@@ -8424,6 +8630,7 @@ function scheduleCashflowPrepaint(key){
 }
 function acceptContext(key,data){
   cacheSetLRU(_contextResults,key,data,12);cacheContextForPortfolio(key,data&&data.A);if(contextKey()!==key)return;
+  showModelNotices(data&&data.A&&data.A.notices);
   CTX=data;CTX_KEY=key;_contextPendingKey="";const rebuilt=!!_pendingScaffoldRebuild;
   if(rebuilt){buildScaffold();showNav();_pendingScaffoldRebuild=false}
   CONTEXT_PANES.forEach(id=>DIRTY[id]=true);const pane=activePane();
@@ -8484,6 +8691,20 @@ function showNav(){
 }
 function activePane(){return NAVSEL[NAVAT]||"verdict"}
 function modelErrorBox(){let err=document.getElementById("model_error");if(!err){err=document.createElement("div");err.id="model_error";err.className="goal miss";err.style.display="none";const panes=document.getElementById("panes");panes.parentNode.insertBefore(err,panes)}return err}
+/* Non-fatal auto-corrections (run() populates A.notices) surface here instead
+   of in modelErrorBox: they are the model telling the user what it changed on
+   their behalf, not asking them to fix an input before it can run at all. */
+function modelNoticeBox(){let box=document.getElementById("model_notice");if(!box){box=document.createElement("div");box.id="model_notice";box.className="goal";box.style.display="none";const err=modelErrorBox();err.parentNode.insertBefore(box,err.nextSibling)}return box}
+let _modelNoticeTimer=null;
+function showModelNotices(notices){
+  const box=modelNoticeBox();
+  clearTimeout(_modelNoticeTimer);
+  if(!notices||!notices.length){box.style.display="none";box.textContent="";return}
+  box.innerHTML="<b>Auto-adjusted:</b> "+notices.map(esc_).join(" ");
+  box.style.display="block";
+  _modelNoticeTimer=setTimeout(clearModelNotices,10000);
+}
+function clearModelNotices(){clearTimeout(_modelNoticeTimer);const box=modelNoticeBox();box.style.display="none";box.textContent=""}
 const CHECK_REASONS={
   noSalesBeforeLand:"a home would be sold before the land it stands on is bought",
   noDevelopmentBeforeLand:"work would start before the land is bought",
@@ -8498,7 +8719,8 @@ const CHECK_REASONS={
   unitsContracted:"the homes contracted no longer add up to the scheme",
   unitsDelivered:"the homes handed over no longer add up to the scheme",
   revenueRecognised:"revenue recognised no longer matches the sales booked",
-  collectionsEqualRevenue:"cash collected no longer matches revenue"
+  collectionsEqualRevenue:"cash collected no longer matches revenue",
+  noOperatingSpendAfterFinalSale:"a development cost (infrastructure, design, authority, construction or a similar spend window) is still scheduled after every unit has already sold — shorten that cost's own duration/start, or slow the sales velocity so the last sale doesn't land before development finishes"
 };
 function explainCheckFailure(raw){
   const m=/reconciliation failed:s*(.+)$/i.exec(String(raw||""));
@@ -8514,6 +8736,7 @@ function restoreInputs(){
     Object.keys(D).forEach(k=>{delete D[k]});Object.assign(D,v);return true}catch(e){return false}
 }
 function showModelError(e){
+  clearModelNotices();
   const err=modelErrorBox();err.style.display="block";
   /* An input check is guidance for the user; a TypeError is a defect in this
      file. Labelling them the same way, and dropping the frame that raised it,
@@ -8524,7 +8747,8 @@ function showModelError(e){
     const f=String(e.stack).split("\n").slice(1).find(l=>/:\d+:\d+/.test(l));
     if(f)where=" — "+f.trim().replace(/^at\s+/,"").replace(/\(?[^ (]*\/([^/]+:\d+:\d+)\)?$/,"$1");
   }
-  err.textContent=(internal?"Internal error: ":"Input check: ")+(e&&e.message?e.message:String(e))+where;
+  const rawMessage=e&&e.message?e.message:String(e);
+  err.textContent=(internal?"Internal error: ":"Input check: ")+(internal?rawMessage:explainCheckFailure(rawMessage))+where;
   try{console.error(e)}catch(_){}
   return false;
 }
@@ -9245,8 +9469,20 @@ function portfolioData(){
            R.sell/R.sellingexpense in run()) rather than a rate-split of one
            pooled figure - same fix as run()'s own PL[y] assignment. */
         brokerage:get("sell"),sellingCost:get("sellingexpense"),marketing:get("marketing"),capitalisedFinanceCost:get("fincaprel"),otherDirectCost:get("otherdirectcogs"),inputSutCredit:get("sutcogs"),
-        gna:get("gna")+get("hoaexppl")+get("hoacaprel"),gnaShared:get("gnashared"),staff:get("staff"),staffShared:get("staffshared"),corpOverhead:get("corpovh"),fin:get("pf")+get("intr")+get("lf"),da:get("da"),otherIncome:get("otherincome"),interestIncome:get("intincome")};
-      vals.capitalisedFinanceCost=0;
+        /* fin is finexp (the portion of finance cost never capitalised), matching
+           the single-parcel model's own PL[y].fin exactly - not the raw pf+intr+lf
+           incurred that month. Capitalised finance cost is released into dc later,
+           at settlement (fincaprel, capitalisedFinanceCost above), not when it was
+           first incurred. Using raw incurred here while also zeroing
+           capitalisedFinanceCost (as this used to do) recognises the whole cost in
+           the wrong fiscal year: verified on the seeded Homebuilder parcel, the old
+           code showed $2,246,757 of finance cost in FY2029 (the true figure is $0 -
+           every dollar was still capitalised, none released yet) and $0 in
+           FY2031-2033 (the true figures are $1.23M/$1.50M/$0.33M - exactly when it
+           actually released). The lifetime total happened to net to the same
+           number either way, which is what let this hide as "sums to zero at the
+           portfolio level" - true in total, false in every individual year. */
+        gna:get("gna")+get("hoaexppl")+get("hoacaprel"),gnaShared:get("gnashared"),staff:get("staff"),staffShared:get("staffshared"),corpOverhead:get("corpovh"),fin:get("finexp"),da:get("da"),otherIncome:get("otherincome"),interestIncome:get("intincome")};
       vals.dc=vals.landCost+vals.transferTax+vals.landSurcharge+vals.acqFeeCost+vals.acquisitionCost+vals.constructionCost+vals.professionalFees+vals.developmentManagementFees+vals.statutoryCost+vals.contingencyCost+vals.holdingCost+vals.brokerage+vals.sellingCost+vals.marketing+vals.capitalisedFinanceCost+vals.otherDirectCost+vals.inputSutCredit;
       vals.gp=vals.rev-vals.dc;vals.oh=vals.gna+vals.gnaShared+vals.staff+vals.staffShared+vals.corpOverhead;vals.totalOverhead=vals.oh+vals.fin+vals.da;vals.npbt=vals.gp-vals.oh-vals.fin-vals.da+vals.otherIncome+vals.interestIncome;
       Object.keys(vals).forEach(k=>PLM[k][i]+=vals[k]);
@@ -9370,7 +9606,7 @@ function renderDynamicCCF(){
     L("5.3","Corporate Tax",y=>sy(Q.CFM.cfrefcorporatetax,y)),
     L("7","Net Cash Flow",y=>sy(Q.CFM.cfrefnetcash,y),"res"),
     L("8","Debt Schedule",debt,"sub"),L("8.1","(-) Debt Raised",y=>sy(Q.CFM.cfrefdebt,y)+sy(Q.CFM.cfrefdebtfinance,y)),L("8.3","(+) Debt Repayment",y=>sy(Q.CFM.cfrefrepayment,y)),
-    ...(anyY(y=>sy(Q.CFM.depplaced,y)+sy(Q.CFM.depreturn,y))?[L("8.4","(+) Bank Deposit Placed",y=>sy(Q.CFM.depplaced,y)),L("8.5","(-) Deposit Returned",y=>-sy(Q.CFM.depreturn,y))]:[]),
+    L("8.4","(+) Bank Deposit Placed",y=>sy(Q.CFM.depplaced,y)),L("8.5","(-) Deposit Returned",y=>-sy(Q.CFM.depreturn,y)),
     L("9","Finance Costs",fin,"sub"),L("9.1","Processing Fee",y=>sy(Q.CFM.cfrefprocessing,y)),L("9.2","Interest",y=>sy(Q.CFM.cfrefinterest,y)),L("9.3","Line Fee",y=>sy(Q.CFM.cfreflifetime,y)),
     L("10","Equity Needed",y=>sy(Q.CFM.cfrefequity,y),"res"),L("11","Net Surplus",y=>sy(Q.CFM.cfrefsurplus,y),"res"),L("12","Profit (11 - 10)",y=>sy(Q.CFM.cfrefprofit,y),"res")
   ];
@@ -9385,7 +9621,7 @@ function renderDynamicCCF(){
     ["3","Development Costs",add(Q.CFM.cfrefconstruction,Q.CFM.cfrefprofessional,Q.CFM.cfrefdm,Q.CFM.cfrefstatutory,Q.CFM.cfrefcontingency),"sub"],["3.1","Due Diligence & Ancillary Fees",Q.CFM.cfrefduediligence],["3.2","Infrastructure Costs",Q.CFM.cfrefinfrastructure],["3.3","Design Costs",Q.CFM.cfrefdesigncost],["3.4","Construction Costs",Q.CFM.cfrefbuildcost],["3.5","Soft Costs",Q.CFM.cfrefsoftcost],["3.6","Authority & Statutory Costs",Q.CFM.cfrefstatutory],["3.7","Other Costs",add(Q.CFM.cfrefothercost,Q.CFM.cfrefcontingency,Q.CFM.cfrefdm)],
     ["4","Selling Costs",add(Q.CFM.cfrefbrokerage,Q.CFM.cfrefselling,Q.CFM.cfrefmarketing),"sub"],["4.1","Brokerage Costs",Q.CFM.cfrefbrokerage],["4.2","Selling Expenses",Q.CFM.cfrefselling],["4.3","Marketing & Advertising",Q.CFM.cfrefmarketing],
     ["5","Taxes",add(Q.CFM.cfrefholding,Q.CFM.cfreffranchisetax,Q.CFM.cfrefcorporatetax),"sub"],["5.1","Real Estate Property Tax",Q.CFM.cfrefholding],["5.2","Franchise Tax",Q.CFM.cfreffranchisetax],["5.3","Corporate Tax",Q.CFM.cfrefcorporatetax],["7","Net Cash Flow",Q.CFM.cfrefnetcash,"res"],["8","Debt Schedule",add(Q.CFM.cfrefdebt,Q.CFM.cfrefdebtfinance,Q.CFM.cfrefrepayment,Q.CFM.depplaced,neg(Q.CFM.depreturn)),"sub"],["8.1","(-) Debt Raised",add(Q.CFM.cfrefdebt,Q.CFM.cfrefdebtfinance)],["8.3","(+) Debt Repayment",Q.CFM.cfrefrepayment],
-    ...(anyA(add(Q.CFM.depplaced,Q.CFM.depreturn))?[["8.4","(+) Bank Deposit Placed",Q.CFM.depplaced],["8.5","(-) Deposit Returned",neg(Q.CFM.depreturn)]]:[]),
+    ["8.4","(+) Bank Deposit Placed",Q.CFM.depplaced],["8.5","(-) Deposit Returned",neg(Q.CFM.depreturn)],
     ["9","Finance Costs",add(Q.CFM.cfrefprocessing,Q.CFM.cfrefinterest,Q.CFM.cfreflifetime),"sub"],["9.1","Processing Fee",Q.CFM.cfrefprocessing],["9.2","Interest",Q.CFM.cfrefinterest],["9.3","Line Fee",Q.CFM.cfreflifetime],["10","Equity Needed",Q.CFM.cfrefequity,"res"],["11","Net Surplus",Q.CFM.cfrefsurplus,"res"],["12","Profit (11 - 10)",Q.CFM.cfrefprofit,"res"]
   /* A rounding residue prints as "$-0", which reads as a real negative. Anything
      under half a dollar is shown as zero. */
@@ -9545,15 +9781,36 @@ function _buildExcel(){
   const nf="'$#,##0'";
   t=`<table><tr><td style="${bn}" colspan="${fys.length+2}">Profit and Loss</td></tr>
     <tr><td style="${hd}">Sr</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
+  /* Rebuilt: the previous row list mixed a "2.2"/"2.8" pair that read the
+     identical constructionCost value twice, named a "2.6 Design & Supervision
+     Cost" that is really just the design slice of professionalFees (not a
+     term dc actually contains on its own), and never had a row at all for
+     transferTax, landSurcharge, acqFeeCost, acquisitionCost, professionalFees,
+     developmentManagementFees, contingencyCost, holdingCost, sellingCost,
+     marketing or inputSutCredit. Row 2 ("Direct Cost") is A.PL[y].dc, computed
+     independently of this display list, so none of that changed what the
+     total said - only what its own listed children added up to (previously
+     off by several million dollars, per QA). Every row below is now one of
+     dc's own constituent terms (see the dc= assignment in _runUncached), each
+     exactly once, so 2.1-2.17 sum to row 2 by construction, not by luck. */
   const pl=[["1","Total Revenue",y=>A.PL[y].rev,gr],
-    ["2.1","Land Cost",y=>A.PL[y].landCost],
-    ["2.2","Construction Cost",y=>A.PL[y].infraCost],
-    ["2.6","Design & Supervision Cost",y=>A.PL[y].designCost],
-    ["2.7","Authority Costs",y=>A.PL[y].authorityCost],
-    ["2.8","Construction Costs (incl. builder risk insurance)",y=>A.PL[y].constructionCost],
-    ["2.9","Capitalised Finance Cost Released",y=>A.PL[y].capitalisedFinanceCost],
-    ["2.10","Other Direct Cost — explicit manual input only",y=>A.PL[y].otherDirectCost],
-    ["2.11","Brokerage & Incentive",y=>A.PL[y].brokerage],
+    ["2.1","Land Purchase Cost",y=>A.PL[y].landCost],
+    ["2.2","Transfer and Recording Tax",y=>A.PL[y].transferTax],
+    ["2.3","Title Insurance and Escrow Fees",y=>A.PL[y].landSurcharge],
+    ["2.4","Survey, Environmental and Appraisal",y=>A.PL[y].acqFeeCost],
+    ["2.5","Acquisition and Other Costs",y=>A.PL[y].acquisitionCost],
+    ["2.6","Construction Cost",y=>A.PL[y].constructionCost],
+    ["2.7","Professional Fees (Due Diligence, Soft Cost & Design)",y=>A.PL[y].professionalFees],
+    ["2.8","Development Management Fee",y=>A.PL[y].developmentManagementFees],
+    ["2.9","Authority Costs",y=>A.PL[y].statutoryCost],
+    ["2.10","Project Contingency",y=>A.PL[y].contingencyCost],
+    ["2.11","Land Holding Costs",y=>A.PL[y].realEstateTax],
+    ["2.12","Capitalised Finance Cost Released",y=>A.PL[y].capitalisedFinanceCost],
+    ["2.13","Other Direct Cost — explicit manual input only",y=>A.PL[y].otherDirectCost],
+    ["2.14","Brokerage & Incentive",y=>A.PL[y].brokerage],
+    ["2.15","Selling / Closing Expenses",y=>A.PL[y].sellingCost],
+    ["2.16","Marketing and Advertising",y=>A.PL[y].marketing],
+    ["2.17","Less: Recoverable Sales and Use Tax",y=>A.PL[y].inputSutCredit],
     ["2","Direct Cost",y=>A.PL[y].dc,gr],["3","Gross Profit",y=>A.PL[y].gp,gn],
     ["4.1.a","Project G&A Expenses",y=>A.PL[y].gna],
     ["4.1.b","Shared-service G&A Allocation",y=>A.PL[y].gnaShared],
@@ -9562,7 +9819,12 @@ function _buildExcel(){
     ["4.3","Corporate Overhead Allocation",y=>A.PL[y].corpOverhead],
     ["4","Overhead Cost",y=>A.PL[y].oh,gr],
     ["5","Finance Cost Expensed (post-completion / non-capitalisable)",y=>A.PL[y].fin],["6","Depreciation & Amortization",y=>A.PL[y].da],
-    ["7","Marketing & Selling Expenses",y=>A.PL[y].marketing],["8","Land Holding Costs",y=>A.PL[y].realEstateTax],
+    /* Marketing (2.16) and Land Holding Costs (2.11) already appear once,
+       under Direct Cost, where the engine actually counts them (dc, hence
+       gp and npbt). They used to repeat here, sitting right before "Total
+       Operating Cost" as if included in it - but totalOverhead is oh+fin+da
+       only, so the repeat was never in that total either: a pure double
+       display with no total that ever depended on it. */
     ["10","Total Operating Costs",y=>A.PL[y].totalOverhead,gr],
     ["11","Other Income",y=>A.PL[y].otherIncome],["12","Net Profit Before Taxes",y=>A.PL[y].npbt,gn],
     ["13.1","Corporate Income Tax",y=>A.PL[y].corporateTax],["13.2","Franchise Tax",y=>A.PL[y].franchise],
@@ -9575,10 +9837,23 @@ function _buildExcel(){
   /* Cashflow */
   const cfMonthsByYear={};fys.forEach(y=>cfMonthsByYear[y]=[]);
   for(let m=0;m<=A.NM;m++){const y=fyOf(m,d);if(cfMonthsByYear[y])cfMonthsByYear[y].push(m)}
+  /* cashtotal, not the narrower cash: this sheet's inflow/outflow rows
+     (escin, depreturn/depplaced included) are the same terms the engine's own
+     cashflowStatementCheck rolls forward against cashtotal, not cash - proven
+     by direct calculation (max roll-forward gap ~1e-8 on both fixtures with
+     cashtotal vs. a multi-million-dollar gap when cash was tried instead).
+     The on-screen Project Cash Flow tab computes its own, narrower operating-
+     only roll-forward from a different row list and correctly lands on cash;
+     the two are answering different questions (with vs. without escrow held)
+     and are each internally consistent on their own basis. */
   const cfOpen={},cfClose={};fys.forEach(y=>{const ms=cfMonthsByYear[y],first=ms[0],last=ms[ms.length-1];cfOpen[y]=first>0?(A.R.cashtotal[first-1]||0):0;cfClose[y]=A.R.cashtotal[last]||0});
   const cfDepIn=y=>Number((A.B.depreturn&&A.B.depreturn[y])||0),cfDepOut=y=>Number((A.B.depplaced&&A.B.depplaced[y])||0);
-  const cfIn=y=>A.B.cfequity[y]+A.B.cfdebtraised[y]+A.B.salescash[y]+A.B.escin[y]+A.B.cfsutrefund[y]+A.B.pid[y]+A.B.cfotherincome[y]+cfDepIn(y);
-  const cfOut=y=>A.B.cfland[y]+A.B.cfinfra[y]+A.B.cfpiddebt[y]+A.B.cfcapex[y]+A.B.cfconstruction[y]+A.B.cfdesign[y]+A.B.cfauthority[y]+A.B.cfbrokerage[y]+A.B.cfretax[y]+A.B.cfohpaid[y]+A.B.cfoutputsut[y]+A.B.cftaxpaid[y]+A.B.cffinance[y]+A.B.cfdebtrepaid[y]+cfDepOut(y);
+  /* Must match the engine's own cashflowStatementCheck inflow/outflow terms
+     exactly (R.cfinterestincome and R.cfinputsutpaid were missing here, so
+     this sheet never footed - the gap was always exactly that year's
+     interest income / input SUT paid). */
+  const cfIn=y=>A.B.cfequity[y]+A.B.cfdebtraised[y]+A.B.salescash[y]+A.B.escin[y]+A.B.cfsutrefund[y]+A.B.pid[y]+A.B.cfotherincome[y]+A.B.cfinterestincome[y]+cfDepIn(y);
+  const cfOut=y=>A.B.cfland[y]+A.B.cfinfra[y]+A.B.cfpiddebt[y]+A.B.cfcapex[y]+A.B.cfconstruction[y]+A.B.cfdesign[y]+A.B.cfauthority[y]+A.B.cfbrokerage[y]+A.B.cfretax[y]+A.B.cfohpaid[y]+A.B.cfoutputsut[y]+A.B.cfinputsutpaid[y]+A.B.cftaxpaid[y]+A.B.cffinance[y]+A.B.cfdebtrepaid[y]+cfDepOut(y);
   t=`<table><tr><td style="${bn}" colspan="${fys.length+3}">Project Cashflow Statement — Net Equity Funding</td></tr>
     <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
   const addCf=(sr,lab,fn,style=st,totalFn=null)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>`+
@@ -9592,7 +9867,8 @@ function _buildExcel(){
   addCf("4","Collection in Escrow",y=>A.B.escin[y]);
   addCf("5.1","Other Reimbursement",y=>A.B.pid[y]);
   addCf("5.2","Other Cash Income",y=>A.B.cfotherincome[y]);
-  if(fys.some(y=>Math.abs(cfDepIn(y))>.5))addCf("5.3","Deposit Returned",cfDepIn);
+  addCf("5.3","Deposit Returned",cfDepIn);
+  addCf("5.4","Interest Income",y=>A.B.cfinterestincome[y]);
   addCf("","Total Cash Inflows",cfIn,gr);
   t+=`<tr><td style="${bn}">C</td><td style="${bn}" colspan="${fys.length+2}">Cash Outflows</td></tr>`;
   addCf("6","Land Cost",y=>A.B.cfland[y]);
@@ -9606,10 +9882,11 @@ function _buildExcel(){
   addCf("13","Land Holding Costs",y=>A.B.cfretax[y]);
   addCf("14","OH Paid",y=>A.B.cfohpaid[y]);
   addCf("14.1","Transaction tax on sales paid",y=>A.B.cfoutputsut[y]);
+  addCf("14.2","Input sales and use tax paid",y=>A.B.cfinputsutpaid[y]);
   addCf("15","Tax Paid",y=>A.B.cftaxpaid[y]);
   addCf("16","Finance Cost",y=>A.B.cffinance[y]);
   addCf("17","Debt Repaid",y=>A.B.cfdebtrepaid[y]);
-  if(fys.some(y=>Math.abs(cfDepOut(y))>.5))addCf("17.1","Bank Deposit Placed",cfDepOut);
+  addCf("17.1","Bank Deposit Placed",cfDepOut);
   addCf("","Total Project Outflows",cfOut,gr);
   addCf("D","Closing Cash Balance",y=>cfClose[y],gn,Math.round(cfClose[fys[fys.length-1]]));
   sheets.push(["Cashflow",t+`</table>`]);
@@ -10601,7 +10878,7 @@ function initCollapsibleInputRail(){
     acresGross:"Gross area",_acresNet:"Net area",buildbua:"Building area / GFA",pr:"Land price",prmode:"Land price basis",_land:"Land consideration",_densG:"Gross density",_dens:"Net density",
     nprod:"Product types",pidx:"Price index",_lots:"Total lots / units",_frontft:"Total frontage",_lotsqft:"Total saleable lot area",_rev0:"Gross sales value",_avgp:"Avg sale value",
     startMonth:"Start month",startYear:"Start year",fyEnd:"FY end month",ddur:"Due diligence spend period",ddend:"Due diligence complete",landdepmonth:"Deposit payment",close:"Closing payment",closingmonth:"Closing-cost payment month",entdur:"Approval duration",_ent:"Approval complete",nph:"Phases",phm:"Default phase duration",_cstart:"Construction start",
-    landsut:"Sales / transfer tax on land",landdepo:"Deposit on contract",landdeposit:"Deposit as a fixed amount",_landdepositamt:"Effective deposit amount",landpaycount:"Number of interim payments",landpaystart:"First interim payment",landpaygap:"Interim payment interval",_landpresettlementamt:"Total paid before settlement",_landbalanceamt:"Final closing balance",xfertaxmode:"Transfer tax basis",xfertaxfixed:"Transfer and recording tax",xfertaxrt:"Transfer tax rate",landsurchargert:"Title insurance and escrow fees",acqfeefixed:"Survey, environmental and appraisal",acquisitionfee:"Acquisition fee",otheracq:"Other acquisition costs",ddpc:"Due diligence",_ddamt:"DD amount",landcurve:"Land payment profile",landdur:"Payment duration",closingpc:"Title, escrow & legal",rollback:"Rollback tax & other",otherdirect:"Other direct cost",allocbasis:"Cost allocation basis",
+    landsut:"Sales / transfer tax on land",landdepo:"Land deposit",landdeposit:"Deposit as a fixed amount",_landdepositamt:"Effective deposit amount",landpaycount:"Number of interim payments",landpaystart:"First interim payment",landpaygap:"Interim payment interval",_landpresettlementamt:"Total paid before settlement",_landbalanceamt:"Final closing balance",xfertaxmode:"Transfer tax basis",xfertaxfixed:"Transfer and recording tax",xfertaxrt:"Transfer tax rate",landsurchargert:"Title insurance and escrow fees",acqfeefixed:"Survey, environmental and appraisal",acquisitionfee:"Acquisition fee",otheracq:"Other acquisition costs",ddpc:"Due diligence",_ddamt:"DD amount",landcurve:"Land payment profile",landdur:"Payment duration",closingpc:"Title, escrow & legal",rollback:"Rollback tax & other",otherdirect:"Other direct cost",allocbasis:"Cost allocation basis",
     buildpsf:"Build cost / BUA",_infra:"Infrastructure cost",contpc:"Contingency",contfixed:"Fixed contingency",_cont:"Contingency amount",infesc:"Infrastructure cost escalation",infracurve:"Infrastructure spend profile",
     softmode:"Soft-cost input method",softbase:"Soft-cost basis",sfpc:"Soft cost",dmpc:"Dev. management",sfengpc:"Engineering",sfarchpc:"Design",sfplanpc:"Planning / approvals",sfcostpc:"Cost consultant / QS",sflegalpc:"Legal / commercial",sfdmpc:"Dev. management",sfotherpc:"Other soft cost",_profpc:"Soft cost rate",_dmpc:"Dev. management rate",_softpc:"Total soft-cost rate",_prof:"Soft cost",_dm:"Dev. management fee",_soft:"Total soft cost",
     infrastructurecharge:"Impact fees — roadway, water, wastewater",dafees:"Plan review and platting fees",certifierfees:"Building permit and inspection fees",referralfees:"Municipal review and referral fees",qleave:"Park, school and open-space fees",munic:"Total statutory costs",
@@ -11079,11 +11356,18 @@ try{buildForm();if(typeof paintCalc==='function')paintCalc();compactRenderedInpu
         inputSutCredit=sy("inputSutCredit",y),
         /* Capitalised Finance Cost Released is finance cost, not an other
            cost - see financeCost below, same reclassification as the
-           per-project P&L (projectPlData above). It sums to zero at the
-           portfolio level today (portfolioData()'s PLM build zeroes
-           vals.capitalisedFinanceCost per-parcel), so this move has no
-           numeric effect on the Consolidated P&L yet, only on the per-parcel
-           statement. */
+           per-project P&L (projectPlData above). portfolioData()'s PLM build
+           used to zero vals.capitalisedFinanceCost per-parcel (relying on
+           vals.fin's raw pf+intr+lf incurred-that-month figure to cover it
+           instead) - that made this move a numeric no-op, but it also front-
+           loaded every dollar of finance cost into the year it was incurred
+           rather than the year it actually releases into cost of sales,
+           misstating individual fiscal years by up to several million dollars
+           even though the lifetime total happened to net out. Now that
+           vals.fin reads finexp and vals.capitalisedFinanceCost is the real
+           released figure (both matching the single-parcel model exactly),
+           this reclassification has the intended numeric effect on the
+           Consolidated P&L, not just the per-parcel statement. */
         capitalisedFinanceCost=sy("capitalisedFinanceCost",y),
         otherCostsOther=developmentManagementFees+designCost+contingencyCost+otherDirectCostManual+inputSutCredit,
         otherDirectCost=dueDiligence+softCosts+statutoryCosts+otherCostsOther;
@@ -11887,6 +12171,14 @@ function toast(text,ms=1800){
   clearTimeout(AM.timers.toast);
   AM.timers.toast=setTimeout(()=>{t.classList.remove("on");t.style.display="none"},ms);
 }
+/* This whole file is one IIFE per <script> block, so toast() - despite the
+   comment above it already documenting "any tab" as a caller - stayed private
+   to this one. Every other script block's callers (Resync push/pull, on the
+   Inputs rail) guard with toast&&toast(...) precisely because typeof toast
+   was "undefined" there, so the confirmation silently never showed and the
+   guard's own reference read threw instead. Exporting it is the fix - the
+   function itself already does not depend on anything Map-tab-specific. */
+window.toast=toast;
 /* An instruction with nothing to instruct is clutter, so an empty hint hides
    rather than sitting there as an empty box. */
 function hint(text){
@@ -16764,14 +17056,19 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     return {pages,finish,page,rect,line,text,textBlock,card,miniTable,hbarChart,lineBarChart,drawTable,setY:v=>{y=v},getY:()=>y};
   }
   /* bpPlRows/cashFlowRowDefs-shaped rows read [sr,label,...middle,total] - the
-     on-screen tables (tbl() with the "totalfirst" class) already move that
-     trailing total to sit right after label; PDF tables built directly
-     (plTable/cashTable/board PDF) need the same lift so Sl.No/Particulars/
-     Total/%-of-Revenue/years matches what's on screen instead of leaving
-     Total last where a header/row cell-count mismatch silently drops it. */
-  /* PDF column order now matches the on-screen HTML table exactly (Total last,
-     same as tbl()'s own header order) rather than pulling Total/% to the front. */
-  function liftTotalFirst(arr){return arr}
+     on-screen tables (tbl() with the "totalfirst" class, see its own `lift`
+     helper) already move that trailing total to sit right after label; PDF
+     tables built directly (plTable/cashTable/board PDF) need the exact same
+     lift so Sl.No/Particulars/Total/%-of-Revenue/years matches what's on
+     screen (2026-09-10: restored - had been left as a no-op on the mistaken
+     premise that tbl()'s own header order leaves Total last, when tbl()'s
+     "totalfirst" class already moves it for every on-screen statement). */
+  function liftTotalFirst(arr){
+    if(!Array.isArray(arr)||arr.length<4)return arr;
+    const a=arr.slice(),total=a.pop();
+    a.splice(2,0,total);
+    return a;
+  }
   /* This script block is an IIFE - board-pdf-export-runtime (a separate block)
      also needs this for its own P&L/Cashflow tables, so it must be reached via
      window like every other cross-block helper here (projectPlData,
@@ -16829,17 +17126,24 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     years.forEach(y=>{openingOf[y]=openRun;openRun+=totalInflows(y)-totalOutflows(y);closingOf[y]=openRun});
     const opening=y=>openingOf[y]||0,closing=y=>closingOf[y]||0;
     return [
-      ["","Homes Sold",y=>b("ctr",y),"",true],
+      ["","Units Sold",y=>b("ctr",y),"",true],
+      ["","Net Qualified Sales",y=>b("sval",y),""],
       ["A","Opening Balance",opening,"sub",false,true],
       ["B","Cash Inflows",()=>0,"sub"],
       ["1","Collections from Sale",salesRevenue],
       ["2","Interest Income",interestIncome],
       ...(anyY(otherIncome)?[["3","Other Income",otherIncome]]:[]),
+      /* sutRecovered was already summed into operatingInflow with no row of
+         its own, so "a" would not foot to its visible children whenever a
+         sales-and-use-tax refund is non-zero - same class of gap as the
+         already-documented "Other Costs" subtotal, just previously
+         undocumented and unlabelled here. */
+      ...(anyY(sutRecovered)?[["4","Sales and Use Tax Recovered",sutRecovered]]:[]),
       ["a","Operating Cash Inflows",operatingInflow,"sub"],
       ["5","Equity Infused",equityInfused],
       ["b","Promoter's Inflow",equityInfused,"sub"],
       ["6","Debt Raised",y=>debtRaised(y)+debtRaisedToService(y)],
-      ...(anyY(depositReturned)?[["7","Deposit Returned",depositReturned]]:[]),
+      ["7","Deposit Returned",depositReturned],
       ["c","Loans & Borrowings",loans,"sub"],
       ["I","Total Cash Inflows",totalInflows,"res"],
       ["C","Cash Outflows",()=>0,"sub"],
@@ -16863,7 +17167,7 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
       ["16","Line Fee",y=>b("lf",y)],
       ["c","Total Interest & Other Payments",interestAndFees,"sub"],
       ["17","Debt Repaid",debtRepaid],
-      ...(anyY(depositPlaced)?[["17.1","Bank Deposit Placed",depositPlaced]]:[]),
+      ["17.1","Bank Deposit Placed",depositPlaced],
       ["d","Total Debt Payments",debtPayments,"sub"],
       ...(anyY(equityDistributed)?[["18","Equity Distributed",equityDistributed],["e","Total Equity Distributions",equityDistributed,"sub"]]:[]),
       ["II","Total Cash Outflows",totalOutflows,"res"],
@@ -16879,7 +17183,7 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
        balance, matching how the statement's own D row reads as "where things
        stand at the end". */
     const rows=cashFlowRowDefs(b,fys).map(([ref,label,fn,kind,isCount,isBal])=>{
-      const f=isCount?M0:money,vals=fys.map(fn);
+      const f0=isCount?M0:money,f=v=>f0(v),vals=fys.map(fn);
       return {kind,cells:liftTotalFirst([ref,label,...vals.map(f),f(isBal?vals[vals.length-1]:vals.reduce((a,v)=>a+v,0))])};
     });
     return{title:"Project Cash Flow Statement",headers:liftTotalFirst(["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"]),rows,foot:""}
@@ -16978,19 +17282,34 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
      straight off the live pane the same way pl/cf already are here, so a
      change to those tabs' own rendering is automatically reflected in every
      export without a second definition to keep in sync. */
-  function extraStatementTables(){
+  /* paintPane("exp")/("eqsch") etc. render through the shared, cached active
+     context (ctx()) rather than the A/d already in hand here - if that cache
+     is not yet warm (or reflects a different parcel/edit than what buildReport
+     just computed fresh for plTable/cashTable), the pane silently schedules an
+     async recompute and returns without rendering anything, so the borrowed
+     table can come back missing its last column or empty outright. Rendering
+     each statement straight into a detached scratch node with the exact A/d
+     this report is already using sidesteps that cache entirely - always
+     correct regardless of what the on-screen tabs have or have not painted. */
+  function renderFreshTable(fn,hostId,title,A,d){
+    const div=document.createElement("div");div.id=hostId;div.style.cssText="position:absolute;left:-9999px;top:-9999px";
+    document.body.appendChild(div);
+    try{fn({A,d},div.id)}catch(e){}
+    const t=tableFromNode(div,title);
+    div.remove();
+    return t;
+  }
+  function extraStatementTables(A,d){
     const out=[];
-    const add=(node,title)=>{const t=tableFromNode(node,title);if(t)out.push(t)};
-    add(paintPane("exp"),"Exposure Statement");
-    add(paintPane("eqsch"),"Equity Schedule");
+    const t1=renderFreshTable(window.renderExposureStatement,"o_exp_pdf","Exposure Statement",A,d);if(t1)out.push(t1);
+    const t2=renderFreshTable(window.renderEquitySchedule,"o_eqsch_pdf","Equity Schedule",A,d);if(t2)out.push(t2);
     return out;
   }
   function statementSections(A,d){
     const out=[plTable(A,d),cashTable(A,d)];
-    const add=(node,title)=>{const t=tableFromNode(node,title);if(t)out.push(t)};
-    add(paintPane("pl"),"Profit and Loss");
-    add(paintPane("cf"),"Cashflow");
-    out.push(...extraStatementTables());
+    const t3=renderFreshTable(window.renderProjectPl,"o_pl_pdf","Profit and Loss",A,d);if(t3)out.push(t3);
+    const t4=renderFreshTable(renderProjectCashflow,"o_cf_pdf","Cashflow",A,d);if(t4)out.push(t4);
+    out.push(...extraStatementTables(A,d));
     /* The consolidated panes lead with a "Selected project timelines" block, so
        the adapter was lifting that three-row summary instead of the statement
        and printing two pages of project dates. Dropped on request; restoring
@@ -17017,7 +17336,7 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
     pages.rect(620,375,515,120,C.white,C.grid);pages.rect(620,375,515,22,C.blue,C.grid);pages.text(628,382,"Report Scope",7.4,true,C.text);pages.textBlock(630,410,490,"This restarted report is active-project only. It removes the raw input appendix and the consolidated/portfolio schedules, then adds derived project output, financial analysis, scenarios, sensitivity, annual statements and monthly appendices.",7,9,false,C.muted);
     const b=(k,y)=>num(A.B[k]&&A.B[k][y]),years=(A.fys||[]).filter(y=>Math.abs(b("net",y))+Math.abs((A.PL[y]||{}).rev)>0.5),bars=years.map(y=>b("net",y));let cr=0,cum=bars.map(v=>cr+=v);
     pages.page("Cashflow Context");pages.text(SIDE,48,"Project cashflow, funding and programme context",12,true,C.text);pages.text(SIDE,67,title(),8.6,true,C.navy);pages.lineBarChart(SIDE,100,700,320,"Annual net cash flow and cumulative position",years.map(y=>"FY "+String(y).slice(-2)),bars,cum);pages.miniTable(790,100,330,"Cashflow Indicators",[["Peak debt",money(A.peakdebt)],["Equity required",money(A.epeak)],["Total equity injected",money(A.cashEquityInjected)],["Total cash returned",money(A.cashEquityReturned)],["Interest reserve",money(A.interestReserve)],["Escrow peak",money(A.escpeak)]]);
-    pages.drawTable(productTable(A,d));pages.drawTable(phaseTable(A,d));pages.drawTable(scenariosTable(A,d));pages.drawTable(sensitivityTable(A,d));tables.forEach(t=>pages.drawTable(t));extraStatementTables().forEach(t=>pages.drawTable(t));monthlyTables(A,d).forEach(t=>pages.drawTable(t));pages.finish();return buildPdf(pages.pages)
+    pages.drawTable(productTable(A,d));pages.drawTable(phaseTable(A,d));pages.drawTable(scenariosTable(A,d));pages.drawTable(sensitivityTable(A,d));tables.forEach(t=>pages.drawTable(t));extraStatementTables(A,d).forEach(t=>pages.drawTable(t));monthlyTables(A,d).forEach(t=>pages.drawTable(t));pages.finish();return buildPdf(pages.pages)
   }
   async function download(builder,name){
     const btn=document.activeElement,old=btn&&btn.tagName==="BUTTON"?btn.textContent:"";
@@ -17219,7 +17538,7 @@ async function _boardPdfAnalytics(snapshot,meta){
   const out={A,d,ask,be,hurd,be25,noPid,breakers,scenarios,tornado,meta};if(sig!=null)cacheSetLRU(_boardPdfAnalyticsCache,sig,out,12);return out
 }
 function _boardPdfCostData(A){
-  const land=A.pnlLandCost||0,construction=(A.pnlInfraCost||0)+(A.pnlConstructionCost||0),design=(A.pnlDesignCost||0)+(A.pnlAuthorityCost||0),selling=(A.pnlOtherDirectCost||0)+(A.brokerCost||0),below=(A.totalOperatingCost||0)+(A.corporateTax||0);return [{name:"Land and acquisition",v:land},{name:"Construction and development",v:construction},{name:"Design and authority",v:design},{name:"Selling and other direct",v:selling},{name:"Overhead, finance and tax",v:below}]
+  const land=A.pnlLandCost||0,construction=A.pnlConstructionCost||0,design=(A.pnlDesignCost||0)+(A.pnlAuthorityCost||0),selling=(A.pnlOtherDirectCost||0)+(A.brokerCost||0),below=(A.totalOperatingCost||0)+(A.corporateTax||0);return [{name:"Land and acquisition",v:land},{name:"Construction and development",v:construction},{name:"Design and authority",v:design},{name:"Selling and other direct",v:selling},{name:"Overhead, finance and tax",v:below}]
 }
 function _boardPdfYearsData(A){
   const activity=y=>{const p=A.PL[y]||{};return Math.abs(p.rev||0)+Math.abs(p.dc||0)+Math.abs(p.oh||0)+Math.abs(p.fin||0)+Math.abs(p.corporateTax||0)+Math.abs((A.B.eqin||{})[y]||0)+Math.abs((A.B.eqout||{})[y]||0)};
@@ -18795,6 +19114,14 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
       const a=(Ah.PL&&Ah.PL[y])||{},b=(Av.PL&&Av.PL[y])||{},o={};
       new Set(Object.keys(a).concat(Object.keys(b))).forEach(function(k){o[k]=num(a[k])+num(b[k])});
       o.rev=num(o.rev)-num(saleByFy[y]);
+      /* rev (net of output SUT) was eliminated but grossRev never was, so
+         exposureEquityData's receivables tracking (cumRevRecog += grossRev)
+         still carried the full uneliminated intercompany sale forever - the
+         Balance Check broke from the seller's first fiscal year onward and
+         never recovered, even at wind-up. saleByFy is already sourced from
+         Ah.B.recog, the exact series PL[y].grossRev is itself built from, so
+         this is the same elimination as the rev line above. */
+      o.grossRev=num(o.grossRev)-num(saleByFy[y]);
       o.dc=num(o.dc)-num(landByFy[y]);
       PL[y]=o;
     });
@@ -18925,12 +19252,31 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     let cIn=0,cOut=0,cPat=0;
     const allRows=allFys.map(y=>{
       const map=(S&&S.map[y])||{};
-      cumDevCash+=n(map.directCost)+n(map.financeCost);
-      cumDevRecog+=pl("dc",y)+pl("fin",y);
+      /* directCost's own inputSutCredit term is deliberately matched to revenue
+         recognition timing (see the comment beside it in
+         projectPlDataForExports), not to cash - correct for that export, but
+         this roll-up needs the cash actually paid/refunded that year instead,
+         or inv drifts mid-life by the gap between the two (it self-corrects by
+         the final year, since both bases sum to the same lifetime total -
+         verified against the seeded Landowner + inputsut=5: 548,999.99 vs
+         549,000 over the life - so only the year-by-year allocation changes,
+         not the total). */
+      cumDevCash+=n(map.directCost)-n(map.inputSutCredit)+b("cfinputsutpaid",y)-b("cfsutrefund",y)+n(map.financeCost);
+      /* da (depreciation expense) is recognised in totalOverhead, not dc/fin,
+         so without it here the capex cash above never gets released as it
+         depreciates - inv would carry the full undepreciated amount forever,
+         even past a fully wound-up project with everything else at zero. */
+      cumDevRecog+=pl("dc",y)+pl("fin",y)+pl("da",y);
       const inv=cumDevCash-cumDevRecog;
       cumTaxAccr+=pl("tax",y);cumTaxCash+=b("taxm",y);
       const taxPayable=cumTaxAccr-cumTaxCash;
-      cumRevRecog+=pl("rev",y);cumCashCollected+=b("lsr",y);
+      /* grossRev, not rev (net of output SUT): lsr is gross cash collected
+         (collectionsEqualRevenue ties sum(lsr) to sum(recog)/grossRev, not to
+         net revenue), so comparing it against net revenue permanently
+         understated recv by exactly the output SUT collected - never
+         self-correcting, since output SUT is real cash that came in but was
+         never counted as recognised revenue on either side of this line. */
+      cumRevRecog+=pl("grossRev",y);cumCashCollected+=b("lsr",y);
       const recv=cumRevRecog-cumCashCollected;
       const eqIn=b("eqin",y),eqOut=b("eqout",y),pat=pl("npat",y);
       cIn+=eqIn;cOut+=eqOut;cPat+=pat;
@@ -18979,7 +19325,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     const homesSold=years.map(y=>n(A.B&&A.B.ctr&&A.B.ctr[y]));
     const anyDep=rows.some(r=>Math.abs(r.dep)>.5);
     const out=[
-      {cls:"",c:["","Homes Sold",...homesSold.map(v=>M0(v))]},
+      {cls:"",c:["","Units Sold",...homesSold.map(v=>M0(v))]},
       {band:"Assets"},
       line("1","Corporate Cash",rows.map(r=>r.cash)),
       line("2","Escrow Cash (Restricted)",rows.map(r=>r.esc)),
@@ -19085,6 +19431,11 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
   CONTEXT_PANES.add("exp");CONTEXT_PANES.add("eqsch");CONTEXT_PANES.add("salesov");
   PANE.exp=function(C,hostId){renderExposureStatement(C,hostId);return true};
   PANE.eqsch=function(C,hostId){renderEquitySchedule(C,hostId);return true};
+  /* Needed outside this closure by statementSections/extraStatementTables
+     (board-pdf-export-runtime), which render these two straight into a fresh
+     scratch node rather than through the shared paintPane/ctx() cache. */
+  window.renderExposureStatement=renderExposureStatement;
+  window.renderEquitySchedule=renderEquitySchedule;
   PANE.salesov=function(C,hostId){renderSalesOverview(C,hostId);return true};
 
   /* ---- Manual Inputs: year-by-year sales velocity + intercompany payment ---- */
