@@ -1,3 +1,32 @@
+/* One-time data fixes for rows that already exist.
+
+   Three separate scripts, kept together because they share a shape and a reason.
+   Each corrects a value in a row the seed cannot reach: the seed's inserts are
+   guarded by IF NOT EXISTS on the id, so re-running a seed against a database
+   that already holds the row is a no-op and will not touch what is there. The
+   seed carries the corrected value for a FRESH database; these files are what
+   fix an existing one.
+
+   All three are idempotent - each sets an absolute value - so running this on a
+   database that already has the fixes changes nothing.
+
+   None of them is covered by patch-bank-rows.sql. That patch is generated from
+   the difference between each project's current envelope and its previous
+   version, and all three of these were applied before that snapshot was taken,
+   so they do not appear in the difference.
+
+   Contents:
+     1. AU - FIRB fee on all 17 Australian projects
+     2. US - Southlake Homebuilder Co build duration
+     3. US - Southlake Landowner Co other direct cost
+*/
+
+
+/* ==================================================================
+   AU - FIRB fee on all 17 Australian projects
+   was: api/patch-firbfee.sqlserver.sql
+   ================================================================== */
+
 /* One-time data fix: every one of the 17 Australian projects carried a
    copy-pasted firbfee placeholder rather than an actually-calculated one -
    several shared the identical figure despite having different land prices,
@@ -145,3 +174,77 @@ where region = 'AU' and deleted_at is null
     'c3e78ebe-628c-451a-865a-29a186aab8f0')
   and try_cast(json_value(envelope, '$.parcels[0].inputs.firbfee') as bigint) not in
     (93900,62600,62600,93900,31300,15600,31300,31300,31300,15600,15600,15600,62600,15600,62600,31300,62600);
+
+/* ==================================================================
+   US - Southlake Homebuilder Co build duration
+   was: api/patch-buildmo-southlake.sqlserver.sql
+   ================================================================== */
+
+/* One-time data fix: Southlake - Homebuilder Co's build/closing duration was
+   saved as 10 months. The reference workbook ("south lake cashflow mom 620
+   3units month.xlsx", sheet "Homebuilde Projectwise cashflow", cell F91:
+   =($D66*1.5/57)/12) spreads each unit's construction cost over 12 months,
+   not 10 - the total build cost is unchanged either way (buildpsf x BUA),
+   only the monthly timing shifts.
+
+   seed-us.sqlserver.sql already carries the corrected value, but its insert
+   is guarded by IF NOT EXISTS keyed on id, so re-running it is a no-op
+   against a database this row already exists in - it will not touch what is
+   already there. This file is what actually fixes it.
+
+   Run this ONCE, any time after seed-us.sqlserver.sql has been run at least
+   once. Safe to run again afterwards, or on a database that never had this
+   row at all: the UPDATE is guarded on the stored value actually differing
+   from the correct one, so a second run touches nothing.
+
+   Deliberately does not insert an appraisal_version row: this corrects an
+   input value entered before the reference workbook was checked against,
+   the same class of fix as patch-firbfee.sqlserver.sql, not a save made
+   through the app itself. */
+
+update dbo.appraisal
+set envelope = json_modify(envelope, '$.parcels[1].inputs.buildmo', cast(12 as int)),
+    updated_by = N'patch-buildmo-southlake.sqlserver.sql', updated_at = sysutcdatetime()
+where id = 'c0d638fc-912b-58d7-a5b2-2976bc68e138'
+  and json_value(envelope, '$.parcels[1].id') = 'p2njs7e'
+  and try_cast(json_value(envelope, '$.parcels[1].inputs.buildmo') as int) <> 12;
+
+/* Verify: expect one row back showing buildmo = 12. */
+select id, json_value(envelope, '$.name') as name,
+       json_value(envelope, '$.parcels[1].name') as parcel_name,
+       json_value(envelope, '$.parcels[1].inputs.buildmo') as stored_buildmo
+from dbo.appraisal
+where id = 'c0d638fc-912b-58d7-a5b2-2976bc68e138';
+
+/* ==================================================================
+   US - Southlake Landowner Co other direct cost
+   was: api/patch-otherdirect-southlake.sqlserver.sql
+   ================================================================== */
+
+/* One-time data fix: Southlake - Landowner Co's "Other Direct Cost" was saved
+   as $3,750,000 (labelled "demolition and site clearance"). Per the reference
+   workbooks, this line should be zero for now.
+
+   seed-us.sqlserver.sql already carries the corrected value, but its insert
+   is guarded by IF NOT EXISTS keyed on id, so re-running it is a no-op
+   against a database this row already exists in - it will not touch what is
+   already there. This file is what actually fixes it.
+
+   Run this ONCE, any time after seed-us.sqlserver.sql has been run at least
+   once. Safe to run again afterwards, or on a database that never had this
+   row at all: the UPDATE is guarded on the stored value actually differing
+   from the correct one, so a second run touches nothing. */
+
+update dbo.appraisal
+set envelope = json_modify(envelope, '$.parcels[0].inputs.otherdirect', cast(0 as int)),
+    updated_by = N'patch-otherdirect-southlake.sqlserver.sql', updated_at = sysutcdatetime()
+where id = 'c0d638fc-912b-58d7-a5b2-2976bc68e138'
+  and json_value(envelope, '$.parcels[0].id') = 'pltmxdz'
+  and try_cast(json_value(envelope, '$.parcels[0].inputs.otherdirect') as int) <> 0;
+
+/* Verify: expect one row back showing otherdirect = 0. */
+select id, json_value(envelope, '$.name') as name,
+       json_value(envelope, '$.parcels[0].name') as parcel_name,
+       json_value(envelope, '$.parcels[0].inputs.otherdirect') as stored_otherdirect
+from dbo.appraisal
+where id = 'c0d638fc-912b-58d7-a5b2-2976bc68e138';

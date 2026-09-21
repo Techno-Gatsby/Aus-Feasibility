@@ -4000,7 +4000,7 @@ nav.tabs button{letter-spacing:.02em;}
   <aside class="rail">
     <div class="railhead"><span class="rail-title">Inputs</span><span class="spacer"></span><button type="button" id="btnCollapseInputs" class="rail-collapse-btn" aria-pressed="false" title="Collapse all input sections">Collapse all</button><button type="button" id="btnRailToggle" class="rail-toggle" aria-expanded="true" aria-label="Collapse input panel" title="Collapse input panel"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="io">
-      <button id="btnLoad">Open</button><button id="btnCloudSave" title="Save this appraisal to the shared store">Save project</button><button id="btnCloudOpen" title="Open an appraisal from the shared store">Open cloud</button><button id="btnReset">Reset</button><button id="btnResync" style="display:none">Resync</button>
+      <button id="btnLoad">Open</button><button id="btnCloudSave" title="Save this appraisal to the shared store">Save project</button><button id="btnReset">Reset</button><button id="btnResync" style="display:none">Resync</button>
       <input type="file" id="fileIn" accept=".json" hidden="">
     </div>
     <div id="form"></div>
@@ -4143,13 +4143,16 @@ function phaseMatrixOf(d,count,totals){
    middle terms for one product, on whichever basis the scheme sells on, and are
    the only place that arithmetic is written down. */
 function unitAreaOf(d,p){
-  return d&&d.vert?Math.max(0,_num(d["bua"+p])):Math.max(0,_num(d["w"+p]))*Math.max(0,_num(d["d"+p]));
+  if(d&&d.vert)return Math.max(0,_num(d["bua"+p]));
+  if(Math.round(_num(d&&d.pmode,0))===2)return Math.max(0,_num(d["bua"+p]));
+  return Math.max(0,_num(d["w"+p]))*Math.max(0,_num(d["d"+p]));
 }
 function unitPriceOf(d,p){
   const idx=Math.max(0,_num(d&&d.pidx,100))/100;
   if(d&&d.vert)return Math.max(0,_num(d["bua"+p]))*Math.max(0,_num(d["hpsf"+p+"ovr"])?_num(d["hpsf"+p]):_num(d.hpsf))*idx;
-  const w=Math.max(0,_num(d["w"+p])),dep=Math.max(0,_num(d["d"+p])),r=Math.max(0,_num(d["p"+p]));
-  return (Math.round(_num(d.pmode,0))===1?w*dep*r:w*r)*idx;
+  const w=Math.max(0,_num(d["w"+p])),dep=Math.max(0,_num(d["d"+p])),r=Math.max(0,_num(d["p"+p])),mode=Math.round(_num(d.pmode,0));
+  if(mode===2)return Math.max(0,_num(d["bua"+p]))*r*idx;
+  return (mode===1?w*dep*r:w*r)*idx;
 }
 /* Which product / phase the editors are pointed at. Display-only. */
 function uiPhaseNo(d){return _clamp(Math.round((typeof APP!=="undefined"&&APP.uiPhase)||1),1,Math.max(1,Math.round(_num(d&&d.nph,1))))}
@@ -4221,7 +4224,7 @@ function _normalizedForDerive(raw){
   const o=applyLagTiming({...raw});
   for(let i=1;i<=MAX_LAND_INTERIM_PAYMENTS;i++)o[`landpay${i}month`]=landInterimMonth(o,i);
   o.nprod=_clamp(Math.round(_num(o.nprod,3)),1,MAX_PRODUCTS);
-  o.pmode=_clamp(Math.round(_num(o.pmode,0)),0,1);
+  o.pmode=_clamp(Math.round(_num(o.pmode,0)),0,2);
   ["startMonth","fyEnd"].forEach(k=>o[k]=_clamp(Math.round(_num(o[k],1)),1,12));
   ["phm","buildmo","landdur"].forEach(k=>o[k]=Math.max(1,Math.round(_num(o[k],1))));
   ["ddur","entdur"].forEach(k=>o[k]=Math.max(0,Math.round(_num(o[k],0))));
@@ -4448,12 +4451,12 @@ const GROUPS=[
   ["_lotarea","Lot area","sqft",null,"c",d=>{const p=productCount(d)<((typeof APP!=="undefined"&&APP.uiLotProduct)||1)?1:((typeof APP!=="undefined"&&APP.uiLotProduct)||1);
     return Math.max(0,_num(d["w"+p]))*Math.max(0,_num(d["d"+p]))}],
   ["_lotprice","Price per lot","$/lot",null,"c",d=>{const p=productCount(d)<((typeof APP!=="undefined"&&APP.uiLotProduct)||1)?1:((typeof APP!=="undefined"&&APP.uiLotProduct)||1);
-    const w=Math.max(0,_num(d["w"+p])),dep=Math.max(0,_num(d["d"+p])),r=Math.max(0,_num(d["p"+p])),idx=Math.max(0,_num(d.pidx,100))/100;
-    return (Math.round(_num(d.pmode,0))===1?w*dep*r:w*r)*idx}],
+    const w=Math.max(0,_num(d["w"+p])),dep=Math.max(0,_num(d["d"+p])),r=Math.max(0,_num(d["p"+p])),bua=Math.max(0,_num(d["bua"+p])),idx=Math.max(0,_num(d.pidx,100))/100,mode=Math.round(_num(d.pmode,0));
+    return (mode===2?bua*r:mode===1?w*dep*r:w*r)*idx}],
   ["_lots","Total lots / units","no.",null,"c",d=>sumProducts(d,p=>d[`n${p}`])],
   ["_frontft","Total frontage","ft",null,"c",d=>sumProducts(d,p=>d[`n${p}`]*d[`w${p}`])],
   ["_lotsqft","Total lot area","sqft",null,"c",d=>sumProducts(d,p=>d[`n${p}`]*d[`w${p}`]*d[`d${p}`])],
-  ["_rev0","Gross sales value at today's pricing","$",null,"c",d=>sumProducts(d,p=>{const n=d[`n${p}`],w=d[`w${p}`],dep=d[`d${p}`],price=d[`p${p}`];return d.pmode===1?n*w*dep*price:n*w*price})*d.pidx/100],
+  ["_rev0","Gross sales value at today's pricing","$",null,"c",d=>sumProducts(d,p=>{const n=d[`n${p}`],w=d[`w${p}`],dep=d[`d${p}`],bua=d[`bua${p}`],price=d[`p${p}`];return d.pmode===2?n*bua*price:d.pmode===1?n*w*dep*price:n*w*price})*d.pidx/100],
   ["_avgp","Average gross sale value","$/lot",null,"c",d=>d._lots>0?d._rev0/d._lots:0]]},
  {g:"Sales and receipts",f:[
   ["lagsales","Sales — start after approvals","mth",11,"n"],
@@ -4583,7 +4586,8 @@ const GROUPS=[
   ["contfixed","Additional fixed contingency","$",0,"n"],
   ["_cont","Project contingency amount","$",null,"c",d=>actualContingencyTotal(d)],
   ["infesc","Construction cost escalation","% p.a. COC",0,"p"],
-  ["infracurve","Horizontal construction spend profile","profile",0,"n"]]},
+  ["infracurve","Horizontal construction spend profile","profile",0,"n"],
+  ["infrasched","Infrastructure spend schedule (custom monthly override)","json","","n"]]},
  {g:"Soft cost",f:[
   ["softmode","Soft cost input method","basis",0,"n"],
   /* Soft cost is struck on construction by default. Land-development feasibilities
@@ -4645,17 +4649,20 @@ const GROUPS=[
   ["buildpsf3","Product 3 — construction cost","$/sqft",0,"n"],["buildpsf3ovr","Product 3 — use cost override","flag",0,"n"],
   ["buildesc","Vertical construction cost escalation","% p.a. COC",0,"p"],
   ["_buildTot","Vertical construction cost total","$",null,"c",d=>baseConstructionTotal(d)],
+  ["buildsched","Construction cost schedule (custom monthly override)","json","","n"],
   ["dsgnpc","Design cost","% construction cost",0,"p"],
   ["dsgnstart","Design — starts month","mth",1,"n"],
   ["dsgndur","Design cost — paid across","mth",0,"n"],
   ["lagdsgn","Design cost — starts after approvals","mth",0,"n"],
   ["designbase","Professional-fee base","flag",1,"n"],
+  ["designsched","Design cost schedule (custom monthly override)","json","","n"],
   ["permpc","Authority costs","% construction cost",0,"p"],
   ["permstart","Authority costs — starts month","mth",1,"n"],
   ["permtiming","Authority costs charged","basis",1,"n"],
   ["permdur","Authority costs — paid across","mth",0,"n"],
   ["lagperm","Authority costs — start after approvals","mth",0,"n"],
   ["permitbase","Permit-fee base","flag",1,"n"],
+  ["permitsched","Authority cost schedule (custom monthly override)","json","","n"],
   ["hpsf","Default vertical sale price","$/sqft",323,"n"],
   ["hpsf1","Product 1 — vertical sale price","$/sqft",0,"n"],["hpsf1ovr","Product 1 — use sale-price override","flag",0,"n"],
   ["hpsf2","Product 2 — vertical sale price","$/sqft",0,"n"],["hpsf2ovr","Product 2 — use sale-price override","flag",0,"n"],
@@ -4680,6 +4687,8 @@ const GROUPS=[
   ["pidrt","Reimbursement / credit rate","% eligible COC",70,"p"],
   ["pidcost","PID / MUD formation and processing cost","$",0,"n"],
   ["pidlag","Receipt lag after phase completion","mth",3,"n"],
+  ["pidprocsched","PID processing cost schedule (custom monthly override)","json","","n"],
+  ["pidreimbsched","PID reimbursement schedule (custom monthly override)","json","","n"],
   ["_pid","Total district / PID reimbursement","$",null,"c",d=>actualReimbursementTotal(d)]]},
  {g:"P&L cost and overhead inputs",f:[
   ["comm","Brokerage and incentive","% gross sales",3,"p"],
@@ -4810,6 +4819,12 @@ const GROUPS=[
      (0 = that same month, no floor). Intermediate years keep the year-end cycle
      above untouched; only the closing liability moves. */
   ["ptaxsettlelag","Final property tax payment lag after last sale","mth",2,"n"],
+  /* Raw land can carry an agricultural-use valuation exemption for a
+     specific fiscal year before development lifts it off the tax roll.
+     0 = no exemption; otherwise the FY (matching the fyOf() label, e.g.
+     2026) whose levy is waived outright - every other year's levy is
+     computed exactly as before. */
+  ["ptaxexemptfy","Property tax exemption fiscal year (e.g. agricultural)","FY",0,"n"],
   ["taxloss","Tax-loss treatment","flag",0,"n"],
   ["taxcarrybackyrs","Tax-loss carryback period","years",0,"n"],
   ["taxlossexp","Tax-loss expiry","years",0,"n"],
@@ -4872,6 +4887,35 @@ function retimeWindow(rows,start,dur,NM,curveMode){
    deposit-and-closing schedule. */
 function linkedLandSchedule(d){
   const raw=d&&d.landsched;if(!raw||typeof raw!=="string")return null;
+  let a;try{a=JSON.parse(raw)}catch(e){return null}
+  if(!Array.isArray(a)||!a.length)return null;
+  const out=a.map(v=>Math.max(0,_num(v,0)));
+  return out.reduce((x,y)=>x+y,0)>0?out:null;
+}
+/* Same shape as linkedLandSchedule, for infrasched: an optional month-indexed
+   (0 = the project's own month 1) $ override for horizontal infra spend, so a
+   project's real source cash flow can be dropped in verbatim instead of
+   approximated by the five infracurve presets (straight line/S-curve/
+   milestone/front/back-loaded), none of which reproduce an arbitrary real
+   schedule. Left unset (the default for every parcel), infra spend keeps
+   working exactly as before via infracurve. */
+function linkedInfraSchedule(d){
+  const raw=d&&d.infrasched;if(!raw||typeof raw!=="string")return null;
+  let a;try{a=JSON.parse(raw)}catch(e){return null}
+  if(!Array.isArray(a)||!a.length)return null;
+  const out=a.map(v=>Math.max(0,_num(v,0)));
+  return out.reduce((x,y)=>x+y,0)>0?out:null;
+}
+/* Same shape again, for buildsched/designsched/permitsched: vertical
+   construction/design/authority cost is driven by each unit's own contract
+   month (plus, for authority cost, an optional reallocation onto the
+   revenue-recognition curve) - there is no single start/duration window to
+   retime the way infra has, so matching an arbitrary real monthly cash flow
+   needs a direct override the same way infrasched does for infra. Reads any
+   of the three by field name; left unset (the default), all three keep
+   working exactly as before. */
+function linkedVerticalCostSchedule(raw){
+  if(!raw||typeof raw!=="string")return null;
   let a;try{a=JSON.parse(raw)}catch(e){return null}
   if(!Array.isArray(a)||!a.length)return null;
   const out=a.map(v=>Math.max(0,_num(v,0)));
@@ -5066,16 +5110,17 @@ const SIMPLE_DEBT_FIELDS=new Set(["ltc","rate","procf","procfrate","linef","debt
   "fundingmode","equitypc","equityfixed","finsuper"]);
 /* capfin/capcarry/pidacct/staxdeduct are permanently frozen by ACCOUNTING_POLICY
    (enforceAccountingPolicy overwrites them on every input path - there is no
-   code path that could honour a different value even if one were entered), but
-   render code already exists (MANDATORY_ACCOUNTING_FIELDS) to show them as
-   read-only so a reader can see the policy rather than wonder if it's editable.
-   That render code was unreachable because this allowlist hid the keys before
-   it ever ran. ovhmode (percent-of-revenue vs fixed-monthly G&A/overhead) is a
-   real, still-relevant choice whose own toggle was hidden - fixing it here also
-   makes the ovhmode===1 branch in buildFormCore reachable for the first time. */
-const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ptaxsettlelag","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic",
-  "ovhmode","capfin","capcarry","pidacct","staxdeduct"]);
-const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc","salesUnitsFY"]);
+   code path that could honour a different value even if one were entered), so
+   they are kept off the rail entirely rather than shown as a dead control.
+   MANDATORY_ACCOUNTING_FIELDS's read-only render path was tried instead, but a
+   <select> can't be made readOnly, and SELECT_OPTIONS already has entries for
+   capfin/capcarry/staxdeduct - so exposing them still rendered live-looking
+   dropdowns that silently snapped back to the policy value on change.
+   ovhmode (percent-of-revenue vs fixed-monthly G&A/overhead) is a real,
+   still-relevant choice, so its own toggle stays. */
+const SIMPLE_TAX_FIELDS=new Set(["ptax","ptaxlag","ptaxsettlelag","ptaxexemptfy","ftax","stax","staxbase","taxwhen","taxlag","taxsettlelag","r","hurdle","tmoic",
+  "ovhmode"]);
+const TEXT_FIELDS=new Set(["otherdirectlabel","landsched","landschedsrc","salesUnitsFY","infrasched","buildsched","designsched","permitsched","pidprocsched","pidreimbsched"]);
 const SIMPLE_SALES_FIELDS=new Set(["absn","vel","_sellmo","esc","depo","escrow","_bal","dellag","salesrecog","salesstart","lagsales",
   "salesmode","salesy1","salesy2","salesy3","salesy4","salesy5","salesy6","salesy7","salesy8","_salestot",
   "salesy1start","salesy1end","salesy2start","salesy2end","salesy3start","salesy3end","salesy4start","salesy4end",
@@ -5177,18 +5222,23 @@ function salesYearNeededCount(d){
   const total=sumProducts(d,p=>Math.max(0,_num(d[`n${p}`],0)));
   return(!(v>0)||!(total>0))?8:_clamp(Math.ceil(Math.ceil(total/v)/12),1,8);
 }
-/* How many Sales Year rows to actually show: the velocity-implied count
-   above, or one more than the last row that already carries a value or an
-   explicit start/end window - whichever is larger - so a fast-selling
-   project isn't shown 8 rows it will never use, but nothing already typed
-   (including a deliberately late tranche entered via its own window) is
-   ever hidden, and there is always one blank row free to grow into. */
+/* How many Sales Year rows to actually show. Once the user has actually typed
+   a manual schedule, that schedule - not the velocity estimate - is what
+   decides the row count: one more than the last row carrying a value or an
+   explicit start/end window (including a deliberately late tranche entered
+   via its own window), so nothing already typed is ever hidden and there is
+   always one blank row free to grow into. absn/vel is a driven-mode rate
+   that a manual schedule can easily outrun (e.g. a schedule that sells out
+   in 3 years while absn still holds a slower rate left over from before the
+   switch, or never set at all) - reading it here would show years the
+   typed schedule doesn't need. The velocity estimate is used only before
+   anything has been typed yet, to preview the same row count
+   seedManualSalesDefaults is about to fill in. */
 function salesYearVisibleCount(d){
-  const needed=salesYearNeededCount(d);
   let usedThrough=0;
   for(let i=1;i<=8;i++)
     if(_num(d[`salesy${i}`],0)>0||_num(d[`salesy${i}start`],-1)>=0||_num(d[`salesy${i}end`],-1)>=0)usedThrough=i;
-  return Math.min(8,Math.max(needed,usedThrough+1));
+  return usedThrough>0?Math.min(8,usedThrough+1):salesYearNeededCount(d);
 }
 function fieldShown(k,vert){
   if(lagFieldHidden(k))return false;
@@ -5196,7 +5246,7 @@ function fieldShown(k,vert){
      - closingpc and ddpc - so they are retired rather than left as a second way to
      enter the same cost. They stay in the schema so a project saved with a figure
      in either of them still adds up. */
-  const hidden=new Set(["buildpsf_legacy","designbase","buildesc","_buildTot","landsched",
+  const hidden=new Set(["buildpsf_legacy","designbase","buildesc","_buildTot","landsched","infrasched","buildsched","designsched","permitsched","pidprocsched","pidreimbsched",
     /* Set only from the Sales Overview tab's inline unit editor, not typed here. */
     "salesFYMode","salesUnitsFY",
     /* The land cost is typed as one figure, so the rate and the basis it is
@@ -5440,7 +5490,7 @@ function _runUncached(din,ov){
   const binaryFlags=["salesrecog","drawmode","distmode","buildstagger","softbase","vert","escrow","staxrecover","xfertaxmode","permtiming","finland","findd","finhoriz","finvert","finsuper","fincapex","fundi","pidrep","intresout","taxloss","capcarry","capfin","pidacct","presales","revolver","cashfungible","equityreimb","designbase","permitbase","staxdeduct","taxfreq","distlock","ph1escovr","ph2escovr","ph3escovr","ph4escovr","ph5escovr","ph6escovr"];
   for(let p=1;p<=MAX_PRODUCTS;p++)binaryFlags.push(`hpsf${p}ovr`,`buildpsf${p}ovr`,`buildmo${p}ovr`);
   binaryFlags.forEach(k=>{if(Number(raw[k])!==0&&Number(raw[k])!==1)throw new Error(`${k} must be entered as 0 or 1.`)});
-  [["taxwhen",0,2],["facmode",0,3],["fundingmode",0,2],["prmode",0,2],["pmode",0,1],["intconv",0,2],["staxbase",0,5],["finbase",0,5],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["relmode",0,2],["hoastart",0,2],["tier1units",0,null]].forEach(x=>requireInteger(...x));
+  [["taxwhen",0,2],["facmode",0,3],["fundingmode",0,2],["prmode",0,2],["pmode",0,2],["intconv",0,2],["staxbase",0,5],["finbase",0,5],["allocbasis",0,3],["ovhmode",0,2],["sutmode",0,1],["costsutbasis",0,1],["softmode",0,1],["landcurve",0,5],["infracurve",0,4],["relmode",0,2],["hoastart",0,2],["tier1units",0,null]].forEach(x=>requireInteger(...x));
   if(!Number.isInteger(Number(raw.facstart))||Number(raw.facstart)<-1)throw new Error("Facility commitment month must be -1 or a non-negative whole month.");
   if(!Number.isInteger(Number(raw.facend))||Number(raw.facend)<-1)throw new Error("Facility end month must be -1 or a non-negative whole month.");
   if(!Number.isInteger(Number(raw.landstart))||Number(raw.landstart)<-1)throw new Error("Land closing / balance payment month must be -1 or a non-negative whole month.");
@@ -5528,7 +5578,10 @@ function _runUncached(din,ov){
       if(!(salePsf>0))throw new Error(`Product ${p} vertical unit sale price must be greater than zero.`);
       if(!(buildPsf>0))throw new Error(`Product ${p} build cost must be greater than zero.`);
       if(!(buildMonths>=1))throw new Error(`Product ${p} build duration must be at least one month.`);
-    }else if(!(d[`p${p}`]>0))throw new Error(`Product ${p} lot sale price must be greater than zero.`);
+    }else{
+      if(!(d[`p${p}`]>0))throw new Error(`Product ${p} lot sale price must be greater than zero.`);
+      if(Math.round(_num(d.pmode,0))===2&&!(d[`bua${p}`]>0))throw new Error(`Product ${p} built-up area must be greater than zero when pricing by built-up area.`);
+    }
   }
   if(!d.vert&&!(d.pidx>0))throw new Error("Price index must be greater than zero.");
   if(d.vert&&!(d.buildbua>0))throw new Error("Total building area / GFA must be greater than zero: vertical construction cost is GFA x the construction rate.");
@@ -5695,7 +5748,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       const item=constructionQueue[soldCount],i=item.phase,product=item.product,p=products[product];
       const phaseEsc=V?(d[`ph${i+1}escovr`]?d[`ph${i+1}esc`]:d.esc):d.esc;
       const depositPct=V?(d[`ph${i+1}depo`]>=0?d[`ph${i+1}depo`]:d.depo):d.depo;
-      const saleBase=V?p.salePsf*p.bua:(d.pmode===1?p.width*p.depth*p.price:p.width*p.price)*d.pidx/100;
+      const saleBase=V?p.salePsf*p.bua:(d.pmode===2?p.bua*p.price:d.pmode===1?p.width*p.depth*p.price:p.width*p.price)*d.pidx/100;
       const salePrice=saleBase*Math.pow(1+phaseEsc/100,month/12);
       if(V){
         /* Every unit's own build start is its own contract month (never earlier than
@@ -5814,7 +5867,15 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     }
     const rm=phaseComplete[i]+d.pidlag;phaseReimb[i]=phaseEligible[i]*d.pidel/100*d.pidrt/100;if(rm<=NM)R.pid[rm]+=phaseReimb[i];
   });
-  retimeWindow([pooledCinf,pooledCont],d.infrastart,d.infradur,NM,d.infracurve);
+  const customPidReimb=linkedVerticalCostSchedule(d.pidreimbsched);
+  if(customPidReimb)for(let m=0;m<=NM;m++)R.pid[m]=customPidReimb[m]||0;
+  const customInfra=linkedInfraSchedule(d);
+  if(customInfra){
+    for(let m=0;m<=NM;m++)pooledCinf[m]=customInfra[m]||0;
+    retimeWindow([pooledCont],d.infrastart,d.infradur,NM,d.infracurve);
+  }else{
+    retimeWindow([pooledCinf,pooledCont],d.infrastart,d.infradur,NM,d.infracurve);
+  }
   for(let m=0;m<=NM;m++){R.cinf[m]+=pooledCinf[m];R.cont[m]+=pooledCont[m]}
   const infTot=R.cinf.reduce((a,b)=>a+b,0),contTot=R.cont.reduce((a,b)=>a+b,0),pid=R.pid.reduce((a,b)=>a+b,0);
   const buaTot=products.reduce((a,p)=>a+p.count*p.bua,0),modelCost=V?d.modelcost:0,vst=modelAnchor+d.vlag,vopen=vst+d.modelmo;
@@ -5857,6 +5918,10 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
     const permTot=R.permit.reduce((a,b)=>a+b,0),recogTot=R.recog.reduce((a,b)=>a+b,0);
     if(permTot>1e-9&&recogTot>1e-9)for(let m=0;m<=NM;m++)R.permit[m]=permTot*R.recog[m]/recogTot;
   }else retimeWindow([R.permit],d.permstart,d.permdur,NM);
+  const customBuild=linkedVerticalCostSchedule(d.buildsched),customDesign=linkedVerticalCostSchedule(d.designsched),customPermit=linkedVerticalCostSchedule(d.permitsched);
+  if(customBuild)for(let m=0;m<=NM;m++)R.build[m]=customBuild[m]||0;
+  if(customDesign)for(let m=0;m<=NM;m++)R.design[m]=customDesign[m]||0;
+  if(customPermit)for(let m=0;m<=NM;m++)R.permit[m]=customPermit[m]||0;
   const actualBuild=R.build.reduce((a,b)=>a+b,0),designTot=R.design.reduce((a,b)=>a+b,0),vertContTot=V?actualBuild*d.contpc/100:0;
   const actualPermit=R.permit.reduce((a,b)=>a+b,0),phaseNetCost=phaseActual.slice();
   const allocMetric=u=>{const p=products[u.product];if(d.allocbasis===0)return 1;if(d.allocbasis===1)return Math.max(1,p.width*p.depth);if(d.allocbasis===2)return Math.max(1,u.salePrice);return Math.max(1,V?p.bua:p.width)};
@@ -6015,6 +6080,8 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
   }else{
     const m=Math.min(NM,Math.max(0,entStart));R.pidprocess[m]+=d.pidcost
   }
+  const customPidProc=linkedVerticalCostSchedule(d.pidprocsched);
+  if(customPidProc)for(let m=0;m<=NM;m++)R.pidprocess[m]=customPidProc[m]||0;
   if(d.dacapex>0)R.capex[d.dastart]+=d.dacapex;
   for(let m=0;m<=NM;m++){R.soft[m]=R.supervision[m]+R.pidprocess[m];R.infra[m]=R.cinf[m];R.impact[m]=d.impact*dlv[m];R.vert1[m]=R.build[m]+R.design[m]+R.permit[m]+R.model[m];R.bradd[m]=R.cinf[m]+R.cont[m]+R.build[m]+R.model[m];R.devc[m]=R.land[m]+R.closing[m]+R.acqfee[m]+R.dd[m]+R.soft[m]+R.otherdirect[m]+R.munic[m]+R.impact[m]+R.infra[m]+R.cont[m]+R.vert1[m];R.fdev[m]=(d.finland?R.land[m]+R.closing[m]+R.acqfee[m]:0)+(d.findd?R.dd[m]+R.pidprocess[m]+R.otherdirect[m]:0)+(d.finsuper?R.supervision[m]:0)+(d.fincapex?R.capex[m]:0)+(d.finhoriz?R.munic[m]+R.impact[m]+R.infra[m]+R.cont[m]:0)+(d.finvert?R.vert1[m]:0)}
   const lastDlv=Math.max(...unitRecords.map(u=>u.delivery)),grossRecognisedTotal=R.recog.reduce((a,b)=>a+b,0);
@@ -6092,6 +6159,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       contractedCum+=ctr[m];
       if(propertyCum<=1e-9)continue;
       if(m<NM&&fyOf(m,d)===fyOf(m+1,d))continue;
+      if(d.ptaxexemptfy>0&&fyOf(m,d)===d.ptaxexemptfy)continue;
       const unsold=Math.max(0,Math.min(1,(L-contractedCum)/L));
       const levy=propertyCum*d.passess/100*d.ptax/100*unsold;
       if(levy>1e-9)levies.push([m,levy]);
@@ -7292,8 +7360,10 @@ function renderAutoSingleDateField(g,key,label,d,resolveAuto,zeroBased){
 const esc_=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
 function inputDisplay(k,lab,unit,d){
   /* "$/price basis" tells the reader nothing. Name the basis that is switched on. */
-  if(/^p\d+$/.test(k)&&unit==="$/price basis")
-    unit=Math.round(_num(d&&d.pmode,0))===1?"$/sqft lot":"$/front ft";
+  if(/^p\d+$/.test(k)&&unit==="$/price basis"){
+    const pm=Math.round(_num(d&&d.pmode,0));
+    unit=pm===1?"$/sqft lot":pm===2?"$/sqft BUA":"$/front ft";
+  }
   /* "% COC" is wrong the moment the soft-cost base is the land price. */
   if(["sfpc","dmpc","sfengpc","sfarchpc","sfplanpc","sfcostpc","sflegalpc","sfdmpc","sfotherpc","_profpc","_dmpc","_softpc"].includes(k)
      && Math.round(_num(d&&d.softbase,0))===1) unit="% land";
@@ -7319,8 +7389,8 @@ const LEV=[
    abs:d=>d._frontft>0?d._rev0/d._frontft:0,
    map:(v,d)=>{const a=d._frontft>0?d._rev0/d._frontft:0;return {pidx:a>0?v*d.pidx/a:d.pidx}}},
  {k:"vpsf",  n:"Sale price / lot area",u:"$/sqft lot",lo:0,hi:50000, st:50,  f:v=>"$"+M0(v,2), grp:"Revenue",
-   abs:d=>d._lotsqft>0?d._rev0/d._lotsqft:0,
-   map:(v,d)=>{const a=d._lotsqft>0?d._rev0/d._lotsqft:0;return {pidx:a>0?v*d.pidx/a:d.pidx}}},
+   abs:d=>Math.round(_num(d.pmode,0))===2?(d._buaTot>0?d._rev0/d._buaTot:0):(d._lotsqft>0?d._rev0/d._lotsqft:0),
+   map:(v,d)=>{const a=Math.round(_num(d.pmode,0))===2?(d._buaTot>0?d._rev0/d._buaTot:0):(d._lotsqft>0?d._rev0/d._lotsqft:0);return {pidx:a>0?v*d.pidx/a:d.pidx}}},
  {k:"absn",  n:"Sales velocity",              u:"units/m",lo:.5,   hi:80,    st:.5,   f:v=>M0(v,1)+" /m",grp:"Revenue"},
  {k:"esc",   n:"Price escalation",        u:"% pa",  lo:-15,  hi:25,    st:.25,  f:v=>M0(v,2)+"%", grp:"Revenue"},
  {k:"depo",  n:"Deposit on contract",     u:"%",     lo:0,    hi:100,   st:1,    f:v=>M0(v)+"%",   grp:"Revenue"},
@@ -7401,7 +7471,7 @@ const MET=Object.fromEntries(METRICS.map(m=>[m.k,m]));
 function cleanProjectLocation(v){return String(v||"").trim()}
 function newParcel(name,loc,inputs){
   return {id:"p"+Math.random().toString(36).slice(2,8),name:name||"New parcel",
-    loc:cleanProjectLocation(loc),inputs:(()=>{const x={...DEF,...cleanStoredInputs(inputs)};x.pmode=Number(x.pmode)===1?1:0;return enforceAccountingPolicy(x)})()};
+    loc:cleanProjectLocation(loc),inputs:(()=>{const x={...DEF,...cleanStoredInputs(inputs)};x.pmode=_clamp(Math.round(Number(x.pmode)||0),0,2);return enforceAccountingPolicy(x)})()};
 }
 function cloneSourceData(x){return JSON.parse(JSON.stringify(x))}
 const APP={
@@ -7486,13 +7556,13 @@ function modeScenarios(d=D){const x=derive(d);if(x.vert)return [
   {n:"Cautious",ov:{hpsf:Math.max(0,x.hpsf*.93),vel:Math.max(.5,x.vel*.85),buildpsf:x.buildpsf*1.1,esc:x.esc-2,contpc:Math.max(x.contpc,6)}},
   {n:"Base case",ov:{},pin:true},
   {n:"Upside",ov:{hpsf:x.hpsf*1.08,vel:x.vel*1.2,buildpsf:x.buildpsf*.95,esc:x.esc+1,contpc:Math.max(0,x.contpc-1)}}];
- const key=x.pmode===1?"vpsf":"vff",base=x.pmode===1?(x._lotsqft?x._rev0/x._lotsqft:0):(x._frontft?x._rev0/x._frontft:0);return [
+ const key=x.pmode>=1?"vpsf":"vff",base=x.pmode===2?(x._buaTot?x._rev0/x._buaTot:0):x.pmode===1?(x._lotsqft?x._rev0/x._lotsqft:0):(x._frontft?x._rev0/x._frontft:0);return [
   {n:"Downside",ov:{[key]:base*.85,absn:Math.max(.5,x.absn*.7),vinfl:x.infl*1.2,esc:x.esc-3,contpc:Math.max(x.contpc,8)}},
   {n:"Cautious",ov:{[key]:base*.93,absn:Math.max(.5,x.absn*.85),vinfl:x.infl*1.1,esc:x.esc-2,contpc:Math.max(x.contpc,6)}},
   {n:"Base case",ov:{},pin:true},
   {n:"Upside",ov:{[key]:base*1.08,absn:x.absn*1.2,vinfl:x.infl*.95,esc:x.esc+1,contpc:Math.max(0,x.contpc-1)}}]}
-function normalizeModeState(resetScenarios=false){D.pmode=Number(D.pmode)===1?1:0;enforceAccountingPolicy(D);const vertical=!!derive(D).vert,allowed=new Set(leversForMode(vertical).map(l=>l.k)),fallback=vertical?"hpsf":(D.pmode===1?"vpsf":"vff");["sDrv","xDrv","goalDrv"].forEach(k=>{if(!allowed.has(APP[k]))APP[k]=fallback});if(!allowed.has(APP.yDrv))APP.yDrv=vertical?"vel":"absn";APP.cols=vertical?["pr","hpsf","buildpsf","vel","esc","contpc"]:["pr","vpsf","absn","vinfl","esc","contpc"];APP.opLev=vertical?["hpsf","buildpsf","vel","pr","contpc"]:["vpsf","absn","vinfl","pr","contpc"];const incompatible=APP.scn.some(s=>Object.keys(s.ov||{}).some(k=>vertical?["vff","vpsf","absn"].includes(k):["hpsf","buildpsf","vel","buildmo"].includes(k)));const legacyVerticalDefaults=vertical&&APP.scn.length===4&&Math.abs(_num(APP.scn[0]?.ov?.hpsf)-275)<1e-9&&Math.abs(_num(APP.scn[1]?.ov?.hpsf)-300)<1e-9&&Math.abs(_num(APP.scn[3]?.ov?.hpsf)-350)<1e-9;if(resetScenarios||incompatible||APP.scnAuto||legacyVerticalDefaults){APP.scn=modeScenarios(D);APP.scnAuto=true}APP.opRes=null;APP.sFrom=APP.sTo=null}
-function leversForMode(vertical){return LEV.filter(l=>{if(l.k==="phm")return false;if(vertical&&LOT_ONLY_LEVERS.includes(l.k))return false;if(!vertical&&VERT_ONLY_LEVERS.includes(l.k))return false;const pm=String(l.k).match(/^ph([1-6])dur$/);if(pm&&Number(pm[1])>Math.max(1,Math.round(_num(D.nph,1))))return false;if(l.k==="vff"&&D.pmode!==0)return false;if(l.k==="vpsf"&&D.pmode!==1)return false;return true})}
+function normalizeModeState(resetScenarios=false){D.pmode=_clamp(Math.round(Number(D.pmode)||0),0,2);enforceAccountingPolicy(D);const vertical=!!derive(D).vert,allowed=new Set(leversForMode(vertical).map(l=>l.k)),fallback=vertical?"hpsf":(D.pmode>=1?"vpsf":"vff");["sDrv","xDrv","goalDrv"].forEach(k=>{if(!allowed.has(APP[k]))APP[k]=fallback});if(!allowed.has(APP.yDrv))APP.yDrv=vertical?"vel":"absn";APP.cols=vertical?["pr","hpsf","buildpsf","vel","esc","contpc"]:["pr","vpsf","absn","vinfl","esc","contpc"];APP.opLev=vertical?["hpsf","buildpsf","vel","pr","contpc"]:["vpsf","absn","vinfl","pr","contpc"];const incompatible=APP.scn.some(s=>Object.keys(s.ov||{}).some(k=>vertical?["vff","vpsf","absn"].includes(k):["hpsf","buildpsf","vel","buildmo"].includes(k)));const legacyVerticalDefaults=vertical&&APP.scn.length===4&&Math.abs(_num(APP.scn[0]?.ov?.hpsf)-275)<1e-9&&Math.abs(_num(APP.scn[1]?.ov?.hpsf)-300)<1e-9&&Math.abs(_num(APP.scn[3]?.ov?.hpsf)-350)<1e-9;if(resetScenarios||incompatible||APP.scnAuto||legacyVerticalDefaults){APP.scn=modeScenarios(D);APP.scnAuto=true}APP.opRes=null;APP.sFrom=APP.sTo=null}
+function leversForMode(vertical){return LEV.filter(l=>{if(l.k==="phm")return false;if(vertical&&LOT_ONLY_LEVERS.includes(l.k))return false;if(!vertical&&VERT_ONLY_LEVERS.includes(l.k))return false;const pm=String(l.k).match(/^ph([1-6])dur$/);if(pm&&Number(pm[1])>Math.max(1,Math.round(_num(D.nph,1))))return false;if(l.k==="vff"&&D.pmode!==0)return false;if(l.k==="vpsf"&&D.pmode!==1&&D.pmode!==2)return false;return true})}
 function scnOv(s){
   let o={},work=derive(D);
   Object.keys(s.ov||{}).forEach(k=>{const v=s.ov[k];if(v!==undefined&&v!==null&&v!==""){const mapped=ovFor(k,+v,work);Object.assign(o,mapped);work=derive({...D,...o})}});
@@ -7611,9 +7681,25 @@ function buildParcels(){
     const b=document.createElement("button");
     b.className="pt";b.dataset.parcelId=p.id;b.setAttribute("aria-current",i===APP.active?"true":"false");
     b.innerHTML=`<span class="parcel-name ${projectNameSizeClass(p.name)}">${esc_(p.name)}</span><span class="kv">${kv}</span>`+
-      (APP.parcels.length>1?`<span class="x" title="Remove">×</span>`:``);
+      (APP.parcels.length>1?`<span class="x" title="${p._dealId?"Delete from shared store":"Remove"}">×</span>`:``);
     b.onclick=e=>{
       if(e.target.classList.contains("x")){
+        /* A parcel tagged with _dealId is one company's tab of a deal saved to
+           the shared store - Landowner Co and Homebuilder Co share one row (see
+           the appraisal-store script), so deleting it there closes the whole
+           deal, for everyone with access, not just this browser's tabs. */
+        if(p._dealId){
+          const dealId=p._dealId,mates=dealMatesOf(p),group=APP.parcels.filter(x=>x._dealId===dealId&&mates.includes(x)),names=group.map(x=>x.name).join(" and ");
+          if(group.length>=APP.parcels.length){toast("At least one project must stay open.",2200);return}
+          if(!confirm("Delete “"+names+"”?\n\nThis cannot be undone here, and it will disappear from the shared store for everyone with access - not just you."))return;
+          Promise.resolve(window.deleteProjectFromStore&&window.deleteProjectFromStore(dealId)).then(()=>{
+            APP.parcels=APP.parcels.filter(x=>x._dealId!==dealId);
+            APP.portfolioSelected=(APP.portfolioSelected||[]).filter(id=>!group.some(x=>x.id===id));
+            APP.active=Math.max(0,Math.min(APP.active,APP.parcels.length-1));
+            D=P0().inputs;normalizeModeState();buildParcels();buildForm();buildScaffold();showNav();render();
+          }).catch(err=>alert("Could not delete “"+names+"”: "+(err&&err.message||err)));
+          return;
+        }
         if(!confirm("Remove "+p.name+"?"))return;
         APP.parcels.splice(i,1);APP.portfolioSelected=(APP.portfolioSelected||[]).filter(id=>id!==p.id);APP.active=Math.max(0,Math.min(APP.active,APP.parcels.length-1));
         D=P0().inputs;normalizeModeState();buildParcels();buildForm();buildScaffold();showNav();render();return}
@@ -7632,13 +7718,16 @@ function buildParcels(){
   }
   const add=document.createElement("button");
   add.className="pt";add.innerHTML="<span>+ Add parcel</span>";
-  add.onclick=()=>{pushParcel(newParcel("Parcel "+(APP.parcels.length+1),""));afterParcelChange()};
+  add.onclick=()=>{
+    const np=newParcel("Parcel "+(APP.parcels.length+1),"");
+    np._dealId=(P0()&&P0()._dealId)||null;
+    pushParcel(np);afterParcelChange()};
   host.appendChild(add);
   const dup=document.createElement("button");
   dup.className="pt";dup.innerHTML="<span>⧉ Duplicate</span>";
   dup.onclick=()=>{
     const p=P0(),wasSelected=new Set(portfolioSelectedIds()).has(p.id);
-    const np=newParcel(p.name+" (copy)",p.loc,cloneSourceData(p.inputs));APP.parcels.push(np);
+    const np=newParcel(p.name+" (copy)",p.loc,cloneSourceData(p.inputs));np._dealId=p._dealId;APP.parcels.push(np);
     /* In Selected Projects mode the copy inherits the original parcel's inclusion state.
        Duplicating an excluded project must not silently change consolidated totals. */
     if(APP.portfolioMode==="selected"&&wasSelected)APP.portfolioSelected=[...(APP.portfolioSelected||[]),np.id];
@@ -7654,6 +7743,7 @@ function buildParcels(){
     const revenue=projectSalesRevenue(p.inputs);
     if(!(revenue>0)){alert("This project has no sales revenue yet, so there is no land price to carry into a vertical stage.");return}
     const np=newParcel(p.name+" - vertical",p.loc,verticalStageInputs(p.inputs,revenue,p.name));
+    np._dealId=p._dealId;
     pushParcel(np,p);
     afterParcelChange();
   };
@@ -7661,6 +7751,10 @@ function buildParcels(){
   const pn=document.getElementById("pname"),pl=document.getElementById("ploc");
   if(pn)pn.value=P0().name||"";
   if(pl)pl.value=P0().loc||"";
+  /* buildParcels() re-runs after every switch/add/remove/duplicate, so this is
+     the one place that keeps "Save project" naming the deal the active tab
+     actually belongs to - see the appraisal-store script. */
+  if(typeof window.refreshCloudSaveLabel==="function")window.refreshCloudSaveLabel();
 }
 /* ── input rail ───────────────────────────────────────── */
 function ensureActivePhaseDurations(){
@@ -7732,7 +7826,7 @@ function reconcilePhaseCountState(count){
 function productOptions(selected){return productIds(D).map(p=>`<option value="${p}"${p===selected?" selected":""}>Product ${p}</option>`).join("")}
 function yesNoOptions(v){return `<option value="1"${Number(v)===1?" selected":""}>Yes</option><option value="0"${Number(v)===0?" selected":""}>No</option>`}
 const SELECT_OPTIONS={
-  pmode:[[0,"Frontage x $ per front foot"],[1,"Frontage x depth x $ per sqft"]],
+  pmode:[[0,"Frontage x $ per front foot"],[1,"Frontage x depth x $ per sqft lot"],[2,"$ per sqft of built-up area"]],
   /* These read as a choice of basis, not a yes/no, so they carry their own wording.
      hoastart has three states - a Yes/No fallback would make the third unreachable. */
   salesmode:[[0,"Steady rate from the sales velocity"],[1,"Figures entered for each year"]],
@@ -7788,7 +7882,8 @@ function phaseOptions(selected){return Array.from({length:_clamp(Math.round(_num
 /* A month left blank means "let the model choose it". Storing that as -1 is an
    implementation detail, so the box shows an empty field marked Automatic and
    an empty box is read back as -1. */
-const AUTO_BLANK_FIELDS=new Set(["facstart","facend","landstart","ph1start","ph2start","ph3start","ph4start","ph5start","ph6start"]);
+const AUTO_BLANK_FIELDS=new Set(["facstart","facend","landstart","ph1start","ph2start","ph3start","ph4start","ph5start","ph6start",
+  "ph1infrapc","ph2infrapc","ph3infrapc","ph4infrapc","ph5infrapc","ph6infrapc"]);
 function autoBlankApply(el,key,value){
   bindNumberFormatting(el);
   if(!AUTO_BLANK_FIELDS.has(key)){el.value=Number.isFinite(Number(value))?numFieldFormat(value,PLAIN_NUMBER_FIELDS.has(key)):"";return}
@@ -7799,22 +7894,64 @@ function autoBlankTaken(el,key){
   if(!AUTO_BLANK_FIELDS.has(key)||String(el.value).trim()!=="")return false;
   D[key]=-1;buildForm();render();return true;
 }
+/* "Debt" and "Tax and return" are two large flat GROUPS sections (69 and 24
+   fields) with no internal structure, which read as overwhelming compared to
+   every other tab. Fields render in GROUPS' own order first (each helper
+   still owns its row exactly as before); this only re-groups the finished
+   rows under sub-headers afterward, the same visual device rebucketInputs()
+   already uses between different GROUPS sections (see ~line 11066) - so it
+   changes layout only, never which fields exist, their defaults, or the
+   engine that reads them. */
+const DEBT_SUBGROUPS={
+  "Facility terms":["ltc","lagfac","finbase","drawmode","facmode","facilityfixed","debtcap","rate","facstart","facend","revolver","cashfungible","fundi"],
+  "Eligible costs & funding sequence":["presaledebtpc","tier1units","fundingmode","equitypc","equityfixed","finland","findd","fincapex","finhoriz","finvert","finsuper"],
+  "Draws & repayments":["drawcount","draw1month","draw1amount","draw2month","draw2amount","draw3month","draw3amount","draw4month","draw4amount","draw5month","draw5amount","repaycount","repay1month","repay1amount","repay2month","repay2amount","repay3month","repay3amount","repay4month","repay4amount","repay5month","repay5amount","debtRepayYear"],
+  "Fees & costs":["procf","procfrate","linef","linefbasis","debtdepopc","financefixed"],
+  "Release mechanics":["relpc","relmode","relsalespc","relfixed1","relfixed2","relfixed3"],
+  "Cash & reserves":["equityreimb","pidrep","mincash","distmode","eqdistlag","cashrate","intres","intresout","intconv","distlock"]
+};
+const TAX_SUBGROUPS={
+  "Income & franchise tax":["ftax","stax","staxbase","staxdeduct","taxfreq","taxqlag","capcarry","capfin","pidacct","ovhmode","taxwhen","taxsettlelag","taxlag"],
+  "Property tax":["ptax","ptaxlag","ptaxsettlelag","ptaxexemptfy"],
+  "Tax-loss treatment":["taxloss","taxcarrybackyrs","taxlossexp","taxlossutil"],
+  "Return targets":["r","hurdle","tmoic"]
+};
+function subgroupOf(map,key){for(const name in map)if(map[name].includes(key))return name;return null}
+function groupSubHeaders(g,map){
+  const order=Object.keys(map),buckets={};order.forEach(n=>buckets[n]=[]);const other=[];
+  Array.from(g.children).forEach(row=>{
+    const label=row.querySelector(":scope > label[for]");
+    const key=label?label.getAttribute("for").replace(/^i_/,""):null;
+    const name=key?subgroupOf(map,key):null;
+    (name?buckets[name]:other).push(row);
+  });
+  const frag=document.createDocumentFragment();
+  order.forEach(name=>{
+    const rows=buckets[name];if(!rows.length)return;
+    const head=document.createElement("div");head.className="input-section-head";head.textContent=name;
+    frag.appendChild(head);rows.forEach(r=>frag.appendChild(r));
+  });
+  other.forEach(r=>frag.appendChild(r));
+  g.appendChild(frag);
+}
 function addEditorRow(g,key,label,unit,opts={}){const row=document.createElement("div");row.className="f"+(opts.calc?" calc":"");const value=opts.calc?derive(D)[key]:D[key];row.innerHTML=`<label for="i_${key}">${label}</label>${opts.select?`<select id="i_${key}">${opts.select}</select>`:`<input id="i_${key}" ${opts.calc?"readonly tabindex=-1":""}>`}<span class="u">${opts.select?"":(unit||"")}</span>`;g.appendChild(row);const el=row.querySelector("input,select");if(!opts.select)autoBlankApply(el,key,value);if(!opts.calc)el.onchange=()=>{if(!opts.select&&autoBlankTaken(el,key))return;const v=opts.select?Number(el.value):numFieldParse(el.value);if(!Number.isFinite(v)){if(!opts.select)el.value=D[key];return}if(opts.integer&&!Number.isInteger(v)){alert(`${label} must be entered as a whole number.`);el.value=D[key];return}D[key]=v;if(opts.rebuild){opts.rebuild();return}syncSliders();render()};return el}
 function buildLotProductEditor(g){
   APP.uiLotProduct=Math.min(productCount(D),Math.max(1,APP.uiLotProduct||1));
   /* The basis decides what every price below means, so it is asked first. */
   if(!D.vert){
     const basis=addEditorRow(g,"pmode","Price basis","",{select:optionsHtml("pmode",D.pmode)});
-    if(basis)basis.onchange=()=>{D.pmode=_clamp(Math.round(Number(basis.value)),0,1);buildForm();render()};
+    if(basis)basis.onchange=()=>{D.pmode=_clamp(Math.round(Number(basis.value)),0,2);buildForm();render()};
   }
   addEditorRow(g,"nprod","Number of product types","",{select:Array.from({length:MAX_PRODUCTS},(_,i)=>`<option value="${i+1}"${i+1===Number(D.nprod)?" selected":""}>${i+1}</option>`).join(""),rebuild:()=>{D.nprod=_clamp(Number(D.nprod),1,MAX_PRODUCTS);APP.uiLotProduct=Math.min(APP.uiLotProduct,D.nprod);APP.uiVerticalProduct=Math.min(APP.uiVerticalProduct,D.nprod);APP.uiPhaseProduct=Math.min(APP.uiPhaseProduct,D.nprod);buildForm();buildScaffold();showNav();render()}});
   const sel=addEditorRow(g,"ui_lot_product","Edit product","",{select:productOptions(APP.uiLotProduct)});sel.onchange=()=>{APP.uiLotProduct=Number(sel.value);buildForm()};
   const p=APP.uiLotProduct;addEditorRow(g,`n${p}`,`Product ${p} — lots / units`,"no.",{integer:true});
   if(!D.vert){
     addEditorRow(g,`w${p}`,`Product ${p} — lot frontage`,"ft");
-    /* Depth only enters revenue on the per-square-foot basis, so it is shown there. */
+    /* Depth only enters revenue on the lot-area per-square-foot basis. */
     if(Number(D.pmode)===1)addEditorRow(g,`d${p}`,`Product ${p} — lot depth`,"ft");
-    addEditorRow(g,`p${p}`,`Product ${p} — selling price`,Number(D.pmode)===1?"$/sqft lot":"$/front ft");
+    /* Built-up area only enters revenue on the built-up-area per-square-foot basis. */
+    if(Number(D.pmode)===2)addEditorRow(g,`bua${p}`,`Product ${p} — built-up area`,"sqft");
+    addEditorRow(g,`p${p}`,`Product ${p} — selling price`,Number(D.pmode)===1?"$/sqft lot":Number(D.pmode)===2?"$/sqft BUA":"$/front ft");
     /* What that rate produces for one lot of this product, so the basis is legible. */
     if(Number(D.pmode)===1)addEditorRow(g,"_lotarea",`Product ${p} — lot area`,"sqft",{calc:true});
   }
@@ -8018,6 +8155,7 @@ function buildFormCore(){
       D.vert=0;normalizeModeState(true);
       const src=P0();
       const np=newParcel(src.name+" - vertical",src.loc,verticalStageInputs(src.inputs,projectSalesRevenue(src.inputs),src.name));
+      np._dealId=src._dealId;
       APP.parcels.push(np);
       APP.active=APP.parcels.length-1;D=P0().inputs;normalizeModeState();
       buildParcels();buildForm();buildScaffold();showNav();render();
@@ -8026,6 +8164,11 @@ function buildFormCore(){
     D.vert=choice;if(choice===1)seedVerticalBua(D);normalizeModeState(true);
     buildForm();buildScaffold();showNav();render()};
   GROUPS.forEach((sec,gi)=>{
+    /* Both groups' fields default to 0/off for every real project and stay
+       fully live in the engine (DEF is built from all of GROUPS regardless of
+       what renders) - only the input form stops offering them, at the user's
+       request to cut down the Funding/Tax and Programme tabs' field count. */
+    if(sec.g==="Statutory costs"||sec.g==="Sales and use tax")return;
     const openByDefault=APP.inputsCollapsed?false:(gi<=1||sec.g==="Phase programme and mix");
     const fs=document.createElement("div");fs.className="fs"+(openByDefault?"":" shut");
     const lg=document.createElement("button");lg.type="button";lg.className="lg";lg.textContent=sec.g;
@@ -8184,7 +8327,7 @@ function buildFormCore(){
              if(_num(D["ph"+i+"vel"],0)<=0)D["ph"+i+"vel"]=Math.max(0,_num(D.vert?D.vel:D.absn,0));
              if(_num(D["ph"+i+"esc"],0)===0)D["ph"+i+"esc"]=_num(D.esc,0);
              if(D.vert&&_num(D["ph"+i+"buildpsf"],0)<=0)D["ph"+i+"buildpsf"]=_num(D.buildpsf,0);}}
-          if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,1);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
+          if(k==="vert"||k==="pmode"){D[k]=k==="vert"?(v>=.5?1:0):_clamp(Math.round(v),0,2);normalizeModeState(k==="vert");buildForm();buildScaffold();showNav();render();return}
           if(k==="nph"){
             if(!Number.isInteger(v)){alert("Construction phases must be entered as a whole number.");inp.value=D[k];return}
             D.nph=_clamp(v,1,6);
@@ -8212,6 +8355,8 @@ function buildFormCore(){
           syncSliders();render()}}
     });
     if(sec.g==="Vertical development"&&D.vert)buildVerticalProductEditor(g);
+    if(sec.g==="Debt")groupSubHeaders(g,DEBT_SUBGROUPS);
+    else if(sec.g==="Tax and return")groupSubHeaders(g,TAX_SUBGROUPS);
     fs.appendChild(g);host.appendChild(fs);
   });
   updateCollapseInputsButton();
@@ -8455,7 +8600,7 @@ function buildTornadoTests(d){
   const sw=APP.tSwing/100,all=levers(),byKey=new Map(all.map(x=>[x.k,x]));
   /* Keep the Tornado responsive by calculating the material development drivers first.
      The displayed values still come from the full appraisal engine. */
-  const priceKey=d.vert?"hpsf":(d.pmode===1?"vpsf":"vff");
+  const priceKey=d.vert?"hpsf":(d.pmode>=1?"vpsf":"vff");
   const preferred=[priceKey,"vinfl","pr","pidel","pidrt","contpc","rate","esc","infesc","ph1dur"];
   const candidates=preferred.map(k=>byKey.get(k)).filter(Boolean);
   return candidates.map(x=>{
@@ -9439,6 +9584,13 @@ function portfolioYears(first,last,fyEnd){
   const set=new Set();for(let a=first;a<=last;a++)set.add(portfolioFyOfAbs(a,fyEnd));return [...set].sort((a,b)=>a-b)
 }
 let _portfolioMemoKey=null,_portfolioMemoValue=null;
+/* portfolioResult()/_portfolioResults (above) cache only a slim metrics view
+   (eirr/npv/... - no R.* arrays), which is all Project comparison needs but
+   not enough to build a consolidated statement here. Without a cache of its
+   own, editing any one selected parcel forced a full run() of every OTHER
+   selected parcel too on the next repaint of any Consolidation pane -
+   this is the actual full result per parcel, keyed the same way. */
+const _portfolioParcelCache=new Map();
 function portfolioDataKey(){
   const selected=new Set(portfolioSelectedIds()),fyEnd=_clamp(Math.round(_num(APP.portfolioFyEnd,6)),1,12);
   return fyEnd+"|"+APP.parcels.filter(p=>selected.has(p.id)).map(p=>
@@ -9449,7 +9601,16 @@ function portfolioData(){
   const memoKey=portfolioDataKey();
   if(_portfolioMemoKey===memoKey&&_portfolioMemoValue)return _portfolioMemoValue;
   const selected=new Set(portfolioSelectedIds()),runs=[],errors=[];
-  APP.parcels.forEach(p=>{if(!selected.has(p.id))return;try{const A=run(p.inputs);runs.push({p,A,d:A.d||derive(p.inputs),start:portfolioAbsStart(A.d||derive(p.inputs))})}catch(e){errors.push({p,e})}});
+  APP.parcels.forEach(p=>{
+    if(!selected.has(p.id))return;
+    const sig=modelInputSignature(p.inputs);
+    try{
+      let A=cacheGetLRU(_portfolioParcelCache,sig);
+      if(!A){A=run(p.inputs);cacheSetLRU(_portfolioParcelCache,sig,A,16)}
+      const d=A.d||derive(p.inputs);
+      runs.push({p,A,d,start:portfolioAbsStart(d)});
+    }catch(e){errors.push({p,e})}
+  });
   if(!runs.length)return memoPortfolio(memoKey,{runs,errors,fyEnd:_clamp(Math.round(_num(APP.portfolioFyEnd,6)),1,12)});
   const minAbs=Math.min(...runs.map(r=>r.start)),maxAbs=Math.max(...runs.map(r=>r.start+r.A.NM)),N=maxAbs-minAbs+1;
   const z=()=>new Array(N).fill(0),plKeys=["grossRev","outputSut","rev","landCost","transferTax","landSurcharge","acqFeeCost","acquisitionCost","constructionCost","professionalFees","dueDiligenceFees","softCostFees","developmentManagementFees","designCost","statutoryCost","contingencyCost","holdingCost","brokerage","sellingCost","marketing","capitalisedFinanceCost","otherDirectCost","inputSutCredit","dc","gp","gna","gnaShared","staff","staffShared","corpOverhead","oh","fin","da","totalOverhead","otherIncome","interestIncome","npbt","tax","npat"],PLM={};plKeys.forEach(k=>PLM[k]=z());
@@ -9780,7 +9941,7 @@ function _buildExcel(){
   const fys=A.fys.filter(y=>A.PL[y].rev!==0||A.B.net[y]!==0);
   const nf="'$#,##0'";
   t=`<table><tr><td style="${bn}" colspan="${fys.length+2}">Profit and Loss</td></tr>
-    <tr><td style="${hd}">Sr</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
+    <tr><td style="${hd}">Sl. No.</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
   /* Rebuilt: the previous row list mixed a "2.2"/"2.8" pair that read the
      identical constructionCost value twice, named a "2.6 Design & Supervision
      Cost" that is really just the design slice of professionalFees (not a
@@ -9855,7 +10016,7 @@ function _buildExcel(){
   const cfIn=y=>A.B.cfequity[y]+A.B.cfdebtraised[y]+A.B.salescash[y]+A.B.escin[y]+A.B.cfsutrefund[y]+A.B.pid[y]+A.B.cfotherincome[y]+A.B.cfinterestincome[y]+cfDepIn(y);
   const cfOut=y=>A.B.cfland[y]+A.B.cfinfra[y]+A.B.cfpiddebt[y]+A.B.cfcapex[y]+A.B.cfconstruction[y]+A.B.cfdesign[y]+A.B.cfauthority[y]+A.B.cfbrokerage[y]+A.B.cfretax[y]+A.B.cfohpaid[y]+A.B.cfoutputsut[y]+A.B.cfinputsutpaid[y]+A.B.cftaxpaid[y]+A.B.cffinance[y]+A.B.cfdebtrepaid[y]+cfDepOut(y);
   t=`<table><tr><td style="${bn}" colspan="${fys.length+3}">Project Cashflow Statement — Net Equity Funding</td></tr>
-    <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
+    <tr><td style="${hd}">Ref.</td><td style="${hd}">Description</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
   const addCf=(sr,lab,fn,style=st,totalFn=null)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>`+
     fys.map(y=>`<td style="${style}mso-number-format:${nf}">${Math.round(fn(y))}</td>`).join("")+
     `<td style="${style}mso-number-format:${nf}">${totalFn===null?Math.round(fys.reduce((a,y)=>a+fn(y),0)):totalFn}</td></tr>`};
@@ -9896,7 +10057,7 @@ function _buildExcel(){
   if(typeof window.exposureEquityData==="function"){
     const EE=window.exposureEquityData(A,d),eys=EE.years,erows=EE.rows;
     t=`<table><tr><td style="${bn}" colspan="${eys.length+2}">Exposure</td></tr>
-      <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
+      <tr><td style="${hd}">Ref.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
     const addE=(sr,lab,fn,style=st)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>`+
       erows.map(r=>`<td style="${style}mso-number-format:${nf}">${Math.round(fn(r))}</td>`).join("")+`<td style="${style}"></td></tr>`};
     t+=`<tr><td style="${bn}">A</td><td style="${bn}" colspan="${eys.length+1}">Assets</td></tr>`;
@@ -9912,7 +10073,7 @@ function _buildExcel(){
     sheets.push(["Exposure",t+`</table>`]);
     let run2=0;const openings=[],closings=[];erows.forEach(r=>{openings.push(run2);run2+=r.eqIn-r.eqOut+r.pat;closings.push(run2)});
     t=`<table><tr><td style="${bn}" colspan="${eys.length+2}">Equity Schedule</td></tr>
-      <tr><td style="${hd}">Sl No.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
+      <tr><td style="${hd}">Sl. No.</td><td style="${hd}">Description</td>${eys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}"></td></tr>`;
     const addQ=(sr,lab,vals,style=st)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>`+
       vals.map(v=>`<td style="${style}mso-number-format:${nf}">${Math.round(v)}</td>`).join("")+`<td style="${style}"></td></tr>`};
     addQ("1","Opening Equity Balance",openings);
@@ -9938,13 +10099,13 @@ function _buildExcel(){
   if(Q.runs.length){
     const pfys=Q.plFys,psy=(k,y)=>Q.sumFy(Q.PLM[k],y),ptot=k=>(Q.PLM[k]||[]).reduce((a,b)=>a+b,0);
     t=`<table><tr><td style="${bn}" colspan="${pfys.length+3}">Selected Portfolio — Consolidated Profit and Loss</td></tr>
-      <tr><td style="${hd}">Ref.</td><td style="${hd}">Description</td>${pfys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
+      <tr><td style="${hd}">Sl. No.</td><td style="${hd}">Description</td>${pfys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
     const addP=(sr,lab,k,style=st)=>{t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>${pfys.map(y=>`<td style="${style}mso-number-format:${nf}">${Math.round(psy(k,y))}</td>`).join("")}<td style="${style}mso-number-format:${nf}">${Math.round(ptot(k))}</td></tr>`};
     [["1.1","Gross Revenue / Net Qualified Sales","grossRev"],["1.2","Less: Transaction tax on sales","outputSut"],["1","Total Revenue","rev",gr],["2.1","Land Purchase Cost","landCost"],["2.2","Transfer and Recording Tax","transferTax"],["2.3","Title Insurance and Escrow Fees","landSurcharge"],["2.4","Survey, Environmental and Appraisal","acqFeeCost"],["2.5","Acquisition Fee and Other Acquisition Costs","acquisitionCost"],["2.6","Construction Cost","constructionCost"],["2.7","Professional Fees","professionalFees"],["2.8","Development Management Fees","developmentManagementFees"],["2.9","Statutory Costs","statutoryCost"],["2.10","Project Contingency","contingencyCost"],["2.11","Land Holding Costs","holdingCost"],["2.12","Brokerage & Incentive","brokerage"],["2.13","Selling / Closing Expenses","sellingCost"],["2.14","Marketing and Advertising","marketing"],["2.15","Capitalised Finance Cost Released","capitalisedFinanceCost"],["2.16","Other Direct Cost","otherDirectCost"],["2.17","Less: Recoverable sales and use tax","inputSutCredit"],["2","Total Direct Cost","dc",gr],["3","Gross Profit","gp",gn],["4.1","General & Administrative Expenses","gna"],["4.2","Shared-service G&A Allocation","gnaShared"],["4.3","Staff / Manpower Expenses","staff"],["4.4","Shared-service Staff / Manpower Allocation","staffShared"],["4.5","Corporate Overhead Allocation","corpOverhead"],["4","Total Overhead Cost","oh",gr],["5","Finance Cost","fin"],["6","Depreciation & Amortisation","da"],["7","Total Overhead Cost including Finance","totalOverhead",gr],["8","Development Fees / Other Income","otherIncome"],["9","Net Profit Before Taxes","npbt",gn],["10","Corporate Taxes","tax"],["11","Net Profit after Tax","npat",gn]].forEach(x=>addP(x[0],x[1],x[2],x[3]||st));
     sheets.push(["Portfolio P and L",t+`</table>`]);
     const cfys=Q.cfFys,ss=(arr,y)=>Q.sumFy(arr,y);
     t=`<table><tr><td style="${bn}" colspan="${cfys.length+3}">Selected Portfolio - Consolidated Project Cash Flow Statement</td></tr>
-      <tr><td style="${hd}">Ref.</td><td style="${hd}">Particulars</td>${cfys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
+      <tr><td style="${hd}">Sl. No.</td><td style="${hd}">Particulars</td>${cfys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;
     const addPC=(sr,lab,fn,style=st)=>{const vals=cfys.map(fn);t+=`<tr><td style="${style}">${sr}</td><td style="${style}">${lab}</td>${vals.map(v=>`<td style="${style}mso-number-format:${nf}">${Math.round(v)}</td>`).join("")}<td style="${style}mso-number-format:${nf}">${Math.round(vals.reduce((a,b)=>a+b,0))}</td></tr>`};
     const pNet=y=>ss(Q.CFM.cfrefresrev,y)-ss(Q.CFM.cfrefsut,y),pLand=y=>ss(Q.CFM.cfrefland,y)+ss(Q.CFM.cfrefxfertax,y)+ss(Q.CFM.cfrefholding,y)+ss(Q.CFM.cfrefacqfee,y)+ss(Q.CFM.cfreflandsurcharge,y),pDev=y=>ss(Q.CFM.cfrefconstruction,y)+ss(Q.CFM.cfrefprofessional,y)+ss(Q.CFM.cfrefdm,y)+ss(Q.CFM.cfrefstatutory,y)+ss(Q.CFM.cfrefcontingency,y),pSell=y=>ss(Q.CFM.cfrefbrokerage,y)+ss(Q.CFM.cfrefselling,y)+ss(Q.CFM.cfrefmarketing,y),pDebt=y=>ss(Q.CFM.cfrefdebt,y)+ss(Q.CFM.cfrefdebtfinance,y)+ss(Q.CFM.cfrefrepayment,y),pFin=y=>ss(Q.CFM.cfrefprocessing,y)+ss(Q.CFM.cfrefinterest,y)+ss(Q.CFM.cfreflifetime,y);
     addPC("1","Net Revenue",pNet,gr);addPC("1.1","Collections from Sale",y=>ss(Q.CFM.cfrefresrev,y)-ss(Q.CFM.cfrefinterestincome,y));addPC("1.2","Interest Income",y=>ss(Q.CFM.cfrefinterestincome,y));
@@ -10102,7 +10263,7 @@ function renderProjectCashflow({A,d},hostId){
     return {sr:1,cls:kind||"",c:[ref,label,...fys.map(y=>f(fn(y))),f(isBal?fn(fys[fys.length-1]):sum(fn))]};
   });
   const note=(d.costsutbasis===0?"Development/selling cost inputs are treated as excluding sales and use tax: the tax paid is grossed into the relevant cost rows and recovered within Operating Cash Inflows after the refund lag.":"Development/selling cost inputs are treated as including sales and use tax: any recoverable tax is returned within Operating Cash Inflows after the refund lag.");
-  const cfHtml=`<div class="scrollx">`+tbl("Project Cash Flow Statement",["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,note,"totalfirst")+`</div>`;
+  const cfHtml=`<div class="scrollx">`+tbl("Project Cash Flow Statement",["Ref.","Particulars",...fys.map(y=>"FY "+y),"Total"],rows,note,"totalfirst")+`</div>`;
   set(host,cfHtml);if(own)cacheSetLRU(_projectCashflowHtml,cfKey,cfHtml,8);
 };
 PANE.monthly=function({A,d},hostId){
@@ -10113,7 +10274,7 @@ PANE.monthly=function({A,d},hostId){
     const f=isCount?M0:$z;
     return {sr:1,cls:kind||"",c:[ref,label,...mm.map(m=>f(fn(m))),f(isBal?fn(mm[mm.length-1]):mm.reduce((a,m)=>a+fn(m),0))]};
   });
-  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Sl. No.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
+  set(hostId||"o_monthly",chart("Loan balance and cumulative equity cash flow",[{n:"Loan balance",v:R.lcl.slice(0,last+1),c:"#C0504D"},{n:"Net equity cash flow",v:R.cfrefprofit.slice(0,last+1),c:"#2E5496"}],mm.map(m=>mLabel(m,d)))+`<div class="scrollx">`+tbl("Monthly Project Cash Flow",["Ref.","Particulars",...mm.map(m=>mLabel(m,d)),"Total"],tableRows,"Reference, particulars and total stay in view while the months scroll.","totalfirst")+`</div>`);
 };
 /* ═══════════════════ SENSITIVITY / HEAT / OFFER ═══════════════════ */
 function renderSensitivitySync({d},runFn=run,solveLandFn=solveLand){
@@ -10169,9 +10330,11 @@ function renderOfferSync(C,decisionOverride,runFn=run,solveLandFn=solveLand){con
   d.vert
     ? d.hpsf
     : (
-        d.pmode
-          ? d._rev0 / d._lotsqft
-          : d._rev0 / d._frontft
+        d.pmode===2
+          ? d._rev0 / d._buaTot
+          : d.pmode===1
+            ? d._rev0 / d._lotsqft
+            : d._rev0 / d._frontft
       );
 const saleLever =
   d.vert
@@ -10376,7 +10539,7 @@ function renderHeatmapPane(C){
 };
 function renderOfferPane(C){
   const d=C.d,decision=currentDecision();
-  const om=APP.oMet,ot=om==="npv"?0:APP.oTgt/100,currentSaleDriver=d.vert?d.hpsf:(d.pmode?d._rev0/d._lotsqft:d._rev0/d._frontft),saleLever=d.vert?"hpsf":(d.pmode?"vpsf":"vff"),idx=[currentSaleDriver,currentSaleDriver*.94,currentSaleDriver*.84],runs=[],solves=[];
+  const om=APP.oMet,ot=om==="npv"?0:APP.oTgt/100,currentSaleDriver=d.vert?d.hpsf:(d.pmode===2?d._rev0/d._buaTot:d.pmode===1?d._rev0/d._lotsqft:d._rev0/d._frontft),saleLever=d.vert?"hpsf":(d.pmode?"vpsf":"vff"),idx=[currentSaleDriver,currentSaleDriver*.94,currentSaleDriver*.84],runs=[],solves=[];
   addPaneSolve(solves,om,ot,{});
   const tg=[["npv",0,false],[om,ot,true],["irr",.20,false],["irr",.25,false],["eirr",.20,false],["eirr",.25,false]],seen=new Set(tg.filter(t=>t[2]).map(t=>t[0]+"|"+t[1].toFixed(4))),useT=[];
   tg.forEach(t=>{const sig=t[0]+"|"+t[1].toFixed(4);if(!t[2]){if(seen.has(sig))return;seen.add(sig)}useT.push(t)});
@@ -10462,11 +10625,23 @@ function buildEnvelope(){
   return {v:ENVELOPE_V,region:APPRAISAL_REGION,parcels:APP.parcels,active:APP.active,scn:APP.scn,scnAuto:APP.scnAuto,
     cols:APP.cols,mets:APP.mets,portfolioRate:APP.portfolioRate,portfolioMode:APP.portfolioMode,portfolioSelected:APP.portfolioSelected,portfolioFyEnd:APP.portfolioFyEnd,portfolioBasis:APP.portfolioBasis};
 }
+/* Same shape as buildEnvelope, but for one deal's own parcels out of the
+   merged tab bar - every US deal shares the same session-wide scn/cols/mets/
+   portfolio settings, but each deal's own row must only ever carry its own
+   parcels back to the shared store. `_dealId` is this page's own bookkeeping
+   (which tab belongs to which saved row) and is stripped before it reaches
+   storage. */
+function buildEnvelopeFor(parcels,active){
+  const e=buildEnvelope();
+  e.parcels=parcels.map(p=>{const{_dealId,...rest}=p;return rest});
+  e.active=active;
+  return e;
+}
 /* One parcel, from its stored form into the shape the model runs on. Shared by
    the file load and the server load, so a parcel cannot arrive two ways - and
    in particular cannot arrive without enforceAccountingPolicy, which would run
    the model on the wrong policy rather than fail. */
-function normalizeParcel(p,envV){const inputs={...DEF,...cleanStoredInputs(p.inputs)};inputs.pmode=Number(inputs.pmode)===1?1:0;if(Number(envV||0)<6&&Number(inputs.ovhmode)===0)inputs.ovhmode=2;
+function normalizeParcel(p,envV){const inputs={...DEF,...cleanStoredInputs(p.inputs)};inputs.pmode=_clamp(Math.round(Number(inputs.pmode)||0),0,2);if(Number(envV||0)<6&&Number(inputs.ovhmode)===0)inputs.ovhmode=2;
   /* One-time cleanup: a stray non-zero "Development management fees - combined"
      value was found sitting on a saved project even though the shipped default
      has always been 0, silently inflating Total soft cost. Zero it once for any
@@ -10569,8 +10744,8 @@ var makeXlsxBlob=makeXlsxBlobCore;
 (function(){
   function excelCell(v,style,isCount){v=Number(v||0);if(Math.abs(v)<.5)return `<td style="${style}">-</td>`;const nf=isCount?"'#,##0;[Red](#,##0);-'":"'$#,##0;[Red]($#,##0);-'";return `<td style="${style}mso-number-format:${nf}">${Math.round(v)}</td>`}
   function dynamicInputsExcel(){const d=derive(D),st="border:.5pt solid #808080;font-family:Calibri;font-size:9pt;",hd=st+"background:#FCE4D6;font-weight:bold;",bn=st+"background:#DDEBF7;font-weight:bold;",gr=st+"background:#D0CECE;font-weight:bold;";let h=`<table><tr><td style="${bn}" colspan="4">Dynamic Reforecast - Active Inputs</td></tr><tr><td style="${hd}">Group</td><td style="${hd}">Particulars</td><td style="${hd}">Unit</td><td style="${hd}">Value</td></tr>`;GROUPS.forEach(g=>{const rows=[];g.f.forEach(([k,lab,unit,,ty])=>{if(!fieldShown(k,!!d.vert))return;[lab,unit]=inputDisplay(k,lab,unit,d);const v=ty==="c"?d[k]:D[k];if(v==null||v===""||(typeof v==="number"&&!Number.isFinite(v)))return;if(typeof v==="number"&&Math.abs(v)<1e-9)return;rows.push([lab,unit,v])});if(!rows.length)return;rows.forEach((r,i)=>{const [lab,unit,v]=r;h+=`<tr><td style="${i?st:gr}">${i?"":g.g}</td><td style="${st}">${esc_(lab)}</td><td style="${st}">${esc_(unit||"")}</td>${typeof v==="number"?`<td style="${st}mso-number-format:'#,##0.00'">${v}</td>`:`<td style="${st}">${esc_(v)}</td>`}</tr>`})});return h+`</table>`}
-  function dynamicPlExcel(){const A=run(D),d=derive(D),S=projectPlDataForExports(A,d),years=S.years,st="border:.5pt solid #808080;font-family:Calibri;font-size:9pt;",hd=st+"background:#FCE4D6;font-weight:bold;",bn=st+"background:#DDEBF7;font-weight:bold;",gr=st+"background:#D0CECE;font-weight:bold;",gn=st+"background:#E2EFDA;font-weight:bold;";let h=`<table><tr><td style="${bn}" colspan="${years.length+4}">${esc_(P0().name)} - Dynamic Project P&amp;L and Feasibility</td></tr><tr><td style="${hd}">Ref.</td><td style="${hd}">Particulars</td><td style="${hd}">%</td>${years.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;const totalNet=Math.max(1,Math.abs(S.total('netRevenue'))),add=(ref,label,key,style=st,force=false)=>{const total=S.total(key);if(!force&&Math.abs(total)<.5)return;h+=`<tr><td style="${style}">${ref}</td><td style="${style}">${label}</td><td style="${style}">${P(total/totalNet)}</td>${years.map(y=>excelCell(S.value(y,key),style)).join("")}${excelCell(total,style)}</tr>`},band=label=>{h+=`<tr><td style="${bn}" colspan="${years.length+4}">${label}</td></tr>`};add("1.1","Gross Revenue / Net Qualified Sales","grossRevenue",st,true);add("1.2","Less: Transaction tax on sales","outputSut",st,true);add("1","Net Revenue","netRevenue",gn,true);band("Land and Acquisition Cost");add("2.1","Land Purchase Cost","landPurchase");add("2.2","Transfer and Recording Tax","transferTax");add("2.3","Title Insurance and Escrow Fees","surchargeCost");add("2.4","Survey, Environmental and Appraisal","acqfee");add("2.5","Acquisition Fee and Other Acquisition Costs","acquisitionCost");add("2.6","Land Holding Costs","holdingCost");add("2","Total Land Cost","landTotal",gr,true);band("Development Costs");add("3.1","Due Diligence & Ancillary Fees","dueDiligence");add("3.2","Infrastructure Costs","infrastructureCost");add("3.3","Soft Costs","softCost");add("3.4","Other Costs","otherCosts");add("3.7","Authority & Statutory Costs","authorityCost");add("3.5","Design Costs","designCost");add("3.6","Construction Costs","verticalConstruction");add("3.6","Project Capex","projectCapex");add("3","Total Development Cost","developmentTotal",gr,true);band("Selling cost and transaction tax");add("4.1","Brokerage & Incentive","brokerage");add("4.2","Selling / Closing Expenses","sellingCost");add("4.3","Marketing and Advertising","marketing");add("4","Total Selling Cost","sellingTotal",gr,true);add("5","Less: Recoverable sales and use tax","inputSutCredit",st,true);add("6","Total Direct Project Cost","directCost",gr,true);band("Finance, Overheads and Profit");add("7.1","Processing / Establishment Fee","processingFee");add("7.2","Interest","interest");add("7.3","Line Fee","lineFee");add("7","Total Finance Cost","financeCost",gr,true);add("8","Project and Corporate Overheads","overheadCost");add("9","Depreciation & Amortisation","depreciation");add("10","Development Fees / Other Income","otherIncome");add("10.1","Interest Income","interestIncome");add("11","Net Profit Before Taxes","npbt",gn,true);add("12","Corporate Taxes","tax");add("13","Net Profit after Tax","npat",gn,true);return h+`</table>`}
-  function dynamicCfExcel(){const A=run(D),activity=["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"],fys=A.fys.filter(y=>activity.some(k=>Math.abs(Number(A.B[k]&&A.B[k][y]||0))>.5)),st="border:.5pt solid #808080;font-family:Calibri;font-size:9pt;",hd=st+"background:#FCE4D6;font-weight:bold;",bn=st+"background:#DDEBF7;font-weight:bold;",gr=st+"background:#D0CECE;font-weight:bold;",gn=st+"background:#E2EFDA;font-weight:bold;";let h=`<table><tr><td style="${bn}" colspan="${fys.length+3}">Project Cash Flow Statement</td></tr><tr><td style="${hd}">Ref.</td><td style="${hd}">Particulars</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;const b=(k,y)=>Number(A.B[k]&&A.B[k][y]||0),row=(ref,label,fn,style=st)=>{const vals=fys.map(fn);h+=`<tr><td style="${style}">${ref}</td><td style="${style}">${label}</td>${vals.map(v=>excelCell(v,style)).join("")}${excelCell(vals.reduce((a,b)=>a+b,0),style)}</tr>`},netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),land=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefholding",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),dev=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sell=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debt=y=>-b("dr1",y)-b("dr2",y)+b("rep",y)+b("depplaced",y)-b("depreturn",y),fin=y=>b("pf",y)+b("intr",y)+b("lf",y);row("1","Net Revenue",netRevenue,gr);row("1.1","Collections from Sale",y=>b("cfrefresrev",y));row("2","Land Costs",land,gr);row("2.1","Land Costs",y=>b("cfrefland",y));row("2.2","Real Estate Property Tax",y=>b("cfrefholding",y));row("3","Development Costs",dev,gr);row("3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y));row("3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y));row("3.3","Soft Costs",y=>b("cfrefsoftcost",y));row("3.4","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y));row("3.7","Authority & Statutory Costs",y=>b("cfrefstatutory",y));row("3.5","Design Costs",y=>b("cfrefdesigncost",y));row("3.6","Construction Costs",y=>b("cfrefbuildcost",y));row("4","Selling Costs",sell,gr);row("4.1","Brokerage Costs",y=>b("cfrefbrokerage",y));row("4.2","Selling Expenses",y=>b("cfrefselling",y));row("4.3","Marketing & Advertising",y=>b("cfrefmarketing",y));row("6","Net Cash Flow",y=>b("cfrefnetcash",y),gn);row("7","Debt Schedule",debt,gr);row("7.1","(-) Debt Raised",y=>-b("dr1",y)-b("dr2",y));row("7.3","(+) Debt Repayment",y=>b("rep",y));if(fys.some(y=>Math.abs(b("depplaced",y))+Math.abs(b("depreturn",y))>.5)){row("7.4","(+) Bank Deposit Placed",y=>b("depplaced",y));row("7.5","(-) Deposit Returned",y=>-b("depreturn",y))}row("8","Finance Costs",fin,gr);row("8.1","Processing Fee",y=>b("pf",y));row("8.2","Interest",y=>b("intr",y));row("8.3","Line fee",y=>b("lf",y));row("9","Equity Needed",y=>b("cfrefequity",y),gn);row("10","Net Surplus",y=>b("cfrefsurplus",y),gn);row("11","Profit (10 - 9)",y=>b("cfrefprofit",y),gn);return h+`</table>`}
+  function dynamicPlExcel(){const A=run(D),d=derive(D),S=projectPlDataForExports(A,d),years=S.years,st="border:.5pt solid #808080;font-family:Calibri;font-size:9pt;",hd=st+"background:#FCE4D6;font-weight:bold;",bn=st+"background:#DDEBF7;font-weight:bold;",gr=st+"background:#D0CECE;font-weight:bold;",gn=st+"background:#E2EFDA;font-weight:bold;";let h=`<table><tr><td style="${bn}" colspan="${years.length+4}">${esc_(P0().name)} - Dynamic Project P&amp;L and Feasibility</td></tr><tr><td style="${hd}">Sl. No.</td><td style="${hd}">Particulars</td><td style="${hd}">%</td>${years.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;const totalNet=Math.max(1,Math.abs(S.total('netRevenue'))),add=(ref,label,key,style=st,force=false)=>{const total=S.total(key);if(!force&&Math.abs(total)<.5)return;h+=`<tr><td style="${style}">${ref}</td><td style="${style}">${label}</td><td style="${style}">${P(total/totalNet)}</td>${years.map(y=>excelCell(S.value(y,key),style)).join("")}${excelCell(total,style)}</tr>`},band=label=>{h+=`<tr><td style="${bn}" colspan="${years.length+4}">${label}</td></tr>`};add("1.1","Gross Revenue / Net Qualified Sales","grossRevenue",st,true);add("1.2","Less: Transaction tax on sales","outputSut",st,true);add("1","Net Revenue","netRevenue",gn,true);band("Land and Acquisition Cost");add("2.1","Land Purchase Cost","landPurchase");add("2.2","Transfer and Recording Tax","transferTax");add("2.3","Title Insurance and Escrow Fees","surchargeCost");add("2.4","Survey, Environmental and Appraisal","acqfee");add("2.5","Acquisition Fee and Other Acquisition Costs","acquisitionCost");add("2.6","Land Holding Costs","holdingCost");add("2","Total Land Cost","landTotal",gr,true);band("Development Costs");add("3.1","Due Diligence & Ancillary Fees","dueDiligence");add("3.2","Infrastructure Costs","infrastructureCost");add("3.3","Soft Costs","softCost");add("3.4","Other Costs","otherCosts");add("3.7","Authority & Statutory Costs","authorityCost");add("3.5","Design Costs","designCost");add("3.6","Construction Costs","verticalConstruction");add("3.6","Project Capex","projectCapex");add("3","Total Development Cost","developmentTotal",gr,true);band("Selling cost and transaction tax");add("4.1","Brokerage & Incentive","brokerage");add("4.2","Selling / Closing Expenses","sellingCost");add("4.3","Marketing and Advertising","marketing");add("4","Total Selling Cost","sellingTotal",gr,true);add("5","Less: Recoverable sales and use tax","inputSutCredit",st,true);add("6","Total Direct Project Cost","directCost",gr,true);band("Finance, Overheads and Profit");add("7.1","Processing / Establishment Fee","processingFee");add("7.2","Interest","interest");add("7.3","Line Fee","lineFee");add("7","Total Finance Cost","financeCost",gr,true);add("8","Project and Corporate Overheads","overheadCost");add("9","Depreciation & Amortisation","depreciation");add("10","Development Fees / Other Income","otherIncome");add("10.1","Interest Income","interestIncome");add("11","Net Profit Before Taxes","npbt",gn,true);add("12","Corporate Taxes","tax");add("13","Net Profit after Tax","npat",gn,true);return h+`</table>`}
+  function dynamicCfExcel(){const A=run(D),activity=["cfrefqualifiedsales","cfrefresrev","cfrefsut","cfrefland","cfrefconstruction","cfsutrefund","cfrefnetcash","dr1","dr2","rep","pf","intr","lf","cfrefequity","cfrefsurplus"],fys=A.fys.filter(y=>activity.some(k=>Math.abs(Number(A.B[k]&&A.B[k][y]||0))>.5)),st="border:.5pt solid #808080;font-family:Calibri;font-size:9pt;",hd=st+"background:#FCE4D6;font-weight:bold;",bn=st+"background:#DDEBF7;font-weight:bold;",gr=st+"background:#D0CECE;font-weight:bold;",gn=st+"background:#E2EFDA;font-weight:bold;";let h=`<table><tr><td style="${bn}" colspan="${fys.length+3}">Project Cash Flow Statement</td></tr><tr><td style="${hd}">Sl. No.</td><td style="${hd}">Particulars</td>${fys.map(y=>`<td style="${hd}">FY ${y}</td>`).join("")}<td style="${hd}">Total</td></tr>`;const b=(k,y)=>Number(A.B[k]&&A.B[k][y]||0),row=(ref,label,fn,style=st)=>{const vals=fys.map(fn);h+=`<tr><td style="${style}">${ref}</td><td style="${style}">${label}</td>${vals.map(v=>excelCell(v,style)).join("")}${excelCell(vals.reduce((a,b)=>a+b,0),style)}</tr>`},netRevenue=y=>b("cfrefresrev",y)-b("cfrefsut",y),land=y=>b("cfrefland",y)+b("cfrefxfertax",y)+b("cfrefholding",y)+b("cfrefacqfee",y)+b("cfreflandsurcharge",y),dev=y=>b("cfrefconstruction",y)+b("cfrefprofessional",y)+b("cfrefdm",y)+b("cfrefstatutory",y)+b("cfrefcontingency",y),sell=y=>b("cfrefbrokerage",y)+b("cfrefselling",y)+b("cfrefmarketing",y),debt=y=>-b("dr1",y)-b("dr2",y)+b("rep",y)+b("depplaced",y)-b("depreturn",y),fin=y=>b("pf",y)+b("intr",y)+b("lf",y);row("1","Net Revenue",netRevenue,gr);row("1.1","Collections from Sale",y=>b("cfrefresrev",y));row("2","Land Costs",land,gr);row("2.1","Land Costs",y=>b("cfrefland",y));row("2.2","Real Estate Property Tax",y=>b("cfrefholding",y));row("3","Development Costs",dev,gr);row("3.1","Due Diligence & Ancillary Fees",y=>b("cfrefduediligence",y));row("3.2","Infrastructure Costs",y=>b("cfrefinfrastructure",y));row("3.3","Soft Costs",y=>b("cfrefsoftcost",y));row("3.4","Other Costs",y=>b("cfrefothercost",y)+b("cfrefcontingency",y)+b("cfrefdm",y));row("3.7","Authority & Statutory Costs",y=>b("cfrefstatutory",y));row("3.5","Design Costs",y=>b("cfrefdesigncost",y));row("3.6","Construction Costs",y=>b("cfrefbuildcost",y));row("4","Selling Costs",sell,gr);row("4.1","Brokerage Costs",y=>b("cfrefbrokerage",y));row("4.2","Selling Expenses",y=>b("cfrefselling",y));row("4.3","Marketing & Advertising",y=>b("cfrefmarketing",y));row("6","Net Cash Flow",y=>b("cfrefnetcash",y),gn);row("7","Debt Schedule",debt,gr);row("7.1","(-) Debt Raised",y=>-b("dr1",y)-b("dr2",y));row("7.3","(+) Debt Repayment",y=>b("rep",y));if(fys.some(y=>Math.abs(b("depplaced",y))+Math.abs(b("depreturn",y))>.5)){row("7.4","(+) Bank Deposit Placed",y=>b("depplaced",y));row("7.5","(-) Deposit Returned",y=>-b("depreturn",y))}row("8","Finance Costs",fin,gr);row("8.1","Processing Fee",y=>b("pf",y));row("8.2","Interest",y=>b("intr",y));row("8.3","Line fee",y=>b("lf",y));row("9","Equity Needed",y=>b("cfrefequity",y),gn);row("10","Net Surplus",y=>b("cfrefsurplus",y),gn);row("11","Profit (10 - 9)",y=>b("cfrefprofit",y),gn);return h+`</table>`}
   /* ---- the rest of the Cashflow & P&L PDF, one statement per sheet --------
      The workbook already carried the annual P&L and the annual cashflow. The
      side-by-side comparison and the three monthly schedules the same export
@@ -10637,8 +10812,9 @@ var makeXlsxBlob=makeXlsxBlobCore;
   function monthlyBlockExcel(b){
     if(!b||!b.rows||!b.rows.length||!b.months||!b.months.length)return "";
     const n=b.months.length+2;
+    const refHead=b.rows.some(r=>/[a-zA-Z]/.test(String(r.ref||"")))?"Ref.":"Sl. No.";
     let h=`<table><tr><td style="${XL.bn}" colspan="${n}">${esc_(b.title)}</td></tr>`+
-      `<tr><td style="${XL.hd}">Ref.</td><td style="${XL.hd}">Particulars</td>`+
+      `<tr><td style="${XL.hd}">${refHead}</td><td style="${XL.hd}">Particulars</td>`+
       b.months.map(m=>`<td style="${XL.hd}">${esc_(m)}</td>`).join("")+`</tr>`;
     b.rows.forEach(r=>{
       const style=r.kind==="res"?XL.gn:r.kind==="sub"?XL.gr:XL.st;
@@ -10846,8 +11022,8 @@ function initCollapsibleInputRail(){
   const BUCKETS=[
     {name:"01 Site, Yield & Product",sections:["Site and yield","Lot / unit mix and pricing"]},
     {name:"02 Acquisition & Land",sections:["Land acquisition cost"]},
-    {name:"03 Programme & Development Costs",sections:["Programme","Phase programme and mix","Construction cost","Soft cost","Statutory costs","District / PID reimbursement (optional)","Vertical development"]},
-    {name:"04 Sales, Holding & Operations",sections:["Sales and receipts","Land holding costs","P&L cost and overhead inputs","Sales and use tax"]},
+    {name:"03 Programme & Development Costs",sections:["Programme","Phase programme and mix","Construction cost","Soft cost","District / PID reimbursement (optional)","Vertical development"]},
+    {name:"04 Sales, Holding & Operations",sections:["Sales and receipts","Land holding costs","P&L cost and overhead inputs"]},
     {name:"05 Funding, Tax & Returns",sections:["Debt","Tax and return"]}
   ];
   const sectionTitle=name=>{
@@ -11049,6 +11225,22 @@ function landBuyersOf(parcel){
   const me=String(parcel&&parcel.name||"").trim();if(!me)return [];
   return APP.parcels.filter(p=>p!==parcel&&String(p.inputs&&p.inputs.landschedsrc||"").trim()===me);
 }
+/* Every parcel structurally part of the same deal as `p`: itself, whoever
+   it buys land from, and whoever buys land from it. Unlike _dealId this is
+   meaningful before either side has ever been saved, so it is what
+   save()/delete must group by - never plain _dealId equality. */
+function dealMatesOf(p){
+  if(!p)return [];
+  const out=[p],seller=String(p.inputs&&p.inputs.landschedsrc||"").trim();
+  if(seller){const src=APP.parcels.find(x=>x!==p&&x.name===seller);if(src)out.push(src)}
+  landBuyersOf(p).forEach(b=>{if(!out.includes(b))out.push(b)});
+  return out;
+}
+/* This whole file is one IIFE per <script> block (see the toast() note further
+   down) - dealMatesOf's callers are the delete handler (an earlier block) and
+   appraisal-store's save() (a later block), so it has to be exported here the
+   same way, or both read it as ReferenceError: dealMatesOf is not defined. */
+window.dealMatesOf=dealMatesOf;
 function decorateSellerResync(b){
   const me=P0(),buyers=landBuyersOf(me);
   if(!buyers.length)return;
@@ -11608,7 +11800,7 @@ function cleanStatementHost(id){
     if(pd)pd.textContent="Single-page project summary for "+((C&&C.name)||P0().name)+". Same engine as the other statements, presented in the Business Plan layout.";
     set(host,
       tbl("Project Profit &amp; Loss",
-        ["Sr No.","Particulars","Rate / UoM","Value (USD)","% of Revenue"],
+        ["Sl. No.","Particulars","Rate / UoM","Value (USD)","% of Revenue"],
         x.rows,
         "(All amounts in USD. Percentages are each line as a share of Net Revenue.)",
         "project-pl"));
@@ -11926,7 +12118,7 @@ const AM={map:null,mapHost:null,ready:null,parcelId:null,mode:"select",draft:[],
      window.GOOGLE_MAPS_3D_KEY  - key used to load the Maps JavaScript API
      window.GOOGLE_MAPS_KEY     - key used for the Street View still image */
 const GOOGLE_JS_KEY=(typeof window!=="undefined"&&(window.GOOGLE_MAPS_3D_KEY||window.GOOGLE_MAPS_JS_KEY))||
-  "AIzaSyC1PhX0vxj1ob5T_i6In91rPhuVNgd6S8M";
+  "AIzaSyC8HAx5cvtvn8P2ho8Qy_ZMwivFCSGkGEk";
 AM.gmapsCore=function(){
   if(window.google&&window.google.maps&&typeof window.google.maps.importLibrary==="function")
     return Promise.resolve(window.google.maps);
@@ -12999,7 +13191,7 @@ async function queryAmenities(f,m){
     stations:tr,schools:sc,shoppingPlaces:sh,hospitals:hp,
     radius:12000,status:status,sources:sources,errors:errors,count:tr.length+sc.length+sh.length+hp.length};
 }
-async function runSiteIntelligence(f,m){if(!f||!m||m.kind!=="Polygon"||!m.cent)throw new Error("A site polygon is required");const g=state(),[lng,lat]=m.cent;g.siteIntelError=null;setIntelLoading('Building site intelligence','Location, official zoning, demographics and 3S proximity are being resolved');try{const [ctxR,revR,poiR]=await Promise.allSettled([queryContext(lng,lat),reversePhoton(lng,lat),queryAmenities(f,m)]),ctx=ctxR.status==="fulfilled"&&ctxR.value||g.jurisdiction||{},rev=revR.status==="fulfilled"&&revR.value||{},poi=poiR.status==="fulfilled"&&poiR.value||{};setIntelLoading('Checking official planning controls','Querying the jurisdiction planning source for zoning and mapped controls');const planR=await Promise.allSettled([queryPlanning(lng,lat,ctx,f)]),planning=planR[0].status==="fulfilled"&&planR[0].value||{state:ctx.state||"",planningAuthority:ctx.lga||"",zoneCode:"Not returned",zoneName:"Not returned",instrument:"Not returned",dataCurrency:"Not returned",sourceAgency:"Not returned",sourceStatus:"Official planning query failed",sourceUrl:"",maxHeight:"Not mapped / not returned",fsr:"Not mapped / not returned",minLotSize:"Not mapped / not returned",densityRCode:"Not mapped / not returned",subzone:"Not mapped / not returned",overlays:"Not returned",heritage:"Not returned",otherControls:"Not returned"};g.siteIntel={featureId:String(f.id),geometrySignature:geometrySignature(f),updatedAt:Date.now(),centroid:[lng,lat],area:m.area,areaAcres:m.acres,location:{label:(await nswAddressNear(lng,lat))||rev.label||g.searchLabel||parcel().loc||"",suburb:rev.suburb||rev.city||"",state:ctx.state||rev.state||"",lga:ctx.lga||"",lgaCode:ctx.lgaCode||"",postcode:ctx.postcode||rev.postcode||"",sa2:ctx.sa2||""},demographics:{population:ctx.population,popGrowth:ctx.popGrowth,medianIncome:ctx.medianIncome,medianHomeValue:ctx.medianHomeValue,incomeEarners:ctx.incomeEarners,incomeEarnersGrowth:ctx.incomeEarnersGrowth,countryPop:ctx.countryPop,statePop:ctx.statePop,cityPop:ctx.cityPop,stateName:ctx.stateName||ctx.state||"",cityName:ctx.cityName||""},planning,proximity:{station:poi.station||null,school:poi.school||null,shopping:poi.shopping||null,hospital:poi.hospital||null,stations:poi.stations||[],schools:poi.schools||[],shoppingPlaces:poi.shoppingPlaces||[],hospitals:poi.hospitals||[],radius:poi.radius||12000,status:poi.status||{},sources:poi.sources||{},errors:poi.errors||{}},availability:{context:ctxR.status==="fulfilled",reverse:revR.status==="fulfilled",planning:planR[0].status==="fulfilled",proximity:poiR.status==="fulfilled"&&poi&&poi.status&&Object.values(poi.status).some(v=>v==="ok")}};renderContext();return g.siteIntel}finally{clearIntelLoading();renderSiteIntelligence();syncPoiPins()}}
+async function runSiteIntelligence(f,m){if(!f||!m||m.kind!=="Polygon"||!m.cent)throw new Error("A site polygon is required");const g=state(),[lng,lat]=m.cent;g.siteIntelError=null;setIntelLoading('Building site intelligence','Location, official zoning, demographics and 3S proximity are being resolved');try{const [ctxR,revR,poiR,addrR]=await Promise.allSettled([queryContext(lng,lat),reversePhoton(lng,lat),queryAmenities(f,m),nswAddressNear(lng,lat)]),ctx=ctxR.status==="fulfilled"&&ctxR.value||g.jurisdiction||{},rev=revR.status==="fulfilled"&&revR.value||{},poi=poiR.status==="fulfilled"&&poiR.value||{},addr=addrR.status==="fulfilled"&&addrR.value||null;setIntelLoading('Checking official planning controls','Querying the jurisdiction planning source for zoning and mapped controls');const planR=await Promise.allSettled([queryPlanning(lng,lat,ctx,f)]),planning=planR[0].status==="fulfilled"&&planR[0].value||{state:ctx.state||"",planningAuthority:ctx.lga||"",zoneCode:"Not returned",zoneName:"Not returned",instrument:"Not returned",dataCurrency:"Not returned",sourceAgency:"Not returned",sourceStatus:"Official planning query failed",sourceUrl:"",maxHeight:"Not mapped / not returned",fsr:"Not mapped / not returned",minLotSize:"Not mapped / not returned",densityRCode:"Not mapped / not returned",subzone:"Not mapped / not returned",overlays:"Not returned",heritage:"Not returned",otherControls:"Not returned"};g.siteIntel={featureId:String(f.id),geometrySignature:geometrySignature(f),updatedAt:Date.now(),centroid:[lng,lat],area:m.area,areaAcres:m.acres,location:{label:addr||rev.label||g.searchLabel||parcel().loc||"",suburb:rev.suburb||rev.city||"",state:ctx.state||rev.state||"",lga:ctx.lga||"",lgaCode:ctx.lgaCode||"",postcode:ctx.postcode||rev.postcode||"",sa2:ctx.sa2||""},demographics:{population:ctx.population,popGrowth:ctx.popGrowth,medianIncome:ctx.medianIncome,medianHomeValue:ctx.medianHomeValue,incomeEarners:ctx.incomeEarners,incomeEarnersGrowth:ctx.incomeEarnersGrowth,countryPop:ctx.countryPop,statePop:ctx.statePop,cityPop:ctx.cityPop,stateName:ctx.stateName||ctx.state||"",cityName:ctx.cityName||""},planning,proximity:{station:poi.station||null,school:poi.school||null,shopping:poi.shopping||null,hospital:poi.hospital||null,stations:poi.stations||[],schools:poi.schools||[],shoppingPlaces:poi.shoppingPlaces||[],hospitals:poi.hospitals||[],radius:poi.radius||12000,status:poi.status||{},sources:poi.sources||{},errors:poi.errors||{}},availability:{context:ctxR.status==="fulfilled",reverse:revR.status==="fulfilled",planning:planR[0].status==="fulfilled",proximity:poiR.status==="fulfilled"&&poi&&poi.status&&Object.values(poi.status).some(v=>v==="ok")}};renderContext();return g.siteIntel}finally{clearIntelLoading();renderSiteIntelligence();syncPoiPins()}}
 const INTEL_EMPTY=/^(not returned|not mapped \/ not returned|none returned|no mapped historic result returned|none returned from mapped government layers|-|)$/i;
 function intelRowIf(k,v,mono=false){
   return INTEL_EMPTY.test(String(v==null?"":v).trim())?"":intelRow(k,v,mono);
@@ -17074,7 +17266,7 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
      window like every other cross-block helper here (projectPlData,
      cashFlowRowDefs, projectPlRows). */
   window.liftTotalFirst=liftTotalFirst;
-  function plTable(A,d){const S=window.projectPlData?window.projectPlData(A,d):null;if(S&&window.projectPlRows)return{title:"Project P&L Account",headers:liftTotalFirst(["S.No","Particulars","% of Revenue",...S.years.map(y=>"FY "+y),"Total"]),rows:window.projectPlRows(S).map(r=>({cells:liftTotalFirst(r.c),kind:tableKind(r.cls)})),foot:"All amounts in USD. Revenue and project surplus follow the active project model."};return fallbackProjectPlTable(A,d)}
+  function plTable(A,d){const S=window.projectPlData?window.projectPlData(A,d):null;if(S&&window.projectPlRows)return{title:"Project P&L Account",headers:liftTotalFirst(["Sl. No.","Particulars","% of Revenue",...S.years.map(y=>"FY "+y),"Total"]),rows:window.projectPlRows(S).map(r=>({cells:liftTotalFirst(r.c),kind:tableKind(r.cls)})),foot:"All amounts in USD. Revenue and project surplus follow the active project model."};return fallbackProjectPlTable(A,d)}
   function fallbackProjectPlTable(A,d){return{title:"Project P&L Account",headers:["Particulars","Amount"],rows:[["Total revenue",money(A.revenue)],["Direct cost",money(A.direct)],["Gross profit",money(A.gross)],["Operating overhead",money(A.operatingOverhead)],["Finance cost",money(A.finance)],["Tax",money(A.tax)],["Net profit",money(A.npat)]].map(x=>({cells:x})),foot:""}}
   /* Shared by cashTable (Cashflow & P&L PDF) and _boardPdfCashTemplateRows
      (Board PDF Appendix) - was two independently-maintained, row-for-row copies
@@ -17186,9 +17378,9 @@ PANE.map=function(){renderMap()};DIRTY.map=true;
       const f0=isCount?M0:money,f=v=>f0(v),vals=fys.map(fn);
       return {kind,cells:liftTotalFirst([ref,label,...vals.map(f),f(isBal?vals[vals.length-1]:vals.reduce((a,v)=>a+v,0))])};
     });
-    return{title:"Project Cash Flow Statement",headers:liftTotalFirst(["Sl. No.","Particulars",...fys.map(y=>"FY "+y),"Total"]),rows,foot:""}
+    return{title:"Project Cash Flow Statement",headers:liftTotalFirst(["Ref.","Particulars",...fys.map(y=>"FY "+y),"Total"]),rows,foot:""}
   }
-  function monthlyTable(A,d,titleText,rowDefs){const last=Math.max(0,...rowDefs.flatMap(r=>r.values.map((v,i)=>Math.abs(num(v))>.5?i:0))),months=Array.from({length:last+1},(_,m)=>m);return{title:titleText,headers:["Sl. No.","Particulars",...months.map(m=>mLabel(m,d))],rows:rowDefs.map((r,i)=>{const f=r.isCount?M0:money;return {kind:r.kind||"",cells:[r.ref!=null?r.ref:String(i+1),r.label,...months.map(m=>f(r.values[m]))]}}),foot:"Monthly appendix is generated from the active project cashflow engine."}}
+  function monthlyTable(A,d,titleText,rowDefs){const last=Math.max(0,...rowDefs.flatMap(r=>r.values.map((v,i)=>Math.abs(num(v))>.5?i:0))),months=Array.from({length:last+1},(_,m)=>m),refs=rowDefs.map((r,i)=>r.ref!=null?r.ref:String(i+1)),refHead=refs.some(v=>/[a-zA-Z]/.test(String(v)))?"Ref.":"Sl. No.";return{title:titleText,headers:[refHead,"Particulars",...months.map(m=>mLabel(m,d))],rows:rowDefs.map((r,i)=>{const f=r.isCount?M0:money;return {kind:r.kind||"",cells:[refs[i],r.label,...months.map(m=>f(r.values[m]))]}}),foot:"Monthly appendix is generated from the active project cashflow engine."}}
   /* Split into what the schedules are and how they are drawn, so the workbook
      can write the same three schedules as values. monthlyTables is unchanged in
      what it produces. */
@@ -17579,9 +17771,9 @@ function _boardPdfPage3(pages,R,C,dateText,project){
   const gap=15,lw=244,rw=w-lw-gap;let ly=y,ry=y;
   ly=_boardPdfSectionTitle(s,1,"Site, yield and product",x,ly,lw,C);const site=R.d.vert?[["Gross site area",M0(R.d.acresGross,0)+" acres"],["Net developable area",M0(R.d._acresNet,0)+" acres"],["No. of homes / units",M0(R.d._lots)],["Density on net area",M0(R.d._dens,2)+" units/acre"],["Total home area",M0(R.A.buaTot||0)+" sqft"],["Average sale value",_boardPdfShort(R.A.revenue/Math.max(1,R.d._lots))+" / home"],["Project duration",_boardPdfYears(duration)]]:[["Gross site area",M0(R.d.acresGross,0)+" acres"],["Net developable area",M0(R.d._acresNet,0)+" acres"],["No. of lots / units",M0(R.d._lots)],["Density on net area",M0(R.d._dens,2)+" lots/acre"],["Total saleable lot area",M0(R.d._lotsqft)+" sqft"],["Average sale value",_boardPdfShort(R.A.revenue/Math.max(1,R.d._lots))+" / lot"],["Project duration",_boardPdfYears(duration)]];ly=_boardPdfTable(s,["Metric","Value"],site,x,ly,lw,C,{widths:[.62,.38],rowH:21,font:6.7,headFont:5.8,aligns:["left","right"]})-19;
   ly=_boardPdfSectionTitle(s,2,"Revenue source summary",x,ly,lw,C);const totalRev=(R.A.revenue||0)+(R.A.otherIncome||0);ly=_boardPdfTable(s,["Source","Value","Share"],[[R.d.vert?"Home development revenue":"Land / horizontal development revenue",_boardPdfShort(R.A.revenue),_boardPdfPct(R.A.revenue/Math.max(1,totalRev))],["Other income",R.A.otherIncome?_boardPdfShort(R.A.otherIncome):"-",_boardPdfPct((R.A.otherIncome||0)/Math.max(1,totalRev))],{cells:["Total sales revenue",_boardPdfShort(totalRev),"100.0%"],bold:true,fill:C.row2}],x,ly,lw,C,{widths:[.60,.25,.15],rowH:22,font:6.2,headFont:5.5,aligns:["left","right","right"]});
-  ry=_boardPdfSectionTitle(s,3,"Product mix",x+lw+gap,ry,rw,C);const products=productIds(R.d).filter(p=>R.d[`n${p}`]>0),prodRows=products.map(p=>{const n=R.d[`n${p}`],area=R.d.vert?_num(R.d[`bua${p}`],0):_num(R.d[`w${p}`],0)*_num(R.d[`d${p}`],0),basis=R.d.vert?_boardPdfMoney(R.d.hpsf)+"/sqft":(R.d.pmode===1?_boardPdfMoney(R.d[`p${p}`])+"/sqft":_boardPdfMoney(R.d[`p${p}`])+"/m frontage"),value=R.d.vert?n*area*R.d.hpsf*R.d.pidx/100:(R.d.pmode===1?n*area*R.d[`p${p}`]*R.d.pidx/100:n*_num(R.d[`w${p}`],0)*R.d[`p${p}`]*R.d.pidx/100);return [`P${p}`,M0(n),M0(area,0)+" sqft",basis,_boardPdfShort(value)]});const prodTotal=prodRows.reduce((a,r)=>a+Number(String(r[4]).replace(/[^0-9.]/g,""))||a,0);ry=_boardPdfTable(s,["Product","Units","Area / unit","Price basis","Value"],prodRows,x+lw+gap,ry,rw,C,{widths:[.18,.14,.23,.22,.23],rowH:20,font:5.6,headFont:4.7,aligns:["left","right","right","right","right"]});_boardPdfLines(s,"*Product values are shown at the current price basis; total sales revenue includes escalation and timing effects captured in the model.",x+lw+gap,ry-9,rw,5.4,C.muted,1,7.0,3);ry-=35;
+  ry=_boardPdfSectionTitle(s,3,"Product mix",x+lw+gap,ry,rw,C);const products=productIds(R.d).filter(p=>R.d[`n${p}`]>0),prodRows=products.map(p=>{const n=R.d[`n${p}`],area=unitAreaOf(R.d,p),basis=R.d.vert?_boardPdfMoney(R.d.hpsf)+"/sqft":(Math.round(_num(R.d.pmode,0))===0?_boardPdfMoney(R.d[`p${p}`])+"/m frontage":_boardPdfMoney(R.d[`p${p}`])+"/sqft"),value=n*unitPriceOf(R.d,p);return [`P${p}`,M0(n),M0(area,0)+" sqft",basis,_boardPdfShort(value)]});const prodTotal=prodRows.reduce((a,r)=>a+Number(String(r[4]).replace(/[^0-9.]/g,""))||a,0);ry=_boardPdfTable(s,["Product","Units","Area / unit","Price basis","Value"],prodRows,x+lw+gap,ry,rw,C,{widths:[.18,.14,.23,.22,.23],rowH:20,font:5.6,headFont:4.7,aligns:["left","right","right","right","right"]});_boardPdfLines(s,"*Product values are shown at the current price basis; total sales revenue includes escalation and timing effects captured in the model.",x+lw+gap,ry-9,rw,5.4,C.muted,1,7.0,3);ry-=35;
   ry=_boardPdfSectionTitle(s,4,"Sales and timing assumptions",x+lw+gap,ry,rw,C);const timing=[[R.d.vert?"Sales velocity":"Absorption",R.d.vert?M0(R.d.vel,1)+" homes/mo":M0(R.d.absn,1)+" lots/mo","base sales pace"],["Price escalation",M0(R.d.esc,1)+"% p.a.","revenue growth"],["Deposit",M0(R.d.depo,1)+"%","contract cash"],["Delivery lag",M0(R.d.vert?R.A.lag:R.d.dellag)+" months","closing timing"],["Final closing",mLabel(R.A.lastDlv,R.d),M0(duration)+" month model"]];ry=_boardPdfTable(s,["Assumption","Value","Model read"],timing,x+lw+gap,ry,rw,C,{widths:[.38,.27,.35],rowH:20,font:5.8,headFont:5.0,aligns:["left","right","right"]});
-  y=Math.min(ly,ry)-20;y=_boardPdfSectionTitle(s,5,"Programme at a glance",x,y,w,C);const gw=(w-18)/3,gy=y-2;[[mLabel(0,R.d),"MODEL START"],[mLabel(R.A.st,R.d),"LAND / BUILD START"],[mLabel(R.A.lastDlv,R.d),"LAST CLOSING"]].forEach((v,i)=>_boardPdfDarkMetric(s,x+i*(gw+9),gy,gw,50,v[0],v[1],"",C));y=gy-68;y=_boardPdfSectionTitle(s,6,"Product mix value share",x,y,w,C);const vals=products.map(p=>{const n=R.d[`n${p}`],area=R.d.vert?_num(R.d[`bua${p}`],0):_num(R.d[`w${p}`],0)*_num(R.d[`d${p}`],0);return R.d.vert?n*area*R.d.hpsf:(R.d.pmode===1?n*area*R.d[`p${p}`]:n*_num(R.d[`w${p}`],0)*R.d[`p${p}`])}),sumVals=vals.reduce((a,b)=>a+b,0)||1,barY=y-18,barColors=[C.navy,C.blue,C.blue2,C.blue3,C.green,C.amber];let bx=x;vals.forEach((v,i)=>{const bw=w*v/sumVals;_pdfRect(s,bx,barY,bw,15,barColors[i%barColors.length],barColors[i%barColors.length],.1);bx+=bw});let lx=x,legY=barY-14;products.forEach((p,i)=>{const label=`P${p} - ${(vals[i]/sumVals*100).toFixed(1)}%`,ww=Math.max(60,_boardPdfTextWidth(label,5.4,false,1)+16);_pdfRect(s,lx,legY,6,6,barColors[i%barColors.length],barColors[i%barColors.length],.1);_boardPdfText(s,label,lx+10,legY-0.2,5.4,C.muted,"left",ww-10,1);lx+=ww});
+  y=Math.min(ly,ry)-20;y=_boardPdfSectionTitle(s,5,"Programme at a glance",x,y,w,C);const gw=(w-18)/3,gy=y-2;[[mLabel(0,R.d),"MODEL START"],[mLabel(R.A.st,R.d),"LAND / BUILD START"],[mLabel(R.A.lastDlv,R.d),"LAST CLOSING"]].forEach((v,i)=>_boardPdfDarkMetric(s,x+i*(gw+9),gy,gw,50,v[0],v[1],"",C));y=gy-68;y=_boardPdfSectionTitle(s,6,"Product mix value share",x,y,w,C);const vals=products.map(p=>R.d[`n${p}`]*unitPriceOf(R.d,p)),sumVals=vals.reduce((a,b)=>a+b,0)||1,barY=y-18,barColors=[C.navy,C.blue,C.blue2,C.blue3,C.green,C.amber];let bx=x;vals.forEach((v,i)=>{const bw=w*v/sumVals;_pdfRect(s,bx,barY,bw,15,barColors[i%barColors.length],barColors[i%barColors.length],.1);bx+=bw});let lx=x,legY=barY-14;products.forEach((p,i)=>{const label=`P${p} - ${(vals[i]/sumVals*100).toFixed(1)}%`,ww=Math.max(60,_boardPdfTextWidth(label,5.4,false,1)+16);_pdfRect(s,lx,legY,6,6,barColors[i%barColors.length],barColors[i%barColors.length],.1);_boardPdfText(s,label,lx+10,legY-0.2,5.4,C.muted,"left",ww-10,1);lx+=ww});
   _boardPdfCallout(s,x,39,w,62,"Why this matters",`Base recognised revenue of ${_boardPdfShort(R.A.revenue)} is generated ${R.A.otherIncome?"primarily":"entirely"} from ${R.d.vert?"home development":"land and horizontal development sales"} across ${areaText}; the model carries ${R.A.otherIncome?_boardPdfShort(R.A.otherIncome):"no"} other-income contribution.`,C);_boardPdfPush(ctx,pages)
 }
 function _boardPdfGantt(stream,R,x,top,w,h,C){
@@ -17687,7 +17879,7 @@ function _boardPdfPage9(pages,R,C,dateText,project){
 }
 function _boardPdfPage10(pages,R,C,dateText,project){
   const ctx=_boardPdfNewPage(pages.length+1,project,"Appendix - Annual Cashflow",dateText,C),s=ctx.stream,x=36,w=540,years=_boardPdfYearsData(R.A);let y=_boardPdfIntro(s,"Appendix","Annual project cashflow","The cashflow uses the same line sequence, sign convention and annual values as the individual project Cashflow tab and the Cashflow & P&L PDF export.",x,710,w,C);
-  const hdr=["Sl. No.","Particulars",...years.map(v=>"FY "+String(v).slice(-2)),"Total"],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,...Array(years.length).fill(rest),rest];y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);_boardPdfTable(s,hdr,_boardPdfCashTemplateRows(R,years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left",...Array(years.length).fill("right"),"right"]});
+  const hdr=["Ref.","Particulars",...years.map(v=>"FY "+String(v).slice(-2)),"Total"],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,...Array(years.length).fill(rest),rest];y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);_boardPdfTable(s,hdr,_boardPdfCashTemplateRows(R,years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left",...Array(years.length).fill("right"),"right"]});
   _boardPdfPush(ctx,pages)
 }
 /* ---- site page: the map, the 3D view and what the polygon measures ---------
@@ -17845,7 +18037,7 @@ function _boardPdfPageConsolidationDivider(pages,C,dateText,project){
 function _boardPdfPageConsolidatedProjectPl(pages,C,dateText,project,combined){
   const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation - Project P&L",dateText,C),s=ctx.stream,x=36,w=540;
   let y=_boardPdfIntro(s,"Consolidation","Project P&L","Single-page summary of the combined business, same layout as the individual Project P&L tab.",x,710,w,C);
-  const sr=summaryRows(combined.A,combined.d),hdr=["Sr No.","Particulars","Rate / UoM","Value (USD)","% of Revenue"],widths=[.08,.42,.16,.17,.17];
+  const sr=summaryRows(combined.A,combined.d),hdr=["Sl. No.","Particulars","Rate / UoM","Value (USD)","% of Revenue"],widths=[.08,.42,.16,.17,.17];
   y=_boardPdfSectionTitle(s,1,"Project P&L",x,y,w,C);
   _boardPdfTable(s,hdr,sr.rows.map(r=>r.band?{band:r.band}:{cells:r.c,bold:r.cls==="res"}),x,y,w,C,
     {widths,rowH:13.6,font:4.6,headFont:4.4,pad:3,vPad:5,maxLines:2,aligns:["center","left","right","right","right"]});
@@ -17866,7 +18058,7 @@ function _boardPdfPageConsolidatedPl(pages,C,dateText,project,combined){
 function _boardPdfPageConsolidatedCf(pages,C,dateText,project,combined){
   const ctx=_boardPdfNewPage(pages.length+1,project,"Consolidation - Annual Cashflow",dateText,C),s=ctx.stream,x=36,w=540,years=_boardPdfYearsData(combined.A);
   let y=_boardPdfIntro(s,"Consolidation","Annual Project Cashflow","The cashflow uses the same line sequence and sign convention as the individual project Cashflow tab.",x,710,w,C);
-  const hdr=["Sl. No.","Particulars","Total",...years.map(v=>"FY "+String(v).slice(-2))],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,rest,...Array(years.length).fill(rest)];
+  const hdr=["Ref.","Particulars","Total",...years.map(v=>"FY "+String(v).slice(-2))],first=.055,second=.255,rest=(1-first-second)/(years.length+1),widths=[first,second,rest,...Array(years.length).fill(rest)];
   y=_boardPdfSectionTitle(s,1,"Project Cash Flow Statement",x,y,w,C);
   _boardPdfTable(s,hdr,_boardPdfCashTemplateRows({A:combined.A},years,C),x,y,w,C,{widths,rowH:13.6,font:4.25,headFont:4.2,pad:3,vPad:5,maxLines:2,aligns:["center","left","right",...Array(years.length).fill("right")]});
   _boardPdfPush(ctx,pages)
@@ -18166,7 +18358,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
         "Building area, GFA": qty(r.buaTot, "sqft"),
         "Site area": qty(inputs.acresGross, "acres"),
         "Selling rate": qty(Number(inputs.vert) >= 0.5 ? inputs.hpsf : inputs.p1,
-          Number(inputs.vert) >= 0.5 ? "$/sqft" : (Number(inputs.pmode) === 1 ? "$/sqft of lot" : "$/front foot")),
+          Number(inputs.vert) >= 0.5 ? "$/sqft" : (Number(inputs.pmode) === 1 ? "$/sqft of lot" : Number(inputs.pmode) === 2 ? "$/sqft of built-up area" : "$/front foot")),
         "Land rate": qty(inputs.pr, "$/acre"),
         "Closing month": qty(r.close),
         "Last delivery month": qty(r.lastDlv)
@@ -19608,34 +19800,37 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
 <!-- SECTION J · SHARED APPRAISAL STORE
      The appraisal lives in the shared database -->
 <script id="appraisal-store">
-/* J1 · appraisal-store  Open at startup, save to the shared store, pick another
+/* J1 · appraisal-store  Every US deal loads as tabs together, saves stay per-deal
 
-   The appraisal is not hardcoded in this file. At startup the page opens the
-   most recently saved US appraisal; Open from server picks a different one.
+   The appraisal is not hardcoded in this file. At startup every US deal the
+   shared store holds is fetched and merged into one tab bar - there is no
+   "Open cloud" picker: a saved deal shows up exactly as if you had added its
+   parcels yourself, tagged (invisibly, via parcel._dealId) with which saved
+   row it came from.
 
    Landowner Co and Homebuilder Co are the two companies of one consolidated
-   deal, so unlike the Australian projects they are stored together in a single
-   row - sharing one version and one lock, which is what stops the two halves of
-   the consolidation drifting apart under separate saves. The row therefore
-   carries the portfolio settings and the scenario as well.
+   deal, so unlike the Australian projects they are stored together in a
+   single row - sharing one version and one lock, which is what stops the two
+   halves of the consolidation drifting apart under separate saves. The row
+   therefore carries the portfolio settings and the scenario as well. With
+   several deals merged into one tab bar, "Save project" always acts on
+   whichever deal the active tab belongs to (see activeDealId/save below) -
+   never on every tab at once, or Willard's edits could land in Ratcliffe's row.
 
-   Everything goes through buildEnvelope and applyEnvelope, the same two the
-   file buttons use, so a stored row and a saved .json cannot diverge - and
-   whatever is loaded still passes back through cleanStoredInputs and
-   enforceAccountingPolicy, so a stored payload is trusted no further than one
-   read off disk. */
+   Everything goes through buildEnvelope/buildEnvelopeFor and applyEnvelope,
+   the same ones the file buttons use, so a stored row and a saved .json
+   cannot diverge - and whatever is loaded still passes back through
+   cleanStoredInputs and enforceAccountingPolicy, so a stored payload is
+   trusted no further than one read off disk. */
 (function(){
   const ROOT="/api/appraisals";
-  const saveBtn=document.getElementById("btnCloudSave"),
-        openBtn=document.getElementById("btnCloudOpen");
-  if(!saveBtn||!openBtn)return;
+  const saveBtn=document.getElementById("btnCloudSave");
+  if(!saveBtn)return;
 
-  /* Which row this page is editing and the version it was loaded at, so a
-     concurrent save is caught rather than silently overwriting someone. */
-  let openId=null,openVersion=0,openName="";
-
-  const escText=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  const when=t=>{if(!t)return"";const d=new Date(t);return isNaN(d)?"":d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})};
+  /* Every saved US deal, keyed by its appraisal id: the version to send back
+     on a save, plus enough to label it. Rebuilt at boot from every row the
+     store holds. */
+  let deals={};
 
   async function call(path,opts){
     const r=await fetch(ROOT+path,Object.assign({cache:"no-store",headers:{"content-type":"application/json"}},opts||{}));
@@ -19650,6 +19845,15 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     if(err.message==="Failed to fetch")return"The appraisal store could not be reached.";
     return err.message;
   }
+
+  /* Called from buildParcels()'s "×" - a plain function property rather than
+     a const, so it exists on window from the moment this script runs, the
+     same way APP and P0 are already shared across the page's script blocks. */
+  window.deleteProjectFromStore=async function(dealId){
+    if(!dealId)return;
+    await call("/"+dealId,{method:"DELETE"});
+    delete deals[dealId];
+  };
 
   /* ── the status line, above the parcel switcher ────────────────────────── */
   let bar=null;
@@ -19679,78 +19883,91 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     if(detail){const d=document.createElement("div");d.textContent=detail;b.appendChild(d)}
     if(retry){const r=document.createElement("button");r.type="button";r.textContent="Try again";r.onclick=boot;b.appendChild(r)}
   }
-  /* A healthy load needs no banner - the appraisal itself is the evidence. */
+  /* A healthy load needs no banner - the appraisals themselves are the evidence. */
   function clearSay(){if(bar&&bar.parentNode)bar.parentNode.removeChild(bar);bar=null}
 
-  /* One consistent label regardless of new-vs-existing, matching the AU
-     app's "Save project" - the tooltip still says which one will actually
-     happen, since that distinction is real (PUT vs POST) even though the
-     button text no longer calls it out. */
+  /* Whichever tab is active decides what "Save project" does now - there is
+     no single open deal for the whole page any more. */
+  function activeDealId(){const p=P0();return p?p._dealId:null}
   function relabel(){
+    const id=activeDealId(),meta=id&&deals[id];
     saveBtn.textContent="Save project";
-    saveBtn.title=openId
-      ?("Saves over “"+openName+"” in the shared store, version "+openVersion+".")
+    saveBtn.title=meta
+      ?("Saves over “"+meta.name+"” in the shared store, version "+meta.version+".")
       :"Adds this appraisal to the shared store.";
   }
+  /* buildParcels() (a different script block, since parcel tabs are built by
+     the model-engine script) calls this after every switch/add/remove/
+     duplicate so the button always reflects whichever tab just became active. */
+  window.refreshCloudSaveLabel=relabel;
 
-  /* ── startup ───────────────────────────────────────────────────────────── */
+  /* ── startup: every US deal loads as tabs together ────────────────────── */
   async function boot(){
     say("busy","Opening the shared store");
-    saveBtn.disabled=openBtn.disabled=true;
+    saveBtn.disabled=true;
     try{
-      const list=(await call("?region="+encodeURIComponent(APPRAISAL_REGION))).appraisals||[];
+      const list=(await call("?region="+encodeURIComponent(APPRAISAL_REGION)+"&expand=1")).appraisals||[];
       if(!list.length){
         say("warn","Nothing in the shared store yet",
           "The store is reachable but empty. Open a saved appraisal from a file and press Save project to add the first one.",true);
         return;
       }
-      /* The list comes back most-recently-saved first, so the page opens on
-         whatever the team last worked on. Open from server picks another. */
-      await load(list[0].id,true);
-      if(list.length>1)openBtn.title="Open one of the "+list.length+" appraisals in the shared store";
+      deals={};
+      list.forEach(row=>{deals[row.id]={version:row.version,name:row.name,location:row.location,region:row.region}});
+      /* Opens on whichever deal the team last worked on, same as before -
+         the difference is every other deal's parcels join the tab bar too,
+         instead of staying hidden behind a picker. */
+      const latest=list.reduce((a,b)=>new Date(b.updated_at)>new Date(a.updated_at)?b:a);
+      applyEnvelope(latest.envelope);
+      APP.parcels.forEach(p=>{p._dealId=latest.id});
+      list.filter(row=>row.id!==latest.id).forEach(row=>{
+        (row.envelope.parcels||[]).forEach(p=>{
+          const np=normalizeParcel(p,row.envelope.v);np._dealId=row.id;APP.parcels.push(np);
+        });
+      });
+      buildParcels();buildForm();buildScaffold();showNav();render();
+      clearSay();
     }
     catch(err){
-      say("bad","The appraisal could not be opened",
-        explain(err)+" Nothing has been lost - the appraisal is in the shared store, not in this page.",true);
+      say("bad","The shared store could not be opened",
+        explain(err)+" Nothing has been lost - every appraisal is still in the shared store.",true);
     }
-    finally{openBtn.disabled=false;saveBtn.disabled=false;relabel()}
+    finally{saveBtn.disabled=false;relabel()}
   }
 
-  async function load(id,quiet){
-    const row=await call("/"+id);
-    applyEnvelope(row.envelope);
-    openId=row.id;openVersion=row.version;openName=row.name;
-    relabel();
-    if(quiet)clearSay();
-    else{say("busy","Opened “"+row.name+"”","Version "+row.version+", last saved by "+row.updated_by+".");setTimeout(clearSay,3200)}
-  }
-
-  /* ── save ──────────────────────────────────────────────────────────────── */
+  /* ── save: only the tabs belonging to the active deal ──────────────────── */
   async function save(){
-    const body={name:(P0().name||"").trim()||openName||"Untitled appraisal",
+    const group=dealMatesOf(P0());
+    const dealId=group.map(p=>p._dealId).find(Boolean)||null,meta=dealId&&deals[dealId];
+    const activeIdx=Math.max(0,group.indexOf(P0()));
+    const body={name:(P0().name||"").trim()||(meta&&meta.name)||"Untitled appraisal",
       location:cleanProjectLocation(P0().loc||"")||null,
-      region:APPRAISAL_REGION,envelope:buildEnvelope()};
+      region:APPRAISAL_REGION,envelope:buildEnvelopeFor(group,activeIdx)};
     if(!confirm("Save “"+body.name+"”?\n\nEveryone with access to this model will see the update."))return;
     saveBtn.disabled=true;
     try{
       let row;
-      if(openId){
-        try{row=await call("/"+openId,{method:"PUT",body:JSON.stringify(Object.assign({expected_version:openVersion},body))})}
+      if(meta){
+        try{row=await call("/"+dealId,{method:"PUT",body:JSON.stringify(Object.assign({expected_version:meta.version},body))})}
         catch(err){
           if(err.status===409){
             /* Overwriting silently is the one failure that makes a shared store
                worse than the files it replaces, so it is always a decision. */
             const cur=err.body&&err.body.current;
-            if(!confirm(err.message+"\n\nOverwrite their version with yours?\n\nCancel keeps theirs; Open from server will bring it in."))
+            if(!confirm(err.message+"\n\nOverwrite their version with yours?"))
               {saveBtn.disabled=false;return}
-            row=await call("/"+openId,{method:"PUT",body:JSON.stringify(Object.assign({expected_version:cur?cur.version:openVersion},body))});
+            row=await call("/"+dealId,{method:"PUT",body:JSON.stringify(Object.assign({expected_version:cur?cur.version:meta.version},body))});
           }
-          else if(err.status===404){openId=null;row=await call("",{method:"POST",body:JSON.stringify(body)})}
+          else if(err.status===404)row=await call("",{method:"POST",body:JSON.stringify(body)});
           else throw err;
         }
       }
       else row=await call("",{method:"POST",body:JSON.stringify(body)});
-      openId=row.id;openVersion=row.version;openName=row.name;
+      /* Re-tag the group with the row's real id - a brand-new deal only gets
+         one once the POST returns - so the next save PUTs instead of
+         creating a duplicate row. */
+      group.forEach(p=>{p._dealId=row.id});
+      deals[row.id]={version:row.version,name:row.name,location:row.location,region:row.region};
       relabel();
       say("busy","Saved","Everyone will see “"+row.name+"” version "+row.version+" now.");
       setTimeout(clearSay,3200);
@@ -19759,85 +19976,7 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     finally{saveBtn.disabled=false}
   }
 
-  /* ── the picker ────────────────────────────────────────────────────────── */
-  let shell=null;
-  async function pick(){
-    openBtn.disabled=true;
-    try{picker((await call("?region="+encodeURIComponent(APPRAISAL_REGION))).appraisals||[])}
-    catch(err){say("bad","The list could not be loaded",explain(err))}
-    finally{openBtn.disabled=false}
-  }
-  function picker(list){
-    if(!shell)shell=build();
-    const body=shell.querySelector(".as-list");
-    body.innerHTML=list.length?"":'<div class="as-empty">Nothing saved to the shared store yet.</div>';
-    list.forEach(a=>{
-      const row=document.createElement("div");
-      row.className="as-row"+(a.id===openId?" as-current":"");
-      row.innerHTML='<button class="as-pick" type="button">'+
-          '<span class="as-name">'+escText(a.name)+(a.id===openId?' <span class="as-tag">open</span>':"")+"</span>"+
-          '<span class="as-meta">'+escText(a.location||"No location")+" · v"+a.version+
-          " · "+escText(a.updated_by)+" · "+when(a.updated_at)+"</span>"+
-        "</button>"+
-        '<button class="as-del" type="button" title="Delete from the shared store" aria-label="Delete">×</button>';
-      row.querySelector(".as-pick").onclick=()=>{close();load(a.id).catch(err=>say("bad","Could not open that appraisal",explain(err)))};
-      row.querySelector(".as-del").onclick=()=>remove(a.id,a.name,row);
-      body.appendChild(row);
-    });
-    shell.hidden=false;
-    const first=shell.querySelector(".as-pick")||shell.querySelector(".as-close");
-    if(first)first.focus();
-  }
-  function close(){if(shell)shell.hidden=true}
-
-  async function remove(id,name,row){
-    if(!confirm("Delete “"+name+"”?\n\nThis cannot be undone here, and it will disappear from the shared store for everyone with access - not just you."))return;
-    try{
-      await call("/"+id,{method:"DELETE"});
-      if(openId===id){openId=null;openVersion=0;openName="";relabel()}
-      row.remove();
-    }
-    catch(err){say("bad","Not deleted",explain(err))}
-  }
-
-  function build(){
-    const css=document.createElement("style");
-    css.textContent=
-      ".as-back{position:fixed;inset:0;z-index:120;background:rgba(15,30,61,.32);display:flex;align-items:center;justify-content:center;padding:24px}"+
-      ".as-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh2);width:min(560px,100%);max-height:min(74vh,640px);display:flex;flex-direction:column}"+
-      ".as-head{display:flex;align-items:baseline;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}"+
-      ".as-head h2{margin:0;font-size:13.5px;font-weight:600;color:var(--ink)}"+
-      ".as-head span{font-size:11.5px;color:var(--mute)}"+
-      ".as-close{margin-left:auto;min-height:0;padding:2px 8px;font-size:15px;line-height:1;background:none;border:1px solid var(--line);border-radius:var(--r);color:var(--mute);cursor:pointer}"+
-      ".as-list{overflow:auto;padding:6px}"+
-      ".as-row{display:flex;align-items:stretch;gap:4px;border-radius:var(--r)}"+
-      ".as-row:hover{background:var(--accent-soft)}"+
-      ".as-row.as-current{background:var(--info-bg)}"+
-      ".as-pick{flex:1;display:flex;flex-direction:column;gap:2px;min-height:0;padding:9px 10px;text-align:left;background:none;border:0;cursor:pointer;font-size:12.5px}"+
-      ".as-name{font-weight:600;color:var(--ink)}"+
-      ".as-tag{font-weight:500;font-size:10px;color:var(--accent);border:1px solid var(--line2);border-radius:3px;padding:0 4px;vertical-align:1px}"+
-      ".as-meta{font-size:11px;color:var(--mute);font-family:var(--sans)}"+
-      ".as-del{min-height:0;padding:0 9px;background:none;border:0;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;border-radius:var(--r)}"+
-      ".as-del:hover{color:var(--neg);background:var(--neg-bg)}"+
-      ".as-empty{padding:22px 14px;text-align:center;font-size:12.5px;color:var(--mute)}";
-    document.head.appendChild(css);
-
-    const back=document.createElement("div");
-    back.className="as-back";back.hidden=true;
-    back.setAttribute("role","dialog");back.setAttribute("aria-modal","true");back.setAttribute("aria-label","Open from the shared store");
-    back.innerHTML='<div class="as-card"><div class="as-head"><h2>Open from the shared store</h2>'+
-      "<span>US appraisals</span>"+
-      '<button class="as-close" type="button" aria-label="Close">×</button></div>'+
-      '<div class="as-list"></div></div>';
-    back.querySelector(".as-close").onclick=close;
-    back.onclick=e=>{if(e.target===back)close()};
-    document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!back.hidden)close()});
-    document.body.appendChild(back);
-    return back;
-  }
-
   saveBtn.onclick=save;
-  openBtn.onclick=pick;
   relabel();
   boot();
 })();
