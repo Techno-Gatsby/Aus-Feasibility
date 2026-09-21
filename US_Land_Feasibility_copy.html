@@ -4154,6 +4154,41 @@ function unitPriceOf(d,p){
   if(mode===2)return Math.max(0,_num(d["bua"+p]))*r*idx;
   return (mode===1?w*dep*r:w*r)*idx;
 }
+/* A phase can override a unit's frontage/depth/built-up-area/price (blank/
+   zero on every field, the default, means "use the product's own number" -
+   same fallback pattern as ph{n}buildpsf). Whichever basis the product uses
+   is not the last word here: if the PHASE's own override supplies a built-up
+   area, that phase prices by built-up area x $/sqft regardless of the
+   product's Price basis setting (pmode) - filling in the phase's built-up
+   area is how you ask for that, no separate basis selector needed. This
+   never fires from a product's own bua{p} alone (several real parcels carry
+   a leftover/unused bua{p}>0 on lot-basis pricing) - only ph{n}bua itself
+   triggers it, and only when that phase is flagged as differing. Vertical
+   (Homebuilder Co) parcels are unaffected; they already always price by
+   built-up area via hpsf. */
+function phaseOverrides(d,phaseNo){
+  if(!d||d.vert||!d["ph"+phaseNo+"ovr"])return null;
+  const ow=Math.max(0,_num(d["ph"+phaseNo+"w"],0)),od=Math.max(0,_num(d["ph"+phaseNo+"d"],0)),
+        obua=Math.max(0,_num(d["ph"+phaseNo+"bua"],0)),op=Math.max(0,_num(d["ph"+phaseNo+"p"],0));
+  if(!(ow>0||od>0||obua>0||op>0))return null;
+  return {ow,od,obua,op};
+}
+function phaseUnitAreaOf(d,phaseNo,p){
+  const ov=phaseOverrides(d,phaseNo);
+  if(!ov)return unitAreaOf(d,p);
+  if(ov.obua>0)return ov.obua;
+  return (ov.ow>0?ov.ow:Math.max(0,_num(d["w"+p])))*(ov.od>0?ov.od:Math.max(0,_num(d["d"+p])));
+}
+function phaseUnitPriceOf(d,phaseNo,p){
+  const ov=phaseOverrides(d,phaseNo);
+  if(!ov)return unitPriceOf(d,p);
+  const idx=Math.max(0,_num(d&&d.pidx,100))/100,mode=Math.round(_num(d.pmode,0)),
+        w=ov.ow>0?ov.ow:Math.max(0,_num(d["w"+p])),dep=ov.od>0?ov.od:Math.max(0,_num(d["d"+p])),
+        bua=ov.obua>0?ov.obua:Math.max(0,_num(d["bua"+p])),r=ov.op>0?ov.op:Math.max(0,_num(d["p"+p]));
+  if(mode!==0&&ov.obua>0)return bua*r*idx;
+  if(mode===2)return bua*r*idx;
+  return (mode===1?w*dep*r:w*r)*idx;
+}
 /* Which product / phase the editors are pointed at. Display-only. */
 function uiPhaseNo(d){return _clamp(Math.round((typeof APP!=="undefined"&&APP.uiPhase)||1),1,Math.max(1,Math.round(_num(d&&d.nph,1))))}
 function phaseUnits(d,i){return Array.from({length:productCount(d)},(_,k)=>Math.max(0,_num(d["ph"+i+"p"+(k+1)],0))).reduce((a,b)=>a+b,0)}
@@ -4555,20 +4590,20 @@ const GROUPS=[
   ["ph4ovr","Phase 4 sales and cost terms","flag",0,"n"],
   ["ph5ovr","Phase 5 sales and cost terms","flag",0,"n"],
   ["ph6ovr","Phase 6 sales and cost terms","flag",0,"n"],
-  ["ph1share","Phase 1 lot / unit allocation","% total units",34,"p"],["ph1cost","Phase 1 construction cost share","% total COC",34,"p"],["ph1start","Phase 1 start offset","mth",0,"n"],["ph1saleslag","Phase 1 sales launch after start / completion","mth",0,"n"],["ph1vel","Phase 1 sales velocity","lots/m",0,"n"],["ph1esc","Phase 1 price escalation","% p.a. sale price",0,"p"],["ph1escovr","Phase 1 price escalation override enabled","flag",0,"n"],["ph1depo","Phase 1 purchaser deposit","% sale price",-1,"n"],["ph1dellag","Phase 1 closing lag","mth",-1,"n"],["ph1infrastart","Phase 1 — infrastructure start offset","mth",-1,"n"],["ph1infradur","Phase 1 — infrastructure spend duration","mth",0,"n"],["ph1infrapc","Phase 1 — infrastructure cost share","% total infra cost",-1,"n"],["ph1buildpsf","Phase 1 — vertical construction cost override","$/sqft BUA",0,"n"],
-  ["ph2share","Phase 2 lot / unit allocation","% total units",33,"p"],["ph2cost","Phase 2 construction cost share","% total COC",33,"p"],["ph2start","Phase 2 start offset","mth",-1,"n"],["ph2saleslag","Phase 2 sales launch after start / completion","mth",0,"n"],["ph2vel","Phase 2 sales velocity","lots/m",0,"n"],["ph2esc","Phase 2 price escalation","% p.a. sale price",0,"p"],["ph2escovr","Phase 2 price escalation override enabled","flag",0,"n"],["ph2depo","Phase 2 purchaser deposit","% sale price",-1,"n"],["ph2dellag","Phase 2 closing lag","mth",-1,"n"],["ph2infrastart","Phase 2 — infrastructure start offset","mth",-1,"n"],["ph2infradur","Phase 2 — infrastructure spend duration","mth",0,"n"],["ph2infrapc","Phase 2 — infrastructure cost share","% total infra cost",-1,"n"],["ph2buildpsf","Phase 2 — vertical construction cost override","$/sqft BUA",0,"n"],
-  ["ph3share","Phase 3 lot / unit allocation","% total units",33,"p"],["ph3cost","Phase 3 construction cost share","% total COC",33,"p"],["ph3start","Phase 3 start offset","mth",-1,"n"],["ph3saleslag","Phase 3 sales launch after start / completion","mth",0,"n"],["ph3vel","Phase 3 sales velocity","lots/m",0,"n"],["ph3esc","Phase 3 price escalation","% p.a. sale price",0,"p"],["ph3escovr","Phase 3 price escalation override enabled","flag",0,"n"],["ph3depo","Phase 3 purchaser deposit","% sale price",-1,"n"],["ph3dellag","Phase 3 closing lag","mth",-1,"n"],["ph3infrastart","Phase 3 — infrastructure start offset","mth",-1,"n"],["ph3infradur","Phase 3 — infrastructure spend duration","mth",0,"n"],["ph3infrapc","Phase 3 — infrastructure cost share","% total infra cost",-1,"n"],["ph3buildpsf","Phase 3 — vertical construction cost override","$/sqft BUA",0,"n"],
-  ["ph4share","Phase 4 lot / unit allocation","% total units",0,"p"],["ph4cost","Phase 4 construction cost share","% total COC",0,"p"],["ph4start","Phase 4 start offset","mth",-1,"n"],["ph4saleslag","Phase 4 sales launch after start / completion","mth",0,"n"],["ph4vel","Phase 4 sales velocity","lots/m",0,"n"],["ph4esc","Phase 4 price escalation","% p.a. sale price",0,"p"],["ph4escovr","Phase 4 price escalation override enabled","flag",0,"n"],["ph4depo","Phase 4 purchaser deposit","% sale price",-1,"n"],["ph4dellag","Phase 4 closing lag","mth",-1,"n"],["ph4infrastart","Phase 4 — infrastructure start offset","mth",-1,"n"],["ph4infradur","Phase 4 — infrastructure spend duration","mth",0,"n"],["ph4infrapc","Phase 4 — infrastructure cost share","% total infra cost",-1,"n"],["ph4buildpsf","Phase 4 — vertical construction cost override","$/sqft BUA",0,"n"],
-  ["ph5share","Phase 5 lot / unit allocation","% total units",0,"p"],["ph5cost","Phase 5 construction cost share","% total COC",0,"p"],["ph5start","Phase 5 start offset","mth",-1,"n"],["ph5saleslag","Phase 5 sales launch after start / completion","mth",0,"n"],["ph5vel","Phase 5 sales velocity","lots/m",0,"n"],["ph5esc","Phase 5 price escalation","% p.a. sale price",0,"p"],["ph5escovr","Phase 5 price escalation override enabled","flag",0,"n"],["ph5depo","Phase 5 purchaser deposit","% sale price",-1,"n"],["ph5dellag","Phase 5 closing lag","mth",-1,"n"],["ph5infrastart","Phase 5 — infrastructure start offset","mth",-1,"n"],["ph5infradur","Phase 5 — infrastructure spend duration","mth",0,"n"],["ph5infrapc","Phase 5 — infrastructure cost share","% total infra cost",-1,"n"],["ph5buildpsf","Phase 5 — vertical construction cost override","$/sqft BUA",0,"n"],
-  ["ph6share","Phase 6 lot / unit allocation","% total units",0,"p"],["ph6cost","Phase 6 construction cost share","% total COC",0,"p"],["ph6start","Phase 6 start offset","mth",-1,"n"],["ph6saleslag","Phase 6 sales launch after start / completion","mth",0,"n"],["ph6vel","Phase 6 sales velocity","lots/m",0,"n"],["ph6esc","Phase 6 price escalation","% p.a. sale price",0,"p"],["ph6escovr","Phase 6 price escalation override enabled","flag",0,"n"],["ph6depo","Phase 6 purchaser deposit","% sale price",-1,"n"],["ph6dellag","Phase 6 closing lag","mth",-1,"n"],["ph6infrastart","Phase 6 — infrastructure start offset","mth",-1,"n"],["ph6infradur","Phase 6 — infrastructure spend duration","mth",0,"n"],["ph6infrapc","Phase 6 — infrastructure cost share","% total infra cost",-1,"n"],["ph6buildpsf","Phase 6 — vertical construction cost override","$/sqft BUA",0,"n"]]},
+  ["ph1share","Phase 1 lot / unit allocation","% total units",34,"p"],["ph1cost","Phase 1 construction cost share","% total COC",34,"p"],["ph1start","Phase 1 start offset","mth",0,"n"],["ph1saleslag","Phase 1 sales launch after start / completion","mth",0,"n"],["ph1vel","Phase 1 sales velocity","lots/m",0,"n"],["ph1esc","Phase 1 price escalation","% p.a. sale price",0,"p"],["ph1escovr","Phase 1 price escalation override enabled","flag",0,"n"],["ph1depo","Phase 1 purchaser deposit","% sale price",-1,"n"],["ph1dellag","Phase 1 closing lag","mth",-1,"n"],["ph1infrastart","Phase 1 — infrastructure start offset","mth",-1,"n"],["ph1infradur","Phase 1 — infrastructure spend duration","mth",0,"n"],["ph1infrapc","Phase 1 — infrastructure cost share","% total infra cost",-1,"n"],["ph1buildpsf","Phase 1 — vertical construction cost override","$/sqft BUA",0,"n"],["ph1w","Phase 1 — lot frontage override","ft",0,"n"],["ph1d","Phase 1 — lot depth override","ft",0,"n"],["ph1bua","Phase 1 — built-up area override","sqft",0,"n"],["ph1p","Phase 1 — selling price override","$/price basis",0,"n"],
+  ["ph2share","Phase 2 lot / unit allocation","% total units",33,"p"],["ph2cost","Phase 2 construction cost share","% total COC",33,"p"],["ph2start","Phase 2 start offset","mth",-1,"n"],["ph2saleslag","Phase 2 sales launch after start / completion","mth",0,"n"],["ph2vel","Phase 2 sales velocity","lots/m",0,"n"],["ph2esc","Phase 2 price escalation","% p.a. sale price",0,"p"],["ph2escovr","Phase 2 price escalation override enabled","flag",0,"n"],["ph2depo","Phase 2 purchaser deposit","% sale price",-1,"n"],["ph2dellag","Phase 2 closing lag","mth",-1,"n"],["ph2infrastart","Phase 2 — infrastructure start offset","mth",-1,"n"],["ph2infradur","Phase 2 — infrastructure spend duration","mth",0,"n"],["ph2infrapc","Phase 2 — infrastructure cost share","% total infra cost",-1,"n"],["ph2buildpsf","Phase 2 — vertical construction cost override","$/sqft BUA",0,"n"],["ph2w","Phase 2 — lot frontage override","ft",0,"n"],["ph2d","Phase 2 — lot depth override","ft",0,"n"],["ph2bua","Phase 2 — built-up area override","sqft",0,"n"],["ph2p","Phase 2 — selling price override","$/price basis",0,"n"],
+  ["ph3share","Phase 3 lot / unit allocation","% total units",33,"p"],["ph3cost","Phase 3 construction cost share","% total COC",33,"p"],["ph3start","Phase 3 start offset","mth",-1,"n"],["ph3saleslag","Phase 3 sales launch after start / completion","mth",0,"n"],["ph3vel","Phase 3 sales velocity","lots/m",0,"n"],["ph3esc","Phase 3 price escalation","% p.a. sale price",0,"p"],["ph3escovr","Phase 3 price escalation override enabled","flag",0,"n"],["ph3depo","Phase 3 purchaser deposit","% sale price",-1,"n"],["ph3dellag","Phase 3 closing lag","mth",-1,"n"],["ph3infrastart","Phase 3 — infrastructure start offset","mth",-1,"n"],["ph3infradur","Phase 3 — infrastructure spend duration","mth",0,"n"],["ph3infrapc","Phase 3 — infrastructure cost share","% total infra cost",-1,"n"],["ph3buildpsf","Phase 3 — vertical construction cost override","$/sqft BUA",0,"n"],["ph3w","Phase 3 — lot frontage override","ft",0,"n"],["ph3d","Phase 3 — lot depth override","ft",0,"n"],["ph3bua","Phase 3 — built-up area override","sqft",0,"n"],["ph3p","Phase 3 — selling price override","$/price basis",0,"n"],
+  ["ph4share","Phase 4 lot / unit allocation","% total units",0,"p"],["ph4cost","Phase 4 construction cost share","% total COC",0,"p"],["ph4start","Phase 4 start offset","mth",-1,"n"],["ph4saleslag","Phase 4 sales launch after start / completion","mth",0,"n"],["ph4vel","Phase 4 sales velocity","lots/m",0,"n"],["ph4esc","Phase 4 price escalation","% p.a. sale price",0,"p"],["ph4escovr","Phase 4 price escalation override enabled","flag",0,"n"],["ph4depo","Phase 4 purchaser deposit","% sale price",-1,"n"],["ph4dellag","Phase 4 closing lag","mth",-1,"n"],["ph4infrastart","Phase 4 — infrastructure start offset","mth",-1,"n"],["ph4infradur","Phase 4 — infrastructure spend duration","mth",0,"n"],["ph4infrapc","Phase 4 — infrastructure cost share","% total infra cost",-1,"n"],["ph4buildpsf","Phase 4 — vertical construction cost override","$/sqft BUA",0,"n"],["ph4w","Phase 4 — lot frontage override","ft",0,"n"],["ph4d","Phase 4 — lot depth override","ft",0,"n"],["ph4bua","Phase 4 — built-up area override","sqft",0,"n"],["ph4p","Phase 4 — selling price override","$/price basis",0,"n"],
+  ["ph5share","Phase 5 lot / unit allocation","% total units",0,"p"],["ph5cost","Phase 5 construction cost share","% total COC",0,"p"],["ph5start","Phase 5 start offset","mth",-1,"n"],["ph5saleslag","Phase 5 sales launch after start / completion","mth",0,"n"],["ph5vel","Phase 5 sales velocity","lots/m",0,"n"],["ph5esc","Phase 5 price escalation","% p.a. sale price",0,"p"],["ph5escovr","Phase 5 price escalation override enabled","flag",0,"n"],["ph5depo","Phase 5 purchaser deposit","% sale price",-1,"n"],["ph5dellag","Phase 5 closing lag","mth",-1,"n"],["ph5infrastart","Phase 5 — infrastructure start offset","mth",-1,"n"],["ph5infradur","Phase 5 — infrastructure spend duration","mth",0,"n"],["ph5infrapc","Phase 5 — infrastructure cost share","% total infra cost",-1,"n"],["ph5buildpsf","Phase 5 — vertical construction cost override","$/sqft BUA",0,"n"],["ph5w","Phase 5 — lot frontage override","ft",0,"n"],["ph5d","Phase 5 — lot depth override","ft",0,"n"],["ph5bua","Phase 5 — built-up area override","sqft",0,"n"],["ph5p","Phase 5 — selling price override","$/price basis",0,"n"],
+  ["ph6share","Phase 6 lot / unit allocation","% total units",0,"p"],["ph6cost","Phase 6 construction cost share","% total COC",0,"p"],["ph6start","Phase 6 start offset","mth",-1,"n"],["ph6saleslag","Phase 6 sales launch after start / completion","mth",0,"n"],["ph6vel","Phase 6 sales velocity","lots/m",0,"n"],["ph6esc","Phase 6 price escalation","% p.a. sale price",0,"p"],["ph6escovr","Phase 6 price escalation override enabled","flag",0,"n"],["ph6depo","Phase 6 purchaser deposit","% sale price",-1,"n"],["ph6dellag","Phase 6 closing lag","mth",-1,"n"],["ph6infrastart","Phase 6 — infrastructure start offset","mth",-1,"n"],["ph6infradur","Phase 6 — infrastructure spend duration","mth",0,"n"],["ph6infrapc","Phase 6 — infrastructure cost share","% total infra cost",-1,"n"],["ph6buildpsf","Phase 6 — vertical construction cost override","$/sqft BUA",0,"n"],["ph6w","Phase 6 — lot frontage override","ft",0,"n"],["ph6d","Phase 6 — lot depth override","ft",0,"n"],["ph6bua","Phase 6 — built-up area override","sqft",0,"n"],["ph6p","Phase 6 — selling price override","$/price basis",0,"n"]]},
  {g:"Phase-by-product unit matrix (optional)",f:[
   /* What the phase on screen contains, priced the same way the product is. */
   ["_phlots","Units in this phase","no.",null,"c",d=>{const row=effectivePhaseMatrix(d)[uiPhaseNo(d)-1]||[];
     return row.reduce((a,b)=>a+b,0)}],
-  ["_pharea","Saleable area in this phase","sqft",null,"c",d=>{const row=effectivePhaseMatrix(d)[uiPhaseNo(d)-1]||[];
-    return sumProducts(d,k=>Math.max(0,_num(row[k-1],0))*unitAreaOf(d,k))}],
-  ["_phrev","Gross sales value in this phase","$",null,"c",d=>{const row=effectivePhaseMatrix(d)[uiPhaseNo(d)-1]||[];
-    return sumProducts(d,k=>Math.max(0,_num(row[k-1],0))*unitPriceOf(d,k))}],
+  ["_pharea","Saleable area in this phase","sqft",null,"c",d=>{const row=effectivePhaseMatrix(d)[uiPhaseNo(d)-1]||[],ph=uiPhaseNo(d);
+    return sumProducts(d,k=>Math.max(0,_num(row[k-1],0))*phaseUnitAreaOf(d,ph,k))}],
+  ["_phrev","Gross sales value in this phase","$",null,"c",d=>{const row=effectivePhaseMatrix(d)[uiPhaseNo(d)-1]||[],ph=uiPhaseNo(d);
+    return sumProducts(d,k=>Math.max(0,_num(row[k-1],0))*phaseUnitPriceOf(d,ph,k))}],
   ["ph1p1","Phase 1 — Product 1 units","no.",0,"n"],["ph1p2","Phase 1 — Product 2 units","no.",0,"n"],["ph1p3","Phase 1 — Product 3 units","no.",0,"n"],
   ["ph2p1","Phase 2 — Product 1 units","no.",0,"n"],["ph2p2","Phase 2 — Product 2 units","no.",0,"n"],["ph2p3","Phase 2 — Product 3 units","no.",0,"n"],
   ["ph3p1","Phase 3 — Product 1 units","no.",0,"n"],["ph3p2","Phase 3 — Product 2 units","no.",0,"n"],["ph3p3","Phase 3 — Product 3 units","no.",0,"n"],
@@ -5748,7 +5783,7 @@ let modelPhaseIndex=(d.modelphase>0 && d.modelphase-1<ph.count && ph.counts[d.mo
       const item=constructionQueue[soldCount],i=item.phase,product=item.product,p=products[product];
       const phaseEsc=V?(d[`ph${i+1}escovr`]?d[`ph${i+1}esc`]:d.esc):d.esc;
       const depositPct=V?(d[`ph${i+1}depo`]>=0?d[`ph${i+1}depo`]:d.depo):d.depo;
-      const saleBase=V?p.salePsf*p.bua:(d.pmode===2?p.bua*p.price:d.pmode===1?p.width*p.depth*p.price:p.width*p.price)*d.pidx/100;
+      const saleBase=V?p.salePsf*p.bua:phaseUnitPriceOf(d,i+1,product+1);
       const salePrice=saleBase*Math.pow(1+phaseEsc/100,month/12);
       if(V){
         /* Every unit's own build start is its own contract month (never earlier than
@@ -8022,6 +8057,18 @@ function buildPhaseEditor(g){
      phase is flagged as differing (fieldShown gates it the same way). */
   if(D.vert&&Math.round(_num(D["ph"+ph+"ovr"],0))===1)
     addEditorRow(g,"ph"+ph+"buildpsf","Phase "+ph+" \u2014 vertical construction cost","$/sqft BUA");
+  /* Same "only once this phase differs" gate as buildpsf above, for the lot
+     side: leave any of these at 0 and the phase keeps pricing off the
+     product's own frontage/depth/built-up-area/price. Filling in built-up
+     area switches that phase to built-up-area x $/sqft regardless of the
+     product's own Price basis - see phaseUnitPriceOf. */
+  if(!D.vert&&Math.round(_num(D["ph"+ph+"ovr"],0))===1){
+    addEditorRow(g,"ph"+ph+"w","Phase "+ph+" \u2014 lot frontage override","ft");
+    addEditorRow(g,"ph"+ph+"d","Phase "+ph+" \u2014 lot depth override","ft");
+    addEditorRow(g,"ph"+ph+"bua","Phase "+ph+" \u2014 built-up area override","sqft");
+    addEditorRow(g,"ph"+ph+"p","Phase "+ph+" \u2014 selling price override",
+      _num(D["ph"+ph+"bua"],0)>0?"$/sqft BUA":Number(D.pmode)===1?"$/sqft lot":Number(D.pmode)===2?"$/sqft BUA":"$/front ft");
+  }
   /* What that percentage works out to, priced the way the products are priced. */
   addEditorRow(g,"_phlots","Phase "+ph+" \u2014 total "+unitWord,"no.",{calc:true});
   addEditorRow(g,"_pharea","Phase "+ph+" \u2014 saleable area","sqft",{calc:true});
