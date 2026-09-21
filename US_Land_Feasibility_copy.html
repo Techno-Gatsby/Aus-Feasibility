@@ -19940,6 +19940,12 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     try{
       const list=(await call("?region="+encodeURIComponent(APPRAISAL_REGION)+"&expand=1")).appraisals||[];
       if(!list.length){
+        /* The startup placeholder (APP.parcels[0], literally named "Loading…")
+           is only ever renamed by applyEnvelope() below, so an empty store
+           left it stuck on screen as a project called "Loading…" forever -
+           it still computes and renders real numbers off DEF's defaults, just
+           under a placeholder name nothing ever replaced. */
+        if(P0().name==="Loading…"){P0().name="Untitled appraisal";buildParcels()}
         say("warn","Nothing in the shared store yet",
           "The store is reachable but empty. Open a saved appraisal from a file and press Save project to add the first one.",true);
         return;
