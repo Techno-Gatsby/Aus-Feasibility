@@ -7689,15 +7689,23 @@ function buildParcels(){
            the appraisal-store script), so deleting it there closes the whole
            deal, for everyone with access, not just this browser's tabs. */
         if(p._dealId){
-          const dealId=p._dealId,mates=dealMatesOf(p),group=APP.parcels.filter(x=>x._dealId===dealId&&mates.includes(x)),names=group.map(x=>x.name).join(" and ");
-          if(group.length>=APP.parcels.length){toast("At least one project must stay open.",2200);return}
-          if(!confirm("Delete “"+names+"”?\n\nThis cannot be undone here, and it will disappear from the shared store for everyone with access - not just you."))return;
-          Promise.resolve(window.deleteProjectFromStore&&window.deleteProjectFromStore(dealId)).then(()=>{
-            APP.parcels=APP.parcels.filter(x=>x._dealId!==dealId);
-            APP.portfolioSelected=(APP.portfolioSelected||[]).filter(id=>!group.some(x=>x.id===id));
+          /* Deletes exactly this one parcel, never its dealMatesOf/landschedsrc
+             counterpart - "there should be no pair deletion for any projects,
+             linked or otherwise". Landowner Co and Homebuilder Co sharing one
+             stored row (see the appraisal-store script) is a storage detail,
+             not licence to take both down from one click; deleteParcelFromStore
+             keeps the row alive with the other parcel still in it unless this
+             was the last one left. */
+          const dealId=p._dealId,hasMate=dealMatesOf(p).length>1;
+          if(APP.parcels.length<=1){toast("At least one project must stay open.",2200);return}
+          const note=hasMate?"\n\nOnly “"+p.name+"” is removed - the rest of this deal stays in the shared store.":"";
+          if(!confirm("Delete “"+p.name+"”?\n\nThis cannot be undone here, and it will disappear from the shared store for everyone with access - not just you."+note))return;
+          Promise.resolve(window.deleteParcelFromStore&&window.deleteParcelFromStore(dealId,p.id,p.name)).then(()=>{
+            APP.parcels=APP.parcels.filter(x=>x!==p);
+            APP.portfolioSelected=(APP.portfolioSelected||[]).filter(id=>id!==p.id);
             APP.active=Math.max(0,Math.min(APP.active,APP.parcels.length-1));
             D=P0().inputs;normalizeModeState();buildParcels();buildForm();buildScaffold();showNav();render();
-          }).catch(err=>alert("Could not delete “"+names+"”: "+(err&&err.message||err)));
+          }).catch(err=>alert("Could not delete “"+p.name+"”: "+(err&&err.message||err)));
           return;
         }
         if(!confirm("Remove "+p.name+"?"))return;
@@ -19846,13 +19854,37 @@ const boardPdfButton=document.getElementById("btnPrint");if(boardPdfButton)board
     return err.message;
   }
 
-  /* Called from buildParcels()'s "×" - a plain function property rather than
-     a const, so it exists on window from the moment this script runs, the
-     same way APP and P0 are already shared across the page's script blocks. */
-  window.deleteProjectFromStore=async function(dealId){
+  /* Called from buildParcels()'s "×". Removes exactly the one parcel the
+     caller clicked - a stored row can hold two parcels (Landowner Co +
+     Homebuilder Co, the two halves of one consolidated deal, sharing one
+     row on purpose) or just one, and deleting one must never take the other
+     with it. The row itself is only deleted outright when that was the
+     last parcel left in it; otherwise the row is kept and PUT back with a
+     smaller parcels array - the same shape save()/buildEnvelopeFor already
+     write, just missing one entry. The live row is re-fetched first (never
+     trusted from whatever this browser's tab bar happens to hold - the
+     other parcel may not even be open locally) so this can't act on stale
+     data. A plain function property rather than a const, so it exists on
+     window from the moment this script runs, the same way APP and P0 are
+     already shared across the page's script blocks. */
+  window.deleteParcelFromStore=async function(dealId,parcelId,parcelName){
     if(!dealId)return;
-    await call("/"+dealId,{method:"DELETE"});
-    delete deals[dealId];
+    const live=await call("/"+dealId);
+    const liveParcels=(live.envelope&&Array.isArray(live.envelope.parcels))?live.envelope.parcels:[];
+    const matches=pc=>parcelId?((pc.id||null)===parcelId):(String(pc.name||"")===parcelName);
+    if(liveParcels.length&&!liveParcels.some(matches)){delete deals[dealId];return}
+    if(liveParcels.length<=1){
+      await call("/"+dealId,{method:"DELETE"});
+      delete deals[dealId];
+      return;
+    }
+    const keep=liveParcels.filter(pc=>!matches(pc));
+    const envelope=Object.assign({},live.envelope,{parcels:keep});
+    const updated=await call("/"+dealId,{method:"PUT",body:JSON.stringify({
+      name:keep[0].name||live.name,location:live.location,region:APPRAISAL_REGION,
+      expected_version:live.version,envelope
+    })});
+    deals[dealId]={version:updated.version,name:updated.name,location:updated.location,region:updated.region};
   };
 
   /* ── the status line, above the parcel switcher ────────────────────────── */
