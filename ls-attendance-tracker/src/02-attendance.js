@@ -20,7 +20,7 @@ function renderAttendance() {
   const projList = S.projects.filter(p => !f.client || p.clientId === f.client).sort((a, b) => a.name.localeCompare(b.name));
   const siteList = S.sites.filter(s => (!f.project || s.projectId === f.project) && (!f.client || IX.proj.get(s.projectId)?.clientId === f.client)).sort((a, b) => a.name.localeCompare(b.name));
   const locked = AV.mode === 'payroll' && S.locks[AV.ym];
-  v.innerHTML = `
+  v.innerHTML = setupSteps() + `
   <div id="att-toolbar">
    <div class="card" style="margin-bottom:8px;padding:10px 14px">
     <div class="row">
@@ -304,3 +304,15 @@ document.addEventListener('keydown', e => {
     if (s.r0 === s.r1 && s.c0 === s.c1 && s.c1 < AV.dates.length - 1) { AV.anchor = { r: s.r0, c: s.c0 + 1 }; setSel(AV.anchor, AV.anchor); }
   }
 });
+
+function setupSteps() {
+  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length;
+  const st = [
+    [store.dir && store.perm === 'granted', '1 · Data folder', 'Choose LS_Documents so data saves to OneDrive', "connectFolder().then(renderAll)"],
+    [S.employees.length > 0, '2 · Import master sheet', 'Load workers, sites and daily codes from Excel', "showView('data')"],
+    [S.sites.length > 0 && !unm, '3 · Map sites to projects', unm ? unm + ' site(s) not under a project yet' : 'Every site belongs to a project', "showView('projects')"],
+    [S.projects.length > 0 && !noRate && S.projects.every(p => p.clientId), '4 · Clients & rates', noRate ? noRate + ' project(s) without a rate' : 'Client, PO and rate per project', "showView('projects')"]
+  ];
+  if (st.every(x => x[0])) return '';
+  return `<div class="steps">${st.map(([d, t, h, f]) => `<a href="#" class="${d ? 'done' : ''}" onclick="${f};return false"><b>${t}</b><span class="small muted">${h}</span></a>`).join('')}</div>`;
+}

@@ -265,16 +265,18 @@ async function exportTimesheetsXlsx(list) {
     const N = ts.days, C0 = 5, CT = C0 + N; // 1-based columns: B site, C shift, D name, E code, F.. days, total
     ws.getColumn(1).width = 2; ws.getColumn(2).width = 26; ws.getColumn(3).width = 8; ws.getColumn(4).width = 34; ws.getColumn(5).width = 16;
     for (let i = 0; i < N; i++) ws.getColumn(C0 + 1 + i).width = 3.6; ws.getColumn(CT + 1).width = 9;
+    // Same cell positions as the LS/DO/F-026 workbook: header rows 2-4, legend AI6:AJ9, MONTH row 8, PROJECT row 10, table from row 13
     ws.getCell('B2').value = st.companyShort; ws.getCell('B2').font = { bold: true, size: 14 };
     ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
-    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('D4').value = `REV NO: ${st.revNo}`; ws.getCell(4, C0 + 12).value = `DATE : ${st.formDate}`;
-    const leg = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
-    leg.forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
-    ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = fmtMonYY(ts.ym); ws.getCell('B8').font = { bold: true };
-    ws.getCell('B9').value = 'PROJECT NAME'; ws.getCell('C9').value = p?.name || ''; ws.getCell('B9').font = { bold: true };
-    const HR = 12;
+    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`; ws.getCell(4, CT - 8).value = `DATE : ${st.formDate}`;
+    TS_LEGEND.forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
+    const [yy, mm] = ts.ym.split('-').map(Number);
+    ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
+    ws.getCell('B10').value = 'PROJECT NAME'; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
+    const HR = 13;
     const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...Array.from({ length: N }, (_, i) => i + 1), 'TOTAL DAYS'];
     head.forEach((v, i) => { const c = ws.getCell(HR, 2 + i); c.value = v; c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; });
+    const pCodes = S.codes.filter(c => c.billable && c.code !== 'R').map(c => c.code);
     let r = HR + 1;
     for (const sec of ts.sections) {
       const r0 = r;
@@ -283,7 +285,9 @@ async function exportTimesheetsXlsx(list) {
         ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
         for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? 'O' : code) : null; c.alignment = { horizontal: 'center' }; }
         const rg = `${colL(C0)}${r}:${colL(C0 + N - 1)}${r}`;
-        ws.getCell(r, CT + 1).value = { formula: billFormula(rg), result: row.total };
+        // template: =COUNTIF(F14:AI14,"P") for site rows, "R" for reliever rows
+        const f = (sec.id === '__REL' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';
+        ws.getCell(r, CT + 1).value = { formula: f, result: row.total };
         for (let c = 2; c <= CT + 1; c++) ws.getCell(r, c).border = thin;
         ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
         r++;
@@ -291,12 +295,14 @@ async function exportTimesheetsXlsx(list) {
       if (r - 1 > r0) ws.mergeCells(r0, 2, r - 1, 2);
       const sc = ws.getCell(r0, 2); sc.font = { bold: true }; sc.alignment = { vertical: 'middle', wrapText: true };
     }
-    ws.getCell(r, CT - 2).value = 'GRAND TOTAL'; ws.getCell(r, CT - 2).font = { bold: true };
+    ws.getCell(r, CT - 3).value = 'GRAND TOTAL'; ws.getCell(r, CT - 3).font = { bold: true };
     ws.getCell(r, CT + 1).value = { formula: `SUM(${colL(CT)}${HR + 1}:${colL(CT)}${Math.max(HR + 1, r - 1)})`, result: ts.total };
     ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).border = thin; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
-    r += 3;
-    const spots = [2, 4, C0 + 4, C0 + 13, C0 + 23];
-    st.signatories.forEach((s, i) => { const c = spots[i] || 2 + i * 6; ws.getCell(r, c).value = s.label; ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 3, c).value = s.name; ws.getCell(r + 4, c).value = s.title; });
+    r++;
+    // signatories: labels B, D, I, R, AC; "name title" in one cell below
+    const spots = [2, 4, 9, 18, 29];
+    st.signatories.forEach((s, i) => { const c = Math.min(spots[i] || 2 + i * 6, CT); ws.getCell(r, c).value = s.label; ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 1, c).value = ' ' + [s.name, s.title].filter(Boolean).join(' ') + ' '; ws.getCell(r + 1, c).alignment = { wrapText: true, vertical: 'top' }; });
+    ws.getRow(r + 1).height = 45;
     ws.views = [{ state: 'frozen', ySplit: HR }];
   }
   const buf = await wb.xlsx.writeBuffer();
@@ -310,18 +316,19 @@ async function exportMasterXlsx() {
   const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('LS-PAYROLL ATTENDENCE', { pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
   const D = AV.dates, C0 = 8;
   const { start, end } = attPeriod();
-  ws.getCell('A1').value = `${S.settings.companyShort} MASTER PAYROLL ATTENDANCE MONTH OF ${fmtMonthName(AV.mode === 'payroll' ? AV.ym : AV.ym)}`; ws.getCell('A1').font = { bold: true, size: 13 };
-  ws.getCell('E2').value = 'MONTH'; ws.getCell('F2').value = `${fmtDMY(start)} TO ${fmtDMY(end)}`;
-  ws.getCell(2, C0 + 8).value = 'PREPARED BY OPERATION'; ws.getCell(2, C0 + 13).value = S.settings.preparedBy;
-  const head = ['S.NO', 'SHIFT', 'NAME', 'EMP ID NO', 'D.O.J', 'TRADE', 'PROJECT'];
-  head.forEach((h, i) => { ws.getCell(4, i + 1).value = h; });
-  D.forEach((d, j) => { ws.getCell(3, C0 + j).value = WD[weekday(d)]; ws.getCell(4, C0 + j).value = fmtDMY(d).slice(0, 5); });
-  ws.getCell(4, C0 + D.length).value = 'TOTAL P'; ws.getCell(4, C0 + D.length + 1).value = 'BILLABLE';
-  for (let c = 1; c <= C0 + D.length + 1; c++) for (const r of [3, 4]) { const x = ws.getCell(r, c); x.font = { bold: true }; x.border = thin; x.alignment = { horizontal: 'center', vertical: 'middle' }; x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; }
+  ws.getCell('A1').value = `${S.settings.companyShort} MASTER PAYROLL ATTENDANCE MONTH OF ${fmtMonthName(AV.ym)}`; ws.getCell('A1').font = { bold: true, size: 13 };
+  // template rows: 3 = MONTH / PREPARED BY, 4 = D.O.J TRADE PROJECT + weekdays + TOTAL, 5 = S.NO EMP NO NAME EMP ID NO + dates, data from 6
+  ws.getCell('E3').value = 'MONTH'; ws.getCell('F3').value = `${fmtDMY(start)} TO ${fmtDMY(end)}`;
+  ws.getCell(3, C0 + 9).value = 'PREPARED BY OPERATION'; ws.getCell(3, C0 + 14).value = S.settings.preparedBy; ws.getCell(3, C0 + 21).value = 'REVIEWED BY';
+  ['D.O.J', 'TRADE', 'PROJECT'].forEach((h, i) => ws.getCell(4, 5 + i).value = h);
+  ['S.NO', 'EMP NO', 'NAME', 'EMP ID NO'].forEach((h, i) => ws.getCell(5, 1 + i).value = h);
+  D.forEach((d, j) => { ws.getCell(4, C0 + j).value = WD[weekday(d)]; const c = ws.getCell(5, C0 + j); const [y, m, dd] = d.split('-').map(Number); c.value = new Date(Date.UTC(y, m - 1, dd)); c.numFmt = 'yyyy-mm-dd'; });
+  ws.getCell(4, C0 + D.length).value = ' T0TAL ';
+  for (let c = 1; c <= C0 + D.length; c++) for (const r of [4, 5]) { const x = ws.getCell(r, c); x.font = { bold: true }; x.border = thin; x.alignment = { horizontal: 'center', vertical: 'middle', textRotation: r === 5 && c >= C0 && c < C0 + D.length ? 90 : 0 }; x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; }
   ws.getColumn(1).width = 6; ws.getColumn(2).width = 8; ws.getColumn(3).width = 38; ws.getColumn(4).width = 12; ws.getColumn(5).width = 11; ws.getColumn(6).width = 18; ws.getColumn(7).width = 26;
-  D.forEach((_, j) => ws.getColumn(C0 + j).width = 4.6);
+  D.forEach((_, j) => ws.getColumn(C0 + j).width = 4.6); ws.getRow(5).height = 62;
   AV.rows.forEach((row, i) => {
-    const r = 5 + i, e = row.emp;
+    const r = 6 + i, e = row.emp;
     [i + 1, row.shift, e.name, empCodeLabel(e), e.doj ? fmtDMY(e.doj) : '', e.trade, siteName(row.lastSite)].forEach((v, k) => { ws.getCell(r, k + 1).value = v; ws.getCell(r, k + 1).border = thin; });
     let endMarked = false;
     D.forEach((d, j) => {
@@ -333,10 +340,9 @@ async function exportMasterXlsx() {
     });
     const rg = `${colL(C0 - 1)}${r}:${colL(C0 + D.length - 2)}${r}`;
     ws.getCell(r, C0 + D.length).value = { formula: `COUNTIF(${rg},"P")` };
-    ws.getCell(r, C0 + D.length + 1).value = { formula: billFormula(rg) };
-    ws.getCell(r, C0 + D.length).border = ws.getCell(r, C0 + D.length + 1).border = thin;
+    ws.getCell(r, C0 + D.length).border = thin;
   });
-  ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 4 }];
+  ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
   const buf = await wb.xlsx.writeBuffer();
   downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${S.settings.companyShort} MASTER PAYROLL ATTENDANCE MONTH OF ${fmtMonthName(AV.ym)}.xlsx`);
 }

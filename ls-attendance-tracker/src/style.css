@@ -1,8 +1,8 @@
 :root{
-  --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2330; --muted:#6b7280; --line:#dfe3ea; --line2:#eef0f4;
+  --bg:#ffffff; --panel:#ffffff; --ink:#1d2330; --muted:#6b7280; --line:#dfe3ea; --line2:#eef0f4;
   --brand:#1f3a5f; --brand2:#2c5282; --accent:#b8892d; --ok:#1e7b43; --warn:#b45309; --bad:#b42318;
   --sel:#2c5282; --lock:#f1f1f1;
-  --radius:8px; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --radius:8px; --shadow:none;
   font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
 }
 *{box-sizing:border-box}
@@ -12,25 +12,26 @@ button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--brand2)}
 
 /* ---------- top bar ---------- */
-#topbar{position:sticky;top:0;z-index:50;background:var(--brand);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px;height:48px}
+#topbar{position:sticky;top:0;z-index:50;background:#fff;color:var(--ink);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 16px;height:48px}
 #topbar .brand{font-weight:700;letter-spacing:.3px;white-space:nowrap}
-#topbar .brand small{font-weight:400;opacity:.75;margin-left:6px}
+#topbar .brand{color:var(--brand)}
+#topbar .brand small{font-weight:400;color:var(--muted);margin-left:6px}
 #tabs{display:flex;gap:2px;height:100%;overflow-x:auto}
-#tabs button{background:none;border:0;color:#cfd8e6;padding:0 11px;height:100%;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
-#tabs button:hover{color:#fff}
-#tabs button.on{color:#fff;border-bottom-color:var(--accent);font-weight:600}
+#tabs button{background:none;border:0;color:var(--muted);padding:0 11px;height:100%;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+#tabs button:hover{color:var(--ink);background:#f7f8fa}
+#tabs button.on{color:var(--brand);border-bottom-color:var(--brand2);font-weight:600}
 #savestate{margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px}
-#savestate .pill{padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.14)}
-#savestate .pill.ok{background:#1e7b43}
-#savestate .pill.warn{background:#b45309}
-#savestate button{background:#fff;color:var(--brand);border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600}
+#savestate .pill{padding:3px 10px;border-radius:99px;background:#f2f4f7;color:#475467}
+#savestate .pill.ok{background:#e7f6ec;color:#155d33}
+#savestate .pill.warn{background:#fff4e5;color:#8a4b08}
+#savestate button{background:var(--brand2);color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600}
 
 main{padding:16px;max-width:none}
 .view{display:none}
 .view.on{display:block}
 
 /* ---------- generic ---------- */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
 .card h2{font-size:15px;margin:0 0 10px}
 .card h3{font-size:13px;margin:14px 0 8px;color:var(--brand)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -83,6 +84,7 @@ table.ag thead th.we{background:#eef1f6}
 table.ag td.d{width:30px;min-width:30px;max-width:30px;text-align:center;cursor:cell;position:relative;font-weight:600;font-size:11px;padding:0}
 table.ag td.d.lk{background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 4px,#ececec 4px,#ececec 8px);cursor:not-allowed}
 table.ag td.d.frz{cursor:not-allowed;opacity:.8}
+table.ag td.d:hover{box-shadow:inset 0 0 0 1px #9fb6d6}
 table.ag td.d.sel{outline:2px solid var(--sel);outline-offset:-2px;z-index:1}
 table.ag td.d .ov{position:absolute;top:1px;right:2px;width:5px;height:5px;border-radius:50%;background:#7c3aed}
 table.ag td.d .nt{position:absolute;bottom:0;left:2px;font-size:7px;color:#1d4ed8;font-weight:700}
@@ -160,3 +162,9 @@ table.ts tr.gtr td{background:#f2f2f2}
   table.ts th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.steps a{flex:1 1 200px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-decoration:none;color:var(--ink)}
+.steps a b{display:block;color:var(--brand2);margin-bottom:2px}
+.steps a.done{opacity:.55}
+.steps a.done b::after{content:' ✓';color:var(--ok)}

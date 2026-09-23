@@ -1,6 +1,7 @@
 /* =====================================================================
    Client timesheets (calendar month, one sheet per project, LS/DO/F-026)
    ===================================================================== */
+const TS_LEGEND = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
 const TV = { ym: null, client: '', picked: new Set(), all: true };
 
 /** Build the project-wise breakup for one calendar month from the daily ledger. */
@@ -52,8 +53,8 @@ function tsSheetHTML(ts) {
     });
   }
   if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance recorded for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
-  const legend = S.codes.filter(c => c.client || ['P', 'A', 'OFF', 'R'].includes(c.code)).map(c => `<tr><td><b>${esc(c.code === 'OFF' ? 'O' : c.code)}</b></td><td>${esc(c.label.toUpperCase())}</td></tr>`).join('');
-  const signs = st.signatories.map(s => `<div><b>${esc(s.label)}</b>${esc(s.name)}<br>${esc(s.title)}</div>`).join('');
+  const legend = TS_LEGEND.map(([a, b]) => `<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('');
+  const signs = st.signatories.map(s => `<div><b>${esc(s.label)}</b>${esc([s.name, s.title].filter(Boolean).join(' '))}</div>`).join('');
   return `<div class="sheet land ts-sheet">
     <div class="ts-head"><div>
       <div class="t1">${esc(st.companyShort)}</div><div class="t2">${esc(st.tsTitle)}</div>
