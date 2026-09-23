@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LS Attendance Tracker</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2330; --muted:#6b7280; --line:#dfe3ea; --line2:#eef0f4;
+  --brand:#1f3a5f; --brand2:#2c5282; --accent:#b8892d; --ok:#1e7b43; --warn:#b45309; --bad:#b42318;
+  --sel:#2c5282; --lock:#f1f1f1;
+  --radius:8px; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-size:13px}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--brand2)}
+
+/* ---------- top bar ---------- */
+#topbar{position:sticky;top:0;z-index:50;background:var(--brand);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px;height:48px}
+#topbar .brand{font-weight:700;letter-spacing:.3px;white-space:nowrap}
+#topbar .brand small{font-weight:400;opacity:.75;margin-left:6px}
+#tabs{display:flex;gap:2px;height:100%;overflow-x:auto}
+#tabs button{background:none;border:0;color:#cfd8e6;padding:0 11px;height:100%;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+#tabs button:hover{color:#fff}
+#tabs button.on{color:#fff;border-bottom-color:var(--accent);font-weight:600}
+#savestate{margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px}
+#savestate .pill{padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.14)}
+#savestate .pill.ok{background:#1e7b43}
+#savestate .pill.warn{background:#b45309}
+#savestate button{background:#fff;color:var(--brand);border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600}
+
+main{padding:16px;max-width:none}
+.view{display:none}
+.view.on{display:block}
+
+/* ---------- generic ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px}
+.card h3{font-size:13px;margin:14px 0 8px;color:var(--brand)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.end{justify-content:flex-end}
+.grow{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:11.5px}
+.hint{color:var(--muted);font-size:12px;margin:4px 0 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 14px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted)}
+label.f > input,label.f > select,label.f > textarea{color:var(--ink);font-size:13px}
+label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{border:1px solid #cdd3dd;border-radius:6px;padding:5px 8px;background:#fff;min-height:30px}
+textarea{min-height:60px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid #9fb6d6;outline-offset:0;border-color:#7d9cc6}
+.btn{border:1px solid #c5ccd8;background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;min-height:30px;white-space:nowrap}
+.btn:hover{background:#f3f5f9}
+.btn.pri{background:var(--brand2);border-color:var(--brand2);color:#fff}
+.btn.pri:hover{background:var(--brand)}
+.btn.bad{color:var(--bad);border-color:#efc2bd}
+.btn.bad:hover{background:#fff1f0}
+.btn.sm{padding:2px 8px;min-height:24px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;background:#eef2f7;font-size:11px;color:#344054}
+.tag.warn{background:#fff4e5;color:#8a4b08}
+.tag.bad{background:#fdeceb;color:#912018}
+.tag.ok{background:#e7f6ec;color:#155d33}
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:#fff8e6;border:1px solid #f3d38a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.banner.info{background:#eef4fb;border-color:#bcd0ea}
+
+table.t{border-collapse:collapse;width:100%;background:#fff}
+table.t th,table.t td{border-bottom:1px solid var(--line2);padding:5px 8px;text-align:left;vertical-align:middle}
+table.t th{background:#f7f8fa;font-weight:600;font-size:12px;color:#475467;position:sticky;top:0;z-index:1}
+table.t tr:hover td{background:#fafbfd}
+table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.t input,table.t select{min-height:26px;padding:2px 6px}
+.scroll{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--line);border-radius:6px}
+
+/* ---------- attendance grid ---------- */
+#att-toolbar{position:sticky;top:48px;z-index:20;background:var(--bg);padding-bottom:8px}
+.palette{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.palette .code{min-width:38px;border:1px solid #c5ccd8;border-radius:5px;padding:3px 7px;cursor:pointer;font-weight:600;font-size:12px}
+.palette .code:hover{filter:brightness(.95)}
+#grid-wrap{overflow:auto;max-height:calc(100vh - 250px);border:1px solid var(--line);border-radius:6px;background:#fff;user-select:none}
+table.ag{border-collapse:separate;border-spacing:0;font-size:11.5px}
+table.ag th,table.ag td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:0 4px;height:24px;white-space:nowrap}
+table.ag thead th{position:sticky;top:0;background:#f7f8fa;z-index:3;font-weight:600;color:#475467;text-align:center}
+table.ag thead tr:nth-child(2) th{top:24px}
+table.ag thead th.we{background:#eef1f6}
+table.ag td.d{width:30px;min-width:30px;max-width:30px;text-align:center;cursor:cell;position:relative;font-weight:600;font-size:11px;padding:0}
+table.ag td.d.lk{background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 4px,#ececec 4px,#ececec 8px);cursor:not-allowed}
+table.ag td.d.frz{cursor:not-allowed;opacity:.8}
+table.ag td.d.sel{outline:2px solid var(--sel);outline-offset:-2px;z-index:1}
+table.ag td.d .ov{position:absolute;top:1px;right:2px;width:5px;height:5px;border-radius:50%;background:#7c3aed}
+table.ag td.d .nt{position:absolute;bottom:0;left:2px;font-size:7px;color:#1d4ed8;font-weight:700}
+table.ag .fix{position:sticky;background:#fff;z-index:2}
+table.ag thead .fix{z-index:4;background:#f7f8fa}
+table.ag td.nm{cursor:pointer;color:var(--brand2);max-width:220px;overflow:hidden;text-overflow:ellipsis}
+table.ag td.nm:hover{text-decoration:underline}
+table.ag td.tot{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:0 6px}
+table.ag td.sum{font-size:10.5px;color:#475467}
+table.ag tr.left td.nm{color:#98a2b3;text-decoration:line-through}
+table.ag tfoot td{position:sticky;bottom:0;background:#f7f8fa;font-weight:700;text-align:center;z-index:2}
+table.ag tfoot td.fix{z-index:4}
+
+/* ---------- modal ---------- */
+#modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto}
+#modal-bg.on{display:flex}
+#modal{background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(820px,100%);max-width:100%}
+#modal .mh{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+#modal .mh h3{margin:0;font-size:15px;flex:1}
+#modal .mb{padding:14px 16px;max-height:calc(100vh - 200px);overflow:auto}
+#modal .mf{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1d2330;color:#fff;padding:9px 16px;border-radius:8px;z-index:200;display:none;max-width:90vw}
+
+/* ---------- timesheet & invoice sheet (screen + print) ---------- */
+.sheet{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);margin:0 auto 18px;padding:14px 16px;color:#000;font-family:Calibri,"Segoe UI",Arial,sans-serif}
+.sheet.land{width:1120px;max-width:100%;overflow-x:auto}
+.sheet.port{width:800px;max-width:100%}
+.ts-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.ts-head .t1{font-size:18px;font-weight:700;letter-spacing:.5px}
+.ts-head .t2{font-size:13px;font-weight:700;margin-top:2px}
+.ts-head .t3{font-size:10.5px;margin-top:4px}
+.ts-legend{border-collapse:collapse;font-size:10px}
+.ts-legend td{border:1px solid #000;padding:1px 6px}
+.ts-meta{margin:8px 0 6px;font-size:11.5px}
+.ts-meta b{display:inline-block;min-width:95px}
+table.ts{border-collapse:collapse;width:100%;font-size:9.5px;table-layout:auto}
+table.ts th,table.ts td{border:1px solid #000;padding:1px 2px;text-align:center;height:16px}
+table.ts th{background:#d9e1f2;font-weight:700}
+table.ts td.l{text-align:left;padding-left:4px}
+table.ts td.site{font-weight:700;text-align:left;vertical-align:middle;padding-left:4px;max-width:140px;white-space:normal}
+table.ts td.tot,table.ts td.gt{font-weight:700}
+table.ts tr.gtr td{background:#f2f2f2}
+.ts-sign{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:22px;font-size:9.5px}
+.ts-sign div b{display:block;margin-bottom:26px}
+
+.inv{font-size:12px}
+.inv .ihead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--brand);padding-bottom:8px}
+.inv .logo{font-size:24px;font-weight:800;color:var(--brand);letter-spacing:1px}
+.inv .ttl{text-align:center;font-size:17px;font-weight:700;margin:12px 0;letter-spacing:1px}
+.inv .blocks{display:flex;justify-content:space-between;gap:20px;margin-bottom:12px}
+.inv .blocks .addr{white-space:pre-line;line-height:1.45}
+.inv table.kv{border-collapse:collapse}
+.inv table.kv td{border:1px solid #999;padding:3px 8px}
+.inv table.kv td:first-child{background:#f2f4f7;font-weight:600;white-space:nowrap}
+.inv table.lines{border-collapse:collapse;width:100%;margin-top:6px}
+.inv table.lines th,.inv table.lines td{border:1px solid #999;padding:4px 6px}
+.inv table.lines th{background:#1f3a5f;color:#fff;font-weight:600}
+.inv table.lines td.num{text-align:right;font-variant-numeric:tabular-nums}
+.inv table.lines tr.tt td{font-weight:700;background:#f2f4f7}
+.inv .words{margin-top:10px;font-style:italic}
+.inv .foot{margin-top:40px;display:flex;justify-content:space-between;font-size:11px}
+
+#print-root{display:none}
+
+@page land{size:A4 landscape;margin:7mm}
+@page port{size:A4 portrait;margin:12mm}
+@media print{
+  body{background:#fff}
+  body.printing #topbar,body.printing main,body.printing #modal-bg,body.printing #toast{display:none!important}
+  body.printing #print-root{display:block}
+  #print-root .sheet{border:0;box-shadow:none;margin:0;padding:0;width:auto;overflow:visible;break-after:page}
+  #print-root .sheet:last-child{break-after:auto}
+  #print-root .sheet.land{page:land}
+  #print-root .sheet.port{page:port}
+  table.ts th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">LATINEM SECURITIES <small>Attendance &amp; Billing</small></div>
+  <nav id="tabs">
+    <button data-view="attendance" class="on">Master attendance</button>
+    <button data-view="timesheets">Client timesheets</button>
+    <button data-view="invoices">Invoices</button>
+    <button data-view="employees">Employees</button>
+    <button data-view="projects">Clients, projects &amp; sites</button>
+    <button data-view="data">Data &amp; settings</button>
+  </nav>
+  <div id="savestate"></div>
+</header>
+<main>
+  <section id="v-attendance" class="view on"></section>
+  <section id="v-timesheets" class="view"></section>
+  <section id="v-invoices" class="view"></section>
+  <section id="v-employees" class="view"></section>
+  <section id="v-projects" class="view"></section>
+  <section id="v-data" class="view"></section>
+</main>
+<div id="modal-bg"><div id="modal"></div></div>
+<div id="toast"></div>
+<div id="print-root"></div>
+<script>
+'use strict';
+/* =====================================================================
+   LS Attendance Tracker - core: utilities, dates, state, persistence
+   ===================================================================== */
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = p => p + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+const norm = s => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+const pad = n => String(n).padStart(2, '0');
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const money = n => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qtyFmt = n => (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+/* ---------- dates (ISO 'YYYY-MM-DD', computed in UTC to avoid DST/timezone drift) ---------- */
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const toDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const isoOf = dt => `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return isoOf(d); };
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const dim = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
+const addMonths = (ym, n) => { let [y, m] = ym.split('-').map(Number); m += n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return `${y}-${pad(m)}`; };
+const ymOf = iso => iso.slice(0, 7);
+const weekday = iso => toDate(iso).getUTCDay();
+const fmtDMY = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
+const fmtDotDMY = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '';
+const fmtMonYY = ym => `${MON[+ym.slice(5, 7) - 1]}-${ym.slice(2, 4)}`;
+const fmtMonthName = ym => `${MONTH_FULL[+ym.slice(5, 7) - 1]}-${ym.slice(0, 4)}`;
+function datesBetween(a, b) { const out = []; for (let d = a; d <= b; d = addDays(d, 1)) out.push(d); return out; }
+function monthDates(ym) { return datesBetween(ym + '-01', `${ym}-${pad(dim(ym))}`); }
+function monthsBetween(a, b) { const out = []; for (let m = a; m <= b; m = addMonths(m, 1)) out.push(m); return out; }
+
+/** Payroll cycle named after the month it ends in, e.g. 2026-07 => 21/06/2026 - 20/07/2026 */
+function payrollCycle(ym) {
+  const sd = +S.settings.cycleStartDay || 1;
+  if (sd <= 1) return { start: ym + '-01', end: `${ym}-${pad(dim(ym))}` };
+  const prev = addMonths(ym, -1);
+  const start = `${prev}-${pad(Math.min(sd, dim(prev)))}`;
+  const end = addDays(`${ym}-${pad(Math.min(sd, dim(ym)))}`, -1);
+  return { start, end };
+}
+function cycleOfDate(iso) {
+  const sd = +S.settings.cycleStartDay || 1;
+  if (sd <= 1) return ymOf(iso);
+  return (+iso.slice(8, 10) >= sd) ? addMonths(ymOf(iso), 1) : ymOf(iso);
+}
+
+/** Parse the many date shapes found in the Excel sheets. Returns ISO or null. */
+function parseAnyDate(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+  if (typeof v === 'number') {
+    if (v < 20000 || v > 80000) return null;                  // Excel serial window ~1954-2119
+    return isoOf(new Date(Math.round((v - 25569) * 86400000)));
+  }
+  const s = String(v).trim();
+  let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  if ((m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/))) {
+    let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+    let mo = a, d = b;                              // the master sheet shows M/D/YYYY
+    if (a > 12) { d = a; mo = b; }                  // unambiguous D/M/Y
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return `${y}-${pad(mo)}-${pad(d)}`;
+  }
+  return null;
+}
+/** 'Jun-26', 'June 2026', 'JUN 2026', Excel serial, Date -> 'YYYY-MM' */
+function parseAnyMonth(v) {
+  const iso = parseAnyDate(v); if (iso) return ymOf(iso);
+  const s = norm(v); const m = s.match(/^([A-Z]{3,9})[\s\-']*(\d{2,4})$/);
+  if (!m) return null;
+  const mi = MON.findIndex(x => m[1].startsWith(x.toUpperCase()));
+  if (mi < 0) return null;
+  let y = +m[2]; if (y < 100) y += 2000;
+  return `${y}-${pad(mi + 1)}`;
+}
+
+/* ---------- state ---------- */
+let S = null;               // the whole data model
+const IX = { site: new Map(), proj: new Map(), client: new Map(), emp: new Map(), code: new Map() };
+
+function defaultState() {
+  return {
+    version: 1,
+    savedAt: null,
+    settings: {
+      company: 'Latinem Securities L.L.C.',
+      companyShort: 'LATINEM SECURITIES',
+      address: 'PO BOX 125250\nDUBAI\nUNITED ARAB EMIRATES',
+      tel: '+971 44238064',
+      trn: '100551377300003',
+      formNo: 'LS/DO/F-026', revNo: '00', formDate: '06.01.2021',
+      tsTitle: 'SECURITY GUARD - MONTHLY BILLING TIME SHEET',
+      cycleStartDay: 21,
+      preparedBy: 'MUHAMMAD ALI',
+      shiftHours: 12,
+      shifts: ['DAY', 'NIGHT'],
+      trades: ['SECURITY GUARD', 'CCTV OPERATOR', 'TEAM LEADER', 'ASST. SUPERVISOR', 'SUPERVISOR', 'SENIOR SUPERVISOR', 'TRAINING SUP'],
+      signatories: [
+        { label: 'PREPARED BY:', name: 'Sandeep.C50984 SANDEEP TK', title: 'DOCUMENT CONTROLLER - HSSE' },
+        { label: 'ACKNOWLEDGE BY:', name: 'C14732 SHAHZAD MUHAMMAD', title: 'MANAGER - LS' },
+        { label: 'VERIFIED BY:', name: 'C10143 MUHAMMED NISAR SAYED', title: 'VP - HSSE' },
+        { label: 'APPROVED BY:', name: 'Dr. MANOJ GOPALAKRISHNAN', title: 'CHIEF HSSE OFFICER & BUSINESS HEAD - LATINEM SECURITIES LLC' },
+        { label: 'ACCEPTED BY:', name: '', title: 'CLIENT' }
+      ]
+    },
+    // billable = counted in client totals & invoices; client = printed on the client timesheet
+    codes: [
+      { code: 'P', label: 'Present', color: '#c9efd3', billable: true, client: true, key: 'p' },
+      { code: 'R', label: 'Reliever', color: '#cfe0ff', billable: true, client: true, key: 'r' },
+      { code: 'A', label: 'Absent', color: '#ffd0cc', billable: false, client: false, key: 'a' },
+      { code: 'OFF', label: 'Day off', color: '#e4e7ec', billable: false, client: false, key: 'o' },
+      { code: 'AL', label: 'Annual leave', color: '#ffeaa8', billable: false, client: false, key: 'l' },
+      { code: 'SL', label: 'Sick leave', color: '#fcd9b6', billable: false, client: false, key: 's' },
+      { code: 'EL', label: 'Emergency leave', color: '#f5d0fe', billable: false, client: false, key: 'e' },
+      { code: 'SIRA', label: 'SIRA exam / training', color: '#d5f3f7', billable: false, client: false, key: 't' }
+    ],
+    clients: [],      // {id,name,trn,customerCode,address}
+    projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},active}
+    sites: [],        // {id,projectId|null,name}
+    employees: [],    // {id,empCode,name,agency,trade,shift,doj,end,endReason,assign:[{from,site,shift}]}
+    att: {},          // att[empId][iso] = 'P' | {c:'R', s:siteId, sh:'NIGHT'}
+    locks: {},        // locks['2026-07'] = true  (payroll month)
+    invoices: []
+  };
+}
+
+function reindex() {
+  IX.site = new Map(S.sites.map(x => [x.id, x]));
+  IX.proj = new Map(S.projects.map(x => [x.id, x]));
+  IX.client = new Map(S.clients.map(x => [x.id, x]));
+  IX.emp = new Map(S.employees.map(x => [x.id, x]));
+  IX.code = new Map(S.codes.map(x => [x.code, x]));
+}
+function migrate(st) {
+  const d = defaultState();
+  st.settings = Object.assign({}, d.settings, st.settings || {});
+  for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
+  st.att = st.att || {}; st.locks = st.locks || {};
+  for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
+  st.version = 1;
+  return st;
+}
+
+/* ---------- attendance helpers ---------- */
+function getCell(empId, d) { const v = S.att[empId]?.[d]; if (!v) return null; return typeof v === 'string' ? { c: v } : v; }
+function putCell(empId, d, val) {
+  if (!val || !val.c) { if (S.att[empId]) { delete S.att[empId][d]; } return; }
+  (S.att[empId] ||= {});
+  S.att[empId][d] = (val.s || val.sh) ? { c: val.c, ...(val.s ? { s: val.s } : {}), ...(val.sh ? { sh: val.sh } : {}) } : val.c;
+}
+function assignOn(emp, d) { let a = null; for (const x of emp.assign || []) { if (x.from <= d) a = x; else break; } return a; }
+function siteOn(emp, d) { const c = getCell(emp.id, d); return c?.s || assignOn(emp, d)?.site || null; }
+function shiftOn(emp, d) { const c = getCell(emp.id, d); return c?.sh || assignOn(emp, d)?.shift || emp.shift || ''; }
+function employedOn(emp, d) { return (!emp.doj || d >= emp.doj) && (!emp.end || d <= emp.end); }
+function isLocked(d) { return !!S.locks[cycleOfDate(d)]; }
+function codeDef(c) { return IX.code.get(c) || { code: c, label: c, color: '#f2f4f7', billable: false, client: false }; }
+function empCodeLabel(e) { return e.empCode || (e.agency ? `SUBCON (${e.agency})` : ''); }
+function siteName(id) { return IX.site.get(id)?.name || ''; }
+function projOfSite(id) { const s = IX.site.get(id); return s ? IX.proj.get(s.projectId) || null : null; }
+function sitesOfProject(pid) { return S.sites.filter(s => s.projectId === pid); }
+function setAssignment(emp, from, site, shift) {
+  emp.assign = (emp.assign || []).filter(a => a.from !== from);
+  emp.assign.push({ from, site, shift: shift || emp.shift || '' });
+  emp.assign.sort((a, b) => a.from < b.from ? -1 : 1);
+  // collapse consecutive identical entries
+  emp.assign = emp.assign.filter((a, i, arr) => i === 0 || a.site !== arr[i - 1].site || a.shift !== arr[i - 1].shift);
+}
+
+/* ---------- small UI helpers ---------- */
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
+function openModal(title, bodyHTML, buttons = [], opts = {}) {
+  const m = $('#modal');
+  m.style.width = opts.width || '';
+  m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3><button class="btn sm" data-x>✕</button></div>
+    <div class="mb">${bodyHTML}</div>
+    <div class="mf">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-b="${i}">${esc(b.label)}</button>`).join('')}</div>`;
+  $('#modal-bg').classList.add('on');
+  m.querySelector('[data-x]').onclick = closeModal;
+  buttons.forEach((b, i) => m.querySelector(`[data-b="${i}"]`).onclick = async () => { const r = await b.onClick?.(m); if (r !== false) closeModal(); });
+  setTimeout(() => { if (!m.contains(document.activeElement)) m.querySelector('input,select,textarea')?.focus(); }, 30);
+  return m;
+}
+function closeModal() { $('#modal-bg').classList.remove('on'); $('#modal').innerHTML = ''; }
+function confirmBox(msg, okLabel = 'OK', cls = 'pri') {
+  return new Promise(res => openModal('Please confirm', `<p style="white-space:pre-line">${esc(msg)}</p>`, [
+    { label: 'Cancel', onClick: () => res(false) }, { label: okLabel, cls, onClick: () => res(true) }]));
+}
+function opts(list, sel, blank) {
+  return (blank != null ? `<option value="">${esc(blank)}</option>` : '') +
+    list.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}"${String(v) === String(sel ?? '') ? ' selected' : ''}>${esc(l)}</option>`; }).join('');
+}
+function siteOptions(sel, blank = '— none —') {
+  let h = blank != null ? `<option value="">${esc(blank)}</option>` : '';
+  const groups = [...S.projects].sort((a, b) => a.name.localeCompare(b.name)).map(p => [p.name, sitesOfProject(p.id)]);
+  const unm = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
+  if (unm.length) groups.push(['(Unmapped sites)', unm]);
+  for (const [g, ss] of groups) {
+    if (!ss.length) continue;
+    h += `<optgroup label="${esc(g)}">` + ss.map(s => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${esc(s.name)}</option>`).join('') + '</optgroup>';
+  }
+  return h;
+}
+
+const libs = {};
+function loadScript(url) {
+  return libs[url] ||= new Promise((res, rej) => { const s = document.createElement('script'); s.src = url; s.onload = res; s.onerror = () => { delete libs[url]; rej(new Error('Could not load ' + url + ' (internet connection needed for Excel/PDF features)')); }; document.head.appendChild(s); });
+}
+const LIB = {
+  xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  exceljs: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+  pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'
+};
+function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+
+/* ---------- persistence: IndexedDB cache + JSON data file in a chosen folder ---------- */
+const IDB = {
+  db: null,
+  open() { return this.db ||= new Promise((res, rej) => { const r = indexedDB.open('ls-attendance-tracker', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+  async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+};
+const DATA_FILE = 'tracker-data.json';
+const BACKUP_DIR = 'tracker-backups';
+const store = { dir: null, perm: 'none', dirty: false, saving: false, lastFileSave: null, error: null, timer: null };
+const fsSupported = 'showDirectoryPicker' in window;
+
+async function permOf(handle, ask) {
+  const o = { mode: 'readwrite' };
+  if ((await handle.queryPermission(o)) === 'granted') return 'granted';
+  if (ask && (await handle.requestPermission(o)) === 'granted') return 'granted';
+  return 'prompt';
+}
+function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 700); }
+async function saveNow() {
+  clearTimeout(store.timer);
+  if (store.saving) { store.timer = setTimeout(saveNow, 400); return; }
+  store.saving = true;
+  try {
+    S.savedAt = new Date().toISOString();
+    const json = JSON.stringify(S);
+    await IDB.set('state', json);
+    if (store.dir && store.perm === 'granted') {
+      const fh = await store.dir.getFileHandle(DATA_FILE, { create: true });
+      const w = await fh.createWritable(); await w.write(json); await w.close();
+      store.lastFileSave = new Date(); store.error = null;
+      await dailyBackup(json);
+    }
+    store.dirty = false;
+  } catch (e) { store.error = e.message; console.error(e); }
+  store.saving = false; renderSaveState();
+}
+async function dailyBackup(json) {
+  const name = `tracker-data-${todayISO()}.json`;
+  const bd = await store.dir.getDirectoryHandle(BACKUP_DIR, { create: true });
+  try { await bd.getFileHandle(name); return; } catch { /* not there yet */ }
+  const fh = await bd.getFileHandle(name, { create: true }); const w = await fh.createWritable(); await w.write(json); await w.close();
+}
+async function connectFolder() {
+  if (!fsSupported) { toast('This browser cannot save to a folder. Use Microsoft Edge or Google Chrome.'); return; }
+  const dir = await window.showDirectoryPicker({ id: 'ls-tracker', mode: 'readwrite' });
+  store.dir = dir; store.perm = await permOf(dir, true);
+  await IDB.set('dir', dir);
+  let fileState = null;
+  try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); fileState = JSON.parse(await f.text()); } catch { }
+  if (fileState) {
+    const useFile = !S.employees.length || await confirmBox(`Found ${DATA_FILE} in "${dir.name}" (saved ${fileState.savedAt ? new Date(fileState.savedAt).toLocaleString() : 'unknown'}).\n\nLoad the data from that file? Choose Cancel to overwrite the file with the data currently open in the browser.`, 'Load file');
+    if (useFile) { S = migrate(fileState); reindex(); renderAll(); toast('Loaded ' + DATA_FILE); renderSaveState(); return; }
+  }
+  await saveNow(); toast('Connected. Data now saves to ' + dir.name + '\\' + DATA_FILE);
+}
+async function reconnectFolder() {
+  if (!store.dir) return connectFolder();
+  store.perm = await permOf(store.dir, true);
+  if (store.perm === 'granted') {
+    try {
+      const f = await (await store.dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text());
+      if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); renderAll(); toast('Loaded latest data from ' + DATA_FILE); }
+      else if (store.dirty || !fs.savedAt || fs.savedAt < S.savedAt) await saveNow();
+    } catch { await saveNow(); }
+  }
+  renderSaveState();
+}
+function renderSaveState() {
+  const el = $('#savestate'); if (!el) return;
+  let pill, btn = '';
+  if (store.dir && store.perm === 'granted') {
+    pill = store.error ? `<span class="pill warn" title="${esc(store.error)}">Save failed – click Save</span>`
+      : store.dirty || store.saving ? `<span class="pill">Saving…</span>`
+      : `<span class="pill ok" title="${esc(store.dir.name)}\\${DATA_FILE}">Saved to ${esc(store.dir.name)}</span>`;
+    btn = `<button onclick="saveNow()">Save</button>`;
+  } else if (store.dir) {
+    pill = `<span class="pill warn">Folder not reconnected</span>`; btn = `<button onclick="reconnectFolder()">Reconnect</button>`;
+  } else {
+    pill = `<span class="pill warn">Browser only – not saved to a file</span>`; btn = `<button onclick="connectFolder()">Choose data folder</button>`;
+  }
+  el.innerHTML = pill + btn;
+}
+window.addEventListener('beforeunload', e => { if (store.dirty) { saveNow(); e.preventDefault(); e.returnValue = ''; } });
+
+/* =====================================================================
+   Master attendance grid (payroll cycle or calendar month)
+   ===================================================================== */
+const AV = {
+  ym: null, mode: 'payroll',
+  f: { client: '', project: '', site: '', shift: '', trade: '', type: '', status: 'active', q: '' },
+  sort: 'order', rows: [], dates: [], sel: null, anchor: null, drag: false, onlyEmpty: false, undo: []
+};
+
+function attPeriod() {
+  if (AV.mode === 'calendar') return { start: AV.ym + '-01', end: `${AV.ym}-${pad(dim(AV.ym))}` };
+  return payrollCycle(AV.ym);
+}
+
+function renderAttendance() {
+  if (!AV.ym) AV.ym = cycleOfDate(todayISO());
+  const v = $('#v-attendance');
+  const { start, end } = attPeriod();
+  const f = AV.f;
+  const projList = S.projects.filter(p => !f.client || p.clientId === f.client).sort((a, b) => a.name.localeCompare(b.name));
+  const siteList = S.sites.filter(s => (!f.project || s.projectId === f.project) && (!f.client || IX.proj.get(s.projectId)?.clientId === f.client)).sort((a, b) => a.name.localeCompare(b.name));
+  const locked = AV.mode === 'payroll' && S.locks[AV.ym];
+  v.innerHTML = `
+  <div id="att-toolbar">
+   <div class="card" style="margin-bottom:8px;padding:10px 14px">
+    <div class="row">
+      <select id="av-mode" title="Period type">${opts([['payroll', 'Payroll month'], ['calendar', 'Calendar month']], AV.mode)}</select>
+      <button class="btn sm" id="av-prev">◀</button>
+      <input type="month" id="av-ym" value="${AV.ym}">
+      <button class="btn sm" id="av-next">▶</button>
+      <b>${fmtDMY(start)} → ${fmtDMY(end)}</b>
+      ${locked ? '<span class="tag bad">LOCKED</span>' : ''}
+      <span class="grow"></span>
+      <button class="btn" id="av-add">+ Add employee</button>
+      ${AV.mode === 'payroll' ? `<button class="btn" id="av-lock">${locked ? 'Unlock month' : 'Lock month'}</button>` : ''}
+      <button class="btn" id="av-xls">Export Excel</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="f-client">${opts(S.clients.map(c => [c.id, c.name]), f.client, 'All clients')}</select>
+      <select id="f-project">${opts(projList.map(p => [p.id, p.name]), f.project, 'All projects')}</select>
+      <select id="f-site">${opts(siteList.map(s => [s.id, s.name]), f.site, 'All sites')}</select>
+      <select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select>
+      <select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select>
+      <select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select>
+      <select id="f-status">${opts([['active', 'Employed in period'], ['left', 'Left in/before period'], ['all', 'Everyone']], f.status)}</select>
+      <input type="search" id="f-q" placeholder="Search name / emp ID" value="${esc(f.q)}" style="width:190px">
+      <select id="av-sort" title="Sort">${opts([['order', 'Sheet order'], ['name', 'Name'], ['site', 'Site'], ['shift', 'Shift'], ['code', 'Emp ID']], AV.sort)}</select>
+      <span id="av-count" class="muted"></span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="palette">
+        ${S.codes.map(c => `<button class="code" data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' – key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}
+        <button class="code" data-code="" title="Clear – Delete key" style="background:#fff">Clear</button>
+        <button class="btn sm" id="av-edit" title="Set code, site (e.g. reliever posting) and shift – Enter key">Code + site/shift…</button>
+      </div>
+      <label class="chk small"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> only fill empty cells</label>
+      <span class="grow"></span>
+      <button class="btn sm" id="av-all">Select all</button>
+      <button class="btn sm" id="av-undo" title="Ctrl+Z">Undo</button>
+    </div>
+    <div class="hint">Click or drag to select cells, then press a key (${S.codes.filter(c => c.key).map(c => `<b>${c.key.toUpperCase()}</b>=${esc(c.code)}`).join(', ')}, Del = clear) or click a code. Double-click or Enter opens site/shift options for reliever postings. A purple dot means the day is worked at a site other than the assigned one.</div>
+   </div>
+  </div>
+  <div id="grid-wrap"></div>`;
+
+  const refilter = () => { AV.sel = null; renderAttendance(); };
+  $('#av-mode').onchange = e => { AV.mode = e.target.value; refilter(); };
+  $('#av-ym').onchange = e => { if (e.target.value) { AV.ym = e.target.value; refilter(); } };
+  $('#av-prev').onclick = () => { AV.ym = addMonths(AV.ym, -1); refilter(); };
+  $('#av-next').onclick = () => { AV.ym = addMonths(AV.ym, 1); refilter(); };
+  $('#f-client').onchange = e => { f.client = e.target.value; f.project = ''; f.site = ''; refilter(); };
+  $('#f-project').onchange = e => { f.project = e.target.value; f.site = ''; refilter(); };
+  for (const k of ['site', 'shift', 'trade', 'type', 'status']) $('#f-' + k).onchange = e => { f[k] = e.target.value; refilter(); };
+  $('#f-q').oninput = e => { f.q = e.target.value; clearTimeout(AV._qt); AV._qt = setTimeout(() => { AV.sel = null; renderGrid(); }, 250); };
+  $('#av-sort').onchange = e => { AV.sort = e.target.value; refilter(); };
+  $('#av-add').onclick = () => editEmployee(null);
+  $('#av-xls').onclick = () => exportMasterXlsx().catch(e => toast(e.message));
+  if ($('#av-lock')) $('#av-lock').onclick = () => { if (S.locks[AV.ym]) delete S.locks[AV.ym]; else S.locks[AV.ym] = true; markDirty(); renderAttendance(); };
+  $('#av-empty').onchange = e => AV.onlyEmpty = e.target.checked;
+  $('#av-all').onclick = () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); };
+  $('#av-undo').onclick = undoAtt;
+  $('#av-edit').onclick = () => openCellEditor();
+  $$('.palette .code').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
+  renderGrid();
+}
+
+function computeAttRows() {
+  const { start, end } = attPeriod();
+  AV.dates = datesBetween(start, end);
+  const f = AV.f, q = norm(f.q);
+  const out = [];
+  for (const e of S.employees) {
+    if (f.status === 'active' && !((!e.doj || e.doj <= end) && (!e.end || e.end >= start))) continue;
+    if (f.status === 'left' && !(e.end && e.end <= end)) continue;
+    if (f.type === 'ls' && e.agency) continue;
+    if (f.type === 'sub' && !e.agency) continue;
+    if (f.trade && e.trade !== f.trade) continue;
+    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q)) continue;
+    const sites = new Set(), shifts = new Set();
+    let lastSite = null;
+    for (const d of AV.dates) {
+      if (!employedOn(e, d)) continue;
+      const s = siteOn(e, d); if (s) { sites.add(s); lastSite = s; }
+      shifts.add(shiftOn(e, d));
+    }
+    if (!sites.size) { const a = assignOn(e, end) || e.assign?.[0]; if (a?.site) { sites.add(a.site); lastSite = a.site; } }
+    if (!shifts.size) shifts.add(e.shift || '');
+    if (f.site && !sites.has(f.site)) continue;
+    if (f.project && ![...sites].some(s => IX.site.get(s)?.projectId === f.project)) continue;
+    if (f.client && ![...sites].some(s => projOfSite(s)?.clientId === f.client)) continue;
+    if (f.shift && !shifts.has(f.shift)) continue;
+    const mainShift = assignOn(e, end)?.shift || e.shift || [...shifts][0] || '';
+    out.push({ emp: e, sites, lastSite, shift: mainShift });
+  }
+  const by = {
+    name: (a, b) => a.emp.name.localeCompare(b.emp.name),
+    site: (a, b) => siteName(a.lastSite).localeCompare(siteName(b.lastSite)) || a.shift.localeCompare(b.shift) || a.emp.name.localeCompare(b.emp.name),
+    shift: (a, b) => a.shift.localeCompare(b.shift) || a.emp.name.localeCompare(b.emp.name),
+    code: (a, b) => (a.emp.empCode || 'zz').localeCompare(b.emp.empCode || 'zz')
+  }[AV.sort];
+  if (by) out.sort(by);
+  AV.rows = out;
+}
+
+function cellInner(emp, d) {
+  if (!employedOn(emp, d)) return { cls: 'd lk', style: '', html: '', title: emp.doj && d < emp.doj ? 'Before joining date' : 'After end date' + (emp.endReason ? ' (' + emp.endReason + ')' : '') };
+  const c = getCell(emp.id, d);
+  const a = assignOn(emp, d);
+  let cls = 'd' + (isLocked(d) ? ' frz' : ''), style = '', html = '', title = fmtDMY(d);
+  if (c) {
+    const cd = codeDef(c.c);
+    style = `background:${cd.color}`; html = esc(c.c.length > 4 ? c.c.slice(0, 4) : c.c);
+    title += ` · ${cd.label}`;
+    if (c.s && c.s !== a?.site) { html += '<i class="ov"></i>'; }
+    if (c.sh && c.sh !== (a?.shift || emp.shift)) html += `<i class="nt">${esc(c.sh[0])}</i>`;
+  }
+  const s = siteOn(emp, d); if (s) title += ` · ${siteName(s)}`;
+  const sh = shiftOn(emp, d); if (sh) title += ` · ${sh}`;
+  return { cls, style, html, title };
+}
+
+function rowHTML(i) {
+  const { emp, lastSite, sites, shift } = AV.rows[i];
+  const counts = {}; let bill = 0;
+  let cells = '';
+  AV.dates.forEach((d, j) => {
+    const ci = cellInner(emp, d);
+    const c = employedOn(emp, d) ? getCell(emp.id, d) : null;
+    if (c) { counts[c.c] = (counts[c.c] || 0) + 1; if (codeDef(c.c).billable) bill++; }
+    cells += `<td class="${ci.cls}" data-c="${j}" style="${ci.style}" title="${esc(ci.title)}">${ci.html}</td>`;
+  });
+  const p = counts.P || 0;
+  const other = Object.entries(counts).filter(([k]) => k !== 'P').map(([k, n]) => `${k}${n}`).join(' · ');
+  const proj = projOfSite(lastSite);
+  const left = emp.end && emp.end <= AV.dates[AV.dates.length - 1];
+  return `<tr data-r="${i}" class="${left ? 'left' : ''}">
+    <td class="fix" style="left:0;width:38px;min-width:38px;text-align:right">${i + 1}</td>
+    <td class="fix nm" style="left:38px;width:210px;min-width:210px" data-emp="${emp.id}" title="${esc(emp.name)} – click to edit">${esc(emp.name)}</td>
+    <td>${esc(empCodeLabel(emp))}</td><td>${esc(shift)}</td><td class="small">${esc(emp.trade || '')}</td>
+    <td class="small" title="${esc(proj ? proj.name : 'Site not mapped to a project')}">${esc(siteName(lastSite))}${sites.size > 1 ? ` <span class="tag">+${sites.size - 1}</span>` : ''}</td>
+    <td class="small">${fmtDMY(emp.doj)}</td>
+    ${cells}
+    <td class="tot">${p}</td><td class="tot" style="color:var(--brand2)">${bill}</td><td class="sum">${esc(other)}</td></tr>`;
+}
+
+function renderGrid() {
+  computeAttRows();
+  const wrap = $('#grid-wrap'); if (!wrap) return;
+  $('#av-count').textContent = `${AV.rows.length} employee${AV.rows.length === 1 ? '' : 's'}`;
+  if (!S.employees.length) {
+    wrap.innerHTML = `<div style="padding:30px;text-align:center" class="muted">No employees yet. Import the master payroll sheet under <a href="#" onclick="showView('data');return false">Data &amp; settings</a>, or <a href="#" onclick="editEmployee(null);return false">add an employee</a>.</div>`;
+    return;
+  }
+  const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
+  const dh2 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}" title="${fmtDMY(d)}">${+d.slice(8)}${d.slice(8) === '01' || d === AV.dates[0] ? '<br><span class="small muted">' + MON[+d.slice(5, 7) - 1] + '</span>' : ''}</th>`).join('');
+  wrap.innerHTML = `<table class="ag"><thead>
+    <tr><th class="fix" rowspan="2" style="left:0">#</th><th class="fix" rowspan="2" style="left:38px;text-align:left">Name</th><th rowspan="2">Emp ID</th><th rowspan="2">Shift</th><th rowspan="2">Trade</th><th rowspan="2">Site</th><th rowspan="2">D.O.J</th>${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
+    <tr>${dh2}</tr></thead>
+    <tbody>${AV.rows.map((_, i) => rowHTML(i)).join('')}</tbody>
+    <tfoot><tr><td class="fix" style="left:0"></td><td class="fix" style="left:38px;text-align:left">Billable per day</td><td colspan="5"></td>${AV.dates.map((_, j) => `<td data-f="${j}"></td>`).join('')}<td colspan="3" id="av-ftot"></td></tr></tfoot></table>`;
+  renderFooter();
+  paintSel();
+  const tb = wrap.querySelector('tbody');
+  tb.onmousedown = e => {
+    const nm = e.target.closest('td.nm'); if (nm) { editEmployee(nm.dataset.emp); return; }
+    const td = e.target.closest('td.d'); if (!td) return;
+    e.preventDefault();
+    const r = +td.parentElement.dataset.r, c = +td.dataset.c;
+    if (e.shiftKey && AV.anchor) setSel(AV.anchor, { r, c });
+    else { AV.anchor = { r, c }; setSel(AV.anchor, AV.anchor); }
+    AV.drag = true;
+  };
+  tb.onmouseover = e => { if (!AV.drag) return; const td = e.target.closest('td.d'); if (!td) return; setSel(AV.anchor, { r: +td.parentElement.dataset.r, c: +td.dataset.c }); };
+  tb.ondblclick = e => { if (e.target.closest('td.d')) openCellEditor(); };
+}
+document.addEventListener('mouseup', () => AV.drag = false);
+
+function renderFooter() {
+  const tf = $('#grid-wrap tfoot'); if (!tf) return;
+  let all = 0;
+  AV.dates.forEach((d, j) => {
+    let n = 0;
+    for (const { emp } of AV.rows) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (c && codeDef(c.c).billable) n++; }
+    all += n; tf.querySelector(`[data-f="${j}"]`).textContent = n || '';
+  });
+  $('#av-ftot').textContent = all + ' billable days';
+}
+function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
+function paintSel() {
+  const wrap = $('#grid-wrap'); if (!wrap) return;
+  wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
+  const s = AV.sel; if (!s) return;
+  const trs = wrap.querySelectorAll('tbody tr');
+  for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
+}
+function refreshRows(rowIdx) {
+  const trs = $$('#grid-wrap tbody tr');
+  for (const r of rowIdx) { const tr = trs[r]; if (!tr) continue; const tmp = document.createElement('tbody'); tmp.innerHTML = rowHTML(r); tr.replaceWith(tmp.firstElementChild); }
+  renderFooter(); paintSel();
+}
+
+/** Apply a value to every selected cell. val = null clears; val = {c, s?, sh?} where s/sh undefined = keep, null = back to assigned */
+function applyToSel(val, onlyEmpty = AV.onlyEmpty) {
+  const s = AV.sel; if (!s) { toast('Select one or more cells first'); return; }
+  const changes = []; const rowsTouched = new Set(); let skippedLock = 0;
+  for (let r = s.r0; r <= s.r1; r++) {
+    const emp = AV.rows[r].emp;
+    for (let c = s.c0; c <= s.c1; c++) {
+      const d = AV.dates[c];
+      if (!employedOn(emp, d)) continue;
+      if (isLocked(d)) { skippedLock++; continue; }
+      const prev = S.att[emp.id]?.[d];
+      if (onlyEmpty && prev) continue;
+      let nv = null;
+      if (val) {
+        const cur = getCell(emp.id, d) || {};
+        const a = assignOn(emp, d);
+        nv = { c: val.c ?? cur.c, s: val.s === undefined ? cur.s : val.s, sh: val.sh === undefined ? cur.sh : val.sh };
+        if (!nv.c) nv = null;
+        else {
+          if (!nv.s || nv.s === a?.site) delete nv.s;
+          if (!nv.sh || nv.sh === (a?.shift || emp.shift)) delete nv.sh;
+        }
+      }
+      changes.push({ e: emp.id, d, prev: prev === undefined ? null : (typeof prev === 'object' ? { ...prev } : prev) });
+      putCell(emp.id, d, nv); rowsTouched.add(r);
+    }
+  }
+  if (skippedLock) toast(`${skippedLock} cell(s) skipped – payroll month is locked`);
+  if (!changes.length) return;
+  AV.undo.push(changes); if (AV.undo.length > 60) AV.undo.shift();
+  markDirty(); refreshRows(rowsTouched);
+}
+function undoAtt() {
+  const ch = AV.undo.pop(); if (!ch) { toast('Nothing to undo'); return; }
+  for (const x of ch) { if (x.prev == null) { if (S.att[x.e]) delete S.att[x.e][x.d]; } else (S.att[x.e] ||= {})[x.d] = x.prev; }
+  markDirty(); renderGrid(); toast(`Undid ${ch.length} cell change(s)`);
+}
+function openCellEditor() {
+  const s = AV.sel; if (!s) { toast('Select one or more cells first'); return; }
+  const n = (s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1);
+  const one = n === 1 ? getCell(AV.rows[s.r0].emp.id, AV.dates[s.c0]) : null;
+  openModal(`Set ${n} cell${n > 1 ? 's' : ''}`, `
+    <div class="grid2">
+      <label class="f">Code<select id="ce-code">${opts(S.codes.map(c => [c.code, `${c.code} – ${c.label}`]), one?.c || 'R', null)}<option value="">(clear)</option></select></label>
+      <label class="f">Worked at site<select id="ce-site"><option value="__keep">Keep as is</option><option value="__def">Assigned site (default)</option>${siteOptions(one?.s, null)}</select></label>
+      <label class="f">Shift<select id="ce-shift"><option value="__keep">Keep as is</option><option value="__def">Assigned shift (default)</option>${opts(S.settings.shifts, one?.sh)}</select></label>
+    </div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="ce-empty" ${AV.onlyEmpty ? 'checked' : ''}> Only fill empty cells</label>
+    <p class="hint">Use this for relievers: select their days, choose <b>R</b> and the site they relieved at. The day is then billed on that site's client timesheet in the RELIEVER section.</p>`,
+    [{ label: 'Cancel' }, {
+      label: 'Apply', cls: 'pri', onClick: m => {
+        const code = $('#ce-code', m).value, site = $('#ce-site', m).value, sh = $('#ce-shift', m).value;
+        if (!code) { applyToSel(null, $('#ce-empty', m).checked); return; }
+        applyToSel({ c: code, s: site === '__keep' ? undefined : site === '__def' ? null : site, sh: sh === '__keep' ? undefined : sh === '__def' ? null : sh }, $('#ce-empty', m).checked);
+      }
+    }]);
+  if (one?.s) $('#ce-site').value = one.s;
+  if (one?.sh) $('#ce-shift').value = one.sh;
+}
+
+document.addEventListener('keydown', e => {
+  if (!$('#v-attendance').classList.contains('on') || $('#modal-bg').classList.contains('on')) return;
+  if (e.target.matches('input,select,textarea')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoAtt(); return; }
+  if (!AV.sel) return;
+  const mv = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+  if (mv) {
+    e.preventDefault();
+    const cur = e.shiftKey ? { r: AV.sel.r0 === AV.anchor.r ? AV.sel.r1 : AV.sel.r0, c: AV.sel.c0 === AV.anchor.c ? AV.sel.c1 : AV.sel.c0 } : { ...AV.anchor };
+    const nx = { r: Math.max(0, Math.min(AV.rows.length - 1, cur.r + mv[0])), c: Math.max(0, Math.min(AV.dates.length - 1, cur.c + mv[1])) };
+    if (e.shiftKey) setSel(AV.anchor, nx); else { AV.anchor = nx; setSel(nx, nx); }
+    const td = $$('#grid-wrap tbody tr')[nx.r]?.querySelectorAll('td.d')[nx.c]; td?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return;
+  }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); applyToSel(null, false); return; }
+  if (e.key === 'Enter') { e.preventDefault(); openCellEditor(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  const cd = S.codes.find(c => c.key && c.key.toLowerCase() === e.key.toLowerCase());
+  if (cd) {
+    e.preventDefault(); applyToSel({ c: cd.code });
+    // single-cell entry: advance to the next day for fast typing
+    const s = AV.sel;
+    if (s.r0 === s.r1 && s.c0 === s.c1 && s.c1 < AV.dates.length - 1) { AV.anchor = { r: s.r0, c: s.c0 + 1 }; setSel(AV.anchor, AV.anchor); }
+  }
+});
+
+/* =====================================================================
+   Employees: list, add / edit / delete, assignments, bulk actions
+   ===================================================================== */
+const EV = { q: '', status: 'active', type: '', site: '', project: '', checked: new Set() };
+
+function renderEmployees() {
+  const v = $('#v-employees');
+  const today = todayISO(), q = norm(EV.q);
+  const list = S.employees.filter(e => {
+    const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
+    if (EV.status === 'active' && e.end && e.end < today) return false;
+    if (EV.status === 'left' && !(e.end && e.end < today)) return false;
+    if (EV.type === 'ls' && e.agency) return false;
+    if (EV.type === 'sub' && !e.agency) return false;
+    if (EV.site && cur?.site !== EV.site) return false;
+    if (EV.project && IX.site.get(cur?.site)?.projectId !== EV.project) return false;
+    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q) && !norm(e.agency).includes(q)) return false;
+    return true;
+  });
+  v.innerHTML = `<div class="card">
+    <div class="row">
+      <h2 style="margin:0">Employees</h2><span class="muted">${list.length} shown · ${S.employees.length} total</span>
+      <span class="grow"></span>
+      <button class="btn pri" id="ev-add">+ Add employee</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input type="search" id="ev-q" placeholder="Search name / emp ID / agency" value="${esc(EV.q)}" style="width:240px">
+      <select id="ev-status">${opts([['active', 'Current (no end date passed)'], ['left', 'Left'], ['all', 'Everyone']], EV.status)}</select>
+      <select id="ev-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>
+      <select id="ev-project">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), EV.project, 'All projects')}</select>
+      <select id="ev-site">${opts(S.sites.filter(s => !EV.project || s.projectId === EV.project).map(s => [s.id, s.name]).sort((a, b) => a[1].localeCompare(b[1])), EV.site, 'All sites (current)')}</select>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="muted small" id="ev-nchk">${EV.checked.size} selected</span>
+      <button class="btn sm" id="ev-b-assign">Assign to site from date…</button>
+      <button class="btn sm" id="ev-b-shift">Change shift from date…</button>
+      <button class="btn sm" id="ev-b-end">Set end date…</button>
+      <button class="btn sm bad" id="ev-b-del">Delete…</button>
+    </div>
+  </div>
+  <div class="scroll"><table class="t"><thead><tr>
+    <th><input type="checkbox" id="ev-all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>End date</th><th></th></tr></thead>
+    <tbody>${list.map(e => {
+      const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
+      const p = projOfSite(cur?.site);
+      return `<tr><td><input type="checkbox" data-chk="${e.id}" ${EV.checked.has(e.id) ? 'checked' : ''}></td>
+        <td>${esc(e.empCode)}</td><td><a href="#" data-edit="${e.id}">${esc(e.name)}</a></td><td>${esc(e.agency || '')}</td><td>${esc(e.trade || '')}</td>
+        <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="small">${esc(p?.name || '')}</td>
+        <td>${fmtDMY(e.doj)}</td><td>${e.end ? `${fmtDMY(e.end)} <span class="tag ${e.end < today ? 'bad' : 'warn'}">${esc(e.endReason || 'end')}</span>` : ''}</td>
+        <td><button class="btn sm" data-edit="${e.id}">Edit</button></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+
+  $('#ev-add').onclick = () => editEmployee(null);
+  $('#ev-q').oninput = e => { EV.q = e.target.value; clearTimeout(EV._t); EV._t = setTimeout(() => { renderEmployees(); const i = $('#ev-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  for (const k of ['status', 'type', 'site']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
+  $('#ev-project').onchange = e => { EV.project = e.target.value; EV.site = ''; renderEmployees(); };
+  v.querySelectorAll('[data-edit]').forEach(b => b.onclick = ev => { ev.preventDefault(); editEmployee(b.dataset.edit); });
+  const upd = () => $('#ev-nchk').textContent = EV.checked.size + ' selected';
+  v.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { c.checked ? EV.checked.add(c.dataset.chk) : EV.checked.delete(c.dataset.chk); upd(); });
+  $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); };
+  $('#ev-b-assign').onclick = () => bulkAssign('site');
+  $('#ev-b-shift').onclick = () => bulkAssign('shift');
+  $('#ev-b-end').onclick = bulkEnd;
+  $('#ev-b-del').onclick = bulkDelete;
+}
+
+function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more employees first'); return l; }
+function bulkAssign(kind) {
+  const l = selectedEmps(); if (!l.length) return;
+  openModal(kind === 'site' ? `Assign ${l.length} employee(s) to a site` : `Change shift for ${l.length} employee(s)`, `
+    <div class="grid2">
+      <label class="f">Effective from<input type="date" id="ba-from" value="${todayISO()}"></label>
+      ${kind === 'site' ? `<label class="f">Site<select id="ba-site">${siteOptions('', null)}</select></label>` : ''}
+      <label class="f">Shift<select id="ba-shift">${kind === 'site' ? '<option value="">Keep current shift</option>' : ''}${opts(S.settings.shifts, '')}</select></label>
+    </div><p class="hint">Attendance before this date keeps its old site/shift.</p>`,
+    [{ label: 'Cancel' }, {
+      label: 'Apply', cls: 'pri', onClick: m => {
+        const from = $('#ba-from', m).value; if (!from) { toast('Pick a date'); return false; }
+        for (const e of l) {
+          const cur = assignOn(e, from);
+          const site = kind === 'site' ? $('#ba-site', m).value : cur?.site || '';
+          const sh = $('#ba-shift', m).value || cur?.shift || e.shift;
+          setAssignment(e, from, site, sh);
+          if (kind === 'shift') e.shift = sh;
+        }
+        markDirty(); renderAll(); toast('Updated ' + l.length + ' employee(s)');
+      }
+    }]);
+}
+function bulkEnd() {
+  const l = selectedEmps(); if (!l.length) return;
+  openModal(`Set end date for ${l.length} employee(s)`, `<div class="grid2">
+    <label class="f">Last working day<input type="date" id="be-d" value="${todayISO()}"></label>
+    <label class="f">Reason<select id="be-r">${opts(['RESIGNED', 'TERMINATED', 'ABSCONDED', 'TRANSFERRED', 'CONTRACT END', 'OTHER'], 'RESIGNED')}</select></label></div>`,
+    [{ label: 'Cancel' }, { label: 'Apply', cls: 'pri', onClick: m => { for (const e of l) { e.end = $('#be-d', m).value || null; e.endReason = $('#be-r', m).value; } markDirty(); renderAll(); } }]);
+}
+async function bulkDelete() {
+  const l = selectedEmps(); if (!l.length) return;
+  const n = l.reduce((a, e) => a + Object.keys(S.att[e.id] || {}).length, 0);
+  if (!await confirmBox(`Delete ${l.length} employee(s) and ${n} attendance record(s)?\n\nThis also removes them from past client timesheets. To keep history, set an end date instead.`, 'Delete', 'bad')) return;
+  for (const e of l) { delete S.att[e.id]; EV.checked.delete(e.id); }
+  const ids = new Set(l.map(e => e.id)); S.employees = S.employees.filter(e => !ids.has(e.id));
+  reindex(); markDirty(); renderAll();
+}
+
+function editEmployee(id) {
+  const isNew = !id;
+  const e = isNew ? { id: uid('e'), empCode: '', name: '', agency: '', trade: 'SECURITY GUARD', shift: 'DAY', doj: todayISO(), end: null, endReason: '', assign: [] } : JSON.parse(JSON.stringify(IX.emp.get(id)));
+  const nAtt = Object.keys(S.att[e.id] || {}).length;
+  const asgRows = () => e.assign.map((a, i) => `<tr>
+      <td><input type="date" data-a="${i}" data-k="from" value="${a.from}"></td>
+      <td><select data-a="${i}" data-k="site">${siteOptions(a.site)}</select></td>
+      <td><select data-a="${i}" data-k="shift">${opts(S.settings.shifts, a.shift)}</select></td>
+      <td><button class="btn sm bad" data-adel="${i}">✕</button></td></tr>`).join('');
+  const m = openModal(isNew ? 'Add employee' : 'Edit employee', `
+    <div class="grid2">
+      <label class="f">Name *<input type="text" id="ee-name" value="${esc(e.name)}"></label>
+      <label class="f">Emp ID (LS code, e.g. C14761)<input type="text" id="ee-code" value="${esc(e.empCode)}"></label>
+      <label class="f">Subcontractor agency (blank = LS staff)<input type="text" id="ee-agency" list="ee-agencies" value="${esc(e.agency || '')}" placeholder="e.g. FSS, 365 SECURITY"></label>
+      <label class="f">Trade<input type="text" id="ee-trade" list="ee-trades" value="${esc(e.trade || '')}"></label>
+      <label class="f">Default shift<select id="ee-shift">${opts(S.settings.shifts, e.shift)}</select></label>
+      <label class="f">Joining date (D.O.J)<input type="date" id="ee-doj" value="${e.doj || ''}"></label>
+      <label class="f">End date (last working day)<input type="date" id="ee-end" value="${e.end || ''}"></label>
+      <label class="f">End reason<select id="ee-endr">${opts(['RESIGNED', 'TERMINATED', 'ABSCONDED', 'TRANSFERRED', 'CONTRACT END', 'OTHER'], e.endReason, '')}</select></label>
+    </div>
+    <datalist id="ee-trades">${S.settings.trades.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    <datalist id="ee-agencies">${[...new Set(S.employees.map(x => x.agency).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    <h3>Site allocation history</h3>
+    <p class="hint" style="margin-top:0">Each row applies from its date until the next row. Day-by-day exceptions (e.g. relieving at another site) are set in the attendance grid.</p>
+    <table class="t"><thead><tr><th>From</th><th>Site (project)</th><th>Shift</th><th></th></tr></thead><tbody id="ee-asg">${asgRows()}</tbody></table>
+    <button class="btn sm" id="ee-addasg" style="margin-top:6px">+ Add allocation</button>
+    ${!isNew ? `<p class="hint">${nAtt} attendance record(s) on file.</p>` : ''}`,
+    [
+      ...(!isNew ? [{ label: 'Delete employee', cls: 'bad', onClick: async () => {
+        if (!await confirmBox(`Delete ${e.name} and ${nAtt} attendance record(s)?\n\nTo keep history, set an end date instead.`, 'Delete', 'bad')) return;
+        S.employees = S.employees.filter(x => x.id !== e.id); delete S.att[e.id]; reindex(); markDirty(); renderAll();
+      } }] : []),
+      { label: 'Cancel' },
+      {
+        label: 'Save', cls: 'pri', onClick: m => {
+          readAsg(m);
+          e.name = $('#ee-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase();
+          if (!e.name) { toast('Name is required'); return false; }
+          e.empCode = $('#ee-code', m).value.trim().toUpperCase();
+          const dup = e.empCode && S.employees.find(x => x.id !== e.id && x.empCode === e.empCode);
+          if (dup) { toast(`Emp ID ${e.empCode} already belongs to ${dup.name}`); return false; }
+          e.agency = $('#ee-agency', m).value.trim().toUpperCase();
+          e.trade = $('#ee-trade', m).value.trim().toUpperCase();
+          e.shift = $('#ee-shift', m).value;
+          e.doj = $('#ee-doj', m).value || null;
+          e.end = $('#ee-end', m).value || null;
+          e.endReason = e.end ? ($('#ee-endr', m).value || 'OTHER') : '';
+          if (e.doj && e.end && e.end < e.doj) { toast('End date is before joining date'); return false; }
+          e.assign = e.assign.filter(a => a.from).sort((a, b) => a.from < b.from ? -1 : 1);
+          if (e.trade && !S.settings.trades.includes(e.trade)) S.settings.trades.push(e.trade);
+          if (isNew) S.employees.push(e); else S.employees[S.employees.findIndex(x => x.id === e.id)] = e;
+          reindex(); markDirty(); renderAll(); toast('Saved ' + e.name);
+        }
+      }
+    ]);
+  function readAsg(m) { m.querySelectorAll('[data-a]').forEach(inp => { e.assign[+inp.dataset.a][inp.dataset.k] = inp.value; }); }
+  function bindAsg() {
+    m.querySelectorAll('[data-adel]').forEach(b => b.onclick = () => { readAsg(m); e.assign.splice(+b.dataset.adel, 1); $('#ee-asg', m).innerHTML = asgRows(); bindAsg(); });
+  }
+  bindAsg();
+  $('#ee-addasg', m).onclick = () => {
+    readAsg(m);
+    const last = e.assign[e.assign.length - 1];
+    e.assign.push({ from: e.assign.length ? todayISO() : ($('#ee-doj', m).value || todayISO()), site: last?.site || '', shift: $('#ee-shift', m).value });
+    $('#ee-asg', m).innerHTML = asgRows(); bindAsg();
+  };
+}
+
+/* =====================================================================
+   Clients -> Projects -> Sites, with billing configuration per project
+   ===================================================================== */
+const BASES = [
+  ['monthly_cal', 'Monthly rate per guard, pro-rata on calendar days'],
+  ['monthly_26', 'Monthly rate per guard, pro-rata on 26 days'],
+  ['monthly_30', 'Monthly rate per guard, pro-rata on 30 days'],
+  ['daily', 'Rate per man-day'],
+  ['hourly', 'Rate per hour (man-days × shift hours)'],
+  ['fixed', 'Fixed posts × monthly rate (ignores attendance)']
+];
+const PV = { q: '' };
+
+function renderProjects() {
+  const v = $('#v-projects');
+  const q = norm(PV.q);
+  const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
+  const headcount = siteId => { const t = todayISO(); return S.employees.filter(e => employedOn(e, t) && assignOn(e, t)?.site === siteId).length; };
+  const projRows = [...S.projects].filter(p => !q || norm(p.name).includes(q) || norm(p.code).includes(q) || sitesOfProject(p.id).some(s => norm(s.name).includes(q)))
+    .sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
+  v.innerHTML = `
+  <div class="card">
+    <div class="row"><h2 style="margin:0">Clients</h2><span class="grow"></span><button class="btn pri" id="pv-addc">+ Add client</button></div>
+    <table class="t" style="margin-top:8px"><thead><tr><th>Client (billing entity)</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
+    ${S.clients.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.customerCode || '')}</td><td>${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td>
+      <td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet – e.g. SOBHA CONSTRUCTIONS LLC, Sobha Community Management LLC, Provis, Kaizen.</td></tr>'}
+    </tbody></table>
+  </div>
+  ${unmapped.length ? `<div class="card"><h2>Unmapped sites <span class="tag warn">${unmapped.length}</span></h2>
+    <p class="hint" style="margin-top:0">These came from the master sheet's PROJECT column. Pick the project each belongs to so it appears on that client timesheet and invoice.</p>
+    <table class="t"><thead><tr><th>Site</th><th class="num">Staff now</th><th>Move to project</th><th></th></tr></thead><tbody>
+    ${unmapped.map(s => `<tr><td>${esc(s.name)}</td><td class="num">${headcount(s.id)}</td>
+      <td><select data-map="${s.id}">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —')}<option value="__new">+ New project with this name…</option></select></td>
+      <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
+    </tbody></table></div>` : ''}
+  <div class="card">
+    <div class="row"><h2 style="margin:0">Projects &amp; sites</h2>
+      <input type="search" id="pv-q" placeholder="Search project / code / site" value="${esc(PV.q)}" style="width:230px">
+      <span class="grow"></span><button class="btn pri" id="pv-addp">+ Add project</button></div>
+    ${projRows.map(p => {
+      const c = IX.client.get(p.clientId); const b = p.billing || {};
+      const ss = sitesOfProject(p.id);
+      return `<div style="border:1px solid var(--line);border-radius:8px;margin-top:12px">
+        <div class="row" style="padding:8px 12px;background:#f7f8fa;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0">
+          <b>${esc(p.name)}</b>${p.code ? `<span class="tag">${esc(p.code)}</span>` : ''}
+          <span class="muted small">${esc(c?.name || 'No client')}</span>
+          ${!p.clientId ? '<span class="tag warn">client not set</span>' : ''}
+          ${!b.rate && b.basis !== 'fixed' ? '<span class="tag warn">rate not set</span>' : ''}
+          <span class="small muted">${esc((BASES.find(x => x[0] === b.basis) || [, ''])[1])}${b.rate ? ' · AED ' + money(b.rate) : ''}${b.vat != null ? ' · VAT ' + b.vat + '%' : ''}</span>
+          ${p.active === false ? '<span class="tag">inactive</span>' : ''}
+          <span class="grow"></span>
+          <button class="btn sm" data-addsite="${p.id}">+ Site</button>
+          <button class="btn sm" data-ep="${p.id}">Edit project</button>
+        </div>
+        <table class="t"><tbody>${ss.map(s => `<tr><td style="width:50%">${esc(s.name)}</td><td class="num small muted">${headcount(s.id)} staff now</td>
+          <td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted small">No sites yet</td></tr>'}</tbody></table>
+      </div>`;
+    }).join('') || '<p class="muted">No projects yet.</p>'}
+  </div>`;
+  $('#pv-addc').onclick = () => editClient(null);
+  $('#pv-addp').onclick = () => editProject(null);
+  $('#pv-q').oninput = e => { PV.q = e.target.value; clearTimeout(PV._t); PV._t = setTimeout(() => { renderProjects(); const i = $('#pv-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  v.querySelectorAll('[data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
+  v.querySelectorAll('[data-ep]').forEach(b => b.onclick = () => editProject(b.dataset.ep));
+  v.querySelectorAll('[data-es]').forEach(b => b.onclick = () => editSite(b.dataset.es));
+  v.querySelectorAll('[data-addsite]').forEach(b => b.onclick = () => editSite(null, b.dataset.addsite));
+  v.querySelectorAll('[data-map]').forEach(sel => sel.onchange = () => {
+    const s = IX.site.get(sel.dataset.map);
+    if (sel.value === '__new') { editProject(null, s.name, pid => { s.projectId = pid; }); return; }
+    if (sel.value) { s.projectId = sel.value; markDirty(); renderAll(); }
+  });
+}
+
+function editClient(id) {
+  const c = id ? { ...IX.client.get(id) } : { id: uid('c'), name: '', customerCode: '', trn: '', address: '' };
+  openModal(id ? 'Edit client' : 'Add client', `<div class="grid2">
+    <label class="f">Client / billing entity name *<input type="text" id="ec-name" value="${esc(c.name)}"></label>
+    <label class="f">Customer code (SAP)<input type="text" id="ec-cc" value="${esc(c.customerCode || '')}"></label>
+    <label class="f">TRN<input type="text" id="ec-trn" value="${esc(c.trn || '')}"></label>
+    </div><label class="f" style="margin-top:10px">Address<textarea id="ec-addr">${esc(c.address || '')}</textarea></label>`,
+    [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
+      if (S.projects.some(p => p.clientId === id)) { toast('Move or delete this client\'s projects first'); return; }
+      S.clients = S.clients.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
+    } }] : []), { label: 'Cancel' }, {
+      label: 'Save', cls: 'pri', onClick: m => {
+        c.name = $('#ec-name', m).value.trim(); if (!c.name) { toast('Name required'); return false; }
+        c.customerCode = $('#ec-cc', m).value.trim(); c.trn = $('#ec-trn', m).value.trim(); c.address = $('#ec-addr', m).value;
+        if (id) S.clients[S.clients.findIndex(x => x.id === id)] = c; else S.clients.push(c);
+        reindex(); markDirty(); renderAll();
+      }
+    }]);
+}
+
+function editProject(id, presetName, onCreated) {
+  const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
+  p.billing ||= { basis: 'monthly_cal', rate: 0, vat: 0 };
+  openModal(id ? 'Edit project' : 'Add project', `<div class="grid2">
+    <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
+    <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
+    <label class="f">Client<select id="ep-client">${opts(S.clients.map(c => [c.id, c.name]), p.clientId, '— choose client —')}</select></label>
+    <label class="f">Entity text on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
+    <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
+    <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    </div>
+    <h3>Billing</h3>
+    <div class="grid2">
+      <label class="f">Basis<select id="ep-basis">${opts(BASES, p.billing.basis)}</select></label>
+      <label class="f">Unit rate (AED)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
+      <label class="f">VAT %<input type="number" step="0.01" id="ep-vat" value="${p.billing.vat ?? 0}"></label>
+      <label class="f">Fixed posts (for "fixed" basis)<input type="number" id="ep-posts" value="${p.billing.posts || 0}"></label>
+      <label class="f">Unit word on invoice<input type="text" id="ep-unit" value="${esc(p.billing.unit || 'Security')}"></label>
+    </div>
+    <p class="hint">Example – Elwood: monthly rate 4,100 per guard, pro-rata on calendar days → a full month with 4 guards bills "4 Security @ 31 Days = 16,400". Rates are in Trackers.xlsx.</p>`,
+    [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
+      const ss = sitesOfProject(id);
+      if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
+      ss.forEach(s => s.projectId = null); S.projects = S.projects.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
+    } }] : []), { label: 'Cancel' }, {
+      label: 'Save', cls: 'pri', onClick: m => {
+        p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
+        p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
+        p.poNo = $('#ep-po', m).value.trim(); p.active = $('#ep-active', m).value === '1';
+        p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security' };
+        if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
+        reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
+      }
+    }]);
+}
+
+function editSite(id, projectId) {
+  const s = id ? { ...IX.site.get(id) } : { id: uid('s'), projectId: projectId || null, name: '' };
+  const refs = id ? countSiteRefs(id) : 0;
+  openModal(id ? 'Edit site' : 'Add site', `<div class="grid2">
+    <label class="f">Site name *<input type="text" id="es-name" value="${esc(s.name)}"></label>
+    <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
+    ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
+    </div>${id ? `<p class="hint">${refs} allocation/attendance reference(s) use this site.</p>` : ''}`,
+    [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
+      if (refs) { toast('Site is in use – merge it into another site instead'); return; }
+      S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
+    } }] : []), { label: 'Cancel' }, {
+      label: 'Save', cls: 'pri', onClick: m => {
+        const merge = $('#es-merge', m)?.value;
+        if (merge) { mergeSite(id, merge); return; }
+        s.name = $('#es-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase(); if (!s.name) { toast('Name required'); return false; }
+        s.projectId = $('#es-proj', m).value || null;
+        if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
+        reindex(); markDirty(); renderAll();
+      }
+    }]);
+}
+function countSiteRefs(id) {
+  let n = 0;
+  for (const e of S.employees) for (const a of e.assign || []) if (a.site === id) n++;
+  for (const k in S.att) for (const d in S.att[k]) { const v = S.att[k][d]; if (typeof v === 'object' && v.s === id) n++; }
+  return n;
+}
+function mergeSite(from, to) {
+  for (const e of S.employees) {
+    if (!e.assign?.length) continue;
+    for (const a of e.assign) if (a.site === from) a.site = to;
+    e.assign = e.assign.filter((a, i, arr) => i === 0 || a.site !== arr[i - 1].site || a.shift !== arr[i - 1].shift);
+  }
+  for (const k in S.att) for (const d in S.att[k]) { const v = S.att[k][d]; if (typeof v === 'object' && v.s === from) v.s = to; }
+  S.sites = S.sites.filter(x => x.id !== from); reindex(); markDirty(); renderAll(); toast('Sites merged');
+}
+
+/* =====================================================================
+   Client timesheets (calendar month, one sheet per project, LS/DO/F-026)
+   ===================================================================== */
+const TV = { ym: null, client: '', picked: new Set(), all: true };
+
+/** Build the project-wise breakup for one calendar month from the daily ledger. */
+function buildTimesheet(projectId, ym) {
+  const days = monthDates(ym);
+  const siteOrder = sitesOfProject(projectId).map(s => s.id);
+  const siteSet = new Set(siteOrder);
+  const rows = new Map();
+  S.employees.forEach((emp, ei) => {
+    for (const d of days) {
+      if (!employedOn(emp, d)) continue;
+      const c = getCell(emp.id, d); if (!c) continue;
+      const cd = codeDef(c.c); if (!cd.billable && !cd.client) continue;
+      const site = siteOn(emp, d); if (!siteSet.has(site)) continue;
+      const rel = c.c === 'R';
+      const shift = shiftOn(emp, d) || '';
+      const section = rel ? '__REL' : site;
+      const key = `${section}|${shift}|${emp.id}`;
+      let row = rows.get(key);
+      if (!row) rows.set(key, row = { section, shift, emp, ei, cells: {}, total: 0, sites: new Set() });
+      row.cells[+d.slice(8)] = c.c; row.sites.add(site);
+      if (cd.billable) row.total++;
+    }
+  });
+  const secIdx = s => s === '__REL' ? 1e6 : siteOrder.indexOf(s);
+  const list = [...rows.values()].sort((a, b) => secIdx(a.section) - secIdx(b.section) || a.ei - b.ei || a.shift.localeCompare(b.shift));
+  const sections = [];
+  for (const r of list) {
+    let sec = sections[sections.length - 1];
+    if (!sec || sec.id !== r.section) sections.push(sec = { id: r.section, name: r.section === '__REL' ? 'RELIEVER' : siteName(r.section), rows: [] });
+    sec.rows.push(r);
+  }
+  const total = list.reduce((a, r) => a + r.total, 0);
+  // headcount equivalent per site = billable man-days / days in month
+  return { projectId, ym, days: days.length, sections, total, rows: list };
+}
+
+function tsSheetHTML(ts) {
+  const st = S.settings, p = IX.proj.get(ts.projectId);
+  const N = ts.days;
+  const dayTh = Array.from({ length: N }, (_, i) => `<th>${i + 1}</th>`).join('');
+  let body = '';
+  for (const sec of ts.sections) {
+    sec.rows.forEach((r, i) => {
+      body += `<tr>${i === 0 ? `<td class="site" rowspan="${sec.rows.length}">${esc(sec.name)}</td>` : ''}
+        <td>${esc(r.shift)}</td><td class="l">${esc(r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
+        ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return `<td>${c && codeDef(c).client ? esc(c === 'OFF' ? 'O' : c) : ''}</td>`; }).join('')}
+        <td class="tot">${r.total}</td></tr>`;
+    });
+  }
+  if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance recorded for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
+  const legend = S.codes.filter(c => c.client || ['P', 'A', 'OFF', 'R'].includes(c.code)).map(c => `<tr><td><b>${esc(c.code === 'OFF' ? 'O' : c.code)}</b></td><td>${esc(c.label.toUpperCase())}</td></tr>`).join('');
+  const signs = st.signatories.map(s => `<div><b>${esc(s.label)}</b>${esc(s.name)}<br>${esc(s.title)}</div>`).join('');
+  return `<div class="sheet land ts-sheet">
+    <div class="ts-head"><div>
+      <div class="t1">${esc(st.companyShort)}</div><div class="t2">${esc(st.tsTitle)}</div>
+      <div class="t3">Form No: ${esc(st.formNo)} &nbsp;&nbsp;&nbsp; REV NO: ${esc(st.revNo)} &nbsp;&nbsp;&nbsp; DATE : ${esc(st.formDate)}</div>
+      <div class="ts-meta"><div><b>MONTH</b> ${fmtMonYY(ts.ym)}</div><div><b>PROJECT NAME</b> ${esc(p?.name || '')}${p?.code ? ` &nbsp;(${esc(p.code)})` : ''}</div></div>
+    </div><table class="ts-legend">${legend}</table></div>
+    <table class="ts"><thead><tr><th>SITE NAME</th><th>SHIFT D/N</th><th>NAME</th><th>EMP. CODE</th>${dayTh}<th>TOTAL DAYS</th></tr></thead>
+    <tbody>${body}<tr class="gtr"><td colspan="${N + 4}" style="text-align:right;padding-right:8px"><b>GRAND TOTAL</b></td><td class="gt">${ts.total}</td></tr></tbody></table>
+    <div class="ts-sign">${signs}</div></div>`;
+}
+
+function renderTimesheets() {
+  if (!TV.ym) TV.ym = addMonths(ymOf(todayISO()), -1);
+  const v = $('#v-timesheets');
+  const projs = S.projects.filter(p => p.active !== false && (!TV.client || p.clientId === TV.client)).sort((a, b) => a.name.localeCompare(b.name));
+  const all = projs.map(p => ({ p, ts: buildTimesheet(p.id, TV.ym) }));
+  if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
+  const chosen = all.filter(x => TV.picked.has(x.p.id));
+  v.innerHTML = `<div class="card">
+    <div class="row">
+      <h2 style="margin:0">Client timesheets</h2>
+      <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
+      <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
+      <span class="grow"></span>
+      <button class="btn" id="tv-xls">Export Excel (1 tab per project)</button>
+      <button class="btn pri" id="tv-print">Print / Save as PDF</button>
+    </div>
+    <p class="hint">Calendar month ${fmtDMY(TV.ym + '-01')} – ${fmtDMY(`${TV.ym}-${pad(dim(TV.ym))}`)}. Built from the master attendance: each day goes to the site the person worked at that day; <b>R</b> days go to the RELIEVER section. Totals count billable codes (${S.codes.filter(c => c.billable).map(c => c.code).join(', ')}).</p>
+    <div class="scroll" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th>Client</th><th class="num">Staff rows</th><th class="num">Billable days</th><th class="num">≈ Guards (days ÷ ${dim(TV.ym)})</th></tr></thead><tbody>
+    ${all.map(({ p, ts }) => `<tr><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
+      <td class="num">${ts.rows.length}</td><td class="num">${ts.total}</td><td class="num">${qtyFmt(ts.total / dim(TV.ym))}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No projects yet – set them up under Clients, projects &amp; sites.</td></tr>'}
+    </tbody></table></div>
+  </div>
+  <div id="tv-sheets">${chosen.map(x => tsSheetHTML(x.ts)).join('')}</div>`;
+  $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; renderTimesheets(); } };
+  $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; renderTimesheets(); };
+  $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; renderTimesheets(); };
+  $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; renderTimesheets(); };
+  $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); renderTimesheets(); };
+  v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
+  $('#tv-print').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); printHTML(chosen.map(x => tsSheetHTML(x.ts)).join('')); };
+  $('#tv-xls').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); exportTimesheetsXlsx(chosen.map(x => x.ts)).catch(e => toast(e.message)); };
+}
+
+function printHTML(html) {
+  const root = $('#print-root'); root.innerHTML = html;
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); root.innerHTML = ''; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 50);
+}
+
+/* =====================================================================
+   Invoice builder: pick client + projects + months, add SAP fields,
+   generate lines from attendance, print invoice + timesheets, merge PDFs
+   ===================================================================== */
+const IV = { draft: null, pdfs: [] };
+
+function newInvoiceDraft() {
+  const m = addMonths(ymOf(todayISO()), -1);
+  return { id: uid('i'), no: '', date: todayISO(), clientId: '', projectIds: [], from: m, to: m, entity: '', trn: '', customerCode: '', poNo: '', lines: [], attachTs: true, notes: '' };
+}
+
+function invoiceLines(dr) {
+  const lines = [];
+  const multi = dr.projectIds.length > 1;
+  for (const m of monthsBetween(dr.from, dr.to)) {
+    for (const pid of dr.projectIds) {
+      const p = IX.proj.get(pid); if (!p) continue;
+      const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
+      const md = buildTimesheet(pid, m).total; const D = dim(m);
+      if (!md && b.basis !== 'fixed') continue;           // nothing worked on this project that month
+      let amt = 0, desc = '';
+      switch (b.basis) {
+        case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
+        case 'daily': amt = md * rate; desc = `${fmtMonYY(m)}  ${md} man-days (${unit})`; break;
+        case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${fmtMonYY(m)}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
+        case 'fixed': { const q = +b.posts || 0; amt = q * rate; desc = `${fmtMonYY(m)}  ${q} ${unit} @ ${D} Days`; break; }
+        default: { const q = md / D; amt = md * rate / D; desc = `${fmtMonYY(m)}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
+      }
+      lines.push({ desc: (multi ? p.name + ' – ' : '') + desc, rate, amount: round2(amt), vat: +b.vat || 0, src: { pid, m, md } });
+    }
+  }
+  return lines;
+}
+function invTotals(dr) {
+  let ex = 0, vat = 0;
+  for (const l of dr.lines) { ex += +l.amount || 0; vat += round2((+l.amount || 0) * (+l.vat || 0) / 100); }
+  return { ex: round2(ex), vat: round2(vat), inc: round2(ex + vat) };
+}
+
+function numberWords(n) {
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const t = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const w = x => x < 20 ? a[x] : x < 100 ? t[Math.floor(x / 10)] + (x % 10 ? '-' + a[x % 10] : '') : a[Math.floor(x / 100)] + ' Hundred' + (x % 100 ? ' and ' + w(x % 100) : '');
+  const parts = [[1e9, 'Billion'], [1e6, 'Million'], [1e3, 'Thousand'], [1, '']];
+  let int = Math.floor(n), out = [];
+  for (const [v, l] of parts) { const q = Math.floor(int / v); if (q) { out.push(w(q) + (l ? ' ' + l : '')); int -= q * v; } }
+  const fils = Math.round((n - Math.floor(n)) * 100);
+  return 'AED ' + (out.join(' ') || 'Zero') + (fils ? ` and ${w(fils)} Fils` : '') + ' Only';
+}
+
+function invoiceHTML(dr) {
+  const st = S.settings, c = IX.client.get(dr.clientId); const tt = invTotals(dr);
+  return `<div class="sheet port inv">
+    <div class="ihead"><div class="logo">${esc(st.companyShort)}</div><div class="small" style="text-align:right">TRN No : ${esc(st.trn)}<br>Tel : ${esc(st.tel)}</div></div>
+    <div class="ttl">TAX INVOICE</div>
+    <div class="blocks">
+      <div class="addr"><b>${esc(st.company)}</b>\n${esc(st.address)}\nTel : ${esc(st.tel)}\nTRN No : ${esc(st.trn)}</div>
+      <table class="kv">
+        <tr><td>Entity</td><td>${esc(dr.entity || c?.name || '')}</td></tr>
+        <tr><td>TRN NO</td><td>${esc(dr.trn)}</td></tr>
+        <tr><td>Invoice No</td><td>${esc(dr.no)}</td></tr>
+        <tr><td>Invoice Date</td><td>${fmtDotDMY(dr.date)}</td></tr>
+        <tr><td>PO No</td><td>${esc(dr.poNo)}</td></tr>
+        <tr><td>Customer Code</td><td>${esc(dr.customerCode)}</td></tr>
+      </table>
+    </div>
+    <table class="lines"><thead><tr><th>Sl.No</th><th>Description</th><th>Unit Rate</th><th>Amount Excl VAT</th><th>VAT</th><th>VAT Amount</th><th>Amount Incl VAT</th></tr></thead><tbody>
+    ${dr.lines.map((l, i) => { const va = round2((+l.amount || 0) * (+l.vat || 0) / 100); return `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td><td class="num">${+l.vat || 0}%</td><td class="num">${va ? money(va) : '-'}</td><td class="num">${money((+l.amount || 0) + va)}</td></tr>`; }).join('')}
+    <tr class="tt"><td></td><td colspan="2">TOTAL</td><td class="num">${money(tt.ex)}</td><td></td><td class="num">${tt.vat ? money(tt.vat) : '-'}</td><td class="num">${money(tt.inc)}</td></tr>
+    </tbody></table>
+    <h4 style="margin:18px 0 6px">AMOUNT BREAK-UP</h4>
+    <table class="kv" style="min-width:360px">
+      <tr><td>Total Amount Excluding VAT</td><td class="num" style="text-align:right">${money(tt.ex)}</td></tr>
+      <tr><td>VAT</td><td style="text-align:right">${tt.vat ? money(tt.vat) : '-'}</td></tr>
+      <tr><td>Total Amount Including VAT</td><td style="text-align:right"><b>${money(tt.inc)}</b></td></tr>
+    </table>
+    <div class="words">${esc(numberWords(tt.inc))}</div>
+    ${dr.notes ? `<p style="white-space:pre-line;margin-top:10px">${esc(dr.notes)}</p>` : ''}
+    <div class="foot"><div>Prepared by: ${esc(st.preparedBy)}</div><div>For ${esc(st.company)}<br><br><br>Authorised Signatory</div></div>
+  </div>`;
+}
+
+function parseSapText(txt, dr) {
+  const map = [[/invoice\s*(no|number|#)/i, 'no'], [/invoice\s*date|doc(ument)?\s*date|billing\s*date/i, 'date'], [/customer\s*(code|no|number)|sold.?to/i, 'customerCode'], [/\bpo\b|purchase\s*order|work\s*order|reference/i, 'poNo'], [/\btrn\b|tax\s*reg/i, 'trn'], [/entity|customer\s*name|bill.?to/i, 'entity']];
+  let n = 0;
+  const lines = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // format A: "Label: value" or "Label<TAB>value" per line
+  for (const l of lines) {
+    const m = l.match(/^([^:\t]+)[:\t]\s*(.+)$/); if (!m) continue;
+    const hit = map.find(([re]) => re.test(m[1])); if (!hit) continue;
+    let val = m[2].trim(); if (hit[1] === 'date') val = parseAnyDate(val) || val;
+    dr[hit[1]] = val; n++;
+  }
+  // format B: a header row + a value row copied from an SAP list (tab separated)
+  if (!n && lines.length >= 2 && lines[0].includes('\t')) {
+    const hd = lines[0].split('\t'), vals = lines[1].split('\t');
+    hd.forEach((h, i) => { const hit = map.find(([re]) => re.test(h)); if (hit && vals[i]) { dr[hit[1]] = hit[1] === 'date' ? (parseAnyDate(vals[i]) || vals[i]) : vals[i].trim(); n++; } });
+  }
+  return n;
+}
+
+function renderInvoices() {
+  const v = $('#v-invoices');
+  const dr = IV.draft ||= newInvoiceDraft();
+  const projs = S.projects.filter(p => !dr.clientId || p.clientId === dr.clientId).sort((a, b) => a.name.localeCompare(b.name));
+  const tt = invTotals(dr);
+  v.innerHTML = `<div class="row" style="align-items:flex-start;gap:14px">
+  <div style="flex:1 1 640px;min-width:0">
+    <div class="card">
+      <div class="row"><h2 style="margin:0">${S.invoices.some(x => x.id === dr.id) ? 'Edit invoice' : 'New invoice'}</h2><span class="grow"></span><button class="btn sm" id="iv-new">Start new</button></div>
+      <h3>1 · Client, projects and period</h3>
+      <div class="grid2">
+        <label class="f">Client<select id="iv-client">${opts(S.clients.map(c => [c.id, c.name]), dr.clientId, '— all clients —')}</select></label>
+        <label class="f">From month<input type="month" id="iv-from" value="${dr.from}"></label>
+        <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
+      </div>
+      <div style="margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px">
+        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${p.billing?.rate ? ' · ' + money(p.billing.rate) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
+      </div>
+      <h3>2 · SAP details</h3>
+      <div class="grid2">
+        <label class="f">Invoice No<input type="text" data-k="no" value="${esc(dr.no)}" placeholder="2026-0900000689"></label>
+        <label class="f">Invoice date<input type="date" data-k="date" value="${esc(dr.date)}"></label>
+        <label class="f">PO No<input type="text" data-k="poNo" value="${esc(dr.poNo)}"></label>
+        <label class="f">Customer code<input type="text" data-k="customerCode" value="${esc(dr.customerCode)}"></label>
+        <label class="f">TRN No<input type="text" data-k="trn" value="${esc(dr.trn)}"></label>
+        <label class="f" style="grid-column:1/-1">Entity<input type="text" data-k="entity" value="${esc(dr.entity)}"></label>
+      </div>
+      <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Paste from SAP…</summary>
+        <textarea id="iv-paste" style="width:100%;margin-top:6px" placeholder="Paste lines like 'Invoice No: 2026-0900000689' or a header row + value row copied from an SAP list"></textarea>
+        <button class="btn sm" id="iv-parse">Fill fields</button></details>
+      <h3>3 · Lines</h3>
+      <div class="row"><button class="btn pri" id="iv-gen">Generate lines from attendance</button><button class="btn sm" id="iv-addl">+ Blank line</button>
+        <label class="chk small"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> include client timesheets after the invoice</label></div>
+      <table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>Description</th><th class="num">Unit rate</th><th class="num">Amount excl VAT</th><th class="num">VAT %</th><th class="num">Incl VAT</th><th></th></tr></thead><tbody>
+      ${dr.lines.map((l, i) => `<tr><td>${i + 1}</td><td><input type="text" data-l="${i}" data-lk="desc" value="${esc(l.desc)}" style="width:100%">${l.src ? `<div class="small muted">${l.src.md} billable days in ${fmtMonYY(l.src.m)}</div>` : ''}</td>
+        <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="rate" value="${l.rate}" style="width:95px"></td>
+        <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="amount" value="${l.amount}" style="width:110px"></td>
+        <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="vat" value="${l.vat}" style="width:60px"></td>
+        <td class="num">${money((+l.amount || 0) * (1 + (+l.vat || 0) / 100))}</td><td><button class="btn sm bad" data-ldel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">No lines yet.</td></tr>'}
+      <tr><td></td><td><b>Total</b></td><td></td><td class="num"><b>${money(tt.ex)}</b></td><td class="num">${money(tt.vat)}</td><td class="num"><b>${money(tt.inc)}</b></td><td></td></tr>
+      </tbody></table>
+      <label class="f" style="margin-top:10px">Notes on invoice (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>
+      <div class="row end" style="margin-top:12px">
+        <button class="btn" id="iv-prev">Preview</button>
+        <button class="btn" id="iv-save">Save invoice</button>
+        <button class="btn pri" id="iv-print">Print pack / Save as PDF</button>
+      </div>
+    </div>
+    <div id="iv-preview"></div>
+  </div>
+  <div style="flex:0 1 440px;min-width:320px">
+    <div class="card"><h2>Saved invoices</h2>
+      <table class="t"><thead><tr><th>No</th><th>Client</th><th>Period</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+      ${[...S.invoices].reverse().map(x => `<tr><td>${esc(x.no || '(no number)')}<div class="small muted">${fmtDMY(x.date)}</div></td><td class="small">${esc(IX.client.get(x.clientId)?.name || x.entity || '')}</td>
+        <td class="small">${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</td><td class="num">${money(invTotals(x).inc)}</td>
+        <td><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">None yet</td></tr>'}
+      </tbody></table></div>
+    <div class="card"><h2>Merge PDFs into one pack</h2>
+      <p class="hint" style="margin-top:0">Add the invoice pack you saved as PDF, the Work Order Instruction from SAP and any signed/scanned timesheets. Put them in order and download one file – like "Tax Invoice_Elwood Infra-January to May 2026.pdf".</p>
+      <input type="file" id="iv-pdfs" accept="application/pdf" multiple>
+      <table class="t" style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small">${i + 1}. ${esc(f.name)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
+      <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
+      <div class="row end" style="margin-top:8px"><button class="btn pri" id="iv-merge" ${IV.pdfs.length < 1 ? 'disabled' : ''}>Merge &amp; download</button></div>
+    </div>
+  </div></div>`;
+
+  const rer = () => renderInvoices();
+  $('#iv-new').onclick = () => { IV.draft = newInvoiceDraft(); rer(); };
+  $('#iv-client').onchange = e => {
+    dr.clientId = e.target.value; dr.projectIds = dr.projectIds.filter(id => !dr.clientId || IX.proj.get(id)?.clientId === dr.clientId);
+    const c = IX.client.get(dr.clientId); if (c) { dr.customerCode ||= c.customerCode || ''; dr.trn ||= c.trn || ''; }
+    rer();
+  };
+  $('#iv-from').onchange = e => { dr.from = e.target.value; if (dr.to < dr.from) dr.to = dr.from; rer(); };
+  $('#iv-to').onchange = e => { dr.to = e.target.value; if (dr.to < dr.from) dr.from = dr.to; rer(); };
+  v.querySelectorAll('[data-ip]').forEach(c => c.onchange = () => {
+    const id = c.dataset.ip;
+    dr.projectIds = c.checked ? [...dr.projectIds, id] : dr.projectIds.filter(x => x !== id);
+    const p = IX.proj.get(id);
+    if (c.checked && p) {
+      if (!dr.clientId && p.clientId) dr.clientId = p.clientId;
+      const cl = IX.client.get(p.clientId);
+      dr.poNo ||= p.poNo || ''; dr.entity ||= p.entityName || cl?.name || ''; dr.customerCode ||= cl?.customerCode || ''; dr.trn ||= cl?.trn || '';
+    }
+    rer();
+  });
+  v.querySelectorAll('[data-k]').forEach(i => i.oninput = () => { dr[i.dataset.k] = i.value; });
+  v.querySelectorAll('[data-l]').forEach(i => i.onchange = () => { const l = dr.lines[+i.dataset.l]; l[i.dataset.lk] = i.dataset.lk === 'desc' ? i.value : +i.value; rer(); });
+  v.querySelectorAll('[data-ldel]').forEach(b => b.onclick = () => { dr.lines.splice(+b.dataset.ldel, 1); rer(); });
+  $('#iv-parse').onclick = () => { const n = parseSapText($('#iv-paste').value, dr); toast(n ? `Filled ${n} field(s)` : 'No recognised fields – use "Label: value" lines'); rer(); };
+  $('#iv-gen').onclick = () => {
+    if (!dr.projectIds.length) return toast('Tick at least one project');
+    dr.lines = invoiceLines(dr); rer();
+    const noRate = dr.projectIds.filter(id => !IX.proj.get(id)?.billing?.rate).map(id => IX.proj.get(id)?.name);
+    if (noRate.length) toast('No rate set for: ' + noRate.join(', '), 5000);
+  };
+  $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
+  $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
+  $('#iv-prev').onclick = () => { $('#iv-preview').innerHTML = invoiceHTML(dr); $('#iv-preview').scrollIntoView({ behavior: 'smooth' }); };
+  $('#iv-save').onclick = () => { saveInvoice(dr); rer(); };
+  $('#iv-print').onclick = () => {
+    if (!dr.lines.length) return toast('Generate or add lines first');
+    let html = invoiceHTML(dr);
+    if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) html += tsSheetHTML(buildTimesheet(pid, m));
+    printHTML(html);
+  };
+  v.querySelectorAll('[data-iopen]').forEach(b => b.onclick = () => { IV.draft = JSON.parse(JSON.stringify(S.invoices.find(x => x.id === b.dataset.iopen))); rer(); });
+  v.querySelectorAll('[data-idel]').forEach(b => b.onclick = async () => { if (!await confirmBox('Delete this saved invoice?', 'Delete', 'bad')) return; S.invoices = S.invoices.filter(x => x.id !== b.dataset.idel); markDirty(); rer(); });
+  $('#iv-pdfs').onchange = e => { IV.pdfs.push(...e.target.files); rer(); };
+  v.querySelectorAll('[data-pu]').forEach(b => b.onclick = () => { const i = +b.dataset.pu; if (i > 0) [IV.pdfs[i - 1], IV.pdfs[i]] = [IV.pdfs[i], IV.pdfs[i - 1]]; rer(); });
+  v.querySelectorAll('[data-pd]').forEach(b => b.onclick = () => { const i = +b.dataset.pd; if (i < IV.pdfs.length - 1) [IV.pdfs[i + 1], IV.pdfs[i]] = [IV.pdfs[i], IV.pdfs[i + 1]]; rer(); });
+  v.querySelectorAll('[data-px]').forEach(b => b.onclick = () => { IV.pdfs.splice(+b.dataset.px, 1); rer(); });
+  $('#iv-merge').onclick = () => mergePdfs($('#iv-pdfname').value).catch(e => toast(e.message, 5000));
+}
+function defaultPackName(dr) {
+  const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;
+  const who = (p?.name || c?.name || 'Client').replace(/[\\/:*?"<>|]/g, '');
+  const mn = ym => MONTH_FULL[+ym.slice(5) - 1].charAt(0) + MONTH_FULL[+ym.slice(5) - 1].slice(1).toLowerCase();
+  const per = dr.from === dr.to ? `${mn(dr.from)} ${dr.from.slice(0, 4)}`
+    : dr.from.slice(0, 4) === dr.to.slice(0, 4) ? `${mn(dr.from)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`
+    : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
+  return `Tax Invoice_${who}-${per}.pdf`;
+}
+function saveInvoice(dr) {
+  const i = S.invoices.findIndex(x => x.id === dr.id);
+  const copy = JSON.parse(JSON.stringify(dr)); copy.savedAt = new Date().toISOString();
+  if (i >= 0) S.invoices[i] = copy; else S.invoices.push(copy);
+  markDirty(); toast('Invoice saved');
+}
+async function mergePdfs(name) {
+  await loadScript(LIB.pdflib);
+  const out = await PDFLib.PDFDocument.create();
+  for (const f of IV.pdfs) {
+    const src = await PDFLib.PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true });
+    const pages = await out.copyPages(src, src.getPageIndices()); pages.forEach(p => out.addPage(p));
+  }
+  const bytes = await out.save();
+  downloadBlob(new Blob([bytes], { type: 'application/pdf' }), (name || 'Invoice pack').replace(/\.pdf$/i, '') + '.pdf');
+  toast(`Merged ${IV.pdfs.length} file(s) · ${out.getPageCount()} pages`);
+}
+
+/* =====================================================================
+   Excel import (master payroll sheet, client timesheet workbook) and
+   Excel export (master, client timesheets)
+   ===================================================================== */
+const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R' };
+const END_WORDS = ['TERMINATED', 'RESIGNED', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
+const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); return CODE_ALIAS[s] || s; };
+
+async function readWorkbook(file) {
+  await loadScript(LIB.xlsx);
+  return XLSX.read(await file.arrayBuffer(), { type: 'array' });
+}
+const sheetRows = (wb, name) => XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: true });
+const isHidden = (wb, i) => !!wb.Workbook?.Sheets?.[i]?.Hidden;
+
+function ensureCode(code, stats) {
+  if (IX.code.has(code)) return;
+  S.codes.push({ code, label: code, color: '#e9e2f7', billable: false, client: false, key: '' });
+  reindex(); stats && (stats.newCodes ||= new Set()).add(code);
+}
+function findOrCreateSite(name, projectId, stats) {
+  const n = norm(name); if (!n) return null;
+  let s = S.sites.find(x => norm(x.name) === n && (x.projectId || null) === (projectId || null))
+    || (projectId && S.sites.find(x => norm(x.name) === n && !x.projectId))
+    || (!projectId && S.sites.find(x => norm(x.name) === n));
+  if (s) { if (projectId && !s.projectId) s.projectId = projectId; return s.id; }
+  s = { id: uid('s'), projectId: projectId || null, name: n }; S.sites.push(s); IX.site.set(s.id, s);
+  if (stats) stats.newSites = (stats.newSites || 0) + 1;
+  return s.id;
+}
+function findOrCreateProject(name, stats) {
+  const n = norm(name);
+  let p = S.projects.find(x => norm(x.name) === n);
+  if (p) return p;
+  p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
+  S.projects.push(p); IX.proj.set(p.id, p); if (stats) stats.newProjects = (stats.newProjects || 0) + 1;
+  return p;
+}
+function splitIdAgency(raw) {
+  const s = norm(raw);
+  if (!s) return { empCode: '', agency: '' };
+  if (/^C\d{3,}$/.test(s)) return { empCode: s, agency: '' };
+  const m = s.match(/^SUBCON\s*\(?\s*([^)]*)\)?$/); if (m) return { empCode: '', agency: m[1].trim() || 'SUBCON' };
+  if (/^[A-Z]{0,3}\d{3,}$/.test(s)) return { empCode: s, agency: '' };
+  return { empCode: '', agency: s };
+}
+function findEmployee(empCode, name, agency) {
+  if (empCode) { const e = S.employees.find(x => x.empCode === empCode); if (e) return e; }
+  const n = norm(name);
+  return S.employees.find(x => norm(x.name) === n && (!empCode || !x.empCode) && (x.agency || '') === (agency || '')) || null;
+}
+
+/* ---------- master payroll sheet ---------- */
+function parseMasterSheet(rows) {
+  let hr = -1;
+  for (let i = 0; i < Math.min(rows.length, 25); i++) if ((rows[i] || []).some(v => norm(v) === 'NAME')) { hr = i; break; }
+  if (hr < 0) return null;
+  const hdr = [rows[hr - 2] || [], rows[hr - 1] || [], rows[hr]];
+  const width = Math.max(...hdr.map(r => r.length));
+  const col = {};
+  for (let c = 0; c < width; c++) {
+    const L = hdr.map(r => norm(r[c]));
+    if (L.includes('NAME')) col.name = c;
+    if (L.some(l => /EMP\.?\s*ID|EMP\.?\s*CODE|STAFF\s*ID/.test(l))) col.id ??= c;
+    if (L.some(l => l === 'D.O.J' || l === 'DOJ' || /JOINING/.test(l))) col.doj = c;
+    if (L.some(l => l === 'TRADE' || l === 'DESIGNATION')) col.trade = c;
+    if (L.some(l => l === 'PROJECT' || l === 'SITE' || l === 'SITE NAME')) col.site = c;
+  }
+  // day columns = longest run of consecutive dates in the header row (or the row above)
+  const findDates = r => { const out = []; for (let c = 0; c < width; c++) { const iso = parseAnyDate(r[c]); if (iso && iso >= '2015' && iso <= '2040') out.push({ c, iso }); } return out; };
+  let cand = findDates(hdr[2]); if (cand.length < 7) cand = findDates(hdr[1]);
+  let best = [], run = [];
+  for (const x of cand) { if (run.length && x.iso === addDays(run[run.length - 1].iso, 1) && x.c === run[run.length - 1].c + 1) run.push(x); else run = [x]; if (run.length > best.length) best = [...run]; }
+  if (best.length < 7 || col.name == null) return null;
+  // shift column = the one holding DAY / NIGHT values
+  let shiftBest = 0;
+  for (let c = 0; c < width; c++) {
+    let n = 0; for (let r = hr + 1; r < Math.min(rows.length, hr + 60); r++) if (['DAY', 'NIGHT'].includes(norm(rows[r]?.[c]))) n++;
+    if (n > shiftBest) { shiftBest = n; col.shift = c; }
+  }
+  if (shiftBest < 3) delete col.shift;
+  const out = [];
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r] || []; const name = row[col.name];
+    if (typeof name !== 'string' || !name.trim()) continue;
+    const N = norm(name); if (N === 'NAME' || /PREPARED BY|REVIEWED BY|APPROVED BY|GRAND TOTAL/.test(N)) continue;
+    const id = col.id != null ? row[col.id] : null;
+    const cells = best.map(x => row[x.c]);
+    const hasCodes = cells.some(v => v != null && String(v).trim() !== '');
+    const shift = col.shift != null ? norm(row[col.shift]) : '';
+    if (!id && !hasCodes && !['DAY', 'NIGHT'].includes(shift)) continue;
+    out.push({ name: N, id: id == null ? '' : String(id), shift: ['DAY', 'NIGHT'].includes(shift) ? shift : '', doj: col.doj != null ? parseAnyDate(row[col.doj]) : null, trade: col.trade != null ? norm(row[col.trade]) : '', site: col.site != null ? norm(row[col.site]) : '', cells });
+  }
+  return { dates: best.map(x => x.iso), rows: out };
+}
+
+function applyMasterImport(parsed, overwrite) {
+  const st = { created: 0, updated: 0, cells: 0, ended: 0 };
+  const start = parsed.dates[0];
+  for (const r of parsed.rows) {
+    const { empCode, agency } = splitIdAgency(r.id);
+    let e = findEmployee(empCode, r.name, agency);
+    if (!e) {
+      e = { id: uid('e'), empCode, name: r.name, agency, trade: r.trade || 'SECURITY GUARD', shift: r.shift || 'DAY', doj: r.doj, end: null, endReason: '', assign: [] };
+      S.employees.push(e); IX.emp.set(e.id, e); st.created++;
+    } else {
+      st.updated++;
+      if (r.trade) e.trade = r.trade; if (r.doj) e.doj = r.doj; if (r.shift) e.shift = r.shift;
+      if (r.name && r.name !== e.name && empCode) e.name = r.name;
+    }
+    if (e.trade && !S.settings.trades.includes(e.trade)) S.settings.trades.push(e.trade);
+    const siteId = r.site ? findOrCreateSite(r.site, null, st) : null;
+    if (siteId) {
+      const a = assignOn(e, start);
+      if (!a || a.site !== siteId || (r.shift && a.shift !== r.shift)) {
+        const from = !e.assign.length && e.doj && e.doj < start ? e.doj : start;
+        setAssignment(e, from, siteId, r.shift || a?.shift || e.shift);
+      }
+    }
+    for (let i = 0; i < parsed.dates.length; i++) {
+      const d = parsed.dates[i]; const raw = r.cells[i];
+      const code = raw == null ? '' : normCode(raw);
+      if (END_WORDS.includes(code)) {
+        const last = addDays(d, -1);
+        if (!e.end || e.end > last) { e.end = last; e.endReason = code; st.ended++; }
+        for (let k = i; k < parsed.dates.length; k++) if (overwrite && S.att[e.id]) delete S.att[e.id][parsed.dates[k]];
+        break;
+      }
+      if (!code || /^\d+(\.\d+)?$/.test(code)) { if (overwrite && !code && S.att[e.id]?.[d]) delete S.att[e.id][d]; continue; }
+      if (!overwrite && S.att[e.id]?.[d]) continue;
+      ensureCode(code, st);
+      const cur = getCell(e.id, d);
+      putCell(e.id, d, { c: code, s: cur?.s, sh: cur?.sh }); st.cells++;
+    }
+  }
+  reindex();
+  return st;
+}
+
+/* ---------- client timesheet workbook (one tab per project) ---------- */
+function parseClientSheet(rows) {
+  let hr = -1, project = '', ym = null;
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const row = rows[i] || [];
+    row.forEach((v, c) => {
+      const n = norm(v);
+      if (n === 'PROJECT NAME' && !project) project = norm(row.slice(c + 1).find(x => x != null && String(x).trim()));
+      if (n === 'MONTH' && !ym) ym = parseAnyMonth(row.slice(c + 1).find(x => x != null && String(x).trim()));
+    });
+    if (hr < 0 && row.some(v => norm(v) === 'SITE NAME')) hr = i;
+  }
+  if (hr < 0 || !project || !ym) return null;
+  const h = rows[hr]; const col = { days: [] };
+  h.forEach((v, c) => {
+    const n = norm(v);
+    if (n === 'SITE NAME') col.site = c; else if (n.startsWith('SHIFT')) col.shift = c; else if (n === 'NAME') col.name = c; else if (/EMP/.test(n)) col.code = c;
+    else if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31) col.days.push({ c, day: v });
+  });
+  if (col.name == null || !col.days.length) return null;
+  const out = []; let site = '';
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    if (row.some(v => /GRAND TOTAL|PREPARED BY/.test(norm(v)))) break;
+    if (col.site != null && norm(row[col.site])) site = norm(row[col.site]);
+    const name = norm(row[col.name]); if (!name) continue;
+    const cells = {};
+    for (const { c, day } of col.days) { const v = row[c]; if (v != null && String(v).trim() !== '' && day <= dim(ym)) cells[day] = normCode(v); }
+    out.push({ site, shift: norm(row[col.shift]), name, id: col.code != null ? String(row[col.code] ?? '') : '', cells });
+  }
+  return { project, ym, rows: out };
+}
+
+function applyClientImport(parsed, overwrite) {
+  const st = { created: 0, cells: 0 };
+  const proj = findOrCreateProject(parsed.project, st);
+  let lastReal = null;
+  for (const r of parsed.rows) {
+    const rel = r.site === 'RELIEVER';
+    const siteId = rel ? (lastReal || findOrCreateSite(parsed.project, proj.id, st)) : findOrCreateSite(r.site || parsed.project, proj.id, st);
+    if (!rel) lastReal = siteId;
+    const { empCode, agency } = splitIdAgency(r.id);
+    let e = findEmployee(empCode, r.name, agency);
+    const shift = ['DAY', 'NIGHT'].includes(r.shift) ? r.shift : '';
+    if (!e) {
+      const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : 'SECURITY GUARD';
+      e = { id: uid('e'), empCode, name: r.name, agency, trade, shift: shift || 'DAY', doj: null, end: null, endReason: '', assign: [] };
+      S.employees.push(e); IX.emp.set(e.id, e); st.created++;
+    }
+    if (!e.assign.length && !rel) setAssignment(e, parsed.ym + '-01', siteId, shift || e.shift);
+    for (const [day, code] of Object.entries(r.cells)) {
+      if (/^\d+$/.test(code)) continue;
+      const d = `${parsed.ym}-${pad(day)}`;
+      if (!overwrite && S.att[e.id]?.[d]) continue;
+      ensureCode(code, st);
+      const a = assignOn(e, d);
+      putCell(e.id, d, { c: code, s: siteId !== a?.site ? siteId : undefined, sh: shift && shift !== (a?.shift || e.shift) ? shift : undefined });
+      st.cells++;
+    }
+  }
+  reindex();
+  return st;
+}
+
+async function importMasterFile(file) {
+  const wb = await readWorkbook(file);
+  const found = [];
+  wb.SheetNames.forEach((n, i) => { const p = parseMasterSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p }); });
+  if (!found.length) { toast('No master attendance layout found (needs a NAME header row and a row of dates)', 5000); return; }
+  const describe = f => {
+    const known = f.p.rows.filter(r => { const { empCode, agency } = splitIdAgency(r.id); return findEmployee(empCode, r.name, agency); }).length;
+    return `${f.p.rows.length} rows · ${fmtDMY(f.p.dates[0])} → ${fmtDMY(f.p.dates[f.p.dates.length - 1])} · ${f.p.rows.length - known} new, ${known} existing employees`;
+  };
+  openModal('Import master attendance', `
+    <p>File: <b>${esc(file.name)}</b></p>
+    ${found.map((f, k) => `<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" data-ms="${k}" ${k === 0 ? 'checked' : ''}> <b>${esc(f.n)}</b>${isHidden(wb, f.i) ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${describe(f)}</span></label>`).join('')}
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="mi-ow" checked> Overwrite existing attendance for these dates (blank cells in the sheet clear the day)</label>
+    <p class="hint">Each row's PROJECT column becomes the employee's site from the first date of the sheet. New site names are listed under <b>Clients, projects &amp; sites → Unmapped sites</b> for you to put under a project. TERMINATED / RESIGNED in a day cell sets the end date to the day before.</p>`,
+    [{ label: 'Cancel' }, {
+      label: 'Import', cls: 'pri', onClick: m => {
+        const ow = $('#mi-ow', m).checked; const tot = { created: 0, updated: 0, cells: 0, ended: 0, newSites: 0 }; const codes = new Set();
+        m.querySelectorAll('[data-ms]:checked').forEach(c => { const r = applyMasterImport(found[+c.dataset.ms].p, ow); for (const k in tot) tot[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x)); });
+        AV.ym = cycleOfDate(found[0].p.dates[found[0].p.dates.length - 1]); AV.mode = 'payroll';
+        markDirty(); renderAll();
+        openModal('Import complete', `<p>${tot.created} employees added, ${tot.updated} updated, ${tot.cells} attendance cells written, ${tot.ended} end dates set, ${tot.newSites} new sites.</p>
+          ${codes.size ? `<p>New codes found and added as <b>non-billable</b>: ${[...codes].map(esc).join(', ')}. Review them under Data &amp; settings → Attendance codes.</p>` : ''}
+          ${tot.newSites ? '<p>Next: map the new sites to projects under <b>Clients, projects &amp; sites</b>.</p>' : ''}`, [{ label: 'OK', cls: 'pri' }]);
+        return false;
+      }
+    }]);
+}
+
+async function importClientFile(file) {
+  const wb = await readWorkbook(file);
+  const found = [];
+  wb.SheetNames.forEach((n, i) => { const p = parseClientSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p, hidden: isHidden(wb, i) }); });
+  if (!found.length) { toast('No client timesheet tabs found (needs PROJECT NAME, MONTH and a SITE NAME header)', 5000); return; }
+  openModal('Import client timesheets', `
+    <p>File: <b>${esc(file.name)}</b> – ${found.length} timesheet tab(s)</p>
+    <div style="max-height:320px;overflow:auto">${found.map((f, k) => `<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" data-cs="${k}" ${f.hidden ? '' : 'checked'}> <b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${esc(f.p.project)} · ${fmtMonYY(f.p.ym)} · ${f.p.rows.length} rows</span></label>`).join('')}</div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="ci-ow"> Overwrite days that already have attendance</label>
+    <p class="hint">Creates each project and its sites (e.g. SCL TR - AL QUOZ TR → SOBHA AL QUOZ CAMP, CCTV OPERATOR, TEAM LEADER). Reliever rows are posted to the project's first site with code R. Useful for loading history or setting up the project/site structure.</p>`,
+    [{ label: 'Cancel' }, {
+      label: 'Import', cls: 'pri', onClick: m => {
+        const ow = $('#ci-ow', m).checked; let created = 0, cells = 0, np = 0, ns = 0;
+        m.querySelectorAll('[data-cs]:checked').forEach(c => { const r = applyClientImport(found[+c.dataset.cs].p, ow); created += r.created; cells += r.cells; np += r.newProjects || 0; ns += r.newSites || 0; });
+        markDirty(); renderAll(); toast(`${np} projects, ${ns} sites and ${created} employees added · ${cells} cells written`, 5000);
+      }
+    }]);
+}
+
+/* ---------- Excel export (styled, via ExcelJS) ---------- */
+const argb = hex => 'FF' + String(hex || '#FFFFFF').replace('#', '').toUpperCase().padEnd(6, 'F').slice(0, 6);
+const thin = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+const colL = n => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+function billFormula(range) { return S.codes.filter(c => c.billable).map(c => `COUNTIF(${range},"${c.code}")`).join('+') || '0'; }
+
+async function exportTimesheetsXlsx(list) {
+  await loadScript(LIB.exceljs);
+  const wb = new ExcelJS.Workbook(); const used = new Set(); const st = S.settings;
+  for (const ts of list) {
+    const p = IX.proj.get(ts.projectId);
+    let nm = (p?.name || 'Project').replace(/^SCL\s*(TR)?\s*-\s*/i, '').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31).trim() || 'Sheet';
+    let k = 2; const base = nm; while (used.has(nm.toUpperCase())) nm = (base.slice(0, 28) + ' ' + k++); used.add(nm.toUpperCase());
+    const ws = wb.addWorksheet(nm, { pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    const N = ts.days, C0 = 5, CT = C0 + N; // 1-based columns: B site, C shift, D name, E code, F.. days, total
+    ws.getColumn(1).width = 2; ws.getColumn(2).width = 26; ws.getColumn(3).width = 8; ws.getColumn(4).width = 34; ws.getColumn(5).width = 16;
+    for (let i = 0; i < N; i++) ws.getColumn(C0 + 1 + i).width = 3.6; ws.getColumn(CT + 1).width = 9;
+    ws.getCell('B2').value = st.companyShort; ws.getCell('B2').font = { bold: true, size: 14 };
+    ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
+    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('D4').value = `REV NO: ${st.revNo}`; ws.getCell(4, C0 + 12).value = `DATE : ${st.formDate}`;
+    const leg = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
+    leg.forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
+    ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = fmtMonYY(ts.ym); ws.getCell('B8').font = { bold: true };
+    ws.getCell('B9').value = 'PROJECT NAME'; ws.getCell('C9').value = p?.name || ''; ws.getCell('B9').font = { bold: true };
+    const HR = 12;
+    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...Array.from({ length: N }, (_, i) => i + 1), 'TOTAL DAYS'];
+    head.forEach((v, i) => { const c = ws.getCell(HR, 2 + i); c.value = v; c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; });
+    let r = HR + 1;
+    for (const sec of ts.sections) {
+      const r0 = r;
+      for (const row of sec.rows) {
+        ws.getCell(r, 2).value = r === r0 ? sec.name : null;
+        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
+        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? 'O' : code) : null; c.alignment = { horizontal: 'center' }; }
+        const rg = `${colL(C0)}${r}:${colL(C0 + N - 1)}${r}`;
+        ws.getCell(r, CT + 1).value = { formula: billFormula(rg), result: row.total };
+        for (let c = 2; c <= CT + 1; c++) ws.getCell(r, c).border = thin;
+        ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
+        r++;
+      }
+      if (r - 1 > r0) ws.mergeCells(r0, 2, r - 1, 2);
+      const sc = ws.getCell(r0, 2); sc.font = { bold: true }; sc.alignment = { vertical: 'middle', wrapText: true };
+    }
+    ws.getCell(r, CT - 2).value = 'GRAND TOTAL'; ws.getCell(r, CT - 2).font = { bold: true };
+    ws.getCell(r, CT + 1).value = { formula: `SUM(${colL(CT)}${HR + 1}:${colL(CT)}${Math.max(HR + 1, r - 1)})`, result: ts.total };
+    ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).border = thin; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
+    r += 3;
+    const spots = [2, 4, C0 + 4, C0 + 13, C0 + 23];
+    st.signatories.forEach((s, i) => { const c = spots[i] || 2 + i * 6; ws.getCell(r, c).value = s.label; ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 3, c).value = s.name; ws.getCell(r + 4, c).value = s.title; });
+    ws.views = [{ state: 'frozen', ySplit: HR }];
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const c = TV.client ? IX.client.get(TV.client)?.name + ' ' : '';
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${c}TIME SHEET - ${fmtMonthName(list[0].ym).replace('-', ' ')}.xlsx`);
+}
+
+async function exportMasterXlsx() {
+  if (!AV.rows.length) { toast('Nothing to export'); return; }
+  await loadScript(LIB.exceljs);
+  const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('LS-PAYROLL ATTENDENCE', { pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  const D = AV.dates, C0 = 8;
+  const { start, end } = attPeriod();
+  ws.getCell('A1').value = `${S.settings.companyShort} MASTER PAYROLL ATTENDANCE MONTH OF ${fmtMonthName(AV.mode === 'payroll' ? AV.ym : AV.ym)}`; ws.getCell('A1').font = { bold: true, size: 13 };
+  ws.getCell('E2').value = 'MONTH'; ws.getCell('F2').value = `${fmtDMY(start)} TO ${fmtDMY(end)}`;
+  ws.getCell(2, C0 + 8).value = 'PREPARED BY OPERATION'; ws.getCell(2, C0 + 13).value = S.settings.preparedBy;
+  const head = ['S.NO', 'SHIFT', 'NAME', 'EMP ID NO', 'D.O.J', 'TRADE', 'PROJECT'];
+  head.forEach((h, i) => { ws.getCell(4, i + 1).value = h; });
+  D.forEach((d, j) => { ws.getCell(3, C0 + j).value = WD[weekday(d)]; ws.getCell(4, C0 + j).value = fmtDMY(d).slice(0, 5); });
+  ws.getCell(4, C0 + D.length).value = 'TOTAL P'; ws.getCell(4, C0 + D.length + 1).value = 'BILLABLE';
+  for (let c = 1; c <= C0 + D.length + 1; c++) for (const r of [3, 4]) { const x = ws.getCell(r, c); x.font = { bold: true }; x.border = thin; x.alignment = { horizontal: 'center', vertical: 'middle' }; x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; }
+  ws.getColumn(1).width = 6; ws.getColumn(2).width = 8; ws.getColumn(3).width = 38; ws.getColumn(4).width = 12; ws.getColumn(5).width = 11; ws.getColumn(6).width = 18; ws.getColumn(7).width = 26;
+  D.forEach((_, j) => ws.getColumn(C0 + j).width = 4.6);
+  AV.rows.forEach((row, i) => {
+    const r = 5 + i, e = row.emp;
+    [i + 1, row.shift, e.name, empCodeLabel(e), e.doj ? fmtDMY(e.doj) : '', e.trade, siteName(row.lastSite)].forEach((v, k) => { ws.getCell(r, k + 1).value = v; ws.getCell(r, k + 1).border = thin; });
+    let endMarked = false;
+    D.forEach((d, j) => {
+      const x = ws.getCell(r, C0 + j); x.border = thin; x.alignment = { horizontal: 'center' };
+      if (!employedOn(e, d)) { if (e.end && d > e.end && !endMarked) { x.value = e.endReason || 'LEFT'; endMarked = true; } return; }
+      const c = getCell(e.id, d); if (!c) return;
+      x.value = c.c; x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(codeDef(c.c).color) } };
+      if (c.s && c.s !== assignOn(e, d)?.site) x.note = 'Worked at ' + siteName(c.s);
+    });
+    const rg = `${colL(C0 - 1)}${r}:${colL(C0 + D.length - 2)}${r}`;
+    ws.getCell(r, C0 + D.length).value = { formula: `COUNTIF(${rg},"P")` };
+    ws.getCell(r, C0 + D.length + 1).value = { formula: billFormula(rg) };
+    ws.getCell(r, C0 + D.length).border = ws.getCell(r, C0 + D.length + 1).border = thin;
+  });
+  ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 4 }];
+  const buf = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${S.settings.companyShort} MASTER PAYROLL ATTENDANCE MONTH OF ${fmtMonthName(AV.ym)}.xlsx`);
+}
+
+/* =====================================================================
+   Data & settings view, app bootstrap
+   ===================================================================== */
+function renderData() {
+  const v = $('#v-data'); const st = S.settings;
+  const nAtt = Object.values(S.att).reduce((a, x) => a + Object.keys(x).length, 0);
+  v.innerHTML = `
+  <div class="card"><h2>Data file</h2>
+    ${fsSupported ? '' : '<div class="banner">This browser cannot write to a folder. Open this file in <b>Microsoft Edge</b> or <b>Google Chrome</b>; until then data is kept only inside this browser – use Download backup regularly.</div>'}
+    <p style="margin-top:0">Your data is saved as <b>${DATA_FILE}</b> in the folder you choose (pick <b>LS_Documents</b>, next to this HTML file) so OneDrive syncs and versions it. A dated copy is kept once a day in <b>${BACKUP_DIR}\\</b>.
+    Current folder: <b>${store.dir ? esc(store.dir.name) : 'none'}</b> ${store.dir ? (store.perm === 'granted' ? '<span class="tag ok">connected</span>' : '<span class="tag warn">needs reconnect</span>') : ''}</p>
+    <div class="row">
+      <button class="btn pri" id="dv-folder">${store.dir ? 'Change folder' : 'Choose data folder'}</button>
+      ${store.dir && store.perm !== 'granted' ? '<button class="btn" onclick="reconnectFolder().then(renderData)">Reconnect</button>' : ''}
+      <button class="btn" id="dv-dl">Download backup (.json)</button>
+      <label class="btn" style="display:inline-flex;align-items:center">Restore from backup…<input type="file" id="dv-rs" accept=".json,application/json" hidden></label>
+    </div>
+    <p class="hint">${S.employees.length} employees · ${S.projects.length} projects · ${S.sites.length} sites · ${nAtt.toLocaleString()} attendance days · ${S.invoices.length} invoices${S.savedAt ? ' · last saved ' + new Date(S.savedAt).toLocaleString() : ''}</p>
+  </div>
+
+  <div class="card"><h2>Import from Excel</h2>
+    <div class="grid2">
+      <div><b>Master payroll attendance</b><p class="hint">e.g. "LATINEM SECURITIES MASTER PAYROLL ATTENDANCE MONTH OF JULY-2026.xlsx". Adds/updates employees, their site (PROJECT column), shift, trade, D.O.J and every day's code.</p>
+        <label class="btn pri" style="display:inline-flex;align-items:center;margin-top:6px">Choose master file…<input type="file" id="dv-im" accept=".xlsx,.xlsm,.xls" hidden></label></div>
+      <div><b>Client timesheet workbook</b><p class="hint">e.g. "SCL TR TIME SHEET - JUNE 2026.xlsx" (one tab per project). Creates projects and their sites and loads that month's attendance.</p>
+        <label class="btn" style="display:inline-flex;align-items:center;margin-top:6px">Choose timesheet file…<input type="file" id="dv-ic" accept=".xlsx,.xlsm,.xls" hidden></label></div>
+    </div>
+    <p class="hint">Excel and PDF features load small libraries from cdn.jsdelivr.net, so they need an internet connection. Everything else works offline.</p>
+  </div>
+
+  <div class="card"><h2>Attendance codes</h2>
+    <p class="hint" style="margin-top:0"><b>Billable</b> days are counted in client timesheet totals and invoices. <b>On client sheet</b> prints the code on the client timesheet (others show blank). Key = keyboard shortcut in the grid.</p>
+    <table class="t" id="dv-codes"><thead><tr><th>Code</th><th>Meaning</th><th>Colour</th><th>Key</th><th>Billable</th><th>On client sheet</th><th class="num">Used</th><th></th></tr></thead><tbody>
+    ${S.codes.map((c, i) => `<tr><td><b>${esc(c.code)}</b></td><td><input type="text" data-ci="${i}" data-ck="label" value="${esc(c.label)}"></td>
+      <td><input type="color" data-ci="${i}" data-ck="color" value="${esc(c.color)}"></td>
+      <td><input type="text" maxlength="1" data-ci="${i}" data-ck="key" value="${esc(c.key || '')}" style="width:40px"></td>
+      <td><input type="checkbox" data-ci="${i}" data-ck="billable" ${c.billable ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-ci="${i}" data-ck="client" ${c.client ? 'checked' : ''}></td>
+      <td class="num">${codeUsage(c.code)}</td>
+      <td>${['P', 'R'].includes(c.code) ? '' : `<button class="btn sm bad" data-cdel="${i}">✕</button>`}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="row" style="margin-top:8px"><input type="text" id="dv-nc" placeholder="New code e.g. UL" style="width:120px"><input type="text" id="dv-nl" placeholder="Meaning e.g. Unpaid leave"><button class="btn sm" id="dv-addc">+ Add code</button></div>
+  </div>
+
+  <div class="card"><h2>Company, form &amp; periods</h2>
+    <div class="grid2">
+      ${[['company', 'Company legal name'], ['companyShort', 'Name on headers'], ['tel', 'Tel'], ['trn', 'TRN'], ['formNo', 'Form No'], ['revNo', 'Rev No'], ['formDate', 'Form date'], ['tsTitle', 'Timesheet title'], ['preparedBy', 'Prepared by (operation)']]
+      .map(([k, l]) => `<label class="f">${l}<input type="text" data-s="${k}" value="${esc(st[k])}"></label>`).join('')}
+      <label class="f">Payroll month starts on day<input type="number" min="1" max="28" data-s="cycleStartDay" value="${st.cycleStartDay}"></label>
+      <label class="f">Shift hours (for hourly billing)<input type="number" data-s="shiftHours" value="${st.shiftHours}"></label>
+      <label class="f">Shifts (comma separated)<input type="text" data-sl="shifts" value="${esc(st.shifts.join(', '))}"></label>
+      <label class="f" style="grid-column:1/-1">Trades (comma separated)<input type="text" data-sl="trades" value="${esc(st.trades.join(', '))}"></label>
+      <label class="f" style="grid-column:1/-1">Company address<textarea data-s="address">${esc(st.address)}</textarea></label>
+    </div>
+    <h3>Timesheet signatories</h3>
+    <table class="t"><thead><tr><th>Label</th><th>Name / code</th><th>Title</th></tr></thead><tbody>
+      ${st.signatories.map((s, i) => `<tr><td><input type="text" data-sg="${i}" data-sk="label" value="${esc(s.label)}"></td><td><input type="text" data-sg="${i}" data-sk="name" value="${esc(s.name)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="title" value="${esc(s.title)}" style="width:100%"></td></tr>`).join('')}
+    </tbody></table>
+  </div>
+
+  <div class="card"><h2 style="color:var(--bad)">Reset</h2>
+    <p class="hint" style="margin-top:0">Deletes everything in this browser and, if connected, overwrites ${DATA_FILE}. Daily backups in ${BACKUP_DIR}\\ are kept.</p>
+    <button class="btn bad" id="dv-reset">Delete all data…</button></div>`;
+
+  $('#dv-folder').onclick = () => connectFolder().then(renderData).catch(e => e.name !== 'AbortError' && toast(e.message));
+  $('#dv-dl').onclick = () => downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `tracker-data-${todayISO()}.json`);
+  $('#dv-rs').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const st = JSON.parse(await f.text()); if (!st.employees || !st.settings) throw new Error('Not a tracker backup file');
+      if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} employees)?`, 'Restore', 'bad')) return;
+      S = migrate(st); reindex(); markDirty(); renderAll(); toast('Restored');
+    } catch (err) { toast(err.message); }
+  };
+  $('#dv-im').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importMasterFile(f).catch(err => toast(err.message, 5000)); };
+  $('#dv-ic').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importClientFile(f).catch(err => toast(err.message, 5000)); };
+  v.querySelectorAll('[data-ci]').forEach(i => i.onchange = () => {
+    const c = S.codes[+i.dataset.ci]; const k = i.dataset.ck;
+    c[k] = i.type === 'checkbox' ? i.checked : i.value.trim();
+    if (k === 'key' && c.key) S.codes.forEach(o => { if (o !== c && o.key?.toLowerCase() === c.key.toLowerCase()) o.key = ''; });
+    reindex(); markDirty(); if (k === 'key') renderData();
+  });
+  v.querySelectorAll('[data-cdel]').forEach(b => b.onclick = async () => {
+    const c = S.codes[+b.dataset.cdel]; const n = codeUsage(c.code);
+    if (n && !await confirmBox(`${c.code} is used on ${n} day(s). Delete the code and clear those days?`, 'Delete', 'bad')) return;
+    for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === c.code) delete S.att[k][d]; }
+    S.codes.splice(+b.dataset.cdel, 1); reindex(); markDirty(); renderData();
+  });
+  $('#dv-addc').onclick = () => {
+    const code = normCode($('#dv-nc').value); if (!code) return;
+    if (IX.code.has(code)) return toast('Code exists');
+    S.codes.push({ code, label: $('#dv-nl').value.trim() || code, color: '#e9e2f7', billable: false, client: false, key: '' }); reindex(); markDirty(); renderData();
+  };
+  v.querySelectorAll('[data-s]').forEach(i => i.onchange = () => { const k = i.dataset.s; S.settings[k] = i.type === 'number' ? +i.value : i.value; markDirty(); });
+  v.querySelectorAll('[data-sl]').forEach(i => i.onchange = () => { S.settings[i.dataset.sl] = i.value.split(',').map(x => norm(x)).filter(Boolean); markDirty(); });
+  v.querySelectorAll('[data-sg]').forEach(i => i.onchange = () => { S.settings.signatories[+i.dataset.sg][i.dataset.sk] = i.value; markDirty(); });
+  $('#dv-reset').onclick = async () => {
+    if (!await confirmBox('Delete ALL employees, attendance, projects and invoices?', 'Delete everything', 'bad')) return;
+    S = defaultState(); reindex(); markDirty(); renderAll(); toast('All data deleted');
+  };
+}
+function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
+
+/* ---------- bootstrap ---------- */
+const VIEWS = { attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
+let curView = 'attendance';
+function showView(v) {
+  curView = v;
+  $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  VIEWS[v]();
+}
+function renderAll() { VIEWS[curView](); }
+
+async function init() {
+  let st = null;
+  try { const j = await IDB.get('state'); if (j) st = JSON.parse(j); } catch (e) { console.warn('IndexedDB unavailable', e); }
+  S = migrate(st || defaultState()); reindex();
+  try {
+    const dir = await IDB.get('dir');
+    if (dir) {
+      store.dir = dir; store.perm = await permOf(dir, false);
+      if (store.perm === 'granted') {
+        try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text()); if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); } } catch { }
+      }
+    }
+  } catch (e) { console.warn(e); }
+  $$('#tabs button').forEach(b => b.onclick = () => showView(b.dataset.view));
+  $('#modal-bg').addEventListener('mousedown', e => { if (e.target.id === 'modal-bg') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-bg').classList.contains('on')) closeModal(); });
+  renderSaveState(); showView('attendance');
+}
+init();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LS Attendance Tracker</title>
+<style>
+/*STYLE*/
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">LATINEM SECURITIES <small>Attendance &amp; Billing</small></div>
+  <nav id="tabs">
+    <button data-view="attendance" class="on">Master attendance</button>
+    <button data-view="timesheets">Client timesheets</button>
+    <button data-view="invoices">Invoices</button>
+    <button data-view="employees">Employees</button>
+    <button data-view="projects">Clients, projects &amp; sites</button>
+    <button data-view="data">Data &amp; settings</button>
+  </nav>
+  <div id="savestate"></div>
+</header>
+<main>
+  <section id="v-attendance" class="view on"></section>
+  <section id="v-timesheets" class="view"></section>
+  <section id="v-invoices" class="view"></section>
+  <section id="v-employees" class="view"></section>
+  <section id="v-projects" class="view"></section>
+  <section id="v-data" class="view"></section>
+</main>
+<div id="modal-bg"><div id="modal"></div></div>
+<div id="toast"></div>
+<div id="print-root"></div>
+<script>
+/*SCRIPT*/
+</script>
+</body>
+</html>
