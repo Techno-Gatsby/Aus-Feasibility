@@ -20,48 +20,40 @@ function renderAttendance() {
   const projList = S.projects.filter(p => !f.client || p.clientId === f.client).sort((a, b) => a.name.localeCompare(b.name));
   const siteList = S.sites.filter(s => (!f.project || s.projectId === f.project) && (!f.client || IX.proj.get(s.projectId)?.clientId === f.client)).sort((a, b) => a.name.localeCompare(b.name));
   const locked = AV.mode === 'payroll' && S.locks[AV.ym];
-  v.innerHTML = setupSteps() + `
-  <div id="att-toolbar">
-   <div class="card" style="margin-bottom:8px;padding:10px 14px">
-    <div class="row">
-      <select id="av-mode" title="Period type">${opts([['payroll', 'Payroll month'], ['calendar', 'Calendar month']], AV.mode)}</select>
-      <button class="btn sm" id="av-prev">◀</button>
-      <input type="month" id="av-ym" value="${AV.ym}">
-      <button class="btn sm" id="av-next">▶</button>
-      <b>${fmtDMY(start)} → ${fmtDMY(end)}</b>
-      ${locked ? '<span class="tag bad">LOCKED</span>' : ''}
-      <span class="grow"></span>
-      <button class="btn" id="av-add">+ Add employee</button>
-      ${AV.mode === 'payroll' ? `<button class="btn" id="av-lock">${locked ? 'Unlock month' : 'Lock month'}</button>` : ''}
-      <button class="btn" id="av-xls">Export Excel</button>
-    </div>
-    <div class="row" style="margin-top:8px">
+  v.innerHTML = `<div class="shell">
+  <aside class="rail">
+    <div class="fs"><div class="lg">Period</div><div class="grp">
+      <select id="av-mode">${opts([['payroll', 'Payroll month (21st – 20th)'], ['calendar', 'Calendar month (1st – end)']], AV.mode)}</select>
+      <div class="pair"><button class="btn sm" id="av-prev">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next">▶</button></div>
+      <div class="small mono" style="color:var(--ink2)">${fmtDMY(start)} → ${fmtDMY(end)} ${locked ? '<span class="tag bad">Locked</span>' : ''}</div>
+      ${AV.mode === 'payroll' ? `<button class="btn sm" id="av-lock">${locked ? 'Unlock this month' : 'Lock this month'}</button>` : ''}
+    </div></div>
+    <div class="fs"><div class="lg">Mark selected days</div><div class="grp">
+      <div class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? ` <kbd>${c.key.toUpperCase()}</kbd>` : ''}<small>${esc(c.label)}</small></button>`).join('')}
+        <button data-code="" style="background:#fff">✕ <kbd>DEL</kbd><small>Clear</small></button></div>
+      <button class="btn sm" id="av-edit">Reliever / other site…</button>
+      <label class="chk"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> Fill empty days only</label>
+      <div class="row"><button class="btn sm grow" id="av-all">Select all</button><button class="btn sm grow" id="av-undo">Undo</button></div>
+    </div></div>
+    <div class="fs"><div class="lg">Filter</div><div class="grp">
+      <input type="search" id="f-q" placeholder="Search name or emp ID" value="${esc(f.q)}">
       <select id="f-client">${opts(S.clients.map(c => [c.id, c.name]), f.client, 'All clients')}</select>
       <select id="f-project">${opts(projList.map(p => [p.id, p.name]), f.project, 'All projects')}</select>
       <select id="f-site">${opts(siteList.map(s => [s.id, s.name]), f.site, 'All sites')}</select>
       <select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select>
       <select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select>
-      <select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select>
-      <select id="f-status">${opts([['active', 'Employed in period'], ['left', 'Left in/before period'], ['all', 'Everyone']], f.status)}</select>
-      <input type="search" id="f-q" placeholder="Search name / emp ID" value="${esc(f.q)}" style="width:190px">
-      <select id="av-sort" title="Sort">${opts([['order', 'Sheet order'], ['name', 'Name'], ['site', 'Site'], ['shift', 'Shift'], ['code', 'Emp ID']], AV.sort)}</select>
-      <span id="av-count" class="muted"></span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <div class="palette">
-        ${S.codes.map(c => `<button class="code" data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' – key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}
-        <button class="code" data-code="" title="Clear – Delete key" style="background:#fff">Clear</button>
-        <button class="btn sm" id="av-edit" title="Set code, site (e.g. reliever posting) and shift – Enter key">Code + site/shift…</button>
-      </div>
-      <label class="chk small"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> only fill empty cells</label>
-      <span class="grow"></span>
-      <button class="btn sm" id="av-all">Select all</button>
-      <button class="btn sm" id="av-undo" title="Ctrl+Z">Undo</button>
-    </div>
-    <div class="hint">Click or drag to select cells, then press a key (${S.codes.filter(c => c.key).map(c => `<b>${c.key.toUpperCase()}</b>=${esc(c.code)}`).join(', ')}, Del = clear) or click a code. Double-click or Enter opens site/shift options for reliever postings. A purple dot means the day is worked at a site other than the assigned one.</div>
-   </div>
-  </div>
-  <div id="grid-wrap"></div>`;
+      <select id="f-type">${opts([['ls', 'LS staff only'], ['sub', 'Subcontractors only']], f.type, 'LS + subcontractors')}</select>
+      <select id="f-status">${opts([['active', 'Working this period'], ['left', 'Left'], ['all', 'Everyone']], f.status)}</select>
+      <select id="av-sort">${opts([['order', 'Sort: sheet order'], ['name', 'Sort: name'], ['site', 'Sort: site'], ['shift', 'Sort: shift'], ['code', 'Sort: emp ID']], AV.sort)}</select>
+    </div></div>
+  </aside>
+  <section>
+    <div class="ph-row"><div class="grow"><h2 class="ph">Attendance</h2><p class="pd">Select days in the grid (click or drag), then click a code or press its key.</p></div>
+      <button class="btn" id="av-add">+ Add employee</button><button class="btn" id="av-xls">Export Excel</button></div>
+    ${setupSteps()}
+    <div class="kpis" id="av-kpis"></div>
+    <div id="grid-wrap"></div>
+  </section></div>`;
 
   const refilter = () => { AV.sel = null; renderAttendance(); };
   $('#av-mode').onchange = e => { AV.mode = e.target.value; refilter(); };
@@ -80,7 +72,7 @@ function renderAttendance() {
   $('#av-all').onclick = () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); };
   $('#av-undo').onclick = undoAtt;
   $('#av-edit').onclick = () => openCellEditor();
-  $$('.palette .code').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
+  $$('.codes button').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
   renderGrid();
 }
 
@@ -166,9 +158,10 @@ function rowHTML(i) {
 function renderGrid() {
   computeAttRows();
   const wrap = $('#grid-wrap'); if (!wrap) return;
-  $('#av-count').textContent = `${AV.rows.length} employee${AV.rows.length === 1 ? '' : 's'}`;
   if (!S.employees.length) {
-    wrap.innerHTML = `<div style="padding:30px;text-align:center" class="muted">No employees yet. Import the master payroll sheet under <a href="#" onclick="showView('data');return false">Data &amp; settings</a>, or <a href="#" onclick="editEmployee(null);return false">add an employee</a>.</div>`;
+    $('#av-kpis').innerHTML = '';
+    wrap.outerHTML = `<div id="grid-wrap" class="empty" style="max-height:none"><b>No employees yet</b>Load them from your master attendance Excel, or type them in one by one.
+      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">⬆ Import Excel</button><button class="btn" onclick="editEmployee(null)">+ Add employee</button></div></div>`;
     return;
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
@@ -204,6 +197,14 @@ function renderFooter() {
     all += n; tf.querySelector(`[data-f="${j}"]`).textContent = n || '';
   });
   $('#av-ftot').textContent = all + ' billable days';
+  // KPI strip for the visible rows
+  const cnt = {}; let blank = 0;
+  for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
+  const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
+  const k = (lbl, v, sub, col) => `<div class="kpi" style="--c:${col}"><div class="k">${lbl}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  $('#av-kpis').innerHTML = k('Employees', AV.rows.length, 'in this view', 'var(--accent)') + k('Billable days', all, S.codes.filter(c => c.billable).map(c => c.code).join(' + '), 'var(--pos)')
+    + k('Absent', cnt.A || 0, 'days', 'var(--neg)') + k('Day off', cnt.OFF || 0, 'days', 'var(--line3)') + k('Leave / other', leave, 'AL, SL, EL, SIRA…', 'var(--warn)')
+    + k('Not marked', blank, 'past days left empty', blank ? '#B45309' : 'var(--line3)');
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
@@ -306,13 +307,8 @@ document.addEventListener('keydown', e => {
 });
 
 function setupSteps() {
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length;
-  const st = [
-    [store.dir && store.perm === 'granted', '1 · Data folder', 'Choose LS_Documents so data saves to OneDrive', "connectFolder().then(renderAll)"],
-    [S.employees.length > 0, '2 · Import master sheet', 'Load workers, sites and daily codes from Excel', "showView('data')"],
-    [S.sites.length > 0 && !unm, '3 · Map sites to projects', unm ? unm + ' site(s) not under a project yet' : 'Every site belongs to a project', "showView('projects')"],
-    [S.projects.length > 0 && !noRate && S.projects.every(p => p.clientId), '4 · Clients & rates', noRate ? noRate + ' project(s) without a rate' : 'Client, PO and rate per project', "showView('projects')"]
-  ];
-  if (st.every(x => x[0])) return '';
-  return `<div class="steps">${st.map(([d, t, h, f]) => `<a href="#" class="${d ? 'done' : ''}" onclick="${f};return false"><b>${t}</b><span class="small muted">${h}</span></a>`).join('')}</div>`;
+  if (!S.employees.length) return '';
+  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
+  const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
+  return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
 }

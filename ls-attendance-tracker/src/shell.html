@@ -3,23 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LS Attendance Tracker</title>
+<title>Attendance Tracker</title>
 <style>
 /*STYLE*/
 </style>
 </head>
 <body>
 <header id="topbar">
-  <div class="brand">LATINEM SECURITIES <small>Attendance &amp; Billing</small></div>
+  <div class="hrow">
+    <div class="brand">Latinem Securities<small>Attendance &amp; Billing</small></div>
+    <span class="spacer"></span>
+    <span id="savestate"></span>
+    <label class="hbtn solid" title="Import a master attendance or client timesheet workbook">⬆ Import Excel<input type="file" id="hdr-import" accept=".xlsx,.xlsm,.xls" hidden></label>
+    <button class="hbtn" id="hdr-backup" title="Download a backup copy of all data">Backup</button>
+  </div>
   <nav id="tabs">
-    <button data-view="attendance" class="on">Master attendance</button>
-    <button data-view="timesheets">Client timesheets</button>
-    <button data-view="invoices">Invoices</button>
+    <button data-view="attendance" class="on"><span class="n">1</span>Attendance</button>
+    <button data-view="timesheets"><span class="n">2</span>Client timesheets</button>
+    <button data-view="invoices"><span class="n">3</span>Invoice</button>
+    <span class="sep"></span>
     <button data-view="employees">Employees</button>
-    <button data-view="projects">Clients, projects &amp; sites</button>
-    <button data-view="data">Data &amp; settings</button>
+    <button data-view="projects">Projects &amp; sites</button>
+    <button data-view="data">Settings</button>
   </nav>
-  <div id="savestate"></div>
 </header>
 <main>
   <section id="v-attendance" class="view on"></section>

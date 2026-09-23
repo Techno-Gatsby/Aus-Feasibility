@@ -3,120 +3,161 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LS Attendance Tracker</title>
+<title>Attendance Tracker</title>
 <style>
+/* Design language follows Australia_Land_Feasibility_.html: navy masthead, white surfaces, Inter + mono numbers */
 :root{
-  --bg:#ffffff; --panel:#ffffff; --ink:#1d2330; --muted:#6b7280; --line:#dfe3ea; --line2:#eef0f4;
-  --brand:#1f3a5f; --brand2:#2c5282; --accent:#b8892d; --ok:#1e7b43; --warn:#b45309; --bad:#b42318;
-  --sel:#2c5282; --lock:#f1f1f1;
-  --radius:8px; --shadow:none;
-  font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --ink:#16202F; --ink2:#12305E; --accent:#1766CB; --accent-soft:#EDF1F7;
+  --canvas:#F4F6FA; --surface:#FFFFFF; --raised:#FBFCFE;
+  --line:#E4E9F1; --line2:#C9D2E1; --line3:#A9B6CC;
+  --text:#16202F; --text2:#42506B; --mute:#6B7A94; --faint:#93A0B5;
+  --pos:#2B6A52; --pos-bg:#ECF5EF; --neg:#8F3C3C; --neg-bg:#FAEEEE; --warn:#7A6740; --warn-bg:#F8F1E6; --info-bg:#EAF2FD;
+  --sans:"Inter","Aptos Narrow","Segoe UI Variable","Segoe UI",-apple-system,system-ui,sans-serif;
+  --mono:"JetBrains Mono","Aptos Mono","SF Mono","Consolas",ui-monospace,monospace;
+  --sh1:0 1px 2px rgba(15,30,61,.05); --sh2:0 1px 3px rgba(15,30,61,.06),0 4px 12px rgba(15,30,61,.05);
+  --r:5px;
+  /* legacy aliases used in view code */
+  --brand:var(--ink2); --brand2:var(--accent); --muted:var(--mute); --ok:var(--pos); --bad:var(--neg); --sel:var(--accent);
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--ink);font-size:13px}
-button,input,select,textarea{font:inherit;color:inherit}
-a{color:var(--brand2)}
+body{background:var(--surface);color:var(--text);font:13px/1.5 var(--sans);-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+button,input,select,textarea{font-family:var(--sans);font-size:12.5px;color:inherit}
+.num,td.num,th.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
 
-/* ---------- top bar ---------- */
-#topbar{position:sticky;top:0;z-index:50;background:#fff;color:var(--ink);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 16px;height:48px}
-#topbar .brand{font-weight:700;letter-spacing:.3px;white-space:nowrap}
-#topbar .brand{color:var(--brand)}
-#topbar .brand small{font-weight:400;color:var(--muted);margin-left:6px}
-#tabs{display:flex;gap:2px;height:100%;overflow-x:auto}
-#tabs button{background:none;border:0;color:var(--muted);padding:0 11px;height:100%;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
-#tabs button:hover{color:var(--ink);background:#f7f8fa}
-#tabs button.on{color:var(--brand);border-bottom-color:var(--brand2);font-weight:600}
-#savestate{margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px}
-#savestate .pill{padding:3px 10px;border-radius:99px;background:#f2f4f7;color:#475467}
-#savestate .pill.ok{background:#e7f6ec;color:#155d33}
-#savestate .pill.warn{background:#fff4e5;color:#8a4b08}
-#savestate button{background:var(--brand2);color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600}
+/* ── masthead + tabs ─────────────────────────── */
+#topbar{position:sticky;top:0;z-index:50;background:var(--ink);color:#fff}
+#topbar .hrow{display:flex;align-items:center;gap:12px;height:48px;padding:0 18px}
+#topbar .brand{font:700 13px var(--sans);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+#topbar .brand small{font-weight:450;letter-spacing:.02em;text-transform:none;color:#A9B6CC;margin-left:8px;font-size:12px}
+#topbar .spacer{flex:1}
+.hbtn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);color:#EDF1F7;padding:6px 12px;font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border-radius:var(--r);white-space:nowrap}
+.hbtn:hover{background:rgba(255,255,255,.14);color:#fff}
+.hbtn.solid{background:#fff;color:var(--ink);border-color:#fff;font-weight:650}
+.hbtn.solid:hover{background:#E4E9F1}
+#savestate{font:500 11px var(--sans);color:#A9B6CC;white-space:nowrap}
+#savestate b{color:#8FD3AE;font-weight:600}
+#tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--line2);padding:0 12px;overflow-x:auto}
+#tabs button{background:transparent;border:0;border-bottom:2px solid transparent;padding:11px 14px 10px;font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);cursor:pointer;white-space:nowrap}
+#tabs button:hover{color:var(--ink)}
+#tabs button.on{color:var(--ink2);border-bottom-color:var(--accent);font-weight:700}
+#tabs .n{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font:700 10px var(--mono);margin-right:6px}
+#tabs button.on .n{background:var(--accent);color:#fff}
+#tabs .sep{width:1px;background:var(--line);margin:8px 8px}
 
-main{padding:16px;max-width:none}
-.view{display:none}
+main{padding:18px 20px 60px}
+.view{display:none;max-width:1680px}
 .view.on{display:block}
 
-/* ---------- generic ---------- */
-.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
-.card h2{font-size:15px;margin:0 0 10px}
-.card h3{font-size:13px;margin:14px 0 8px;color:var(--brand)}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* ── page header, KPIs ─────────────────────────── */
+.ph-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+h2.ph{margin:0;font-size:19px;font-weight:680;color:var(--ink);letter-spacing:-.02em}
+p.pd{margin:2px 0 0;font-size:13px;color:var(--mute)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px}
+.kpi{border:1px solid var(--line);border-top:3px solid var(--c,var(--accent));border-radius:var(--r);background:#fff;padding:10px 12px;box-shadow:var(--sh1)}
+.kpi .k{font:650 10px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.kpi .v{font:650 20px var(--mono);color:var(--ink);margin-top:2px}
+.kpi .s{font-size:11px;color:var(--faint)}
+.alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid #E8D3A8;background:var(--warn-bg);color:var(--warn);border-radius:var(--r);padding:8px 12px;margin:0 0 14px;font-size:12.5px}
+.alert.info{border-color:var(--line2);background:var(--info-bg);color:var(--ink2)}
+
+/* ── shell with left rail ─────────────────────────── */
+.shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.rail{position:sticky;top:110px;border:1px solid var(--line);border-radius:var(--r);background:#fff;max-height:calc(100vh - 128px);overflow:auto}
+.fs{border-bottom:1px solid var(--line)}
+.fs:last-child{border-bottom:0}
+.lg{padding:9px 14px;font:650 10.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);background:var(--raised);border-bottom:1px solid var(--line)}
+.grp{padding:10px 14px 12px;display:flex;flex-direction:column;gap:7px}
+.grp select,.grp input[type=search],.grp input[type=month]{width:100%}
+.grp .pair{display:grid;grid-template-columns:auto 1fr auto;gap:5px}
+.codes{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.codes button{border:1px solid var(--line2);border-radius:var(--r);padding:5px 2px 3px;cursor:pointer;font:700 12px var(--mono);line-height:1.1}
+.codes button small{display:block;font:500 9.5px var(--sans);color:var(--text2);letter-spacing:0;margin-top:1px}
+.codes button:hover{border-color:var(--ink2)}
+.codes button kbd{font:600 8.5px var(--mono);color:var(--faint)}
+@media (max-width:1000px){.shell{grid-template-columns:1fr}.rail{position:static;max-height:none}}
+
+/* ── generic ─────────────────────────── */
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh1);padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:14px;font-weight:680;margin:0 0 10px;color:var(--ink)}
+.card h3{font:650 10.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px;color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .row.end{justify-content:flex-end}
 .grow{flex:1}
-.muted{color:var(--muted)}
+.muted{color:var(--mute)}
 .small{font-size:11.5px}
-.hint{color:var(--muted);font-size:12px;margin:4px 0 0}
-.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 14px}
-label.f{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted)}
-label.f > input,label.f > select,label.f > textarea{color:var(--ink);font-size:13px}
-label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
-input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{border:1px solid #cdd3dd;border-radius:6px;padding:5px 8px;background:#fff;min-height:30px}
+.hint{color:var(--mute);font-size:12px;margin:6px 0 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px}
+label.f{display:flex;flex-direction:column;gap:3px;font:600 10.5px var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+label.f > input,label.f > select,label.f > textarea{text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink2);font-size:13px}
+label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text2)}
+input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{border:1px solid var(--line2);border-radius:var(--r);padding:5px 8px;background:#fff;min-height:30px;color:var(--ink2)}
+input:hover,select:hover,textarea:hover{border-color:var(--line3)}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px rgba(46,92,168,.12)}
 textarea{min-height:60px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:2px solid #9fb6d6;outline-offset:0;border-color:#7d9cc6}
-.btn{border:1px solid #c5ccd8;background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;min-height:30px;white-space:nowrap}
-.btn:hover{background:#f3f5f9}
-.btn.pri{background:var(--brand2);border-color:var(--brand2);color:#fff}
-.btn.pri:hover{background:var(--brand)}
-.btn.bad{color:var(--bad);border-color:#efc2bd}
-.btn.bad:hover{background:#fff1f0}
-.btn.sm{padding:2px 8px;min-height:24px;font-size:12px}
-.btn:disabled{opacity:.5;cursor:default}
-.tag{display:inline-block;padding:1px 7px;border-radius:99px;background:#eef2f7;font-size:11px;color:#344054}
-.tag.warn{background:#fff4e5;color:#8a4b08}
-.tag.bad{background:#fdeceb;color:#912018}
-.tag.ok{background:#e7f6ec;color:#155d33}
-.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:#fff8e6;border:1px solid #f3d38a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.banner.info{background:#eef4fb;border-color:#bcd0ea}
+.btn{border:1px solid var(--line2);background:#fff;border-radius:var(--r);padding:6px 12px;cursor:pointer;min-height:30px;white-space:nowrap;font:600 11px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+.btn:hover{border-color:var(--ink2);background:var(--raised)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:var(--ink2);border-color:var(--ink2)}
+.btn.bad{color:var(--neg);border-color:#E6C4C4}
+.btn.bad:hover{background:var(--neg-bg)}
+.btn.sm{padding:3px 8px;min-height:24px;font-size:10px}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;background:var(--canvas);border:1px solid var(--line);font:650 9.5px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--text2);vertical-align:1px}
+.tag.warn{background:var(--warn-bg);color:var(--warn);border-color:#E8D3A8}
+.tag.bad{background:var(--neg-bg);color:var(--neg);border-color:#E6C4C4}
+.tag.ok{background:var(--pos-bg);color:var(--pos);border-color:#C5DFCF}
+.empty{border:1px dashed var(--line2);border-radius:var(--r);padding:40px 20px;text-align:center;color:var(--mute);background:var(--raised)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.empty .row{justify-content:center;margin-top:14px}
 
 table.t{border-collapse:collapse;width:100%;background:#fff}
-table.t th,table.t td{border-bottom:1px solid var(--line2);padding:5px 8px;text-align:left;vertical-align:middle}
-table.t th{background:#f7f8fa;font-weight:600;font-size:12px;color:#475467;position:sticky;top:0;z-index:1}
-table.t tr:hover td{background:#fafbfd}
-table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.t th,table.t td{border-bottom:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:middle}
+table.t th{background:var(--raised);font:650 10px var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--mute);position:sticky;top:0;z-index:1}
+table.t tr:hover td{background:var(--raised)}
+table.t td.num,table.t th.num{text-align:right}
 table.t input,table.t select{min-height:26px;padding:2px 6px}
-.scroll{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--line);border-radius:6px}
+.scroll{overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--line);border-radius:var(--r)}
 
-/* ---------- attendance grid ---------- */
-#att-toolbar{position:sticky;top:48px;z-index:20;background:var(--bg);padding-bottom:8px}
-.palette{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.palette .code{min-width:38px;border:1px solid #c5ccd8;border-radius:5px;padding:3px 7px;cursor:pointer;font-weight:600;font-size:12px}
-.palette .code:hover{filter:brightness(.95)}
-#grid-wrap{overflow:auto;max-height:calc(100vh - 250px);border:1px solid var(--line);border-radius:6px;background:#fff;user-select:none}
+/* ── attendance grid ─────────────────────────── */
+#grid-wrap{overflow:auto;max-height:calc(100vh - 300px);border:1px solid var(--line);border-radius:var(--r);background:#fff;user-select:none}
 table.ag{border-collapse:separate;border-spacing:0;font-size:11.5px}
-table.ag th,table.ag td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:0 4px;height:24px;white-space:nowrap}
-table.ag thead th{position:sticky;top:0;background:#f7f8fa;z-index:3;font-weight:600;color:#475467;text-align:center}
-table.ag thead tr:nth-child(2) th{top:24px}
-table.ag thead th.we{background:#eef1f6}
-table.ag td.d{width:30px;min-width:30px;max-width:30px;text-align:center;cursor:cell;position:relative;font-weight:600;font-size:11px;padding:0}
-table.ag td.d.lk{background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 4px,#ececec 4px,#ececec 8px);cursor:not-allowed}
-table.ag td.d.frz{cursor:not-allowed;opacity:.8}
-table.ag td.d:hover{box-shadow:inset 0 0 0 1px #9fb6d6}
-table.ag td.d.sel{outline:2px solid var(--sel);outline-offset:-2px;z-index:1}
-table.ag td.d .ov{position:absolute;top:1px;right:2px;width:5px;height:5px;border-radius:50%;background:#7c3aed}
-table.ag td.d .nt{position:absolute;bottom:0;left:2px;font-size:7px;color:#1d4ed8;font-weight:700}
+table.ag th,table.ag td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 5px;height:25px;white-space:nowrap}
+table.ag thead th{position:sticky;top:0;background:var(--raised);z-index:3;font:650 9.5px var(--sans);letter-spacing:.05em;color:var(--mute);text-align:center;text-transform:uppercase}
+table.ag thead tr:nth-child(2) th{top:25px;font:600 11px var(--mono);color:var(--ink2)}
+table.ag thead th.we{background:#EEF2F8}
+table.ag td.d{width:30px;min-width:30px;max-width:30px;text-align:center;cursor:cell;position:relative;font:650 10.5px var(--mono);padding:0}
+table.ag td.d:hover{box-shadow:inset 0 0 0 1px var(--line3)}
+table.ag td.d.lk{background:repeating-linear-gradient(45deg,#F6F7FA,#F6F7FA 4px,#EDF0F5 4px,#EDF0F5 8px);cursor:not-allowed}
+table.ag td.d.frz{cursor:not-allowed;opacity:.75}
+table.ag td.d.sel{outline:2px solid var(--accent);outline-offset:-2px;z-index:1}
+table.ag td.d .ov{position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#7c3aed}
+table.ag td.d .nt{position:absolute;bottom:0;left:2px;font-size:7px;color:var(--accent)}
 table.ag .fix{position:sticky;background:#fff;z-index:2}
-table.ag thead .fix{z-index:4;background:#f7f8fa}
-table.ag td.nm{cursor:pointer;color:var(--brand2);max-width:220px;overflow:hidden;text-overflow:ellipsis}
-table.ag td.nm:hover{text-decoration:underline}
-table.ag td.tot{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:0 6px}
-table.ag td.sum{font-size:10.5px;color:#475467}
-table.ag tr.left td.nm{color:#98a2b3;text-decoration:line-through}
-table.ag tfoot td{position:sticky;bottom:0;background:#f7f8fa;font-weight:700;text-align:center;z-index:2}
-table.ag tfoot td.fix{z-index:4}
+table.ag thead .fix{z-index:4;background:var(--raised)}
+table.ag td.nm{cursor:pointer;color:var(--ink2);font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+table.ag td.nm:hover{color:var(--accent)}
+table.ag td.tot{text-align:right;font:700 11.5px var(--mono);padding:0 7px}
+table.ag td.sum{font-size:10.5px;color:var(--mute)}
+table.ag tr.left td.nm{color:var(--faint);text-decoration:line-through}
+table.ag tfoot td{position:sticky;bottom:0;background:var(--raised);font:700 10.5px var(--mono);text-align:center;z-index:2;color:var(--ink2)}
+table.ag tfoot td.fix{z-index:4;font-family:var(--sans)}
 
-/* ---------- modal ---------- */
-#modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto}
+/* ── modal / toast ─────────────────────────── */
+#modal-bg{position:fixed;inset:0;background:rgba(22,32,47,.45);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:48px 16px;overflow:auto}
 #modal-bg.on{display:flex}
-#modal{background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(820px,100%);max-width:100%}
+#modal{background:#fff;border-radius:8px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(820px,100%)}
 #modal .mh{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
-#modal .mh h3{margin:0;font-size:15px;flex:1}
-#modal .mb{padding:14px 16px;max-height:calc(100vh - 200px);overflow:auto}
-#modal .mf{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
-#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1d2330;color:#fff;padding:9px 16px;border-radius:8px;z-index:200;display:none;max-width:90vw}
+#modal .mh h3{margin:0;font-size:15px;font-weight:680;flex:1}
+#modal .mb{padding:16px;max-height:calc(100vh - 210px);overflow:auto}
+#modal .mf{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;background:var(--raised);border-radius:0 0 8px 8px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:6px;z-index:200;display:none;max-width:90vw;font-size:12.5px}
 
-/* ---------- timesheet & invoice sheet (screen + print) ---------- */
-.sheet{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);margin:0 auto 18px;padding:14px 16px;color:#000;font-family:Calibri,"Segoe UI",Arial,sans-serif}
+/* ── timesheet & invoice sheets (screen + print) ─────────────────────────── */
+.sheet{background:#fff;border:1px solid var(--line);box-shadow:var(--sh2);margin:0 auto 18px;padding:14px 16px;color:#000;font-family:Calibri,"Segoe UI",Arial,sans-serif}
 .sheet.land{width:1120px;max-width:100%;overflow-x:auto}
 .sheet.port{width:800px;max-width:100%}
 .ts-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -127,7 +168,7 @@ table.ag tfoot td.fix{z-index:4}
 .ts-legend td{border:1px solid #000;padding:1px 6px}
 .ts-meta{margin:8px 0 6px;font-size:11.5px}
 .ts-meta b{display:inline-block;min-width:95px}
-table.ts{border-collapse:collapse;width:100%;font-size:9.5px;table-layout:auto}
+table.ts{border-collapse:collapse;width:100%;font-size:9.5px}
 table.ts th,table.ts td{border:1px solid #000;padding:1px 2px;text-align:center;height:16px}
 table.ts th{background:#d9e1f2;font-weight:700}
 table.ts td.l{text-align:left;padding-left:4px}
@@ -136,10 +177,9 @@ table.ts td.tot,table.ts td.gt{font-weight:700}
 table.ts tr.gtr td{background:#f2f2f2}
 .ts-sign{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:22px;font-size:9.5px}
 .ts-sign div b{display:block;margin-bottom:26px}
-
 .inv{font-size:12px}
-.inv .ihead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--brand);padding-bottom:8px}
-.inv .logo{font-size:24px;font-weight:800;color:var(--brand);letter-spacing:1px}
+.inv .ihead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--ink2);padding-bottom:8px}
+.inv .logo{font-size:24px;font-weight:800;color:var(--ink2);letter-spacing:1px}
 .inv .ttl{text-align:center;font-size:17px;font-weight:700;margin:12px 0;letter-spacing:1px}
 .inv .blocks{display:flex;justify-content:space-between;gap:20px;margin-bottom:12px}
 .inv .blocks .addr{white-space:pre-line;line-height:1.45}
@@ -148,14 +188,12 @@ table.ts tr.gtr td{background:#f2f2f2}
 .inv table.kv td:first-child{background:#f2f4f7;font-weight:600;white-space:nowrap}
 .inv table.lines{border-collapse:collapse;width:100%;margin-top:6px}
 .inv table.lines th,.inv table.lines td{border:1px solid #999;padding:4px 6px}
-.inv table.lines th{background:#1f3a5f;color:#fff;font-weight:600}
-.inv table.lines td.num{text-align:right;font-variant-numeric:tabular-nums}
+.inv table.lines th{background:#12305E;color:#fff;font-weight:600}
+.inv table.lines td.num{text-align:right}
 .inv table.lines tr.tt td{font-weight:700;background:#f2f4f7}
 .inv .words{margin-top:10px;font-style:italic}
 .inv .foot{margin-top:40px;display:flex;justify-content:space-between;font-size:11px}
-
 #print-root{display:none}
-
 @page land{size:A4 landscape;margin:7mm}
 @page port{size:A4 portrait;margin:12mm}
 @media print{
@@ -166,30 +204,29 @@ table.ts tr.gtr td{background:#f2f2f2}
   #print-root .sheet:last-child{break-after:auto}
   #print-root .sheet.land{page:land}
   #print-root .sheet.port{page:port}
-  table.ts th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  table.ts th,.inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
-
-.steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
-.steps a{flex:1 1 200px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-decoration:none;color:var(--ink)}
-.steps a b{display:block;color:var(--brand2);margin-bottom:2px}
-.steps a.done{opacity:.55}
-.steps a.done b::after{content:' ✓';color:var(--ok)}
 
 </style>
 </head>
 <body>
 <header id="topbar">
-  <div class="brand">LATINEM SECURITIES <small>Attendance &amp; Billing</small></div>
+  <div class="hrow">
+    <div class="brand">Latinem Securities<small>Attendance &amp; Billing</small></div>
+    <span class="spacer"></span>
+    <span id="savestate"></span>
+    <label class="hbtn solid" title="Import a master attendance or client timesheet workbook">⬆ Import Excel<input type="file" id="hdr-import" accept=".xlsx,.xlsm,.xls" hidden></label>
+    <button class="hbtn" id="hdr-backup" title="Download a backup copy of all data">Backup</button>
+  </div>
   <nav id="tabs">
-    <button data-view="attendance" class="on">Master attendance</button>
-    <button data-view="timesheets">Client timesheets</button>
-    <button data-view="invoices">Invoices</button>
+    <button data-view="attendance" class="on"><span class="n">1</span>Attendance</button>
+    <button data-view="timesheets"><span class="n">2</span>Client timesheets</button>
+    <button data-view="invoices"><span class="n">3</span>Invoice</button>
+    <span class="sep"></span>
     <button data-view="employees">Employees</button>
-    <button data-view="projects">Clients, projects &amp; sites</button>
-    <button data-view="data">Data &amp; settings</button>
+    <button data-view="projects">Projects &amp; sites</button>
+    <button data-view="data">Settings</button>
   </nav>
-  <div id="savestate"></div>
 </header>
 <main>
   <section id="v-attendance" class="view on"></section>
@@ -377,6 +414,7 @@ function setAssignment(emp, from, site, shift) {
 }
 
 /* ---------- small UI helpers ---------- */
+const pageHead = (t, d, act = '') => `<div class="ph-row"><div class="grow"><h2 class="ph">${t}</h2><p class="pd">${d}</p></div>${act}</div>`;
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
   const m = $('#modal');
@@ -429,82 +467,23 @@ const IDB = {
   async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
-const DATA_FILE = 'tracker-data.json';
-const BACKUP_DIR = 'tracker-backups';
-const store = { dir: null, perm: 'none', dirty: false, saving: false, lastFileSave: null, error: null, timer: null };
-const fsSupported = 'showDirectoryPicker' in window;
-
-async function permOf(handle, ask) {
-  const o = { mode: 'readwrite' };
-  if ((await handle.queryPermission(o)) === 'granted') return 'granted';
-  if (ask && (await handle.requestPermission(o)) === 'granted') return 'granted';
-  return 'prompt';
-}
-function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 700); }
+const store = { dirty: false, saving: false, last: null, error: null, timer: null };
+function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
   clearTimeout(store.timer);
-  if (store.saving) { store.timer = setTimeout(saveNow, 400); return; }
+  if (store.saving) { store.timer = setTimeout(saveNow, 300); return; }
   store.saving = true;
-  try {
-    S.savedAt = new Date().toISOString();
-    const json = JSON.stringify(S);
-    await IDB.set('state', json);
-    if (store.dir && store.perm === 'granted') {
-      const fh = await store.dir.getFileHandle(DATA_FILE, { create: true });
-      const w = await fh.createWritable(); await w.write(json); await w.close();
-      store.lastFileSave = new Date(); store.error = null;
-      await dailyBackup(json);
-    }
-    store.dirty = false;
-  } catch (e) { store.error = e.message; console.error(e); }
+  try { S.savedAt = new Date().toISOString(); await IDB.set('state', JSON.stringify(S)); store.dirty = false; store.last = new Date(); store.error = null; }
+  catch (e) { store.error = e.message; console.error(e); }
   store.saving = false; renderSaveState();
-}
-async function dailyBackup(json) {
-  const name = `tracker-data-${todayISO()}.json`;
-  const bd = await store.dir.getDirectoryHandle(BACKUP_DIR, { create: true });
-  try { await bd.getFileHandle(name); return; } catch { /* not there yet */ }
-  const fh = await bd.getFileHandle(name, { create: true }); const w = await fh.createWritable(); await w.write(json); await w.close();
-}
-async function connectFolder() {
-  if (!fsSupported) { toast('This browser cannot save to a folder. Use Microsoft Edge or Google Chrome.'); return; }
-  const dir = await window.showDirectoryPicker({ id: 'ls-tracker', mode: 'readwrite' });
-  store.dir = dir; store.perm = await permOf(dir, true);
-  await IDB.set('dir', dir);
-  let fileState = null;
-  try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); fileState = JSON.parse(await f.text()); } catch { }
-  if (fileState) {
-    const useFile = !S.employees.length || await confirmBox(`Found ${DATA_FILE} in "${dir.name}" (saved ${fileState.savedAt ? new Date(fileState.savedAt).toLocaleString() : 'unknown'}).\n\nLoad the data from that file? Choose Cancel to overwrite the file with the data currently open in the browser.`, 'Load file');
-    if (useFile) { S = migrate(fileState); reindex(); renderAll(); toast('Loaded ' + DATA_FILE); renderSaveState(); return; }
-  }
-  await saveNow(); toast('Connected. Data now saves to ' + dir.name + '\\' + DATA_FILE);
-}
-async function reconnectFolder() {
-  if (!store.dir) return connectFolder();
-  store.perm = await permOf(store.dir, true);
-  if (store.perm === 'granted') {
-    try {
-      const f = await (await store.dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text());
-      if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); renderAll(); toast('Loaded latest data from ' + DATA_FILE); }
-      else if (store.dirty || !fs.savedAt || fs.savedAt < S.savedAt) await saveNow();
-    } catch { await saveNow(); }
-  }
-  renderSaveState();
 }
 function renderSaveState() {
   const el = $('#savestate'); if (!el) return;
-  let pill, btn = '';
-  if (store.dir && store.perm === 'granted') {
-    pill = store.error ? `<span class="pill warn" title="${esc(store.error)}">Save failed – click Save</span>`
-      : store.dirty || store.saving ? `<span class="pill">Saving…</span>`
-      : `<span class="pill ok" title="${esc(store.dir.name)}\\${DATA_FILE}">Saved to ${esc(store.dir.name)}</span>`;
-    btn = `<button onclick="saveNow()">Save</button>`;
-  } else if (store.dir) {
-    pill = `<span class="pill warn">Folder not reconnected</span>`; btn = `<button onclick="reconnectFolder()">Reconnect</button>`;
-  } else {
-    pill = `<span class="pill warn">Browser only – not saved to a file</span>`; btn = `<button onclick="connectFolder()">Choose data folder</button>`;
-  }
-  el.innerHTML = pill + btn;
+  el.innerHTML = store.error ? `<span style="color:#F2B8B5">Not saved – ${esc(store.error)}</span>`
+    : store.dirty || store.saving ? 'Saving…'
+    : `<b>✓ Saved</b>${store.last ? ' ' + store.last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`;
 }
+function downloadBackup() { downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`); }
 window.addEventListener('beforeunload', e => { if (store.dirty) { saveNow(); e.preventDefault(); e.returnValue = ''; } });
 
 /* =====================================================================
@@ -529,48 +508,40 @@ function renderAttendance() {
   const projList = S.projects.filter(p => !f.client || p.clientId === f.client).sort((a, b) => a.name.localeCompare(b.name));
   const siteList = S.sites.filter(s => (!f.project || s.projectId === f.project) && (!f.client || IX.proj.get(s.projectId)?.clientId === f.client)).sort((a, b) => a.name.localeCompare(b.name));
   const locked = AV.mode === 'payroll' && S.locks[AV.ym];
-  v.innerHTML = setupSteps() + `
-  <div id="att-toolbar">
-   <div class="card" style="margin-bottom:8px;padding:10px 14px">
-    <div class="row">
-      <select id="av-mode" title="Period type">${opts([['payroll', 'Payroll month'], ['calendar', 'Calendar month']], AV.mode)}</select>
-      <button class="btn sm" id="av-prev">◀</button>
-      <input type="month" id="av-ym" value="${AV.ym}">
-      <button class="btn sm" id="av-next">▶</button>
-      <b>${fmtDMY(start)} → ${fmtDMY(end)}</b>
-      ${locked ? '<span class="tag bad">LOCKED</span>' : ''}
-      <span class="grow"></span>
-      <button class="btn" id="av-add">+ Add employee</button>
-      ${AV.mode === 'payroll' ? `<button class="btn" id="av-lock">${locked ? 'Unlock month' : 'Lock month'}</button>` : ''}
-      <button class="btn" id="av-xls">Export Excel</button>
-    </div>
-    <div class="row" style="margin-top:8px">
+  v.innerHTML = `<div class="shell">
+  <aside class="rail">
+    <div class="fs"><div class="lg">Period</div><div class="grp">
+      <select id="av-mode">${opts([['payroll', 'Payroll month (21st – 20th)'], ['calendar', 'Calendar month (1st – end)']], AV.mode)}</select>
+      <div class="pair"><button class="btn sm" id="av-prev">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next">▶</button></div>
+      <div class="small mono" style="color:var(--ink2)">${fmtDMY(start)} → ${fmtDMY(end)} ${locked ? '<span class="tag bad">Locked</span>' : ''}</div>
+      ${AV.mode === 'payroll' ? `<button class="btn sm" id="av-lock">${locked ? 'Unlock this month' : 'Lock this month'}</button>` : ''}
+    </div></div>
+    <div class="fs"><div class="lg">Mark selected days</div><div class="grp">
+      <div class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? ` <kbd>${c.key.toUpperCase()}</kbd>` : ''}<small>${esc(c.label)}</small></button>`).join('')}
+        <button data-code="" style="background:#fff">✕ <kbd>DEL</kbd><small>Clear</small></button></div>
+      <button class="btn sm" id="av-edit">Reliever / other site…</button>
+      <label class="chk"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> Fill empty days only</label>
+      <div class="row"><button class="btn sm grow" id="av-all">Select all</button><button class="btn sm grow" id="av-undo">Undo</button></div>
+    </div></div>
+    <div class="fs"><div class="lg">Filter</div><div class="grp">
+      <input type="search" id="f-q" placeholder="Search name or emp ID" value="${esc(f.q)}">
       <select id="f-client">${opts(S.clients.map(c => [c.id, c.name]), f.client, 'All clients')}</select>
       <select id="f-project">${opts(projList.map(p => [p.id, p.name]), f.project, 'All projects')}</select>
       <select id="f-site">${opts(siteList.map(s => [s.id, s.name]), f.site, 'All sites')}</select>
       <select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select>
       <select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select>
-      <select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select>
-      <select id="f-status">${opts([['active', 'Employed in period'], ['left', 'Left in/before period'], ['all', 'Everyone']], f.status)}</select>
-      <input type="search" id="f-q" placeholder="Search name / emp ID" value="${esc(f.q)}" style="width:190px">
-      <select id="av-sort" title="Sort">${opts([['order', 'Sheet order'], ['name', 'Name'], ['site', 'Site'], ['shift', 'Shift'], ['code', 'Emp ID']], AV.sort)}</select>
-      <span id="av-count" class="muted"></span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <div class="palette">
-        ${S.codes.map(c => `<button class="code" data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' – key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}
-        <button class="code" data-code="" title="Clear – Delete key" style="background:#fff">Clear</button>
-        <button class="btn sm" id="av-edit" title="Set code, site (e.g. reliever posting) and shift – Enter key">Code + site/shift…</button>
-      </div>
-      <label class="chk small"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> only fill empty cells</label>
-      <span class="grow"></span>
-      <button class="btn sm" id="av-all">Select all</button>
-      <button class="btn sm" id="av-undo" title="Ctrl+Z">Undo</button>
-    </div>
-    <div class="hint">Click or drag to select cells, then press a key (${S.codes.filter(c => c.key).map(c => `<b>${c.key.toUpperCase()}</b>=${esc(c.code)}`).join(', ')}, Del = clear) or click a code. Double-click or Enter opens site/shift options for reliever postings. A purple dot means the day is worked at a site other than the assigned one.</div>
-   </div>
-  </div>
-  <div id="grid-wrap"></div>`;
+      <select id="f-type">${opts([['ls', 'LS staff only'], ['sub', 'Subcontractors only']], f.type, 'LS + subcontractors')}</select>
+      <select id="f-status">${opts([['active', 'Working this period'], ['left', 'Left'], ['all', 'Everyone']], f.status)}</select>
+      <select id="av-sort">${opts([['order', 'Sort: sheet order'], ['name', 'Sort: name'], ['site', 'Sort: site'], ['shift', 'Sort: shift'], ['code', 'Sort: emp ID']], AV.sort)}</select>
+    </div></div>
+  </aside>
+  <section>
+    <div class="ph-row"><div class="grow"><h2 class="ph">Attendance</h2><p class="pd">Select days in the grid (click or drag), then click a code or press its key.</p></div>
+      <button class="btn" id="av-add">+ Add employee</button><button class="btn" id="av-xls">Export Excel</button></div>
+    ${setupSteps()}
+    <div class="kpis" id="av-kpis"></div>
+    <div id="grid-wrap"></div>
+  </section></div>`;
 
   const refilter = () => { AV.sel = null; renderAttendance(); };
   $('#av-mode').onchange = e => { AV.mode = e.target.value; refilter(); };
@@ -589,7 +560,7 @@ function renderAttendance() {
   $('#av-all').onclick = () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); };
   $('#av-undo').onclick = undoAtt;
   $('#av-edit').onclick = () => openCellEditor();
-  $$('.palette .code').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
+  $$('.codes button').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
   renderGrid();
 }
 
@@ -675,9 +646,10 @@ function rowHTML(i) {
 function renderGrid() {
   computeAttRows();
   const wrap = $('#grid-wrap'); if (!wrap) return;
-  $('#av-count').textContent = `${AV.rows.length} employee${AV.rows.length === 1 ? '' : 's'}`;
   if (!S.employees.length) {
-    wrap.innerHTML = `<div style="padding:30px;text-align:center" class="muted">No employees yet. Import the master payroll sheet under <a href="#" onclick="showView('data');return false">Data &amp; settings</a>, or <a href="#" onclick="editEmployee(null);return false">add an employee</a>.</div>`;
+    $('#av-kpis').innerHTML = '';
+    wrap.outerHTML = `<div id="grid-wrap" class="empty" style="max-height:none"><b>No employees yet</b>Load them from your master attendance Excel, or type them in one by one.
+      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">⬆ Import Excel</button><button class="btn" onclick="editEmployee(null)">+ Add employee</button></div></div>`;
     return;
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
@@ -713,6 +685,14 @@ function renderFooter() {
     all += n; tf.querySelector(`[data-f="${j}"]`).textContent = n || '';
   });
   $('#av-ftot').textContent = all + ' billable days';
+  // KPI strip for the visible rows
+  const cnt = {}; let blank = 0;
+  for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
+  const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
+  const k = (lbl, v, sub, col) => `<div class="kpi" style="--c:${col}"><div class="k">${lbl}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  $('#av-kpis').innerHTML = k('Employees', AV.rows.length, 'in this view', 'var(--accent)') + k('Billable days', all, S.codes.filter(c => c.billable).map(c => c.code).join(' + '), 'var(--pos)')
+    + k('Absent', cnt.A || 0, 'days', 'var(--neg)') + k('Day off', cnt.OFF || 0, 'days', 'var(--line3)') + k('Leave / other', leave, 'AL, SL, EL, SIRA…', 'var(--warn)')
+    + k('Not marked', blank, 'past days left empty', blank ? '#B45309' : 'var(--line3)');
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
@@ -815,15 +795,10 @@ document.addEventListener('keydown', e => {
 });
 
 function setupSteps() {
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length;
-  const st = [
-    [store.dir && store.perm === 'granted', '1 · Data folder', 'Choose LS_Documents so data saves to OneDrive', "connectFolder().then(renderAll)"],
-    [S.employees.length > 0, '2 · Import master sheet', 'Load workers, sites and daily codes from Excel', "showView('data')"],
-    [S.sites.length > 0 && !unm, '3 · Map sites to projects', unm ? unm + ' site(s) not under a project yet' : 'Every site belongs to a project', "showView('projects')"],
-    [S.projects.length > 0 && !noRate && S.projects.every(p => p.clientId), '4 · Clients & rates', noRate ? noRate + ' project(s) without a rate' : 'Client, PO and rate per project', "showView('projects')"]
-  ];
-  if (st.every(x => x[0])) return '';
-  return `<div class="steps">${st.map(([d, t, h, f]) => `<a href="#" class="${d ? 'done' : ''}" onclick="${f};return false"><b>${t}</b><span class="small muted">${h}</span></a>`).join('')}</div>`;
+  if (!S.employees.length) return '';
+  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
+  const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
+  return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
 }
 
 /* =====================================================================
@@ -845,11 +820,9 @@ function renderEmployees() {
     if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q) && !norm(e.agency).includes(q)) return false;
     return true;
   });
-  v.innerHTML = `<div class="card">
+  v.innerHTML = pageHead('Employees', 'Add or edit workers, their joining / end dates and the site they work at.', '<button class="btn pri" id="ev-add">+ Add employee</button>') + `<div class="card">
     <div class="row">
-      <h2 style="margin:0">Employees</h2><span class="muted">${list.length} shown · ${S.employees.length} total</span>
-      <span class="grow"></span>
-      <button class="btn pri" id="ev-add">+ Add employee</button>
+      <span class="muted small">${list.length} shown · ${S.employees.length} total</span>
     </div>
     <div class="row" style="margin-top:10px">
       <input type="search" id="ev-q" placeholder="Search name / emp ID / agency" value="${esc(EV.q)}" style="width:240px">
@@ -1019,7 +992,7 @@ function renderProjects() {
   const headcount = siteId => { const t = todayISO(); return S.employees.filter(e => employedOn(e, t) && assignOn(e, t)?.site === siteId).length; };
   const projRows = [...S.projects].filter(p => !q || norm(p.name).includes(q) || norm(p.code).includes(q) || sitesOfProject(p.id).some(s => norm(s.name).includes(q)))
     .sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
-  v.innerHTML = `
+  v.innerHTML = pageHead('Projects &amp; sites', 'Client → project → sites. Each project holds the SAP code, PO number and billing rate used on invoices.') + `
   <div class="card">
     <div class="row"><h2 style="margin:0">Clients</h2><span class="grow"></span><button class="btn pri" id="pv-addc">+ Add client</button></div>
     <table class="t" style="margin-top:8px"><thead><tr><th>Client (billing entity)</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
@@ -1241,16 +1214,14 @@ function renderTimesheets() {
   const all = projs.map(p => ({ p, ts: buildTimesheet(p.id, TV.ym) }));
   if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
   const chosen = all.filter(x => TV.picked.has(x.p.id));
-  v.innerHTML = `<div class="card">
+  v.innerHTML = pageHead('Client timesheets', 'Made automatically from Attendance – one sheet per project for the calendar month. Tick projects, then print or export.') + `<div class="card">
     <div class="row">
-      <h2 style="margin:0">Client timesheets</h2>
-      <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
+            <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
       <span class="grow"></span>
       <button class="btn" id="tv-xls">Export Excel (1 tab per project)</button>
       <button class="btn pri" id="tv-print">Print / Save as PDF</button>
     </div>
-    <p class="hint">Calendar month ${fmtDMY(TV.ym + '-01')} – ${fmtDMY(`${TV.ym}-${pad(dim(TV.ym))}`)}. Built from the master attendance: each day goes to the site the person worked at that day; <b>R</b> days go to the RELIEVER section. Totals count billable codes (${S.codes.filter(c => c.billable).map(c => c.code).join(', ')}).</p>
     <div class="scroll" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th>Client</th><th class="num">Staff rows</th><th class="num">Billable days</th><th class="num">≈ Guards (days ÷ ${dim(TV.ym)})</th></tr></thead><tbody>
     ${all.map(({ p, ts }) => `<tr><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
       <td class="num">${ts.rows.length}</td><td class="num">${ts.total}</td><td class="num">${qtyFmt(ts.total / dim(TV.ym))}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No projects yet – set them up under Clients, projects &amp; sites.</td></tr>'}
@@ -1381,7 +1352,7 @@ function renderInvoices() {
   const dr = IV.draft ||= newInvoiceDraft();
   const projs = S.projects.filter(p => !dr.clientId || p.clientId === dr.clientId).sort((a, b) => a.name.localeCompare(b.name));
   const tt = invTotals(dr);
-  v.innerHTML = `<div class="row" style="align-items:flex-start;gap:14px">
+  v.innerHTML = pageHead('Invoice', 'Choose client, projects and months → enter SAP details → generate lines → print the pack.') + `<div class="row" style="align-items:flex-start;gap:14px">
   <div style="flex:1 1 640px;min-width:0">
     <div class="card">
       <div class="row"><h2 style="margin:0">${S.invoices.some(x => x.id === dr.id) ? 'Edit invoice' : 'New invoice'}</h2><span class="grow"></span><button class="btn sm" id="iv-new">Start new</button></div>
@@ -1720,49 +1691,42 @@ function applyClientImport(parsed, overwrite) {
   return st;
 }
 
-async function importMasterFile(file) {
+/** One entry point: detects master-attendance sheets and client-timesheet sheets in any workbook. */
+async function importExcel(file) {
   const wb = await readWorkbook(file);
   const found = [];
-  wb.SheetNames.forEach((n, i) => { const p = parseMasterSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p }); });
-  if (!found.length) { toast('No master attendance layout found (needs a NAME header row and a row of dates)', 5000); return; }
-  const describe = f => {
-    const known = f.p.rows.filter(r => { const { empCode, agency } = splitIdAgency(r.id); return findEmployee(empCode, r.name, agency); }).length;
-    return `${f.p.rows.length} rows · ${fmtDMY(f.p.dates[0])} → ${fmtDMY(f.p.dates[f.p.dates.length - 1])} · ${f.p.rows.length - known} new, ${known} existing employees`;
-  };
-  openModal('Import master attendance', `
-    <p>File: <b>${esc(file.name)}</b></p>
-    ${found.map((f, k) => `<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" data-ms="${k}" ${k === 0 ? 'checked' : ''}> <b>${esc(f.n)}</b>${isHidden(wb, f.i) ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${describe(f)}</span></label>`).join('')}
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="mi-ow" checked> Overwrite existing attendance for these dates (blank cells in the sheet clear the day)</label>
-    <p class="hint">Each row's PROJECT column becomes the employee's site from the first date of the sheet. New site names are listed under <b>Clients, projects &amp; sites → Unmapped sites</b> for you to put under a project. TERMINATED / RESIGNED in a day cell sets the end date to the day before.</p>`,
+  wb.SheetNames.forEach((n, i) => {
+    const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
+    const m = parseMasterSheet(rows);
+    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
+    const c = parseClientSheet(rows);
+    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.project} · ${fmtMonYY(c.ym)} · ${c.rows.length} rows` });
+  });
+  if (!found.length) { toast('No attendance found in this file. It needs a NAME column and a row of dates (master sheet), or PROJECT NAME + MONTH + SITE NAME (client timesheet).', 7000); return; }
+  openModal('Import Excel', `
+    <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
+    <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
+    ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
+      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}</td></tr>`).join('')}
+    </tbody></table>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
     [{ label: 'Cancel' }, {
       label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#mi-ow', m).checked; const tot = { created: 0, updated: 0, cells: 0, ended: 0, newSites: 0 }; const codes = new Set();
-        m.querySelectorAll('[data-ms]:checked').forEach(c => { const r = applyMasterImport(found[+c.dataset.ms].p, ow); for (const k in tot) tot[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x)); });
-        AV.ym = cycleOfDate(found[0].p.dates[found[0].p.dates.length - 1]); AV.mode = 'payroll';
+        const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0 }; const codes = new Set(); let lastMaster = null;
+        m.querySelectorAll('[data-sh]:checked').forEach(c => {
+          const f = found[+c.dataset.sh];
+          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow);
+          for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x));
+          if (f.type === 'master') lastMaster = f.p;
+        });
+        if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
         markDirty(); renderAll();
-        openModal('Import complete', `<p>${tot.created} employees added, ${tot.updated} updated, ${tot.cells} attendance cells written, ${tot.ended} end dates set, ${tot.newSites} new sites.</p>
-          ${codes.size ? `<p>New codes found and added as <b>non-billable</b>: ${[...codes].map(esc).join(', ')}. Review them under Data &amp; settings → Attendance codes.</p>` : ''}
-          ${tot.newSites ? '<p>Next: map the new sites to projects under <b>Clients, projects &amp; sites</b>.</p>' : ''}`, [{ label: 'OK', cls: 'pri' }]);
+        const unm = S.sites.filter(x => !x.projectId).length;
+        openModal('Import complete', `<div class="kpis">${[['Workers added', t.created], ['Days written', t.cells], ['End dates set', t.ended], ['New sites', t.newSites], ['New projects', t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+          ${codes.size ? `<p>New codes added as <b>not billable</b>: ${[...codes].map(esc).join(', ')} (change in Settings).</p>` : ''}
+          ${unm ? `<div class="alert">${unm} site(s) are not linked to a project yet. Link them so they appear on client timesheets and invoices.</div>` : ''}`,
+          unm ? [{ label: 'Later' }, { label: 'Link sites now', cls: 'pri', onClick: () => showView('projects') }] : [{ label: 'OK', cls: 'pri' }]);
         return false;
-      }
-    }]);
-}
-
-async function importClientFile(file) {
-  const wb = await readWorkbook(file);
-  const found = [];
-  wb.SheetNames.forEach((n, i) => { const p = parseClientSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p, hidden: isHidden(wb, i) }); });
-  if (!found.length) { toast('No client timesheet tabs found (needs PROJECT NAME, MONTH and a SITE NAME header)', 5000); return; }
-  openModal('Import client timesheets', `
-    <p>File: <b>${esc(file.name)}</b> – ${found.length} timesheet tab(s)</p>
-    <div style="max-height:320px;overflow:auto">${found.map((f, k) => `<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" data-cs="${k}" ${f.hidden ? '' : 'checked'}> <b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${esc(f.p.project)} · ${fmtMonYY(f.p.ym)} · ${f.p.rows.length} rows</span></label>`).join('')}</div>
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="ci-ow"> Overwrite days that already have attendance</label>
-    <p class="hint">Creates each project and its sites (e.g. SCL TR - AL QUOZ TR → SOBHA AL QUOZ CAMP, CCTV OPERATOR, TEAM LEADER). Reliever rows are posted to the project's first site with code R. Useful for loading history or setting up the project/site structure.</p>`,
-    [{ label: 'Cancel' }, {
-      label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#ci-ow', m).checked; let created = 0, cells = 0, np = 0, ns = 0;
-        m.querySelectorAll('[data-cs]:checked').forEach(c => { const r = applyClientImport(found[+c.dataset.cs].p, ow); created += r.created; cells += r.cells; np += r.newProjects || 0; ns += r.newSites || 0; });
-        markDirty(); renderAll(); toast(`${np} projects, ${ns} sites and ${created} employees added · ${cells} cells written`, 5000);
       }
     }]);
 }
@@ -1873,27 +1837,16 @@ function renderData() {
   const v = $('#v-data'); const st = S.settings;
   const nAtt = Object.values(S.att).reduce((a, x) => a + Object.keys(x).length, 0);
   v.innerHTML = `
-  <div class="card"><h2>Data file</h2>
-    ${fsSupported ? '' : '<div class="banner">This browser cannot write to a folder. Open this file in <b>Microsoft Edge</b> or <b>Google Chrome</b>; until then data is kept only inside this browser – use Download backup regularly.</div>'}
-    <p style="margin-top:0">Your data is saved as <b>${DATA_FILE}</b> in the folder you choose (pick <b>LS_Documents</b>, next to this HTML file) so OneDrive syncs and versions it. A dated copy is kept once a day in <b>${BACKUP_DIR}\\</b>.
-    Current folder: <b>${store.dir ? esc(store.dir.name) : 'none'}</b> ${store.dir ? (store.perm === 'granted' ? '<span class="tag ok">connected</span>' : '<span class="tag warn">needs reconnect</span>') : ''}</p>
+  ${pageHead('Settings', 'Your data, attendance codes, company details and signatories.')}
+  <div class="card"><h2>Your data</h2>
+    <div class="kpis">${[['Employees', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+    <p class="hint" style="margin:0 0 10px">Everything is saved automatically in this browser on this computer${S.savedAt ? ' (last saved ' + new Date(S.savedAt).toLocaleString() + ')' : ''}. Click <b>Backup</b> now and then and keep the file in LS_Documents – use it to restore or move to another PC.</p>
     <div class="row">
-      <button class="btn pri" id="dv-folder">${store.dir ? 'Change folder' : 'Choose data folder'}</button>
-      ${store.dir && store.perm !== 'granted' ? '<button class="btn" onclick="reconnectFolder().then(renderData)">Reconnect</button>' : ''}
-      <button class="btn" id="dv-dl">Download backup (.json)</button>
-      <label class="btn" style="display:inline-flex;align-items:center">Restore from backup…<input type="file" id="dv-rs" accept=".json,application/json" hidden></label>
+      <button class="btn pri" onclick="$('#hdr-import').click()">⬆ Import Excel</button>
+      <button class="btn" id="dv-dl">Download backup</button>
+      <label class="btn" style="display:inline-flex;align-items:center">Restore backup…<input type="file" id="dv-rs" accept=".json,application/json" hidden></label>
     </div>
-    <p class="hint">${S.employees.length} employees · ${S.projects.length} projects · ${S.sites.length} sites · ${nAtt.toLocaleString()} attendance days · ${S.invoices.length} invoices${S.savedAt ? ' · last saved ' + new Date(S.savedAt).toLocaleString() : ''}</p>
-  </div>
-
-  <div class="card"><h2>Import from Excel</h2>
-    <div class="grid2">
-      <div><b>Master payroll attendance</b><p class="hint">e.g. "LATINEM SECURITIES MASTER PAYROLL ATTENDANCE MONTH OF JULY-2026.xlsx". Adds/updates employees, their site (PROJECT column), shift, trade, D.O.J and every day's code.</p>
-        <label class="btn pri" style="display:inline-flex;align-items:center;margin-top:6px">Choose master file…<input type="file" id="dv-im" accept=".xlsx,.xlsm,.xls" hidden></label></div>
-      <div><b>Client timesheet workbook</b><p class="hint">e.g. "SCL TR TIME SHEET - JUNE 2026.xlsx" (one tab per project). Creates projects and their sites and loads that month's attendance.</p>
-        <label class="btn" style="display:inline-flex;align-items:center;margin-top:6px">Choose timesheet file…<input type="file" id="dv-ic" accept=".xlsx,.xlsm,.xls" hidden></label></div>
-    </div>
-    <p class="hint">Excel and PDF features load small libraries from cdn.jsdelivr.net, so they need an internet connection. Everything else works offline.</p>
+    <p class="hint">Import Excel accepts the master payroll attendance workbook and client timesheet workbooks – the type of each sheet is detected automatically.</p>
   </div>
 
   <div class="card"><h2>Attendance codes</h2>
@@ -1927,11 +1880,10 @@ function renderData() {
   </div>
 
   <div class="card"><h2 style="color:var(--bad)">Reset</h2>
-    <p class="hint" style="margin-top:0">Deletes everything in this browser and, if connected, overwrites ${DATA_FILE}. Daily backups in ${BACKUP_DIR}\\ are kept.</p>
+    <p class="hint" style="margin-top:0">Deletes everything saved in this browser. Download a backup first.</p>
     <button class="btn bad" id="dv-reset">Delete all data…</button></div>`;
 
-  $('#dv-folder').onclick = () => connectFolder().then(renderData).catch(e => e.name !== 'AbortError' && toast(e.message));
-  $('#dv-dl').onclick = () => downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `tracker-data-${todayISO()}.json`);
+  $('#dv-dl').onclick = downloadBackup;
   $('#dv-rs').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -1940,8 +1892,6 @@ function renderData() {
       S = migrate(st); reindex(); markDirty(); renderAll(); toast('Restored');
     } catch (err) { toast(err.message); }
   };
-  $('#dv-im').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importMasterFile(f).catch(err => toast(err.message, 5000)); };
-  $('#dv-ic').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importClientFile(f).catch(err => toast(err.message, 5000)); };
   v.querySelectorAll('[data-ci]').forEach(i => i.onchange = () => {
     const c = S.codes[+i.dataset.ci]; const k = i.dataset.ck;
     c[k] = i.type === 'checkbox' ? i.checked : i.value.trim();
@@ -1984,18 +1934,11 @@ async function init() {
   let st = null;
   try { const j = await IDB.get('state'); if (j) st = JSON.parse(j); } catch (e) { console.warn('IndexedDB unavailable', e); }
   S = migrate(st || defaultState()); reindex();
-  try {
-    const dir = await IDB.get('dir');
-    if (dir) {
-      store.dir = dir; store.perm = await permOf(dir, false);
-      if (store.perm === 'granted') {
-        try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text()); if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); } } catch { }
-      }
-    }
-  } catch (e) { console.warn(e); }
   $$('#tabs button').forEach(b => b.onclick = () => showView(b.dataset.view));
   $('#modal-bg').addEventListener('mousedown', e => { if (e.target.id === 'modal-bg') closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-bg').classList.contains('on')) closeModal(); });
+  $('#hdr-import').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importExcel(f).catch(err => toast(err.message, 5000)); };
+  $('#hdr-backup').onclick = downloadBackup;
   renderSaveState(); showView('attendance');
 }
 init();

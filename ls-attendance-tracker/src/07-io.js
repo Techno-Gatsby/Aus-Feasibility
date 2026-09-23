@@ -201,49 +201,42 @@ function applyClientImport(parsed, overwrite) {
   return st;
 }
 
-async function importMasterFile(file) {
+/** One entry point: detects master-attendance sheets and client-timesheet sheets in any workbook. */
+async function importExcel(file) {
   const wb = await readWorkbook(file);
   const found = [];
-  wb.SheetNames.forEach((n, i) => { const p = parseMasterSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p }); });
-  if (!found.length) { toast('No master attendance layout found (needs a NAME header row and a row of dates)', 5000); return; }
-  const describe = f => {
-    const known = f.p.rows.filter(r => { const { empCode, agency } = splitIdAgency(r.id); return findEmployee(empCode, r.name, agency); }).length;
-    return `${f.p.rows.length} rows · ${fmtDMY(f.p.dates[0])} → ${fmtDMY(f.p.dates[f.p.dates.length - 1])} · ${f.p.rows.length - known} new, ${known} existing employees`;
-  };
-  openModal('Import master attendance', `
-    <p>File: <b>${esc(file.name)}</b></p>
-    ${found.map((f, k) => `<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" data-ms="${k}" ${k === 0 ? 'checked' : ''}> <b>${esc(f.n)}</b>${isHidden(wb, f.i) ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${describe(f)}</span></label>`).join('')}
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="mi-ow" checked> Overwrite existing attendance for these dates (blank cells in the sheet clear the day)</label>
-    <p class="hint">Each row's PROJECT column becomes the employee's site from the first date of the sheet. New site names are listed under <b>Clients, projects &amp; sites → Unmapped sites</b> for you to put under a project. TERMINATED / RESIGNED in a day cell sets the end date to the day before.</p>`,
+  wb.SheetNames.forEach((n, i) => {
+    const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
+    const m = parseMasterSheet(rows);
+    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
+    const c = parseClientSheet(rows);
+    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.project} · ${fmtMonYY(c.ym)} · ${c.rows.length} rows` });
+  });
+  if (!found.length) { toast('No attendance found in this file. It needs a NAME column and a row of dates (master sheet), or PROJECT NAME + MONTH + SITE NAME (client timesheet).', 7000); return; }
+  openModal('Import Excel', `
+    <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
+    <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
+    ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
+      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}</td></tr>`).join('')}
+    </tbody></table>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
     [{ label: 'Cancel' }, {
       label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#mi-ow', m).checked; const tot = { created: 0, updated: 0, cells: 0, ended: 0, newSites: 0 }; const codes = new Set();
-        m.querySelectorAll('[data-ms]:checked').forEach(c => { const r = applyMasterImport(found[+c.dataset.ms].p, ow); for (const k in tot) tot[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x)); });
-        AV.ym = cycleOfDate(found[0].p.dates[found[0].p.dates.length - 1]); AV.mode = 'payroll';
+        const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0 }; const codes = new Set(); let lastMaster = null;
+        m.querySelectorAll('[data-sh]:checked').forEach(c => {
+          const f = found[+c.dataset.sh];
+          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow);
+          for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x));
+          if (f.type === 'master') lastMaster = f.p;
+        });
+        if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
         markDirty(); renderAll();
-        openModal('Import complete', `<p>${tot.created} employees added, ${tot.updated} updated, ${tot.cells} attendance cells written, ${tot.ended} end dates set, ${tot.newSites} new sites.</p>
-          ${codes.size ? `<p>New codes found and added as <b>non-billable</b>: ${[...codes].map(esc).join(', ')}. Review them under Data &amp; settings → Attendance codes.</p>` : ''}
-          ${tot.newSites ? '<p>Next: map the new sites to projects under <b>Clients, projects &amp; sites</b>.</p>' : ''}`, [{ label: 'OK', cls: 'pri' }]);
+        const unm = S.sites.filter(x => !x.projectId).length;
+        openModal('Import complete', `<div class="kpis">${[['Workers added', t.created], ['Days written', t.cells], ['End dates set', t.ended], ['New sites', t.newSites], ['New projects', t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+          ${codes.size ? `<p>New codes added as <b>not billable</b>: ${[...codes].map(esc).join(', ')} (change in Settings).</p>` : ''}
+          ${unm ? `<div class="alert">${unm} site(s) are not linked to a project yet. Link them so they appear on client timesheets and invoices.</div>` : ''}`,
+          unm ? [{ label: 'Later' }, { label: 'Link sites now', cls: 'pri', onClick: () => showView('projects') }] : [{ label: 'OK', cls: 'pri' }]);
         return false;
-      }
-    }]);
-}
-
-async function importClientFile(file) {
-  const wb = await readWorkbook(file);
-  const found = [];
-  wb.SheetNames.forEach((n, i) => { const p = parseClientSheet(sheetRows(wb, n)); if (p && p.rows.length) found.push({ n, i, p, hidden: isHidden(wb, i) }); });
-  if (!found.length) { toast('No client timesheet tabs found (needs PROJECT NAME, MONTH and a SITE NAME header)', 5000); return; }
-  openModal('Import client timesheets', `
-    <p>File: <b>${esc(file.name)}</b> – ${found.length} timesheet tab(s)</p>
-    <div style="max-height:320px;overflow:auto">${found.map((f, k) => `<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" data-cs="${k}" ${f.hidden ? '' : 'checked'}> <b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''} <span class="muted small">${esc(f.p.project)} · ${fmtMonYY(f.p.ym)} · ${f.p.rows.length} rows</span></label>`).join('')}</div>
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="ci-ow"> Overwrite days that already have attendance</label>
-    <p class="hint">Creates each project and its sites (e.g. SCL TR - AL QUOZ TR → SOBHA AL QUOZ CAMP, CCTV OPERATOR, TEAM LEADER). Reliever rows are posted to the project's first site with code R. Useful for loading history or setting up the project/site structure.</p>`,
-    [{ label: 'Cancel' }, {
-      label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#ci-ow', m).checked; let created = 0, cells = 0, np = 0, ns = 0;
-        m.querySelectorAll('[data-cs]:checked').forEach(c => { const r = applyClientImport(found[+c.dataset.cs].p, ow); created += r.created; cells += r.cells; np += r.newProjects || 0; ns += r.newSites || 0; });
-        markDirty(); renderAll(); toast(`${np} projects, ${ns} sites and ${created} employees added · ${cells} cells written`, 5000);
       }
     }]);
 }

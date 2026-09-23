@@ -73,16 +73,14 @@ function renderTimesheets() {
   const all = projs.map(p => ({ p, ts: buildTimesheet(p.id, TV.ym) }));
   if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
   const chosen = all.filter(x => TV.picked.has(x.p.id));
-  v.innerHTML = `<div class="card">
+  v.innerHTML = pageHead('Client timesheets', 'Made automatically from Attendance – one sheet per project for the calendar month. Tick projects, then print or export.') + `<div class="card">
     <div class="row">
-      <h2 style="margin:0">Client timesheets</h2>
-      <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
+            <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
       <span class="grow"></span>
       <button class="btn" id="tv-xls">Export Excel (1 tab per project)</button>
       <button class="btn pri" id="tv-print">Print / Save as PDF</button>
     </div>
-    <p class="hint">Calendar month ${fmtDMY(TV.ym + '-01')} – ${fmtDMY(`${TV.ym}-${pad(dim(TV.ym))}`)}. Built from the master attendance: each day goes to the site the person worked at that day; <b>R</b> days go to the RELIEVER section. Totals count billable codes (${S.codes.filter(c => c.billable).map(c => c.code).join(', ')}).</p>
     <div class="scroll" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th>Client</th><th class="num">Staff rows</th><th class="num">Billable days</th><th class="num">≈ Guards (days ÷ ${dim(TV.ym)})</th></tr></thead><tbody>
     ${all.map(({ p, ts }) => `<tr><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
       <td class="num">${ts.rows.length}</td><td class="num">${ts.total}</td><td class="num">${qtyFmt(ts.total / dim(TV.ym))}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No projects yet – set them up under Clients, projects &amp; sites.</td></tr>'}

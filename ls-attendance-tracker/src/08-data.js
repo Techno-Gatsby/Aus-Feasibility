@@ -5,27 +5,16 @@ function renderData() {
   const v = $('#v-data'); const st = S.settings;
   const nAtt = Object.values(S.att).reduce((a, x) => a + Object.keys(x).length, 0);
   v.innerHTML = `
-  <div class="card"><h2>Data file</h2>
-    ${fsSupported ? '' : '<div class="banner">This browser cannot write to a folder. Open this file in <b>Microsoft Edge</b> or <b>Google Chrome</b>; until then data is kept only inside this browser – use Download backup regularly.</div>'}
-    <p style="margin-top:0">Your data is saved as <b>${DATA_FILE}</b> in the folder you choose (pick <b>LS_Documents</b>, next to this HTML file) so OneDrive syncs and versions it. A dated copy is kept once a day in <b>${BACKUP_DIR}\\</b>.
-    Current folder: <b>${store.dir ? esc(store.dir.name) : 'none'}</b> ${store.dir ? (store.perm === 'granted' ? '<span class="tag ok">connected</span>' : '<span class="tag warn">needs reconnect</span>') : ''}</p>
+  ${pageHead('Settings', 'Your data, attendance codes, company details and signatories.')}
+  <div class="card"><h2>Your data</h2>
+    <div class="kpis">${[['Employees', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+    <p class="hint" style="margin:0 0 10px">Everything is saved automatically in this browser on this computer${S.savedAt ? ' (last saved ' + new Date(S.savedAt).toLocaleString() + ')' : ''}. Click <b>Backup</b> now and then and keep the file in LS_Documents – use it to restore or move to another PC.</p>
     <div class="row">
-      <button class="btn pri" id="dv-folder">${store.dir ? 'Change folder' : 'Choose data folder'}</button>
-      ${store.dir && store.perm !== 'granted' ? '<button class="btn" onclick="reconnectFolder().then(renderData)">Reconnect</button>' : ''}
-      <button class="btn" id="dv-dl">Download backup (.json)</button>
-      <label class="btn" style="display:inline-flex;align-items:center">Restore from backup…<input type="file" id="dv-rs" accept=".json,application/json" hidden></label>
+      <button class="btn pri" onclick="$('#hdr-import').click()">⬆ Import Excel</button>
+      <button class="btn" id="dv-dl">Download backup</button>
+      <label class="btn" style="display:inline-flex;align-items:center">Restore backup…<input type="file" id="dv-rs" accept=".json,application/json" hidden></label>
     </div>
-    <p class="hint">${S.employees.length} employees · ${S.projects.length} projects · ${S.sites.length} sites · ${nAtt.toLocaleString()} attendance days · ${S.invoices.length} invoices${S.savedAt ? ' · last saved ' + new Date(S.savedAt).toLocaleString() : ''}</p>
-  </div>
-
-  <div class="card"><h2>Import from Excel</h2>
-    <div class="grid2">
-      <div><b>Master payroll attendance</b><p class="hint">e.g. "LATINEM SECURITIES MASTER PAYROLL ATTENDANCE MONTH OF JULY-2026.xlsx". Adds/updates employees, their site (PROJECT column), shift, trade, D.O.J and every day's code.</p>
-        <label class="btn pri" style="display:inline-flex;align-items:center;margin-top:6px">Choose master file…<input type="file" id="dv-im" accept=".xlsx,.xlsm,.xls" hidden></label></div>
-      <div><b>Client timesheet workbook</b><p class="hint">e.g. "SCL TR TIME SHEET - JUNE 2026.xlsx" (one tab per project). Creates projects and their sites and loads that month's attendance.</p>
-        <label class="btn" style="display:inline-flex;align-items:center;margin-top:6px">Choose timesheet file…<input type="file" id="dv-ic" accept=".xlsx,.xlsm,.xls" hidden></label></div>
-    </div>
-    <p class="hint">Excel and PDF features load small libraries from cdn.jsdelivr.net, so they need an internet connection. Everything else works offline.</p>
+    <p class="hint">Import Excel accepts the master payroll attendance workbook and client timesheet workbooks – the type of each sheet is detected automatically.</p>
   </div>
 
   <div class="card"><h2>Attendance codes</h2>
@@ -59,11 +48,10 @@ function renderData() {
   </div>
 
   <div class="card"><h2 style="color:var(--bad)">Reset</h2>
-    <p class="hint" style="margin-top:0">Deletes everything in this browser and, if connected, overwrites ${DATA_FILE}. Daily backups in ${BACKUP_DIR}\\ are kept.</p>
+    <p class="hint" style="margin-top:0">Deletes everything saved in this browser. Download a backup first.</p>
     <button class="btn bad" id="dv-reset">Delete all data…</button></div>`;
 
-  $('#dv-folder').onclick = () => connectFolder().then(renderData).catch(e => e.name !== 'AbortError' && toast(e.message));
-  $('#dv-dl').onclick = () => downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `tracker-data-${todayISO()}.json`);
+  $('#dv-dl').onclick = downloadBackup;
   $('#dv-rs').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -72,8 +60,6 @@ function renderData() {
       S = migrate(st); reindex(); markDirty(); renderAll(); toast('Restored');
     } catch (err) { toast(err.message); }
   };
-  $('#dv-im').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importMasterFile(f).catch(err => toast(err.message, 5000)); };
-  $('#dv-ic').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importClientFile(f).catch(err => toast(err.message, 5000)); };
   v.querySelectorAll('[data-ci]').forEach(i => i.onchange = () => {
     const c = S.codes[+i.dataset.ci]; const k = i.dataset.ck;
     c[k] = i.type === 'checkbox' ? i.checked : i.value.trim();
@@ -116,18 +102,11 @@ async function init() {
   let st = null;
   try { const j = await IDB.get('state'); if (j) st = JSON.parse(j); } catch (e) { console.warn('IndexedDB unavailable', e); }
   S = migrate(st || defaultState()); reindex();
-  try {
-    const dir = await IDB.get('dir');
-    if (dir) {
-      store.dir = dir; store.perm = await permOf(dir, false);
-      if (store.perm === 'granted') {
-        try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text()); if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); } } catch { }
-      }
-    }
-  } catch (e) { console.warn(e); }
   $$('#tabs button').forEach(b => b.onclick = () => showView(b.dataset.view));
   $('#modal-bg').addEventListener('mousedown', e => { if (e.target.id === 'modal-bg') closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-bg').classList.contains('on')) closeModal(); });
+  $('#hdr-import').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importExcel(f).catch(err => toast(err.message, 5000)); };
+  $('#hdr-backup').onclick = downloadBackup;
   renderSaveState(); showView('attendance');
 }
 init();

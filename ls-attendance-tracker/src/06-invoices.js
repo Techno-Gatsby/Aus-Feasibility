@@ -104,7 +104,7 @@ function renderInvoices() {
   const dr = IV.draft ||= newInvoiceDraft();
   const projs = S.projects.filter(p => !dr.clientId || p.clientId === dr.clientId).sort((a, b) => a.name.localeCompare(b.name));
   const tt = invTotals(dr);
-  v.innerHTML = `<div class="row" style="align-items:flex-start;gap:14px">
+  v.innerHTML = pageHead('Invoice', 'Choose client, projects and months → enter SAP details → generate lines → print the pack.') + `<div class="row" style="align-items:flex-start;gap:14px">
   <div style="flex:1 1 640px;min-width:0">
     <div class="card">
       <div class="row"><h2 style="margin:0">${S.invoices.some(x => x.id === dr.id) ? 'Edit invoice' : 'New invoice'}</h2><span class="grow"></span><button class="btn sm" id="iv-new">Start new</button></div>

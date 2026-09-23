@@ -172,6 +172,7 @@ function setAssignment(emp, from, site, shift) {
 }
 
 /* ---------- small UI helpers ---------- */
+const pageHead = (t, d, act = '') => `<div class="ph-row"><div class="grow"><h2 class="ph">${t}</h2><p class="pd">${d}</p></div>${act}</div>`;
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
   const m = $('#modal');
@@ -224,80 +225,21 @@ const IDB = {
   async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
-const DATA_FILE = 'tracker-data.json';
-const BACKUP_DIR = 'tracker-backups';
-const store = { dir: null, perm: 'none', dirty: false, saving: false, lastFileSave: null, error: null, timer: null };
-const fsSupported = 'showDirectoryPicker' in window;
-
-async function permOf(handle, ask) {
-  const o = { mode: 'readwrite' };
-  if ((await handle.queryPermission(o)) === 'granted') return 'granted';
-  if (ask && (await handle.requestPermission(o)) === 'granted') return 'granted';
-  return 'prompt';
-}
-function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 700); }
+const store = { dirty: false, saving: false, last: null, error: null, timer: null };
+function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
   clearTimeout(store.timer);
-  if (store.saving) { store.timer = setTimeout(saveNow, 400); return; }
+  if (store.saving) { store.timer = setTimeout(saveNow, 300); return; }
   store.saving = true;
-  try {
-    S.savedAt = new Date().toISOString();
-    const json = JSON.stringify(S);
-    await IDB.set('state', json);
-    if (store.dir && store.perm === 'granted') {
-      const fh = await store.dir.getFileHandle(DATA_FILE, { create: true });
-      const w = await fh.createWritable(); await w.write(json); await w.close();
-      store.lastFileSave = new Date(); store.error = null;
-      await dailyBackup(json);
-    }
-    store.dirty = false;
-  } catch (e) { store.error = e.message; console.error(e); }
+  try { S.savedAt = new Date().toISOString(); await IDB.set('state', JSON.stringify(S)); store.dirty = false; store.last = new Date(); store.error = null; }
+  catch (e) { store.error = e.message; console.error(e); }
   store.saving = false; renderSaveState();
-}
-async function dailyBackup(json) {
-  const name = `tracker-data-${todayISO()}.json`;
-  const bd = await store.dir.getDirectoryHandle(BACKUP_DIR, { create: true });
-  try { await bd.getFileHandle(name); return; } catch { /* not there yet */ }
-  const fh = await bd.getFileHandle(name, { create: true }); const w = await fh.createWritable(); await w.write(json); await w.close();
-}
-async function connectFolder() {
-  if (!fsSupported) { toast('This browser cannot save to a folder. Use Microsoft Edge or Google Chrome.'); return; }
-  const dir = await window.showDirectoryPicker({ id: 'ls-tracker', mode: 'readwrite' });
-  store.dir = dir; store.perm = await permOf(dir, true);
-  await IDB.set('dir', dir);
-  let fileState = null;
-  try { const f = await (await dir.getFileHandle(DATA_FILE)).getFile(); fileState = JSON.parse(await f.text()); } catch { }
-  if (fileState) {
-    const useFile = !S.employees.length || await confirmBox(`Found ${DATA_FILE} in "${dir.name}" (saved ${fileState.savedAt ? new Date(fileState.savedAt).toLocaleString() : 'unknown'}).\n\nLoad the data from that file? Choose Cancel to overwrite the file with the data currently open in the browser.`, 'Load file');
-    if (useFile) { S = migrate(fileState); reindex(); renderAll(); toast('Loaded ' + DATA_FILE); renderSaveState(); return; }
-  }
-  await saveNow(); toast('Connected. Data now saves to ' + dir.name + '\\' + DATA_FILE);
-}
-async function reconnectFolder() {
-  if (!store.dir) return connectFolder();
-  store.perm = await permOf(store.dir, true);
-  if (store.perm === 'granted') {
-    try {
-      const f = await (await store.dir.getFileHandle(DATA_FILE)).getFile(); const fs = JSON.parse(await f.text());
-      if (fs.savedAt && (!S.savedAt || fs.savedAt > S.savedAt)) { S = migrate(fs); reindex(); renderAll(); toast('Loaded latest data from ' + DATA_FILE); }
-      else if (store.dirty || !fs.savedAt || fs.savedAt < S.savedAt) await saveNow();
-    } catch { await saveNow(); }
-  }
-  renderSaveState();
 }
 function renderSaveState() {
   const el = $('#savestate'); if (!el) return;
-  let pill, btn = '';
-  if (store.dir && store.perm === 'granted') {
-    pill = store.error ? `<span class="pill warn" title="${esc(store.error)}">Save failed – click Save</span>`
-      : store.dirty || store.saving ? `<span class="pill">Saving…</span>`
-      : `<span class="pill ok" title="${esc(store.dir.name)}\\${DATA_FILE}">Saved to ${esc(store.dir.name)}</span>`;
-    btn = `<button onclick="saveNow()">Save</button>`;
-  } else if (store.dir) {
-    pill = `<span class="pill warn">Folder not reconnected</span>`; btn = `<button onclick="reconnectFolder()">Reconnect</button>`;
-  } else {
-    pill = `<span class="pill warn">Browser only – not saved to a file</span>`; btn = `<button onclick="connectFolder()">Choose data folder</button>`;
-  }
-  el.innerHTML = pill + btn;
+  el.innerHTML = store.error ? `<span style="color:#F2B8B5">Not saved – ${esc(store.error)}</span>`
+    : store.dirty || store.saving ? 'Saving…'
+    : `<b>✓ Saved</b>${store.last ? ' ' + store.last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`;
 }
+function downloadBackup() { downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`); }
 window.addEventListener('beforeunload', e => { if (store.dirty) { saveNow(); e.preventDefault(); e.returnValue = ''; } });

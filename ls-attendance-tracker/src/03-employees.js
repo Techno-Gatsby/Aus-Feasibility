@@ -17,11 +17,9 @@ function renderEmployees() {
     if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q) && !norm(e.agency).includes(q)) return false;
     return true;
   });
-  v.innerHTML = `<div class="card">
+  v.innerHTML = pageHead('Employees', 'Add or edit workers, their joining / end dates and the site they work at.', '<button class="btn pri" id="ev-add">+ Add employee</button>') + `<div class="card">
     <div class="row">
-      <h2 style="margin:0">Employees</h2><span class="muted">${list.length} shown · ${S.employees.length} total</span>
-      <span class="grow"></span>
-      <button class="btn pri" id="ev-add">+ Add employee</button>
+      <span class="muted small">${list.length} shown · ${S.employees.length} total</span>
     </div>
     <div class="row" style="margin-top:10px">
       <input type="search" id="ev-q" placeholder="Search name / emp ID / agency" value="${esc(EV.q)}" style="width:240px">

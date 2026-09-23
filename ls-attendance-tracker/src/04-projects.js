@@ -18,7 +18,7 @@ function renderProjects() {
   const headcount = siteId => { const t = todayISO(); return S.employees.filter(e => employedOn(e, t) && assignOn(e, t)?.site === siteId).length; };
   const projRows = [...S.projects].filter(p => !q || norm(p.name).includes(q) || norm(p.code).includes(q) || sitesOfProject(p.id).some(s => norm(s.name).includes(q)))
     .sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
-  v.innerHTML = `
+  v.innerHTML = pageHead('Projects &amp; sites', 'Client → project → sites. Each project holds the SAP code, PO number and billing rate used on invoices.') + `
   <div class="card">
     <div class="row"><h2 style="margin:0">Clients</h2><span class="grow"></span><button class="btn pri" id="pv-addc">+ Add client</button></div>
     <table class="t" style="margin-top:8px"><thead><tr><th>Client (billing entity)</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
