@@ -27,9 +27,10 @@ function renderProjects() {
     </tbody></table>
   </div>
   ${unmapped.length ? `<div class="card"><h2>Unmapped sites <span class="tag warn">${unmapped.length}</span></h2>
-    <p class="hint" style="margin-top:0">These came from the master sheet's PROJECT column. Pick the project each belongs to so it appears on that client timesheet and invoice.</p>
-    <table class="t"><thead><tr><th>Site</th><th class="num">Staff now</th><th>Move to project</th><th></th></tr></thead><tbody>
-    ${unmapped.map(s => `<tr><td>${esc(s.name)}</td><td class="num">${headcount(s.id)}</td>
+    <p class="hint" style="margin-top:0">Sites from the master sheet that don't belong to a project yet. They won't appear on client timesheets or invoices until linked.</p>
+    <div class="row" style="margin:0 0 8px"><b class="small">Link ticked sites to</b><select id="pv-bulkp">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —')}</select><button class="btn sm pri" id="pv-bulk">Link</button></div>
+    <table class="t"><thead><tr><th><input type="checkbox" id="pv-all"></th><th>Site</th><th class="num">Staff now</th><th>Or link one by one</th><th></th></tr></thead><tbody>
+    ${unmapped.map(s => `<tr><td><input type="checkbox" data-um="${s.id}"></td><td>${esc(s.name)}</td><td class="num">${headcount(s.id)}</td>
       <td><select data-map="${s.id}">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —')}<option value="__new">+ New project with this name…</option></select></td>
       <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div>` : ''}
@@ -58,6 +59,14 @@ function renderProjects() {
     }).join('') || '<p class="muted">No projects yet.</p>'}
   </div>`;
   $('#pv-addc').onclick = () => editClient(null);
+  if ($('#pv-bulk')) {
+    $('#pv-all').onchange = e => v.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
+    $('#pv-bulk').onclick = () => {
+      const pid = $('#pv-bulkp').value, ids = [...v.querySelectorAll('[data-um]:checked')].map(c => c.dataset.um);
+      if (!pid || !ids.length) return toast('Tick sites and choose a project');
+      ids.forEach(id => IX.site.get(id).projectId = pid); markDirty(); renderAll(); toast(`Linked ${ids.length} site(s)`);
+    };
+  }
   $('#pv-addp').onclick = () => editProject(null);
   $('#pv-q').oninput = e => { PV.q = e.target.value; clearTimeout(PV._t); PV._t = setTimeout(() => { renderProjects(); const i = $('#pv-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   v.querySelectorAll('[data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));

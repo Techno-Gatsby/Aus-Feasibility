@@ -29,7 +29,7 @@ function renderEmployees() {
       <select id="ev-site">${opts(S.sites.filter(s => !EV.project || s.projectId === EV.project).map(s => [s.id, s.name]).sort((a, b) => a[1].localeCompare(b[1])), EV.site, 'All sites (current)')}</select>
     </div>
     <div class="row" style="margin-top:10px">
-      <span class="muted small" id="ev-nchk">${EV.checked.size} selected</span>
+      <span class="small" id="ev-nchk"></span>
       <button class="btn sm" id="ev-b-assign">Assign to site from date…</button>
       <button class="btn sm" id="ev-b-shift">Change shift from date…</button>
       <button class="btn sm" id="ev-b-end">Set end date…</button>
@@ -53,7 +53,8 @@ function renderEmployees() {
   for (const k of ['status', 'type', 'site']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
   $('#ev-project').onchange = e => { EV.project = e.target.value; EV.site = ''; renderEmployees(); };
   v.querySelectorAll('[data-edit]').forEach(b => b.onclick = ev => { ev.preventDefault(); editEmployee(b.dataset.edit); });
-  const upd = () => $('#ev-nchk').textContent = EV.checked.size + ' selected';
+  const upd = () => { const n = EV.checked.size; $('#ev-nchk').innerHTML = n ? `<b>${n} ticked:</b>` : '<span class="muted">Tick employees in the list to:</span>'; ['assign', 'shift', 'end', 'del'].forEach(k => $('#ev-b-' + k).disabled = !n); };
+  upd();
   v.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { c.checked ? EV.checked.add(c.dataset.chk) : EV.checked.delete(c.dataset.chk); upd(); });
   $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); };
   $('#ev-b-assign').onclick = () => bulkAssign('site');

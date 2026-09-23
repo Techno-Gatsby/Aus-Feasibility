@@ -31,6 +31,7 @@ function renderAttendance() {
     <div class="fs"><div class="lg">Mark selected days</div><div class="grp">
       <div class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? ` <kbd>${c.key.toUpperCase()}</kbd>` : ''}<small>${esc(c.label)}</small></button>`).join('')}
         <button data-code="" style="background:#fff">✕ <kbd>DEL</kbd><small>Clear</small></button></div>
+      <div id="av-selinfo" class="small muted">No days selected – click or drag in the grid.</div>
       <button class="btn sm" id="av-edit">Reliever / other site…</button>
       <label class="chk"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> Fill empty days only</label>
       <div class="row"><button class="btn sm grow" id="av-all">Select all</button><button class="btn sm grow" id="av-undo">Undo</button></div>
@@ -210,7 +211,9 @@ function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r
 function paintSel() {
   const wrap = $('#grid-wrap'); if (!wrap) return;
   wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
-  const s = AV.sel; if (!s) return;
+  const s = AV.sel, si = $('#av-selinfo');
+  if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} day(s) selected</b> · ${s.r1 - s.r0 + 1} worker(s)` : 'No days selected – click or drag in the grid.';
+  if (!s) return;
   const trs = wrap.querySelectorAll('tbody tr');
   for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
 }
@@ -248,6 +251,7 @@ function applyToSel(val, onlyEmpty = AV.onlyEmpty) {
     }
   }
   if (skippedLock) toast(`${skippedLock} cell(s) skipped – payroll month is locked`);
+  else if (changes.length > 1) toast(val ? `Marked ${changes.length} days as ${val.c}` : `Cleared ${changes.length} days`);
   if (!changes.length) return;
   AV.undo.push(changes); if (AV.undo.length > 60) AV.undo.shift();
   markDirty(); refreshRows(rowsTouched);

@@ -199,3 +199,9 @@ table.ts tr.gtr td{background:#f2f2f2}
   #print-root .sheet.port{page:port}
   table.ts th,.inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+.step{display:flex;align-items:center;gap:9px;font:680 14px var(--sans);color:var(--ink);margin:0 0 12px}
+.step span{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font:700 11px var(--mono)}
+.step small{font:500 12px var(--sans);color:var(--mute)}
+#iv-preview .sheet{margin:0 0 14px;border-radius:0 0 5px 5px}
+table.t tbody tr.on td{background:var(--info-bg)}

@@ -104,11 +104,10 @@ function renderInvoices() {
   const dr = IV.draft ||= newInvoiceDraft();
   const projs = S.projects.filter(p => !dr.clientId || p.clientId === dr.clientId).sort((a, b) => a.name.localeCompare(b.name));
   const tt = invTotals(dr);
-  v.innerHTML = pageHead('Invoice', 'Choose client, projects and months → enter SAP details → generate lines → print the pack.') + `<div class="row" style="align-items:flex-start;gap:14px">
+  v.innerHTML = pageHead(S.invoices.some(x => x.id === dr.id) ? 'Invoice ' + esc(dr.no || '') : 'New invoice', 'Four steps: choose what to bill → SAP details → check lines → save & print.', '<button class="btn" id="iv-new">+ Start a new invoice</button>') + `<div class="row" style="align-items:flex-start;gap:14px">
   <div style="flex:1 1 640px;min-width:0">
     <div class="card">
-      <div class="row"><h2 style="margin:0">${S.invoices.some(x => x.id === dr.id) ? 'Edit invoice' : 'New invoice'}</h2><span class="grow"></span><button class="btn sm" id="iv-new">Start new</button></div>
-      <h3>1 · Client, projects and period</h3>
+      <div class="step"><span>1</span>Client, projects &amp; months</div>
       <div class="grid2">
         <label class="f">Client<select id="iv-client">${opts(S.clients.map(c => [c.id, c.name]), dr.clientId, '— all clients —')}</select></label>
         <label class="f">From month<input type="month" id="iv-from" value="${dr.from}"></label>
@@ -117,7 +116,7 @@ function renderInvoices() {
       <div style="margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px">
         ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${p.billing?.rate ? ' · ' + money(p.billing.rate) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
       </div>
-      <h3>2 · SAP details</h3>
+      </div><div class="card"><div class="step"><span>2</span>SAP details <small>from the SAP invoice</small></div>
       <div class="grid2">
         <label class="f">Invoice No<input type="text" data-k="no" value="${esc(dr.no)}" placeholder="2026-0900000689"></label>
         <label class="f">Invoice date<input type="date" data-k="date" value="${esc(dr.date)}"></label>
@@ -129,7 +128,7 @@ function renderInvoices() {
       <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Paste from SAP…</summary>
         <textarea id="iv-paste" style="width:100%;margin-top:6px" placeholder="Paste lines like 'Invoice No: 2026-0900000689' or a header row + value row copied from an SAP list"></textarea>
         <button class="btn sm" id="iv-parse">Fill fields</button></details>
-      <h3>3 · Lines</h3>
+      </div><div class="card"><div class="step"><span>3</span>Invoice lines <small>calculated from attendance – edit if needed</small></div>
       <div class="row"><button class="btn pri" id="iv-gen">Generate lines from attendance</button><button class="btn sm" id="iv-addl">+ Blank line</button>
         <label class="chk small"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> include client timesheets after the invoice</label></div>
       <table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>Description</th><th class="num">Unit rate</th><th class="num">Amount excl VAT</th><th class="num">VAT %</th><th class="num">Incl VAT</th><th></th></tr></thead><tbody>
@@ -137,28 +136,28 @@ function renderInvoices() {
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="rate" value="${l.rate}" style="width:95px"></td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="amount" value="${l.amount}" style="width:110px"></td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="vat" value="${l.vat}" style="width:60px"></td>
-        <td class="num">${money((+l.amount || 0) * (1 + (+l.vat || 0) / 100))}</td><td><button class="btn sm bad" data-ldel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">No lines yet.</td></tr>'}
+        <td class="num">${money((+l.amount || 0) * (1 + (+l.vat || 0) / 100))}</td><td><button class="btn sm bad" data-ldel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted" style="padding:14px">Tick a project in step 1, then click <b>Generate lines from attendance</b>.</td></tr>'}
       <tr><td></td><td><b>Total</b></td><td></td><td class="num"><b>${money(tt.ex)}</b></td><td class="num">${money(tt.vat)}</td><td class="num"><b>${money(tt.inc)}</b></td><td></td></tr>
       </tbody></table>
       <label class="f" style="margin-top:10px">Notes on invoice (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>
-      <div class="row end" style="margin-top:12px">
-        <button class="btn" id="iv-prev">Preview</button>
+    </div><div class="card"><div class="step"><span>4</span>Save &amp; print</div>
+      <div class="row">
+        <b class="mono" style="font-size:16px">AED ${money(tt.inc)}</b><span class="muted small">${dr.lines.length} line(s)${dr.attachTs ? ' + timesheets' : ''}</span><span class="grow"></span>
         <button class="btn" id="iv-save">Save invoice</button>
         <button class="btn pri" id="iv-print">Print pack / Save as PDF</button>
       </div>
     </div>
-    <div id="iv-preview"></div>
+    <div id="iv-preview">${dr.lines.length ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0">Preview</div>` + invoiceHTML(dr) : ''}</div>
   </div>
   <div style="flex:0 1 440px;min-width:320px">
     <div class="card"><h2>Saved invoices</h2>
-      <table class="t"><thead><tr><th>No</th><th>Client</th><th>Period</th><th class="num">Amount</th><th></th></tr></thead><tbody>
-      ${[...S.invoices].reverse().map(x => `<tr><td>${esc(x.no || '(no number)')}<div class="small muted">${fmtDMY(x.date)}</div></td><td class="small">${esc(IX.client.get(x.clientId)?.name || x.entity || '')}</td>
-        <td class="small">${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</td><td class="num">${money(invTotals(x).inc)}</td>
-        <td><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">None yet</td></tr>'}
+      <table class="t"><tbody>
+      ${[...S.invoices].reverse().map(x => `<tr><td><b>${esc(x.no || '(no number)')}</b><div class="small muted">${esc(IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
+        <td class="num">${money(invTotals(x).inc)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>
     <div class="card"><h2>Merge PDFs into one pack</h2>
-      <p class="hint" style="margin-top:0">Add the invoice pack you saved as PDF, the Work Order Instruction from SAP and any signed/scanned timesheets. Put them in order and download one file – like "Tax Invoice_Elwood Infra-January to May 2026.pdf".</p>
-      <input type="file" id="iv-pdfs" accept="application/pdf" multiple>
+      <p class="hint" style="margin-top:0">Combine the printed pack, the SAP Work Order Instruction and signed scans into one PDF.</p>
+      <label class="btn wide" style="display:block;text-align:center">+ Add PDF files<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
       <table class="t" style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small">${i + 1}. ${esc(f.name)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
       <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
       <div class="row end" style="margin-top:8px"><button class="btn pri" id="iv-merge" ${IV.pdfs.length < 1 ? 'disabled' : ''}>Merge &amp; download</button></div>
@@ -197,7 +196,6 @@ function renderInvoices() {
   };
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
-  $('#iv-prev').onclick = () => { $('#iv-preview').innerHTML = invoiceHTML(dr); $('#iv-preview').scrollIntoView({ behavior: 'smooth' }); };
   $('#iv-save').onclick = () => { saveInvoice(dr); rer(); };
   $('#iv-print').onclick = () => {
     if (!dr.lines.length) return toast('Generate or add lines first');
