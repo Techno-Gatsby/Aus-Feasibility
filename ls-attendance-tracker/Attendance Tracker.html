@@ -1548,9 +1548,9 @@ async function mergePdfs(name) {
    Excel import (master payroll sheet, client timesheet workbook) and
    Excel export (master, client timesheets)
    ===================================================================== */
-const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
-const END_WORDS = ['TERMINATED', 'RESIGNED', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
-const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); return CODE_ALIAS[s] || s; };
+const CODE_ALIAS = { SICK: 'SL', O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
+const END_WORDS = ['TERMINATED', 'RESIGNED', 'RESIGN', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
+const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); if (/^SIRA ?\.?T\.?$/.test(s)) return 'SIRA.T'; return CODE_ALIAS[s] || s; };
 
 async function readWorkbook(file) {
   await loadScript(LIB.xlsx);
@@ -1574,9 +1574,17 @@ function findOrCreateSite(name, projectId, stats) {
   if (stats) stats.newSites = (stats.newSites || 0) + 1;
   return s.id;
 }
+/** Same project spelled differently across files: "SCL - TR - DIC LV 5" = "DIC TR LV-5", "SONAPURE-2" = "SONAPUR TR-2", "JABEL ALI TR-1" = "SCL - JEBEL ALI TR-1" */
+function projKey(name) {
+  let t = norm(name).replace(/\([^)]*\)/g, ' ').replace(/SUPERVISORS/g, 'SUPERVISOR').replace(/JABEL/g, 'JEBEL').replace(/QOUZ/g, 'QUOZ').replace(/KHWANEEJ/g, 'KHAWANEEJ')
+    .replace(/SONAPURE?/g, 'SONAPUR TR').replace(/TR'S/g, 'TR').replace(/\bII\b/g, '2').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')
+    .filter(x => x && !['NEW', 'UNDER', 'FURNITURE', 'INDUSTRY'].includes(x)).map(x => x.replace(/^0+(\d)/, '$1'));
+  if (t[0] === 'SCL' && t.length > 2 && t.includes('TR')) t = t.slice(1);
+  return [...new Set(t)].sort().join(' ');
+}
 function findOrCreateProject(name, stats) {
-  const n = norm(name);
-  let p = S.projects.find(x => norm(x.name) === n);
+  const n = norm(name), k = projKey(n);
+  let p = S.projects.find(x => norm(x.name) === n) || S.projects.find(x => projKey(x.name) === k);
   if (p) return p;
   p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
   S.projects.push(p); IX.proj.set(p.id, p); if (stats) stats.newProjects = (stats.newProjects || 0) + 1;
@@ -1607,10 +1615,10 @@ function parseMasterSheet(rows) {
   for (let c = 0; c < width; c++) {
     const L = hdr.map(r => norm(r[c]));
     if (L.includes('NAME')) col.name = c;
-    if (L.some(l => /EMP\.?\s*ID|EMP\.?\s*CODE|STAFF\s*ID/.test(l))) col.id ??= c;
+    if (L.some(l => /EMP\.?\s*ID|EMP\.?\s*CODE|STAFF\s*ID|^COMPANY$/.test(l))) col.id ??= c;
     if (L.some(l => l === 'D.O.J' || l === 'DOJ' || /JOINING/.test(l))) col.doj = c;
-    if (L.some(l => l === 'TRADE' || l === 'DESIGNATION')) col.trade = c;
-    if (L.some(l => l === 'PROJECT' || l === 'SITE' || l === 'SITE NAME')) col.site = c;
+    if (L.some(l => /^TRADE\b/.test(l) || l === 'DESIGNATION')) col.trade = c;
+    if (L.some(l => l === 'PROJECT' || l === 'SITE' || l === 'SITE NAME' || /^PROJECT \(SITE NAME\)$/.test(l))) col.site = c;
   }
   // day columns = longest run of consecutive dates in the header row (or the row above)
   const findDates = r => { const out = []; for (let c = 0; c < width; c++) { const iso = parseAnyDate(r[c]); if (iso && iso >= '2015' && iso <= '2040') out.push({ c, iso }); } return out; };
@@ -1658,9 +1666,10 @@ function applyMasterImport(parsed, overwrite) {
     const siteId = r.site ? findOrCreateSite(r.site, null, st) : null;
     if (siteId) {
       const a = assignOn(e, start);
-      if (!a || a.site !== siteId || (r.shift && a.shift !== r.shift)) {
+      const mapped = a && IX.site.get(a.site)?.projectId;   // allocation set from a client timesheet or by hand wins over the payroll label
+      if (!a || (!mapped && a.site !== siteId) || (r.shift && a.shift !== r.shift)) {
         const from = !e.assign.length && e.doj && e.doj < start ? e.doj : start;
-        setAssignment(e, from, siteId, r.shift || a?.shift || e.shift);
+        setAssignment(e, from, mapped ? a.site : siteId, r.shift || a?.shift || e.shift);
       }
     }
     for (let i = 0; i < parsed.dates.length; i++) {
@@ -1724,24 +1733,58 @@ function parseClientSheet(rows) {
   return { project: project || null, multi: col.project != null, ym, rows: out, projects: [...new Set(out.map(r => r.project))] };
 }
 
-/** Entity prefixes used in the CLIENT TIME SHEET PROJECT column -> billing client (Trackers.xlsx groups) */
-const CLIENT_PREFIX = [
-  [/^(SCL|INFRA)\b/, 'SOBHA CONSTRUCTIONS LLC', 'SCL'], [/^SCM\b/, 'SOBHA COMMUNITY MANAGEMENT LLC', 'SCM'],
-  [/^LFM\b/, 'LFM & LANDSCAPING', 'LFM'], [/^KAIZEN\b/, 'KAIZEN OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'KAIZEN'],
-  [/^PROVIS\b/, 'PROVIS OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'PROVIS'], [/^RAK\b/, 'SOBHA MODULAR (RAK)', 'RAK'],
-  [/^SOBHA REALTY\b/, 'SOBHA REALTY (ADMIN DEPARTMENT)', 'SR'], [/^ASTECO\b/, 'ASTECO', 'ASTECO']
+/** Billing client per project, following the groups in Trackers.xlsx → Tax Invoice Tracker (A SCL & Infra … H Factories) */
+const CLIENT_RULES = [
+  [/^KAIZEN\b/, 'KAIZEN OWNERS ASSOCIATION'],
+  [/^(ASTECO|PROVIS)\b/, 'PROVIS OWNERS ASSOCIATION'],
+  [/^SCM\b/, 'SOBHA COMMUNITY MANAGEMENT LLC'],
+  [/^LFM\b|NURSERY/, 'LFM & LANDSCAPING'],
+  [/^RAK\b/, 'SOBHA MODULAR - RAK'],
+  [/FURNITURE INDUSTRIES/, 'SOBHA FURNITURE INDUSTRIES - KIZAD'],
+  [/^(SOBHA REALTY|CRM|DEVELOPMENT|PNCA)\b/, 'SOBHA LLC'],
+  [/^RELIEVER$|CRUSHER/, ''],
+  [/./, 'SOBHA CONSTRUCTIONS LLC']
 ];
 function clientForProjectName(name) {
-  const hit = CLIENT_PREFIX.find(([re]) => re.test(norm(name))); if (!hit) return '';
+  const hit = CLIENT_RULES.find(([re]) => re.test(norm(name))); if (!hit || !hit[1]) return '';
   let c = S.clients.find(x => norm(x.name) === hit[1]);
-  if (!c) { c = { id: uid('c'), name: hit[1], short: hit[2], customerCode: '', trn: '', address: '' }; S.clients.push(c); IX.client.set(c.id, c); }
+  if (!c) { c = { id: uid('c'), name: hit[1], customerCode: '', trn: '', address: '' }; S.clients.push(c); IX.client.set(c.id, c); }
   return c.id;
 }
+/** "Replace": a client timesheet is authoritative for the month for every worker on it – days on none of their rows are cleared */
+function clearUntouched(tm, overwrite) {
+  if (!overwrite) return;
+  for (const [ym, touched] of tm) for (const [id, days] of touched) for (const d of monthDates(ym)) if (!days.has(d) && S.att[id]?.[d]) delete S.att[id][d];
+}
+/** Link payroll site labels (e.g. "THE CREST") to the client-timesheet project most of their workers are allocated to (e.g. "SCM THE CREST") */
+function autoMapSites() {
+  let n = 0;
+  for (const site of S.sites.filter(x => !x.projectId)) {
+    const votes = {}; let total = 0;
+    for (const e of S.employees) {
+      const i = (e.assign || []).findIndex(a => a.site === site.id); if (i < 0) continue;
+      const later = e.assign.slice(i + 1).find(a => IX.site.get(a.site)?.projectId); if (!later) continue;
+      const pid = IX.site.get(later.site).projectId; votes[pid] = (votes[pid] || 0) + 1; total++;
+    }
+    const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+    if (best && best[1] / total >= 0.6) { site.projectId = best[0]; n++; }
+  }
+  reindex(); return n;
+}
+/** Remove unmapped sites nobody uses any more (payroll labels replaced by client-timesheet sites) */
+function pruneSites() {
+  const used = new Set();
+  for (const e of S.employees) for (const a of e.assign || []) used.add(a.site);
+  for (const k in S.att) for (const d in S.att[k]) { const v = S.att[k][d]; if (typeof v === 'object' && v.s) used.add(v.s); }
+  const before = S.sites.length; S.sites = S.sites.filter(x => x.projectId || used.has(x.id)); reindex(); return before - S.sites.length;
+}
 
-function applyClientImport(parsed, overwrite, ymOverride) {
-  const st = { created: 0, cells: 0 };
-  const ym = parsed.ym || ymOverride; if (!ym) throw new Error('Month missing for ' + (parsed.project || 'client timesheet'));
-  const lastReal = {};
+function applyClientImport(parsed, overwrite, ymOverride, shared) {
+  const st = { created: 0, cells: 0, conflicts: 0 };
+  const ym = parsed.ym || ymOverride;
+  st.ym = ym; if (!ym) throw new Error('Month missing for ' + (parsed.project || 'client timesheet'));
+  const lastReal = {}, seen = shared?.seen || new Set();
+  const tm = shared?.touched || new Map(); if (!tm.has(ym)) tm.set(ym, new Map()); const touched = tm.get(ym);
   for (const r of parsed.rows) {
     if (!r.project) continue;
     const proj = findOrCreateProject(r.project, st);
@@ -1757,18 +1800,28 @@ function applyClientImport(parsed, overwrite, ymOverride) {
       e = { id: uid('e'), empCode, name: r.name, agency, trade, shift: shift || 'DAY', doj: null, end: null, endReason: '', assign: [] };
       S.employees.push(e); IX.emp.set(e.id, e); st.created++;
     }
-    if (!e.assign.length && !rel) setAssignment(e, ym + '-01', siteId, shift || e.shift);
-    for (const [day, raw] of Object.entries(r.cells)) {
+    if (!rel && assignOn(e, ym + '-01')?.site !== siteId && !seen.has(e.id)) setAssignment(e, ym + '-01', siteId, shift || e.shift);
+    if (!rel) seen.add(e.id);
+    for (const [day, raw] of Object.entries(r.cells).sort((a, b) => +a[0] - +b[0])) {
       if (/^\d+(\.\d+)?$/.test(raw) || raw.startsWith('#') || +day > dim(ym)) continue;
-      const code = rel && raw === 'P' ? 'R' : raw;
       const d = `${ym}-${pad(day)}`;
-      if (!overwrite && S.att[e.id]?.[d]) continue;
+      if (END_WORDS.includes(raw)) { const last = addDays(d, -1); if (!e.end || e.end > last) { e.end = last; e.endReason = raw; st.ended = (st.ended || 0) + 1; } break; }
+      const code = rel && raw === 'P' ? 'R' : raw;
+      if (touched.get(e.id)?.has(d) && codeDef(getCell(e.id, d)?.c).billable && codeDef(code).billable) {
+        (st.double ||= []).push(`${e.name} ${fmtDMY(d)}: ${IX.site.get(siteOn(e, d))?.name || '?'} / ${r.site || r.project}`);
+      }
+      const prev = getCell(e.id, d);
+      if (!overwrite && prev) continue;
+      if (prev && prev.c !== code && !touched.get(e.id)?.has(d)) st.conflicts++;
       ensureCode(code, st);
       const a = assignOn(e, d);
       putCell(e.id, d, { c: code, s: siteId !== a?.site ? siteId : undefined, sh: shift && shift !== (a?.shift || e.shift) ? shift : undefined });
+      (touched.get(e.id) || touched.set(e.id, new Set()).get(e.id)).add(d);
       st.cells++;
     }
+    if (!touched.has(e.id)) touched.set(e.id, new Set());
   }
+  if (!shared) clearUntouched(tm, overwrite);
   reindex();
   return st;
 }
@@ -1791,22 +1844,27 @@ async function importExcel(file) {
     <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
     <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
     ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
-      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}${f.type === 'client' && !f.p.ym ? ` <input type="month" data-ym="${k}" value="${defYm}" title="Which month is this sheet?">` : ''}</td></tr>`).join('')}
+      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}${f.type === 'client' ? `<div class="row" style="margin-top:4px"><span class="muted">Month:</span><input type="month" data-ym="${k}" value="${f.p.multi && master ? defYm : (f.p.ym || defYm)}">${f.p.ym && f.p.multi && master && f.p.ym !== defYm ? `<span class="tag warn">sheet says ${fmtMonYY(f.p.ym)} – check</span>` : ''}</div>` : ''}</td></tr>`).join('')}
     </tbody></table>
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
     [{ label: 'Cancel' }, {
       label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0 }; const codes = new Set(); let lastMaster = null;
+        const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null;
         m.querySelectorAll('[data-sh]:checked').forEach(c => {
           const f = found[+c.dataset.sh];
-          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow, m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value);
-          for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x));
-          if (f.type === 'master') lastMaster = f.p;
+          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport({ ...f.p, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value || f.p.ym }, ow, null, shared);
+          for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x)); if (r.double) dbl.push(...r.double);
+          if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
         });
+        clearUntouched(shared.touched, ow);
+        const pruned = pruneSites(), autoMapped = autoMapSites();
         if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
         markDirty(); renderAll();
         const unm = S.sites.filter(x => !x.projectId).length;
         openModal('Import complete', `<div class="kpis">${[['Workers added', t.created], ['Days written', t.cells], ['End dates set', t.ended], ['New sites', t.newSites], ['New projects', t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+          ${dbl.length ? `<div class="alert"><div><b>${dbl.length} person-day(s) are billed on two rows for the same day</b> in the client timesheet – the tracker keeps the later row. Check these in the source sheet:<div class="small" style="max-height:120px;overflow:auto;margin-top:4px">${dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
+          ${t.conflicts ? `<div class="alert info">${t.conflicts} day(s) differed between the payroll sheet and the client timesheet – the client timesheet was used for client billing.</div>` : ''}
+          ${autoMapped ? `<p>${autoMapped} payroll site label(s) were linked automatically to the client-timesheet project most of their workers belong to.</p>` : ''}
           ${codes.size ? `<p>New codes added as <b>not billable</b>: ${[...codes].map(esc).join(', ')} (change in Settings).</p>` : ''}
           ${unm ? `<div class="alert">${unm} site(s) are not linked to a project yet. Link them so they appear on client timesheets and invoices.</div>` : ''}`,
           unm ? [{ label: 'Later' }, { label: 'Link sites now', cls: 'pri', onClick: () => showView('projects') }] : [{ label: 'OK', cls: 'pri' }]);
