@@ -310,9 +310,28 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/** Everything that would make a timesheet or invoice wrong, in one list */
+function dataChecks() {
+  const out = [], add = (title, items, fix, view, short, act) => { if (items.length) out.push({ title, items, fix, view, short, act }); };
+  const ym = AV.mode === 'calendar' ? AV.ym : AV.ym, used = new Map();
+  for (const rows of monthRows(ym).values()) for (const r of rows.values()) if (r.total) used.set(r.emp.trade || 'SECURITY GUARD', (used.get(r.emp.trade || 'SECURITY GUARD') || 0) + 1);
+  add('Sites not linked to a project – their days are on no client timesheet', S.sites.filter(x => !x.projectId).map(x => x.name), 'Link in Projects & sites', 'projects', 'unlinked sites');
+  add('Projects without a client', S.projects.filter(p => !p.clientId).map(p => p.name), 'Set client in Projects & sites', 'projects', 'projects without client');
+  const noRate = [...used.keys()].filter(t => !S.settings.rateCard.find(r => r.trade === t)?.rate && !S.projects.some(p => p.billing?.rates?.[t]));
+  add(`Trades working in ${fmtMonYY(ym)} with no rate – invoice lines would be 0`, noRate.map(t => `${t} (${used.get(t)} worker-rows)`), 'Add to rate card & enter rates', 'data', 'trades without rate', () => { noRate.forEach(t => { if (!S.settings.rateCard.some(r => r.trade === t)) S.settings.rateCard.push({ trade: t, unit: unitFor(t), rate: 0, src: 'enter rate' }); }); markDirty(); });
+  add('Double entries in the last client-timesheet import (same person, same day, two rows)', S.issues?.double || [], 'Correct the source sheet, then re-import', null, 'double entries');
+  const today = todayISO();
+  add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
+  return out;
+}
 function setupSteps() {
   if (!S.employees.length) return '';
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !rateFor(p, 'SECURITY GUARD') && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
-  const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
-  return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
+  const ch = dataChecks(); if (!ch.length) return '<div class="alert info"><b>✓ All checks passed</b> – every site is linked, every project has a client and every working trade has a rate.</div>';
+  return `<div class="alert"><b>${ch.reduce((a, c) => a + c.items.length, 0)} item(s) to check:</b> ${ch.map(c => `${c.items.length} ${c.short}`).join(' · ')}<span class="grow"></span><button class="btn sm" onclick="openChecks()">Review →</button></div>`;
+}
+function openChecks() {
+  const ch = dataChecks();
+  openModal('Data checks', ch.map((c, i) => `<div class="card" style="margin-bottom:10px"><div class="row"><b class="grow">${esc(c.title)} <span class="tag warn">${c.items.length}</span></b>${c.view ? `<button class="btn sm pri" data-go="${c.view}" data-ci="${i}">${esc(c.fix)} →</button>` : `<span class="small muted">${esc(c.fix)}</span>`}</div>
+    <div class="small" style="max-height:140px;overflow:auto;margin-top:6px;columns:2">${c.items.slice(0, 300).map(esc).join('<br>')}${c.items.length > 300 ? '<br>…' : ''}</div></div>`).join('') || '<p>Nothing to fix.</p>', [{ label: 'Close', cls: 'pri' }], { width: 'min(900px,100%)' });
+  $$('#modal [data-go]').forEach(b => b.onclick = () => { ch[+b.dataset.ci].act?.(); closeModal(); showView(b.dataset.go); });
 }

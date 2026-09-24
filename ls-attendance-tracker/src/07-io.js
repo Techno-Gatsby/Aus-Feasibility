@@ -4,6 +4,8 @@
    ===================================================================== */
 const CODE_ALIAS = { SICK: 'SL', O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
 const END_WORDS = ['TERMINATED', 'RESIGNED', 'RESIGN', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
+/** Trade spellings seen in the sheets → one name */
+const normTrade = v => { const t = norm(v).replace(/\s*\.\s*$/, ''); return /^CCTV\b/.test(t) ? 'CCTV OPERATOR' : /^TEAM ?LEADERS?$/.test(t) ? 'TEAM LEADER' : /^(SECURITY )?GUARDS?$/.test(t) ? 'SECURITY GUARD' : t; };
 const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); if (/^SIRA ?\.?T\.?$/.test(s)) return 'SIRA.T'; return CODE_ALIAS[s] || s; };
 
 async function readWorkbook(file) {
@@ -97,7 +99,7 @@ function parseMasterSheet(rows) {
     const hasCodes = cells.some(v => v != null && String(v).trim() !== '');
     const shift = col.shift != null ? norm(row[col.shift]) : '';
     if (!id && !hasCodes && !['DAY', 'NIGHT'].includes(shift)) continue;
-    out.push({ name: N, id: id == null ? '' : String(id), shift: ['DAY', 'NIGHT'].includes(shift) ? shift : '', doj: col.doj != null ? parseAnyDate(row[col.doj]) : null, trade: col.trade != null ? norm(row[col.trade]) : '', site: col.site != null ? norm(row[col.site]) : '', cells });
+    out.push({ name: N, id: id == null ? '' : String(id), shift: ['DAY', 'NIGHT'].includes(shift) ? shift : '', doj: col.doj != null ? parseAnyDate(row[col.doj]) : null, trade: col.trade != null ? normTrade(row[col.trade]) : '', site: col.site != null ? norm(row[col.site]) : '', cells });
   }
   return { dates: best.map(x => x.iso), rows: out };
 }
@@ -311,6 +313,7 @@ async function importExcel(file) {
           if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
         });
         clearUntouched(shared.touched, ow);
+        if (m.querySelector('[data-sh]:checked') && found.some((f, k) => f.type === 'client' && m.querySelector(`[data-sh="${k}"]`)?.checked)) S.issues = { at: new Date().toISOString(), double: dbl.slice(0, 2000) };
         const pruned = pruneSites(), autoMapped = autoMapSites();
         if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
         markDirty(); renderAll();

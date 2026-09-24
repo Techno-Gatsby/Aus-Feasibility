@@ -8,7 +8,8 @@ const BASES = [
   ['monthly_30', 'Monthly rate per guard, pro-rata on 30 days'],
   ['daily', 'Rate per man-day'],
   ['hourly', 'Rate per hour (man-days × shift hours)'],
-  ['fixed', 'Fixed posts × monthly rate (ignores attendance)']
+  ['fixed', 'Fixed posts × monthly rate (ignores attendance)'],
+  ['lump', 'Fixed monthly amount (e.g. Sobha Waves 32,795) – enter it as the unit rate']
 ];
 const PV = { q: '' };
 
@@ -112,6 +113,7 @@ function editProject(id, presetName, onCreated) {
     <label class="f">Entity text on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
     <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
     <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    ${id ? `<label class="f">Merge into another project (moves all sites)<select id="ep-merge">${opts(S.projects.filter(x => x.id !== id).map(x => [x.id, x.name]).sort((a, b) => a[1].localeCompare(b[1])), '', "— don't merge —")}</select></label>` : ''}
     </div>
     <h3>Billing</h3>
     <div class="grid2">
@@ -135,6 +137,12 @@ function editProject(id, presetName, onCreated) {
         p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
         p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
         p.poNo = $('#ep-po', m).value.trim(); p.active = $('#ep-active', m).value === '1';
+        const into = $('#ep-merge', m)?.value;
+        if (into) {
+          sitesOfProject(id).forEach(x => x.projectId = into);
+          for (const inv of S.invoices) inv.projectIds = [...new Set(inv.projectIds.map(x => x === id ? into : x))];
+          S.projects = S.projects.filter(x => x.id !== id); reindex(); markDirty(); renderAll(); toast('Merged into ' + IX.proj.get(into).name); return;
+        }
         const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);

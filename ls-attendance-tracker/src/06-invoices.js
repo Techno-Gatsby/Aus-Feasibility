@@ -17,7 +17,7 @@ function invoiceLines(dr) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
       const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
-      if (!md && b.basis !== 'fixed') continue;           // nothing worked on this project that month
+      if (!md && !['fixed', 'lump'].includes(b.basis)) continue;           // nothing worked on this project that month
       if (!b.basis || b.basis === 'ratecard') {
         // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
         const perEmp = new Map();
@@ -35,6 +35,7 @@ function invoiceLines(dr) {
         case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
         case 'daily': amt = md * rate; desc = `${fmtMonYY(m)}  ${md} man-days (${unit})`; break;
         case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${fmtMonYY(m)}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
+        case 'lump': amt = rate; desc = `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}`; break;
         case 'fixed': { const q = +b.posts || 0; amt = q * rate; desc = `${fmtMonYY(m)}  ${q} ${unit} @ ${D} Days`; break; }
         default: { const q = md / D; amt = md * rate / D; desc = `${fmtMonYY(m)}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
       }
@@ -159,13 +160,18 @@ function renderInvoices() {
         <button class="btn pri" id="iv-print">Print pack / Save as PDF</button>
       </div>
     </div>
+    ${S.invoices.some(x => x.id === dr.id) ? `<div class="card"><div class="step"><span>5</span>Track <small>same stages as the Tax Invoice Tracker</small><span class="grow"></span>${statusTag(dr)}</div>
+      <div class="grid2">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
+      <p class="hint">Changes here save straight away.</p></div>` : ''}
     <div id="iv-preview">${dr.lines.length ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0">Preview</div>` + invoiceHTML(dr) : ''}</div>
   </div>
   <div style="flex:0 1 440px;min-width:320px">
     <div class="card"><h2>Saved invoices</h2>
+      ${(() => { const r = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
+        return S.invoices.length ? `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="k">Invoiced</div><div class="v" style="font-size:15px">${money(r.i)}</div></div><div class="kpi" style="--c:var(--pos)"><div class="k">Paid</div><div class="v" style="font-size:15px">${money(r.p)}</div></div><div class="kpi" style="--c:var(--neg)"><div class="k">Outstanding</div><div class="v" style="font-size:15px">${money(r.i - r.p)}</div></div></div>` : ''; })()}
       <table class="t"><tbody>
       ${[...S.invoices].reverse().map(x => `<tr><td><b>${esc(x.no || '(no number)')}</b><div class="small muted">${esc(IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
-        <td class="num">${money(invTotals(x).inc)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
+        <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>
     <div class="card"><h2>Merge PDFs into one pack</h2>
       <p class="hint" style="margin-top:0">Combine the printed pack, the SAP Work Order Instruction and signed scans into one PDF.</p>
@@ -209,6 +215,7 @@ function renderInvoices() {
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
   $('#iv-save').onclick = () => { saveInvoice(dr); rer(); };
+  v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
   $('#iv-print').onclick = () => {
     if (!dr.lines.length) return toast('Generate or add lines first');
     let html = invoiceHTML(dr);
@@ -231,6 +238,12 @@ function defaultPackName(dr) {
     : dr.from.slice(0, 4) === dr.to.slice(0, 4) ? `${mn(dr.from)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`
     : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
   return `Tax Invoice_${who}-${per}.pdf`;
+}
+const TRACK = [['tsSent', 'Timesheet sent to client', 'date'], ['tsApproved', 'Timesheet approved', 'date'], ['invSent', 'Invoice submitted', 'date'], ['invProcessed', 'Invoice processed', 'date'], ['spcNo', 'SPC No', 'text'], ['paidOn', 'Payment received', 'date'], ['paidAmt', 'Amount received (blank = full)', 'number']];
+function statusTag(x) {
+  const t = x.track || {};
+  const [l, c] = t.paidOn ? (t.paidAmt && +t.paidAmt < invTotals(x).inc - 0.01 ? ['Part paid', 'warn'] : ['Paid', 'ok']) : t.invProcessed ? ['Processed', ''] : t.invSent ? ['Invoice sent', ''] : t.tsApproved ? ['TS approved', ''] : t.tsSent ? ['TS sent', ''] : ['Draft', 'warn'];
+  return `<span class="tag ${c}">${l}</span>`;
 }
 function saveInvoice(dr) {
   const i = S.invoices.findIndex(x => x.id === dr.id);

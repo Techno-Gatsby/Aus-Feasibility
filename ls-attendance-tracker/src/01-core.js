@@ -139,7 +139,9 @@ function defaultState() {
   };
 }
 
+let DATA_VER = 0;            // bumped on every change; invalidates derived caches
 function reindex() {
+  DATA_VER++;
   IX.site = new Map(S.sites.map(x => [x.id, x]));
   IX.proj = new Map(S.projects.map(x => [x.id, x]));
   IX.client = new Map(S.clients.map(x => [x.id, x]));
@@ -150,8 +152,9 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.att = st.att || {}; st.locks = st.locks || {};
+  st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {};
   st.settings.rateCard ||= d.settings.rateCard;
+  for (const e of st.employees) if (e.trade && /^CCTV\b/.test(e.trade)) e.trade = 'CCTV OPERATOR';
   for (const c of d.codes) if (!st.codes.some(x => x.code === c.code)) st.codes.push({ ...c, key: st.codes.some(x => x.key === c.key) ? '' : c.key });
   for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
   st.version = 1;
@@ -245,7 +248,7 @@ const IDB = {
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };
-function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
+function markDirty() { DATA_VER++; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
   clearTimeout(store.timer);
   if (store.saving) { store.timer = setTimeout(saveNow, 300); return; }

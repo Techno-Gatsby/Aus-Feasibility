@@ -387,7 +387,9 @@ function defaultState() {
   };
 }
 
+let DATA_VER = 0;            // bumped on every change; invalidates derived caches
 function reindex() {
+  DATA_VER++;
   IX.site = new Map(S.sites.map(x => [x.id, x]));
   IX.proj = new Map(S.projects.map(x => [x.id, x]));
   IX.client = new Map(S.clients.map(x => [x.id, x]));
@@ -398,8 +400,9 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.att = st.att || {}; st.locks = st.locks || {};
+  st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {};
   st.settings.rateCard ||= d.settings.rateCard;
+  for (const e of st.employees) if (e.trade && /^CCTV\b/.test(e.trade)) e.trade = 'CCTV OPERATOR';
   for (const c of d.codes) if (!st.codes.some(x => x.code === c.code)) st.codes.push({ ...c, key: st.codes.some(x => x.key === c.key) ? '' : c.key });
   for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
   st.version = 1;
@@ -493,7 +496,7 @@ const IDB = {
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };
-function markDirty() { store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
+function markDirty() { DATA_VER++; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
   clearTimeout(store.timer);
   if (store.saving) { store.timer = setTimeout(saveNow, 300); return; }
@@ -823,11 +826,30 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/** Everything that would make a timesheet or invoice wrong, in one list */
+function dataChecks() {
+  const out = [], add = (title, items, fix, view, short, act) => { if (items.length) out.push({ title, items, fix, view, short, act }); };
+  const ym = AV.mode === 'calendar' ? AV.ym : AV.ym, used = new Map();
+  for (const rows of monthRows(ym).values()) for (const r of rows.values()) if (r.total) used.set(r.emp.trade || 'SECURITY GUARD', (used.get(r.emp.trade || 'SECURITY GUARD') || 0) + 1);
+  add('Sites not linked to a project – their days are on no client timesheet', S.sites.filter(x => !x.projectId).map(x => x.name), 'Link in Projects & sites', 'projects', 'unlinked sites');
+  add('Projects without a client', S.projects.filter(p => !p.clientId).map(p => p.name), 'Set client in Projects & sites', 'projects', 'projects without client');
+  const noRate = [...used.keys()].filter(t => !S.settings.rateCard.find(r => r.trade === t)?.rate && !S.projects.some(p => p.billing?.rates?.[t]));
+  add(`Trades working in ${fmtMonYY(ym)} with no rate – invoice lines would be 0`, noRate.map(t => `${t} (${used.get(t)} worker-rows)`), 'Add to rate card & enter rates', 'data', 'trades without rate', () => { noRate.forEach(t => { if (!S.settings.rateCard.some(r => r.trade === t)) S.settings.rateCard.push({ trade: t, unit: unitFor(t), rate: 0, src: 'enter rate' }); }); markDirty(); });
+  add('Double entries in the last client-timesheet import (same person, same day, two rows)', S.issues?.double || [], 'Correct the source sheet, then re-import', null, 'double entries');
+  const today = todayISO();
+  add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
+  return out;
+}
 function setupSteps() {
   if (!S.employees.length) return '';
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !rateFor(p, 'SECURITY GUARD') && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
-  const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
-  return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
+  const ch = dataChecks(); if (!ch.length) return '<div class="alert info"><b>✓ All checks passed</b> – every site is linked, every project has a client and every working trade has a rate.</div>';
+  return `<div class="alert"><b>${ch.reduce((a, c) => a + c.items.length, 0)} item(s) to check:</b> ${ch.map(c => `${c.items.length} ${c.short}`).join(' · ')}<span class="grow"></span><button class="btn sm" onclick="openChecks()">Review →</button></div>`;
+}
+function openChecks() {
+  const ch = dataChecks();
+  openModal('Data checks', ch.map((c, i) => `<div class="card" style="margin-bottom:10px"><div class="row"><b class="grow">${esc(c.title)} <span class="tag warn">${c.items.length}</span></b>${c.view ? `<button class="btn sm pri" data-go="${c.view}" data-ci="${i}">${esc(c.fix)} →</button>` : `<span class="small muted">${esc(c.fix)}</span>`}</div>
+    <div class="small" style="max-height:140px;overflow:auto;margin-top:6px;columns:2">${c.items.slice(0, 300).map(esc).join('<br>')}${c.items.length > 300 ? '<br>…' : ''}</div></div>`).join('') || '<p>Nothing to fix.</p>', [{ label: 'Close', cls: 'pri' }], { width: 'min(900px,100%)' });
+  $$('#modal [data-go]').forEach(b => b.onclick = () => { ch[+b.dataset.ci].act?.(); closeModal(); showView(b.dataset.go); });
 }
 
 /* =====================================================================
@@ -1012,7 +1034,8 @@ const BASES = [
   ['monthly_30', 'Monthly rate per guard, pro-rata on 30 days'],
   ['daily', 'Rate per man-day'],
   ['hourly', 'Rate per hour (man-days × shift hours)'],
-  ['fixed', 'Fixed posts × monthly rate (ignores attendance)']
+  ['fixed', 'Fixed posts × monthly rate (ignores attendance)'],
+  ['lump', 'Fixed monthly amount (e.g. Sobha Waves 32,795) – enter it as the unit rate']
 ];
 const PV = { q: '' };
 
@@ -1116,6 +1139,7 @@ function editProject(id, presetName, onCreated) {
     <label class="f">Entity text on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
     <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
     <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    ${id ? `<label class="f">Merge into another project (moves all sites)<select id="ep-merge">${opts(S.projects.filter(x => x.id !== id).map(x => [x.id, x.name]).sort((a, b) => a[1].localeCompare(b[1])), '', "— don't merge —")}</select></label>` : ''}
     </div>
     <h3>Billing</h3>
     <div class="grid2">
@@ -1139,6 +1163,12 @@ function editProject(id, presetName, onCreated) {
         p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
         p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
         p.poNo = $('#ep-po', m).value.trim(); p.active = $('#ep-active', m).value === '1';
+        const into = $('#ep-merge', m)?.value;
+        if (into) {
+          sitesOfProject(id).forEach(x => x.projectId = into);
+          for (const inv of S.invoices) inv.projectIds = [...new Set(inv.projectIds.map(x => x === id ? into : x))];
+          S.projects = S.projects.filter(x => x.id !== id); reindex(); markDirty(); renderAll(); toast('Merged into ' + IX.proj.get(into).name); return;
+        }
         const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
@@ -1189,30 +1219,36 @@ function mergeSite(from, to) {
    Client timesheets (calendar month, one sheet per project, LS/DO/F-026)
    ===================================================================== */
 const TS_LEGEND = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
-const TV = { ym: null, client: '', picked: new Set(), all: true };
+const TV = { ym: null, client: '', picked: new Set(), all: true, preview: null };
 
-/** Build the project-wise breakup for one calendar month from the daily ledger. */
-function buildTimesheet(projectId, ym) {
-  const days = monthDates(ym);
-  const siteOrder = sitesOfProject(projectId).map(s => s.id);
-  const siteSet = new Set(siteOrder);
-  const rows = new Map();
+/** One pass over the ledger per month: projectId -> Map(rowKey -> row). Cached until data changes. */
+const MONTH_CACHE = new Map();
+function monthRows(ym) {
+  const ck = ym + '|' + DATA_VER; if (MONTH_CACHE.has(ck)) return MONTH_CACHE.get(ck);
+  if (MONTH_CACHE.size > 12) MONTH_CACHE.clear();
+  const days = monthDates(ym), byProj = new Map();
   S.employees.forEach((emp, ei) => {
+    const att = S.att[emp.id]; if (!att) return;
     for (const d of days) {
-      if (!employedOn(emp, d)) continue;
-      const c = getCell(emp.id, d); if (!c) continue;
+      const v = att[d]; if (!v || !employedOn(emp, d)) continue;
+      const c = typeof v === 'string' ? { c: v } : v;
       const cd = codeDef(c.c); if (!cd.billable && !cd.client) continue;
-      const site = siteOn(emp, d); if (!siteSet.has(site)) continue;
-      const rel = c.c === 'R';
-      const shift = shiftOn(emp, d) || '';
-      const section = rel ? '__REL' : site;
-      const key = `${section}|${shift}|${emp.id}`;
+      const site = siteOn(emp, d); const pid = IX.site.get(site)?.projectId; if (!pid) continue;
+      const shift = shiftOn(emp, d) || '', section = c.c === 'R' ? '__REL' : site, key = `${section}|${shift}|${emp.id}`;
+      let rows = byProj.get(pid); if (!rows) byProj.set(pid, rows = new Map());
       let row = rows.get(key);
       if (!row) rows.set(key, row = { section, shift, emp, ei, cells: {}, total: 0, sites: new Set() });
       row.cells[+d.slice(8)] = c.c; row.sites.add(site);
       if (cd.billable) row.total++;
     }
   });
+  MONTH_CACHE.set(ck, byProj); return byProj;
+}
+/** Build the project-wise breakup for one calendar month from the daily ledger. */
+function buildTimesheet(projectId, ym) {
+  const days = monthDates(ym);
+  const siteOrder = sitesOfProject(projectId).map(s => s.id);
+  const rows = monthRows(ym).get(projectId) || new Map();
   const secIdx = s => s === '__REL' ? 1e6 : siteOrder.indexOf(s);
   const list = [...rows.values()].sort((a, b) => secIdx(a.section) - secIdx(b.section) || a.ei - b.ei || a.shift.localeCompare(b.shift));
   const sections = [];
@@ -1260,6 +1296,7 @@ function renderTimesheets() {
   const all = projs.map(p => ({ p, ts: buildTimesheet(p.id, TV.ym) }));
   if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
   const chosen = all.filter(x => TV.picked.has(x.p.id));
+  const pv = all.find(x => x.p.id === TV.preview) || chosen[0] || null;
   v.innerHTML = pageHead('Client timesheets', 'Made automatically from Attendance – one sheet per project for the calendar month. Tick projects, then print or export.') + `<div class="card">
     <div class="row">
             <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
@@ -1269,16 +1306,17 @@ function renderTimesheets() {
       <button class="btn pri" id="tv-print">Print / Save as PDF</button>
     </div>
     <div class="scroll" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th>Client</th><th class="num">Staff rows</th><th class="num">Billable days</th><th class="num">≈ Guards (days ÷ ${dim(TV.ym)})</th></tr></thead><tbody>
-    ${all.map(({ p, ts }) => `<tr><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
+    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
       <td class="num">${ts.rows.length}</td><td class="num">${ts.total}</td><td class="num">${qtyFmt(ts.total / dim(TV.ym))}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No projects yet – set them up under Clients, projects &amp; sites.</td></tr>'}
     </tbody></table></div>
   </div>
-  <div id="tv-sheets">${chosen.map(x => tsSheetHTML(x.ts)).join('')}</div>`;
+  <div id="tv-sheets">${pv ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0;max-width:1120px;margin:0 auto">Preview – ${esc(pv.p.name)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· click a project above to preview it · ${chosen.length} ticked for print / export</span></div>` + tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>`;
   $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; renderTimesheets(); } };
   $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; renderTimesheets(); };
   $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; renderTimesheets(); };
   $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; renderTimesheets(); };
   $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); renderTimesheets(); };
+  v.querySelectorAll('[data-pv]').forEach(tr => tr.onclick = e => { if (e.target.matches('input')) return; TV.preview = tr.dataset.pv; renderTimesheets(); });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
   $('#tv-print').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); printHTML(chosen.map(x => tsSheetHTML(x.ts)).join('')); };
   $('#tv-xls').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); exportTimesheetsXlsx(chosen.map(x => x.ts)).catch(e => toast(e.message)); };
@@ -1311,7 +1349,7 @@ function invoiceLines(dr) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
       const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
-      if (!md && b.basis !== 'fixed') continue;           // nothing worked on this project that month
+      if (!md && !['fixed', 'lump'].includes(b.basis)) continue;           // nothing worked on this project that month
       if (!b.basis || b.basis === 'ratecard') {
         // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
         const perEmp = new Map();
@@ -1329,6 +1367,7 @@ function invoiceLines(dr) {
         case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
         case 'daily': amt = md * rate; desc = `${fmtMonYY(m)}  ${md} man-days (${unit})`; break;
         case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${fmtMonYY(m)}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
+        case 'lump': amt = rate; desc = `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}`; break;
         case 'fixed': { const q = +b.posts || 0; amt = q * rate; desc = `${fmtMonYY(m)}  ${q} ${unit} @ ${D} Days`; break; }
         default: { const q = md / D; amt = md * rate / D; desc = `${fmtMonYY(m)}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
       }
@@ -1453,13 +1492,18 @@ function renderInvoices() {
         <button class="btn pri" id="iv-print">Print pack / Save as PDF</button>
       </div>
     </div>
+    ${S.invoices.some(x => x.id === dr.id) ? `<div class="card"><div class="step"><span>5</span>Track <small>same stages as the Tax Invoice Tracker</small><span class="grow"></span>${statusTag(dr)}</div>
+      <div class="grid2">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
+      <p class="hint">Changes here save straight away.</p></div>` : ''}
     <div id="iv-preview">${dr.lines.length ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0">Preview</div>` + invoiceHTML(dr) : ''}</div>
   </div>
   <div style="flex:0 1 440px;min-width:320px">
     <div class="card"><h2>Saved invoices</h2>
+      ${(() => { const r = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
+        return S.invoices.length ? `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="k">Invoiced</div><div class="v" style="font-size:15px">${money(r.i)}</div></div><div class="kpi" style="--c:var(--pos)"><div class="k">Paid</div><div class="v" style="font-size:15px">${money(r.p)}</div></div><div class="kpi" style="--c:var(--neg)"><div class="k">Outstanding</div><div class="v" style="font-size:15px">${money(r.i - r.p)}</div></div></div>` : ''; })()}
       <table class="t"><tbody>
       ${[...S.invoices].reverse().map(x => `<tr><td><b>${esc(x.no || '(no number)')}</b><div class="small muted">${esc(IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
-        <td class="num">${money(invTotals(x).inc)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
+        <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>
     <div class="card"><h2>Merge PDFs into one pack</h2>
       <p class="hint" style="margin-top:0">Combine the printed pack, the SAP Work Order Instruction and signed scans into one PDF.</p>
@@ -1503,6 +1547,7 @@ function renderInvoices() {
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
   $('#iv-save').onclick = () => { saveInvoice(dr); rer(); };
+  v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
   $('#iv-print').onclick = () => {
     if (!dr.lines.length) return toast('Generate or add lines first');
     let html = invoiceHTML(dr);
@@ -1525,6 +1570,12 @@ function defaultPackName(dr) {
     : dr.from.slice(0, 4) === dr.to.slice(0, 4) ? `${mn(dr.from)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`
     : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
   return `Tax Invoice_${who}-${per}.pdf`;
+}
+const TRACK = [['tsSent', 'Timesheet sent to client', 'date'], ['tsApproved', 'Timesheet approved', 'date'], ['invSent', 'Invoice submitted', 'date'], ['invProcessed', 'Invoice processed', 'date'], ['spcNo', 'SPC No', 'text'], ['paidOn', 'Payment received', 'date'], ['paidAmt', 'Amount received (blank = full)', 'number']];
+function statusTag(x) {
+  const t = x.track || {};
+  const [l, c] = t.paidOn ? (t.paidAmt && +t.paidAmt < invTotals(x).inc - 0.01 ? ['Part paid', 'warn'] : ['Paid', 'ok']) : t.invProcessed ? ['Processed', ''] : t.invSent ? ['Invoice sent', ''] : t.tsApproved ? ['TS approved', ''] : t.tsSent ? ['TS sent', ''] : ['Draft', 'warn'];
+  return `<span class="tag ${c}">${l}</span>`;
 }
 function saveInvoice(dr) {
   const i = S.invoices.findIndex(x => x.id === dr.id);
@@ -1550,6 +1601,8 @@ async function mergePdfs(name) {
    ===================================================================== */
 const CODE_ALIAS = { SICK: 'SL', O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
 const END_WORDS = ['TERMINATED', 'RESIGNED', 'RESIGN', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
+/** Trade spellings seen in the sheets → one name */
+const normTrade = v => { const t = norm(v).replace(/\s*\.\s*$/, ''); return /^CCTV\b/.test(t) ? 'CCTV OPERATOR' : /^TEAM ?LEADERS?$/.test(t) ? 'TEAM LEADER' : /^(SECURITY )?GUARDS?$/.test(t) ? 'SECURITY GUARD' : t; };
 const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); if (/^SIRA ?\.?T\.?$/.test(s)) return 'SIRA.T'; return CODE_ALIAS[s] || s; };
 
 async function readWorkbook(file) {
@@ -1643,7 +1696,7 @@ function parseMasterSheet(rows) {
     const hasCodes = cells.some(v => v != null && String(v).trim() !== '');
     const shift = col.shift != null ? norm(row[col.shift]) : '';
     if (!id && !hasCodes && !['DAY', 'NIGHT'].includes(shift)) continue;
-    out.push({ name: N, id: id == null ? '' : String(id), shift: ['DAY', 'NIGHT'].includes(shift) ? shift : '', doj: col.doj != null ? parseAnyDate(row[col.doj]) : null, trade: col.trade != null ? norm(row[col.trade]) : '', site: col.site != null ? norm(row[col.site]) : '', cells });
+    out.push({ name: N, id: id == null ? '' : String(id), shift: ['DAY', 'NIGHT'].includes(shift) ? shift : '', doj: col.doj != null ? parseAnyDate(row[col.doj]) : null, trade: col.trade != null ? normTrade(row[col.trade]) : '', site: col.site != null ? norm(row[col.site]) : '', cells });
   }
   return { dates: best.map(x => x.iso), rows: out };
 }
@@ -1857,6 +1910,7 @@ async function importExcel(file) {
           if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
         });
         clearUntouched(shared.touched, ow);
+        if (m.querySelector('[data-sh]:checked') && found.some((f, k) => f.type === 'client' && m.querySelector(`[data-sh="${k}"]`)?.checked)) S.issues = { at: new Date().toISOString(), double: dbl.slice(0, 2000) };
         const pruned = pruneSites(), autoMapped = autoMapSites();
         if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
         markDirty(); renderAll();
