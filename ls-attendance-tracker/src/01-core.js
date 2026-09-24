@@ -98,6 +98,12 @@ function defaultState() {
       cycleStartDay: 21,
       preparedBy: 'MUHAMMAD ALI',
       shiftHours: 12,
+      // AED per person per month, pro-rata on calendar days (days worked ÷ days in month)
+      rateCard: [
+        { trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'Elwood WO INS-104N135-26-0002 · Sobha Realty invoice Aug-26' },
+        { trade: 'LADY SECURITY GUARD', unit: 'Female Security', rate: 3990, src: 'Sobha Realty invoice Aug-26' },
+        { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Sobha Realty invoice Aug-26' }
+      ],
       shifts: ['DAY', 'NIGHT'],
       trades: ['SECURITY GUARD', 'CCTV OPERATOR', 'TEAM LEADER', 'ASST. SUPERVISOR', 'SUPERVISOR', 'SENIOR SUPERVISOR', 'TRAINING SUP'],
       signatories: [
@@ -117,7 +123,11 @@ function defaultState() {
       { code: 'AL', label: 'Annual leave', color: '#ffeaa8', billable: false, client: false, key: 'l' },
       { code: 'SL', label: 'Sick leave', color: '#fcd9b6', billable: false, client: false, key: 's' },
       { code: 'EL', label: 'Emergency leave', color: '#f5d0fe', billable: false, client: false, key: 'e' },
-      { code: 'SIRA', label: 'SIRA exam / training', color: '#d5f3f7', billable: false, client: false, key: 't' }
+      { code: 'SIRA', label: 'SIRA exam / training', color: '#d5f3f7', billable: false, client: false, key: 't' },
+      { code: 'UL', label: 'Unpaid leave', color: '#f3e0d6', billable: false, client: false, key: 'u' },
+      { code: 'ML', label: 'Medical leave', color: '#fde2e4', billable: false, client: false, key: 'm' },
+      { code: 'PH', label: 'Public holiday', color: '#e0e7ff', billable: false, client: false, key: 'h' },
+      { code: 'WO', label: 'Week off', color: '#e4e7ec', billable: false, client: false, key: 'w' }
     ],
     clients: [],      // {id,name,trn,customerCode,address}
     projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},active}
@@ -141,6 +151,8 @@ function migrate(st) {
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
   st.att = st.att || {}; st.locks = st.locks || {};
+  st.settings.rateCard ||= d.settings.rateCard;
+  for (const c of d.codes) if (!st.codes.some(x => x.code === c.code)) st.codes.push({ ...c, key: st.codes.some(x => x.key === c.key) ? '' : c.key });
   for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
   st.version = 1;
   return st;
@@ -159,6 +171,13 @@ function shiftOn(emp, d) { const c = getCell(emp.id, d); return c?.sh || assignO
 function employedOn(emp, d) { return (!emp.doj || d >= emp.doj) && (!emp.end || d <= emp.end); }
 function isLocked(d) { return !!S.locks[cycleOfDate(d)]; }
 function codeDef(c) { return IX.code.get(c) || { code: c, label: c, color: '#f2f4f7', billable: false, client: false }; }
+/** Monthly rate for a trade on a project: project override → rate card → project default rate */
+function rateFor(p, trade) {
+  const o = p?.billing?.rates?.[trade]; if (o) return +o;
+  const rc = S.settings.rateCard.find(r => r.trade === trade); if (rc?.rate) return +rc.rate;
+  return +p?.billing?.rate || 0;
+}
+const unitFor = trade => S.settings.rateCard.find(r => r.trade === trade)?.unit || (trade === 'SECURITY GUARD' || !trade ? 'Security' : trade.replace(/\b\w+/g, w => /^(CCTV|ERT|LFM)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase()));
 function empCodeLabel(e) { return e.empCode || (e.agency ? `SUBCON (${e.agency})` : ''); }
 function siteName(id) { return IX.site.get(id)?.name || ''; }
 function projOfSite(id) { const s = IX.site.get(id); return s ? IX.proj.get(s.projectId) || null : null; }

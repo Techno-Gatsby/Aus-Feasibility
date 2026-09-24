@@ -16,8 +16,20 @@ function invoiceLines(dr) {
     for (const pid of dr.projectIds) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
-      const md = buildTimesheet(pid, m).total; const D = dim(m);
+      const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
       if (!md && b.basis !== 'fixed') continue;           // nothing worked on this project that month
+      if (!b.basis || b.basis === 'ratecard') {
+        // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
+        const perEmp = new Map();
+        for (const r of ts.rows) perEmp.set(r.emp.id, { emp: r.emp, d: (perEmp.get(r.emp.id)?.d || 0) + r.total });
+        const groups = new Map();
+        for (const { emp, d } of perEmp.values()) { if (!d) continue; const k = `${emp.trade || 'SECURITY GUARD'}|${d}`; groups.set(k, (groups.get(k) || 0) + 1); }
+        [...groups.entries()].sort((x, y) => x[0].split('|')[0].localeCompare(y[0].split('|')[0]) || +y[0].split('|')[1] - +x[0].split('|')[1]).forEach(([k, n]) => {
+          const [trade, d] = k.split('|'); const rt = rateFor(p, trade);
+          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${fmtMonYY(m)}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
+        });
+        continue;
+      }
       let amt = 0, desc = '';
       switch (b.basis) {
         case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
@@ -114,7 +126,7 @@ function renderInvoices() {
         <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
       </div>
       <div style="margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px">
-        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${p.billing?.rate ? ' · ' + money(p.billing.rate) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
+        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
       </div>
       </div><div class="card"><div class="step"><span>2</span>SAP details <small>from the SAP invoice</small></div>
       <div class="grid2">
@@ -191,8 +203,8 @@ function renderInvoices() {
   $('#iv-gen').onclick = () => {
     if (!dr.projectIds.length) return toast('Tick at least one project');
     dr.lines = invoiceLines(dr); rer();
-    const noRate = dr.projectIds.filter(id => !IX.proj.get(id)?.billing?.rate).map(id => IX.proj.get(id)?.name);
-    if (noRate.length) toast('No rate set for: ' + noRate.join(', '), 5000);
+    const noRate = [...new Set(dr.lines.filter(l => l.noRate).map(l => l.desc.split('@')[0].trim()))];
+    if (noRate.length) toast('No rate for: ' + noRate.join(', ') + ' – set it in Settings → Rate card or on the project', 7000);
   };
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;

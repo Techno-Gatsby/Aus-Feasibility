@@ -2,6 +2,7 @@
    Clients -> Projects -> Sites, with billing configuration per project
    ===================================================================== */
 const BASES = [
+  ['ratecard', 'Rate card per trade, pro-rata on calendar days (as Latinem invoices)'],
   ['monthly_cal', 'Monthly rate per guard, pro-rata on calendar days'],
   ['monthly_26', 'Monthly rate per guard, pro-rata on 26 days'],
   ['monthly_30', 'Monthly rate per guard, pro-rata on 30 days'],
@@ -46,8 +47,8 @@ function renderProjects() {
           <b>${esc(p.name)}</b>${p.code ? `<span class="tag">${esc(p.code)}</span>` : ''}
           <span class="muted small">${esc(c?.name || 'No client')}</span>
           ${!p.clientId ? '<span class="tag warn">client not set</span>' : ''}
-          ${!b.rate && b.basis !== 'fixed' ? '<span class="tag warn">rate not set</span>' : ''}
-          <span class="small muted">${esc((BASES.find(x => x[0] === b.basis) || [, ''])[1])}${b.rate ? ' · AED ' + money(b.rate) : ''}${b.vat != null ? ' · VAT ' + b.vat + '%' : ''}</span>
+          ${!rateFor(p, 'SECURITY GUARD') && b.basis !== 'fixed' ? '<span class="tag warn">rate not set</span>' : ''}
+          <span class="small muted">${(!b.basis || b.basis === 'ratecard') ? 'Rate card · guard AED ' + money(rateFor(p, 'SECURITY GUARD')) + (Object.keys(b.rates || {}).length ? ' (project rates)' : '') : esc((BASES.find(x => x[0] === b.basis) || [, ''])[1]) + (b.rate ? ' · AED ' + money(b.rate) : '')} · VAT ${b.vat || 0}%</span>
           ${p.active === false ? '<span class="tag">inactive</span>' : ''}
           <span class="grow"></span>
           <button class="btn sm" data-addsite="${p.id}">+ Site</button>
@@ -101,8 +102,9 @@ function editClient(id) {
 }
 
 function editProject(id, presetName, onCreated) {
-  const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
-  p.billing ||= { basis: 'monthly_cal', rate: 0, vat: 0 };
+  const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
+  p.billing ||= { basis: 'ratecard', rate: 0, vat: 0 };
+  p.billing.rates ||= {};
   openModal(id ? 'Edit project' : 'Add project', `<div class="grid2">
     <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
     <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
@@ -114,12 +116,16 @@ function editProject(id, presetName, onCreated) {
     <h3>Billing</h3>
     <div class="grid2">
       <label class="f">Basis<select id="ep-basis">${opts(BASES, p.billing.basis)}</select></label>
-      <label class="f">Unit rate (AED)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
+      <label class="f">Unit rate (other bases)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
       <label class="f">VAT %<input type="number" step="0.01" id="ep-vat" value="${p.billing.vat ?? 0}"></label>
       <label class="f">Fixed posts (for "fixed" basis)<input type="number" id="ep-posts" value="${p.billing.posts || 0}"></label>
       <label class="f">Unit word on invoice<input type="text" id="ep-unit" value="${esc(p.billing.unit || 'Security')}"></label>
     </div>
-    <p class="hint">Example – Elwood: monthly rate 4,100 per guard, pro-rata on calendar days → a full month with 4 guards bills "4 Security @ 31 Days = 16,400". Rates are in Trackers.xlsx.</p>`,
+    <h3>Rate per trade for this project <small class="muted" style="text-transform:none;letter-spacing:0">(blank = rate card in Settings)</small></h3>
+    <table class="t"><thead><tr><th>Trade</th><th class="num">Rate card</th><th class="num">This project (AED / month)</th></tr></thead><tbody>
+    ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="tag warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
+    </tbody></table>
+    <p class="hint">Invoice lines follow Latinem invoices: workers grouped by trade and days worked, e.g. "4 Security @ 31 Days" at 4,100 = 16,400 (Elwood) or "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
       if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
@@ -129,7 +135,8 @@ function editProject(id, presetName, onCreated) {
         p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
         p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
         p.poNo = $('#ep-po', m).value.trim(); p.active = $('#ep-active', m).value === '1';
-        p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security' };
+        const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
+        p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
       }

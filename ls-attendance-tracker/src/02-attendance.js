@@ -312,7 +312,7 @@ document.addEventListener('keydown', e => {
 
 function setupSteps() {
   if (!S.employees.length) return '';
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
+  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !rateFor(p, 'SECURITY GUARD') && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
   const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
   return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
 }

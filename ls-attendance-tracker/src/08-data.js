@@ -17,6 +17,15 @@ function renderData() {
     <p class="hint">Import Excel accepts the master payroll attendance workbook and client timesheet workbooks – the type of each sheet is detected automatically.</p>
   </div>
 
+  <div class="card"><h2>Rate card <small class="muted" style="font-weight:500">AED per person per month · pro-rata on calendar days</small></h2>
+    <table class="t"><thead><tr><th>Trade (as on employee)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
+    ${st.rateCard.map((r, i) => `<tr><td><input type="text" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
+      <td class="num"><input type="number" step="0.01" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
+      <td><button class="btn sm bad" data-rcdel="${i}">✕</button></td></tr>`).join('')}
+    </tbody></table><datalist id="dv-trades">${st.trades.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="dv-rcadd">+ Add trade</button><span class="hint" style="margin:0">Verified so far: guard 4,100 · female guard 3,990 · supervisor 8,000. Other trades (CCTV operator, team leader…) are billed only once you enter their rate.</span></div>
+  </div>
+
   <div class="card"><h2>Attendance codes</h2>
     <p class="hint" style="margin-top:0"><b>Billable</b> days are counted in client timesheet totals and invoices. <b>On client sheet</b> prints the code on the client timesheet (others show blank). Key = keyboard shortcut in the grid.</p>
     <table class="t" id="dv-codes"><thead><tr><th>Code</th><th>Meaning</th><th>Colour</th><th>Key</th><th>Billable</th><th>On client sheet</th><th class="num">Used</th><th></th></tr></thead><tbody>
@@ -52,6 +61,9 @@ function renderData() {
     <button class="btn bad" id="dv-reset">Delete all data…</button></div>`;
 
   $('#dv-dl').onclick = downloadBackup;
+  v.querySelectorAll('[data-rc]').forEach(i => i.onchange = () => { const r = S.settings.rateCard[+i.dataset.rc]; r[i.dataset.rk] = i.dataset.rk === 'rate' ? +i.value || 0 : i.dataset.rk === 'trade' ? norm(i.value) : i.value.trim(); markDirty(); });
+  v.querySelectorAll('[data-rcdel]').forEach(b => b.onclick = () => { S.settings.rateCard.splice(+b.dataset.rcdel, 1); markDirty(); renderData(); });
+  $('#dv-rcadd').onclick = () => { S.settings.rateCard.push({ trade: '', unit: '', rate: 0, src: '' }); markDirty(); renderData(); };
   $('#dv-rs').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {

@@ -346,6 +346,12 @@ function defaultState() {
       cycleStartDay: 21,
       preparedBy: 'MUHAMMAD ALI',
       shiftHours: 12,
+      // AED per person per month, pro-rata on calendar days (days worked ÷ days in month)
+      rateCard: [
+        { trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'Elwood WO INS-104N135-26-0002 · Sobha Realty invoice Aug-26' },
+        { trade: 'LADY SECURITY GUARD', unit: 'Female Security', rate: 3990, src: 'Sobha Realty invoice Aug-26' },
+        { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Sobha Realty invoice Aug-26' }
+      ],
       shifts: ['DAY', 'NIGHT'],
       trades: ['SECURITY GUARD', 'CCTV OPERATOR', 'TEAM LEADER', 'ASST. SUPERVISOR', 'SUPERVISOR', 'SENIOR SUPERVISOR', 'TRAINING SUP'],
       signatories: [
@@ -365,7 +371,11 @@ function defaultState() {
       { code: 'AL', label: 'Annual leave', color: '#ffeaa8', billable: false, client: false, key: 'l' },
       { code: 'SL', label: 'Sick leave', color: '#fcd9b6', billable: false, client: false, key: 's' },
       { code: 'EL', label: 'Emergency leave', color: '#f5d0fe', billable: false, client: false, key: 'e' },
-      { code: 'SIRA', label: 'SIRA exam / training', color: '#d5f3f7', billable: false, client: false, key: 't' }
+      { code: 'SIRA', label: 'SIRA exam / training', color: '#d5f3f7', billable: false, client: false, key: 't' },
+      { code: 'UL', label: 'Unpaid leave', color: '#f3e0d6', billable: false, client: false, key: 'u' },
+      { code: 'ML', label: 'Medical leave', color: '#fde2e4', billable: false, client: false, key: 'm' },
+      { code: 'PH', label: 'Public holiday', color: '#e0e7ff', billable: false, client: false, key: 'h' },
+      { code: 'WO', label: 'Week off', color: '#e4e7ec', billable: false, client: false, key: 'w' }
     ],
     clients: [],      // {id,name,trn,customerCode,address}
     projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},active}
@@ -389,6 +399,8 @@ function migrate(st) {
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
   st.att = st.att || {}; st.locks = st.locks || {};
+  st.settings.rateCard ||= d.settings.rateCard;
+  for (const c of d.codes) if (!st.codes.some(x => x.code === c.code)) st.codes.push({ ...c, key: st.codes.some(x => x.key === c.key) ? '' : c.key });
   for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
   st.version = 1;
   return st;
@@ -407,6 +419,13 @@ function shiftOn(emp, d) { const c = getCell(emp.id, d); return c?.sh || assignO
 function employedOn(emp, d) { return (!emp.doj || d >= emp.doj) && (!emp.end || d <= emp.end); }
 function isLocked(d) { return !!S.locks[cycleOfDate(d)]; }
 function codeDef(c) { return IX.code.get(c) || { code: c, label: c, color: '#f2f4f7', billable: false, client: false }; }
+/** Monthly rate for a trade on a project: project override → rate card → project default rate */
+function rateFor(p, trade) {
+  const o = p?.billing?.rates?.[trade]; if (o) return +o;
+  const rc = S.settings.rateCard.find(r => r.trade === trade); if (rc?.rate) return +rc.rate;
+  return +p?.billing?.rate || 0;
+}
+const unitFor = trade => S.settings.rateCard.find(r => r.trade === trade)?.unit || (trade === 'SECURITY GUARD' || !trade ? 'Security' : trade.replace(/\b\w+/g, w => /^(CCTV|ERT|LFM)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase()));
 function empCodeLabel(e) { return e.empCode || (e.agency ? `SUBCON (${e.agency})` : ''); }
 function siteName(id) { return IX.site.get(id)?.name || ''; }
 function projOfSite(id) { const s = IX.site.get(id); return s ? IX.proj.get(s.projectId) || null : null; }
@@ -806,7 +825,7 @@ document.addEventListener('keydown', e => {
 
 function setupSteps() {
   if (!S.employees.length) return '';
-  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !p.billing?.rate && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
+  const unm = S.sites.filter(x => !x.projectId).length, noRate = S.projects.filter(p => !rateFor(p, 'SECURITY GUARD') && p.billing?.basis !== 'fixed').length, noCl = S.projects.filter(p => !p.clientId).length;
   const msg = [unm && `${unm} site(s) not linked to a project`, noCl && `${noCl} project(s) without a client`, noRate && `${noRate} project(s) without a rate`].filter(Boolean);
   return msg.length ? `<div class="alert"><b>Finish setup:</b> ${msg.join(' · ')} <span class="grow"></span><button class="btn sm" onclick="showView('projects')">Fix in Projects &amp; sites →</button></div>` : '';
 }
@@ -987,6 +1006,7 @@ function editEmployee(id) {
    Clients -> Projects -> Sites, with billing configuration per project
    ===================================================================== */
 const BASES = [
+  ['ratecard', 'Rate card per trade, pro-rata on calendar days (as Latinem invoices)'],
   ['monthly_cal', 'Monthly rate per guard, pro-rata on calendar days'],
   ['monthly_26', 'Monthly rate per guard, pro-rata on 26 days'],
   ['monthly_30', 'Monthly rate per guard, pro-rata on 30 days'],
@@ -1031,8 +1051,8 @@ function renderProjects() {
           <b>${esc(p.name)}</b>${p.code ? `<span class="tag">${esc(p.code)}</span>` : ''}
           <span class="muted small">${esc(c?.name || 'No client')}</span>
           ${!p.clientId ? '<span class="tag warn">client not set</span>' : ''}
-          ${!b.rate && b.basis !== 'fixed' ? '<span class="tag warn">rate not set</span>' : ''}
-          <span class="small muted">${esc((BASES.find(x => x[0] === b.basis) || [, ''])[1])}${b.rate ? ' · AED ' + money(b.rate) : ''}${b.vat != null ? ' · VAT ' + b.vat + '%' : ''}</span>
+          ${!rateFor(p, 'SECURITY GUARD') && b.basis !== 'fixed' ? '<span class="tag warn">rate not set</span>' : ''}
+          <span class="small muted">${(!b.basis || b.basis === 'ratecard') ? 'Rate card · guard AED ' + money(rateFor(p, 'SECURITY GUARD')) + (Object.keys(b.rates || {}).length ? ' (project rates)' : '') : esc((BASES.find(x => x[0] === b.basis) || [, ''])[1]) + (b.rate ? ' · AED ' + money(b.rate) : '')} · VAT ${b.vat || 0}%</span>
           ${p.active === false ? '<span class="tag">inactive</span>' : ''}
           <span class="grow"></span>
           <button class="btn sm" data-addsite="${p.id}">+ Site</button>
@@ -1086,8 +1106,9 @@ function editClient(id) {
 }
 
 function editProject(id, presetName, onCreated) {
-  const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
-  p.billing ||= { basis: 'monthly_cal', rate: 0, vat: 0 };
+  const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
+  p.billing ||= { basis: 'ratecard', rate: 0, vat: 0 };
+  p.billing.rates ||= {};
   openModal(id ? 'Edit project' : 'Add project', `<div class="grid2">
     <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
     <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
@@ -1099,12 +1120,16 @@ function editProject(id, presetName, onCreated) {
     <h3>Billing</h3>
     <div class="grid2">
       <label class="f">Basis<select id="ep-basis">${opts(BASES, p.billing.basis)}</select></label>
-      <label class="f">Unit rate (AED)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
+      <label class="f">Unit rate (other bases)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
       <label class="f">VAT %<input type="number" step="0.01" id="ep-vat" value="${p.billing.vat ?? 0}"></label>
       <label class="f">Fixed posts (for "fixed" basis)<input type="number" id="ep-posts" value="${p.billing.posts || 0}"></label>
       <label class="f">Unit word on invoice<input type="text" id="ep-unit" value="${esc(p.billing.unit || 'Security')}"></label>
     </div>
-    <p class="hint">Example – Elwood: monthly rate 4,100 per guard, pro-rata on calendar days → a full month with 4 guards bills "4 Security @ 31 Days = 16,400". Rates are in Trackers.xlsx.</p>`,
+    <h3>Rate per trade for this project <small class="muted" style="text-transform:none;letter-spacing:0">(blank = rate card in Settings)</small></h3>
+    <table class="t"><thead><tr><th>Trade</th><th class="num">Rate card</th><th class="num">This project (AED / month)</th></tr></thead><tbody>
+    ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="tag warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
+    </tbody></table>
+    <p class="hint">Invoice lines follow Latinem invoices: workers grouped by trade and days worked, e.g. "4 Security @ 31 Days" at 4,100 = 16,400 (Elwood) or "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
       if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
@@ -1114,7 +1139,8 @@ function editProject(id, presetName, onCreated) {
         p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
         p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
         p.poNo = $('#ep-po', m).value.trim(); p.active = $('#ep-active', m).value === '1';
-        p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security' };
+        const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
+        p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
       }
@@ -1284,8 +1310,20 @@ function invoiceLines(dr) {
     for (const pid of dr.projectIds) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
-      const md = buildTimesheet(pid, m).total; const D = dim(m);
+      const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
       if (!md && b.basis !== 'fixed') continue;           // nothing worked on this project that month
+      if (!b.basis || b.basis === 'ratecard') {
+        // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
+        const perEmp = new Map();
+        for (const r of ts.rows) perEmp.set(r.emp.id, { emp: r.emp, d: (perEmp.get(r.emp.id)?.d || 0) + r.total });
+        const groups = new Map();
+        for (const { emp, d } of perEmp.values()) { if (!d) continue; const k = `${emp.trade || 'SECURITY GUARD'}|${d}`; groups.set(k, (groups.get(k) || 0) + 1); }
+        [...groups.entries()].sort((x, y) => x[0].split('|')[0].localeCompare(y[0].split('|')[0]) || +y[0].split('|')[1] - +x[0].split('|')[1]).forEach(([k, n]) => {
+          const [trade, d] = k.split('|'); const rt = rateFor(p, trade);
+          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${fmtMonYY(m)}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
+        });
+        continue;
+      }
       let amt = 0, desc = '';
       switch (b.basis) {
         case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
@@ -1382,7 +1420,7 @@ function renderInvoices() {
         <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
       </div>
       <div style="margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px">
-        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${p.billing?.rate ? ' · ' + money(p.billing.rate) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
+        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
       </div>
       </div><div class="card"><div class="step"><span>2</span>SAP details <small>from the SAP invoice</small></div>
       <div class="grid2">
@@ -1459,8 +1497,8 @@ function renderInvoices() {
   $('#iv-gen').onclick = () => {
     if (!dr.projectIds.length) return toast('Tick at least one project');
     dr.lines = invoiceLines(dr); rer();
-    const noRate = dr.projectIds.filter(id => !IX.proj.get(id)?.billing?.rate).map(id => IX.proj.get(id)?.name);
-    if (noRate.length) toast('No rate set for: ' + noRate.join(', '), 5000);
+    const noRate = [...new Set(dr.lines.filter(l => l.noRate).map(l => l.desc.split('@')[0].trim()))];
+    if (noRate.length) toast('No rate for: ' + noRate.join(', ') + ' – set it in Settings → Rate card or on the project', 7000);
   };
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
@@ -1510,7 +1548,7 @@ async function mergePdfs(name) {
    Excel import (master payroll sheet, client timesheet workbook) and
    Excel export (master, client timesheets)
    ===================================================================== */
-const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R' };
+const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
 const END_WORDS = ['TERMINATED', 'RESIGNED', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
 const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); return CODE_ALIAS[s] || s; };
 
@@ -1540,7 +1578,7 @@ function findOrCreateProject(name, stats) {
   const n = norm(name);
   let p = S.projects.find(x => norm(x.name) === n);
   if (p) return p;
-  p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
+  p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
   S.projects.push(p); IX.proj.set(p.id, p); if (stats) stats.newProjects = (stats.newProjects || 0) + 1;
   return p;
 }
@@ -1634,7 +1672,7 @@ function applyMasterImport(parsed, overwrite) {
         for (let k = i; k < parsed.dates.length; k++) if (overwrite && S.att[e.id]) delete S.att[e.id][parsed.dates[k]];
         break;
       }
-      if (!code || /^\d+(\.\d+)?$/.test(code)) { if (overwrite && !code && S.att[e.id]?.[d]) delete S.att[e.id][d]; continue; }
+      if (!code || /^\d+(\.\d+)?$/.test(code) || code.startsWith('#')) { if (overwrite && !code && S.att[e.id]?.[d]) delete S.att[e.id][d]; continue; }
       if (!overwrite && S.att[e.id]?.[d]) continue;
       ensureCode(code, st);
       const cur = getCell(e.id, d);
@@ -1646,58 +1684,84 @@ function applyMasterImport(parsed, overwrite) {
 }
 
 /* ---------- client timesheet workbook (one tab per project) ---------- */
+/**
+ * Client timesheet layouts:
+ *  A) one project per sheet (SCL TR TIME SHEET): "PROJECT NAME" + "MONTH" labels above a SITE NAME header
+ *  B) CLIENT TIME SHEET in the master workbook: header row PROJECT | SITE NAME | SHIFT | NAME | EMP. CODE | 1..31
+ */
 function parseClientSheet(rows) {
   let hr = -1, project = '', ym = null;
-  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const row = rows[i] || [];
     row.forEach((v, c) => {
       const n = norm(v);
-      if (n === 'PROJECT NAME' && !project) project = norm(row.slice(c + 1).find(x => x != null && String(x).trim()));
-      if (n === 'MONTH' && !ym) ym = parseAnyMonth(row.slice(c + 1).find(x => x != null && String(x).trim()));
+      if (n === 'PROJECT NAME' && !project && !row.some(x => norm(x) === 'SITE NAME')) project = norm(row.slice(c + 1).find(x => x != null && String(x).trim()));
+      if (/^MONTH\b/.test(n) && !ym) ym = parseAnyMonth(n.replace(/^MONTH\s*:?\s*/, '')) || parseAnyMonth(row.slice(c + 1).find(x => x != null && String(x).trim()));
     });
     if (hr < 0 && row.some(v => norm(v) === 'SITE NAME')) hr = i;
   }
-  if (hr < 0 || !project || !ym) return null;
+  if (hr < 0) return null;
   const h = rows[hr]; const col = { days: [] };
   h.forEach((v, c) => {
     const n = norm(v);
-    if (n === 'SITE NAME') col.site = c; else if (n.startsWith('SHIFT')) col.shift = c; else if (n === 'NAME') col.name = c; else if (/EMP/.test(n)) col.code = c;
-    else if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31) col.days.push({ c, day: v });
+    if (n === 'SITE NAME') col.site = c; else if (n === 'PROJECT' || n === 'PROJECT NAME') col.project = c; else if (n.startsWith('SHIFT')) col.shift = c;
+    else if (n === 'NAME') col.name = c; else if (/EMP/.test(n)) col.code = c;
+    else if ((typeof v === 'number' || /^\d{1,2}$/.test(n)) && +n >= 1 && +n <= 31 && Number.isInteger(+n)) col.days.push({ c, day: +n });
   });
-  if (col.name == null || !col.days.length) return null;
-  const out = []; let site = '';
+  if (col.name == null || col.days.length < 28) return null;
+  if (col.project == null && !project) return null;
+  const out = []; let site = '', proj = project;
   for (let r = hr + 1; r < rows.length; r++) {
     const row = rows[r] || [];
-    if (row.some(v => /GRAND TOTAL|PREPARED BY/.test(norm(v)))) break;
+    if (row.some(v => /PREPARED BY/.test(norm(v)))) break;
+    if (col.project != null && norm(row[col.project]) && !/GRAND TOTAL|^TOTAL/.test(norm(row[col.project]))) { if (norm(row[col.project]) !== proj) site = ''; proj = norm(row[col.project]); }
     if (col.site != null && norm(row[col.site])) site = norm(row[col.site]);
-    const name = norm(row[col.name]); if (!name) continue;
+    const name = norm(row[col.name]); if (!name || /GRAND TOTAL/.test(name)) continue;
     const cells = {};
-    for (const { c, day } of col.days) { const v = row[c]; if (v != null && String(v).trim() !== '' && day <= dim(ym)) cells[day] = normCode(v); }
-    out.push({ site, shift: norm(row[col.shift]), name, id: col.code != null ? String(row[col.code] ?? '') : '', cells });
+    for (const { c, day } of col.days) { const v = row[c]; if (v != null && String(v).trim() !== '') cells[day] = normCode(v); }
+    out.push({ project: proj, site, shift: norm(row[col.shift]), name, id: col.code != null ? String(row[col.code] ?? '') : '', cells });
   }
-  return { project, ym, rows: out };
+  return { project: project || null, multi: col.project != null, ym, rows: out, projects: [...new Set(out.map(r => r.project))] };
 }
 
-function applyClientImport(parsed, overwrite) {
+/** Entity prefixes used in the CLIENT TIME SHEET PROJECT column -> billing client (Trackers.xlsx groups) */
+const CLIENT_PREFIX = [
+  [/^(SCL|INFRA)\b/, 'SOBHA CONSTRUCTIONS LLC', 'SCL'], [/^SCM\b/, 'SOBHA COMMUNITY MANAGEMENT LLC', 'SCM'],
+  [/^LFM\b/, 'LFM & LANDSCAPING', 'LFM'], [/^KAIZEN\b/, 'KAIZEN OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'KAIZEN'],
+  [/^PROVIS\b/, 'PROVIS OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'PROVIS'], [/^RAK\b/, 'SOBHA MODULAR (RAK)', 'RAK'],
+  [/^SOBHA REALTY\b/, 'SOBHA REALTY (ADMIN DEPARTMENT)', 'SR'], [/^ASTECO\b/, 'ASTECO', 'ASTECO']
+];
+function clientForProjectName(name) {
+  const hit = CLIENT_PREFIX.find(([re]) => re.test(norm(name))); if (!hit) return '';
+  let c = S.clients.find(x => norm(x.name) === hit[1]);
+  if (!c) { c = { id: uid('c'), name: hit[1], short: hit[2], customerCode: '', trn: '', address: '' }; S.clients.push(c); IX.client.set(c.id, c); }
+  return c.id;
+}
+
+function applyClientImport(parsed, overwrite, ymOverride) {
   const st = { created: 0, cells: 0 };
-  const proj = findOrCreateProject(parsed.project, st);
-  let lastReal = null;
+  const ym = parsed.ym || ymOverride; if (!ym) throw new Error('Month missing for ' + (parsed.project || 'client timesheet'));
+  const lastReal = {};
   for (const r of parsed.rows) {
-    const rel = r.site === 'RELIEVER';
-    const siteId = rel ? (lastReal || findOrCreateSite(parsed.project, proj.id, st)) : findOrCreateSite(r.site || parsed.project, proj.id, st);
-    if (!rel) lastReal = siteId;
+    if (!r.project) continue;
+    const proj = findOrCreateProject(r.project, st);
+    if (!proj.clientId) proj.clientId = clientForProjectName(proj.name);
+    const rel = /RELIEVER|RELEIVER/.test(r.site);
+    const siteId = rel ? (lastReal[proj.id] || findOrCreateSite(r.project, proj.id, st)) : findOrCreateSite(r.site || r.project, proj.id, st);
+    if (!rel) lastReal[proj.id] = siteId;
     const { empCode, agency } = splitIdAgency(r.id);
     let e = findEmployee(empCode, r.name, agency);
     const shift = ['DAY', 'NIGHT'].includes(r.shift) ? r.shift : '';
     if (!e) {
-      const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : 'SECURITY GUARD';
+      const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : /SUPERVISOR/.test(r.site) ? 'SECURITY SUPERVISOR' : 'SECURITY GUARD';
       e = { id: uid('e'), empCode, name: r.name, agency, trade, shift: shift || 'DAY', doj: null, end: null, endReason: '', assign: [] };
       S.employees.push(e); IX.emp.set(e.id, e); st.created++;
     }
-    if (!e.assign.length && !rel) setAssignment(e, parsed.ym + '-01', siteId, shift || e.shift);
-    for (const [day, code] of Object.entries(r.cells)) {
-      if (/^\d+$/.test(code)) continue;
-      const d = `${parsed.ym}-${pad(day)}`;
+    if (!e.assign.length && !rel) setAssignment(e, ym + '-01', siteId, shift || e.shift);
+    for (const [day, raw] of Object.entries(r.cells)) {
+      if (/^\d+(\.\d+)?$/.test(raw) || raw.startsWith('#') || +day > dim(ym)) continue;
+      const code = rel && raw === 'P' ? 'R' : raw;
+      const d = `${ym}-${pad(day)}`;
       if (!overwrite && S.att[e.id]?.[d]) continue;
       ensureCode(code, st);
       const a = assignOn(e, d);
@@ -1718,14 +1782,16 @@ async function importExcel(file) {
     const m = parseMasterSheet(rows);
     if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
     const c = parseClientSheet(rows);
-    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.project} · ${fmtMonYY(c.ym)} · ${c.rows.length} rows` });
+    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.multi ? c.projects.length + ' projects' : c.project} · ${c.ym ? fmtMonYY(c.ym) : 'month not in sheet'} · ${c.rows.length} rows` });
   });
   if (!found.length) { toast('No attendance found in this file. It needs a NAME column and a row of dates (master sheet), or PROJECT NAME + MONTH + SITE NAME (client timesheet).', 7000); return; }
+  const master = found.find(f => f.type === 'master');
+  const defYm = master ? ymOf(master.p.dates[master.p.dates.length - 1]) : addMonths(ymOf(todayISO()), -1);
   openModal('Import Excel', `
     <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
     <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
     ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
-      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}</td></tr>`).join('')}
+      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}${f.type === 'client' && !f.p.ym ? ` <input type="month" data-ym="${k}" value="${defYm}" title="Which month is this sheet?">` : ''}</td></tr>`).join('')}
     </tbody></table>
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
     [{ label: 'Cancel' }, {
@@ -1733,7 +1799,7 @@ async function importExcel(file) {
         const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0 }; const codes = new Set(); let lastMaster = null;
         m.querySelectorAll('[data-sh]:checked').forEach(c => {
           const f = found[+c.dataset.sh];
-          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow);
+          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow, m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value);
           for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x));
           if (f.type === 'master') lastMaster = f.p;
         });
@@ -1867,6 +1933,15 @@ function renderData() {
     <p class="hint">Import Excel accepts the master payroll attendance workbook and client timesheet workbooks – the type of each sheet is detected automatically.</p>
   </div>
 
+  <div class="card"><h2>Rate card <small class="muted" style="font-weight:500">AED per person per month · pro-rata on calendar days</small></h2>
+    <table class="t"><thead><tr><th>Trade (as on employee)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
+    ${st.rateCard.map((r, i) => `<tr><td><input type="text" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
+      <td class="num"><input type="number" step="0.01" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
+      <td><button class="btn sm bad" data-rcdel="${i}">✕</button></td></tr>`).join('')}
+    </tbody></table><datalist id="dv-trades">${st.trades.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="dv-rcadd">+ Add trade</button><span class="hint" style="margin:0">Verified so far: guard 4,100 · female guard 3,990 · supervisor 8,000. Other trades (CCTV operator, team leader…) are billed only once you enter their rate.</span></div>
+  </div>
+
   <div class="card"><h2>Attendance codes</h2>
     <p class="hint" style="margin-top:0"><b>Billable</b> days are counted in client timesheet totals and invoices. <b>On client sheet</b> prints the code on the client timesheet (others show blank). Key = keyboard shortcut in the grid.</p>
     <table class="t" id="dv-codes"><thead><tr><th>Code</th><th>Meaning</th><th>Colour</th><th>Key</th><th>Billable</th><th>On client sheet</th><th class="num">Used</th><th></th></tr></thead><tbody>
@@ -1902,6 +1977,9 @@ function renderData() {
     <button class="btn bad" id="dv-reset">Delete all data…</button></div>`;
 
   $('#dv-dl').onclick = downloadBackup;
+  v.querySelectorAll('[data-rc]').forEach(i => i.onchange = () => { const r = S.settings.rateCard[+i.dataset.rc]; r[i.dataset.rk] = i.dataset.rk === 'rate' ? +i.value || 0 : i.dataset.rk === 'trade' ? norm(i.value) : i.value.trim(); markDirty(); });
+  v.querySelectorAll('[data-rcdel]').forEach(b => b.onclick = () => { S.settings.rateCard.splice(+b.dataset.rcdel, 1); markDirty(); renderData(); });
+  $('#dv-rcadd').onclick = () => { S.settings.rateCard.push({ trade: '', unit: '', rate: 0, src: '' }); markDirty(); renderData(); };
   $('#dv-rs').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {

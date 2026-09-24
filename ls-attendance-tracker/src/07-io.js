@@ -2,7 +2,7 @@
    Excel import (master payroll sheet, client timesheet workbook) and
    Excel export (master, client timesheets)
    ===================================================================== */
-const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R' };
+const CODE_ALIAS = { O: 'OFF', 'DAY OFF': 'OFF', PP: 'P', PRESENT: 'P', ABSENT: 'A', RELIEVER: 'R', SRIA: 'SIRA' };
 const END_WORDS = ['TERMINATED', 'RESIGNED', 'ABSCONDED', 'ABSCONDING', 'CANCELLED', 'VISA CANCELLED', 'TRANSFERRED'];
 const normCode = v => { const s = norm(v).replace(/\s*\.\s*/g, '.'); return CODE_ALIAS[s] || s; };
 
@@ -32,7 +32,7 @@ function findOrCreateProject(name, stats) {
   const n = norm(name);
   let p = S.projects.find(x => norm(x.name) === n);
   if (p) return p;
-  p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'monthly_cal', rate: 0, vat: 0, posts: 0, unit: 'Security' }, active: true };
+  p = { id: uid('p'), clientId: '', code: '', name: n, entityName: '', poNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
   S.projects.push(p); IX.proj.set(p.id, p); if (stats) stats.newProjects = (stats.newProjects || 0) + 1;
   return p;
 }
@@ -126,7 +126,7 @@ function applyMasterImport(parsed, overwrite) {
         for (let k = i; k < parsed.dates.length; k++) if (overwrite && S.att[e.id]) delete S.att[e.id][parsed.dates[k]];
         break;
       }
-      if (!code || /^\d+(\.\d+)?$/.test(code)) { if (overwrite && !code && S.att[e.id]?.[d]) delete S.att[e.id][d]; continue; }
+      if (!code || /^\d+(\.\d+)?$/.test(code) || code.startsWith('#')) { if (overwrite && !code && S.att[e.id]?.[d]) delete S.att[e.id][d]; continue; }
       if (!overwrite && S.att[e.id]?.[d]) continue;
       ensureCode(code, st);
       const cur = getCell(e.id, d);
@@ -138,58 +138,84 @@ function applyMasterImport(parsed, overwrite) {
 }
 
 /* ---------- client timesheet workbook (one tab per project) ---------- */
+/**
+ * Client timesheet layouts:
+ *  A) one project per sheet (SCL TR TIME SHEET): "PROJECT NAME" + "MONTH" labels above a SITE NAME header
+ *  B) CLIENT TIME SHEET in the master workbook: header row PROJECT | SITE NAME | SHIFT | NAME | EMP. CODE | 1..31
+ */
 function parseClientSheet(rows) {
   let hr = -1, project = '', ym = null;
-  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const row = rows[i] || [];
     row.forEach((v, c) => {
       const n = norm(v);
-      if (n === 'PROJECT NAME' && !project) project = norm(row.slice(c + 1).find(x => x != null && String(x).trim()));
-      if (n === 'MONTH' && !ym) ym = parseAnyMonth(row.slice(c + 1).find(x => x != null && String(x).trim()));
+      if (n === 'PROJECT NAME' && !project && !row.some(x => norm(x) === 'SITE NAME')) project = norm(row.slice(c + 1).find(x => x != null && String(x).trim()));
+      if (/^MONTH\b/.test(n) && !ym) ym = parseAnyMonth(n.replace(/^MONTH\s*:?\s*/, '')) || parseAnyMonth(row.slice(c + 1).find(x => x != null && String(x).trim()));
     });
     if (hr < 0 && row.some(v => norm(v) === 'SITE NAME')) hr = i;
   }
-  if (hr < 0 || !project || !ym) return null;
+  if (hr < 0) return null;
   const h = rows[hr]; const col = { days: [] };
   h.forEach((v, c) => {
     const n = norm(v);
-    if (n === 'SITE NAME') col.site = c; else if (n.startsWith('SHIFT')) col.shift = c; else if (n === 'NAME') col.name = c; else if (/EMP/.test(n)) col.code = c;
-    else if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31) col.days.push({ c, day: v });
+    if (n === 'SITE NAME') col.site = c; else if (n === 'PROJECT' || n === 'PROJECT NAME') col.project = c; else if (n.startsWith('SHIFT')) col.shift = c;
+    else if (n === 'NAME') col.name = c; else if (/EMP/.test(n)) col.code = c;
+    else if ((typeof v === 'number' || /^\d{1,2}$/.test(n)) && +n >= 1 && +n <= 31 && Number.isInteger(+n)) col.days.push({ c, day: +n });
   });
-  if (col.name == null || !col.days.length) return null;
-  const out = []; let site = '';
+  if (col.name == null || col.days.length < 28) return null;
+  if (col.project == null && !project) return null;
+  const out = []; let site = '', proj = project;
   for (let r = hr + 1; r < rows.length; r++) {
     const row = rows[r] || [];
-    if (row.some(v => /GRAND TOTAL|PREPARED BY/.test(norm(v)))) break;
+    if (row.some(v => /PREPARED BY/.test(norm(v)))) break;
+    if (col.project != null && norm(row[col.project]) && !/GRAND TOTAL|^TOTAL/.test(norm(row[col.project]))) { if (norm(row[col.project]) !== proj) site = ''; proj = norm(row[col.project]); }
     if (col.site != null && norm(row[col.site])) site = norm(row[col.site]);
-    const name = norm(row[col.name]); if (!name) continue;
+    const name = norm(row[col.name]); if (!name || /GRAND TOTAL/.test(name)) continue;
     const cells = {};
-    for (const { c, day } of col.days) { const v = row[c]; if (v != null && String(v).trim() !== '' && day <= dim(ym)) cells[day] = normCode(v); }
-    out.push({ site, shift: norm(row[col.shift]), name, id: col.code != null ? String(row[col.code] ?? '') : '', cells });
+    for (const { c, day } of col.days) { const v = row[c]; if (v != null && String(v).trim() !== '') cells[day] = normCode(v); }
+    out.push({ project: proj, site, shift: norm(row[col.shift]), name, id: col.code != null ? String(row[col.code] ?? '') : '', cells });
   }
-  return { project, ym, rows: out };
+  return { project: project || null, multi: col.project != null, ym, rows: out, projects: [...new Set(out.map(r => r.project))] };
 }
 
-function applyClientImport(parsed, overwrite) {
+/** Entity prefixes used in the CLIENT TIME SHEET PROJECT column -> billing client (Trackers.xlsx groups) */
+const CLIENT_PREFIX = [
+  [/^(SCL|INFRA)\b/, 'SOBHA CONSTRUCTIONS LLC', 'SCL'], [/^SCM\b/, 'SOBHA COMMUNITY MANAGEMENT LLC', 'SCM'],
+  [/^LFM\b/, 'LFM & LANDSCAPING', 'LFM'], [/^KAIZEN\b/, 'KAIZEN OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'KAIZEN'],
+  [/^PROVIS\b/, 'PROVIS OWNERS ASSOCIATION MANAGEMENT SERVICES LLC', 'PROVIS'], [/^RAK\b/, 'SOBHA MODULAR (RAK)', 'RAK'],
+  [/^SOBHA REALTY\b/, 'SOBHA REALTY (ADMIN DEPARTMENT)', 'SR'], [/^ASTECO\b/, 'ASTECO', 'ASTECO']
+];
+function clientForProjectName(name) {
+  const hit = CLIENT_PREFIX.find(([re]) => re.test(norm(name))); if (!hit) return '';
+  let c = S.clients.find(x => norm(x.name) === hit[1]);
+  if (!c) { c = { id: uid('c'), name: hit[1], short: hit[2], customerCode: '', trn: '', address: '' }; S.clients.push(c); IX.client.set(c.id, c); }
+  return c.id;
+}
+
+function applyClientImport(parsed, overwrite, ymOverride) {
   const st = { created: 0, cells: 0 };
-  const proj = findOrCreateProject(parsed.project, st);
-  let lastReal = null;
+  const ym = parsed.ym || ymOverride; if (!ym) throw new Error('Month missing for ' + (parsed.project || 'client timesheet'));
+  const lastReal = {};
   for (const r of parsed.rows) {
-    const rel = r.site === 'RELIEVER';
-    const siteId = rel ? (lastReal || findOrCreateSite(parsed.project, proj.id, st)) : findOrCreateSite(r.site || parsed.project, proj.id, st);
-    if (!rel) lastReal = siteId;
+    if (!r.project) continue;
+    const proj = findOrCreateProject(r.project, st);
+    if (!proj.clientId) proj.clientId = clientForProjectName(proj.name);
+    const rel = /RELIEVER|RELEIVER/.test(r.site);
+    const siteId = rel ? (lastReal[proj.id] || findOrCreateSite(r.project, proj.id, st)) : findOrCreateSite(r.site || r.project, proj.id, st);
+    if (!rel) lastReal[proj.id] = siteId;
     const { empCode, agency } = splitIdAgency(r.id);
     let e = findEmployee(empCode, r.name, agency);
     const shift = ['DAY', 'NIGHT'].includes(r.shift) ? r.shift : '';
     if (!e) {
-      const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : 'SECURITY GUARD';
+      const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : /SUPERVISOR/.test(r.site) ? 'SECURITY SUPERVISOR' : 'SECURITY GUARD';
       e = { id: uid('e'), empCode, name: r.name, agency, trade, shift: shift || 'DAY', doj: null, end: null, endReason: '', assign: [] };
       S.employees.push(e); IX.emp.set(e.id, e); st.created++;
     }
-    if (!e.assign.length && !rel) setAssignment(e, parsed.ym + '-01', siteId, shift || e.shift);
-    for (const [day, code] of Object.entries(r.cells)) {
-      if (/^\d+$/.test(code)) continue;
-      const d = `${parsed.ym}-${pad(day)}`;
+    if (!e.assign.length && !rel) setAssignment(e, ym + '-01', siteId, shift || e.shift);
+    for (const [day, raw] of Object.entries(r.cells)) {
+      if (/^\d+(\.\d+)?$/.test(raw) || raw.startsWith('#') || +day > dim(ym)) continue;
+      const code = rel && raw === 'P' ? 'R' : raw;
+      const d = `${ym}-${pad(day)}`;
       if (!overwrite && S.att[e.id]?.[d]) continue;
       ensureCode(code, st);
       const a = assignOn(e, d);
@@ -210,14 +236,16 @@ async function importExcel(file) {
     const m = parseMasterSheet(rows);
     if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
     const c = parseClientSheet(rows);
-    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.project} · ${fmtMonYY(c.ym)} · ${c.rows.length} rows` });
+    if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.multi ? c.projects.length + ' projects' : c.project} · ${c.ym ? fmtMonYY(c.ym) : 'month not in sheet'} · ${c.rows.length} rows` });
   });
   if (!found.length) { toast('No attendance found in this file. It needs a NAME column and a row of dates (master sheet), or PROJECT NAME + MONTH + SITE NAME (client timesheet).', 7000); return; }
+  const master = found.find(f => f.type === 'master');
+  const defYm = master ? ymOf(master.p.dates[master.p.dates.length - 1]) : addMonths(ymOf(todayISO()), -1);
   openModal('Import Excel', `
     <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
     <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
     ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
-      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}</td></tr>`).join('')}
+      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}${f.type === 'client' && !f.p.ym ? ` <input type="month" data-ym="${k}" value="${defYm}" title="Which month is this sheet?">` : ''}</td></tr>`).join('')}
     </tbody></table>
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
     [{ label: 'Cancel' }, {
@@ -225,7 +253,7 @@ async function importExcel(file) {
         const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0 }; const codes = new Set(); let lastMaster = null;
         m.querySelectorAll('[data-sh]:checked').forEach(c => {
           const f = found[+c.dataset.sh];
-          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow);
+          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport(f.p, ow, m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value);
           for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x));
           if (f.type === 'master') lastMaster = f.p;
         });
