@@ -57,7 +57,7 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
     };
     let el = S.projects.find(p => /ELWOOD/.test(p.name) && /INFRA/.test(p.name));
     if (!el) { el = { id: uid('p'), name: 'SCL - ELWOOD - INFRA', active: true }; S.projects.push(el); }
-    Object.assign(el, { name: 'SCL - ELWOOD - INFRA', clientId: client('SOBHA CONSTRUCTIONS LLC').id, trackerName: 'Infra- Sobha Elwood', code: '104N135', poNo: 'INS-104N135-26-0002', woNo: 'LOR-104N135-24-0001', sapName: 'SOBHA ELWOOD INFRASTRUCTURE', orderCode: '3020110P047', tsOff: 'OFF',
+    Object.assign(el, { name: 'SCL - ELWOOD - INFRA', clientId: client('SOBHA CONSTRUCTIONS LLC').id, trackerName: 'Infra- Sobha Elwood', code: '104N135', poNo: 'INS-104N135-26-0002', woNo: 'LOR-104N135-24-0001', sapName: 'SOBHA ELWOOD INFRASTRUCTURE', orderCode: '3020110P047', tsOff: 'OFF', tsNoAck: true,
       entityName: 'SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)', billing: { basis: 'fixed', rate: 4100, vat: 0, posts: 4, unit: 'Security', rates: {} } });   // WOI: 4,100 / guard / month; invoice: 4 Security @ N Days
     reindex();
     const siteId = {}; for (const n of [INF, GATE]) { let x = S.sites.find(y => y.projectId === el.id && y.name === n); if (!x) { x = { id: uid('s'), projectId: el.id, name: n }; S.sites.push(x); } siteId[n] = x.id; }
@@ -99,11 +99,11 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
       lines: [{ desc: String(r[8] || ''), rate: amt, amount: amt, vat: 0 }], savedAt: new Date().toISOString(),
       track: { invSent: xd(r[4]) || '', paidAmt: paid || '', paidOn: /paid/i.test(status) && paid >= amt - 0.01 ? (xd(r[13]) || '') : '', status } });
   }
-  if (el) S.invoices.push({ id: uid('i'), no: '2026-0900000689', date: '2026-06-01', clientId: sclC.id, projectIds: [el.id], from: '2026-01', to: '2026-05', entity: el.entityName, trn: '100551377300003', customerCode: '', poNo: el.poNo, sapProject: el.sapName, orderCode: el.orderCode, custAddress: sclC.address, payTerms: '30 DAYS CREDIT FROM DT INV SUB', advance: 0, retention: 0, withSap: true, attachTs: true, notes: '', savedAt: new Date().toISOString(),
+  if (el) S.invoices.push({ id: uid('i'), no: '2026-0900000689', date: '2026-06-01', clientId: sclC.id, projectIds: [el.id], from: '2026-01', to: '2026-05', entity: el.entityName, trn: '100551377300003', customerCode: '', poNo: el.poNo, sapProject: el.sapName, orderCode: el.orderCode, custAddress: sclC.address, payTerms: '30 DAYS CREDIT FROM DT INV SUB', printDate: '2026-08-20', advance: 0, retention: 0, withSap: true, attachTs: true, notes: '', savedAt: new Date().toISOString(),
     lines: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(m => ({ desc: `${fmtMonYY(m)}  4 Security @ ${dim(m)} Days`, rate: 4100, amount: 16400, vat: 0, src: { pid: el.id, m, md: 4 * dim(m) } })), track: { invSent: '2026-08-20' } });
   S.invoices.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   S.settings.rateCard = [{ trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'WOI INS-104N135-26-0002' }, { trade: 'LADY SECURITY GUARD', unit: 'Female Security Guard', rate: 3990, src: 'Tax Invoice Breakup' }, { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Tax Invoice Breakup' }];
-  S.savedAt = null; S.seedVer = '2026-09-29b'; markDirty();
+  S.savedAt = null; S.seedVer = '2026-09-29c'; markDirty();
   // short ids keep the file small (e1…, s1…, p1…, c1…, i1…)
   let json = JSON.stringify(encodeState(S)); const ids = new Map(); let n = 0;
   for (const k of ['employees', 'sites', 'projects', 'clients', 'invoices']) S[k].forEach((x, i) => ids.set(x.id, x.id[0] + (i + 1)));

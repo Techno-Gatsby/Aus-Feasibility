@@ -392,7 +392,7 @@ async function exportTimesheetsXlsx(list) {
     r++;
     // signatories: labels B, D, I, R, AC; "name title" in one cell below
     const spots = [2, 4, 9, 18, 29];
-    st.signatories.forEach((s, i) => { const c = Math.min(spots[i] || 2 + i * 6, CT); ws.getCell(r, c).value = s.label; ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 1, c).value = ' ' + [s.name, s.title].filter(Boolean).join(' ') + ' '; ws.getCell(r + 1, c).alignment = { wrapText: true, vertical: 'top' }; });
+    st.signatories.forEach((s, i) => { const c = Math.min(spots[i] || 2 + i * 6, CT); ws.getCell(r, c).value = sigLabel(p, s, i); ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 1, c).value = ' ' + [s.name, s.title].filter(Boolean).join(' ') + ' '; ws.getCell(r + 1, c).alignment = { wrapText: true, vertical: 'top' }; });
     ws.getRow(r + 1).height = 45;
     ws.views = [{ state: 'frozen', ySplit: HR }];
   }

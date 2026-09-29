@@ -120,7 +120,7 @@ function invoiceHTML(dr) {
   const st = S.settings, c = IX.client.get(dr.clientId); const tt = invTotals(dr);
   const desc = l => { const m = l.desc.match(/^(.*?)([A-Z][a-z]{2}-\d{2})\s{2,}(.*)$/); return m ? `<b>${esc(m[1] + m[2])}</b><br>${esc(m[3])}` : esc(l.desc); };
   const addr = [...st.address.split('\n'), 'Tel : ' + st.tel, 'TRN No : ' + st.trn];
-  const d = new Date();
+  const pd = dr.printDate || todayISO(), d = new Date(+pd.slice(0, 4), +pd.slice(5, 7) - 1, +pd.slice(8, 10));   // date in the top corner of the break-up
   return `<div class="sheet port bu">
     <div class="bu-top"><span>${esc(st.companyShort)}</span><span>${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}</span></div>
     <div class="bu-logo"><img src="${LOGO}" alt=""></div>
@@ -188,6 +188,7 @@ function renderInvoices() {
       <div class="form">
         <label class="f">Invoice No<input type="text" data-k="no" value="${esc(dr.no)}" placeholder="2026-0900000689"></label>
         <label class="f">Invoice date<input type="date" data-k="date" value="${esc(dr.date)}"></label>
+        <label class="f">Break-up print date<input type="date" data-k="printDate" value="${esc(dr.printDate || '')}" title="Blank = today"></label>
         <label class="f">PO No<input type="text" data-k="poNo" value="${esc(dr.poNo)}" placeholder="INS-104N135-26-0002"></label>
         <label class="f">Customer code<input type="text" data-k="customerCode" value="${esc(dr.customerCode)}"></label>
         <label class="f">Client TRN<input type="text" data-k="trn" value="${esc(dr.trn)}"></label>

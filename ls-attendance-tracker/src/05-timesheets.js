@@ -49,6 +49,8 @@ function buildTimesheet(projectId, ym) {
   return { projectId, ym, days: days.length, sections, total, rows: list };
 }
 
+/** Signature label: the Elwood sheets leave the second box (acknowledge) unlabelled */
+const sigLabel = (p, s, i) => i === 1 && p?.tsNoAck ? '' : s.label;
 /** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets */
 function tsSheetHTML(ts) {
   const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days;
@@ -76,7 +78,7 @@ function tsSheetHTML(ts) {
     </div>
     <table class="ts"><thead><tr><th style="width:10%">SITE NAME</th><th style="width:4%">SHIFT<br>D/N</th><th style="width:15%">NAME</th><th style="width:7%">EMP. CODE</th>${dayTh}<th class="tt" style="width:6%">TOTAL DAYS</th></tr></thead>
     <tbody>${body}<tr class="gtr"><td colspan="${N - 6 + 4}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
-    <table class="ts-sign"><tr>${sg.map(s => `<td>${esc(s.label)}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
+    <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
   </div>`;
 }
 
