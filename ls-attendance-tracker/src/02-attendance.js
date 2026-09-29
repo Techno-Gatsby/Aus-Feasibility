@@ -17,63 +17,41 @@ function renderAttendance() {
   const v = $('#v-attendance');
   const { start, end } = attPeriod();
   const f = AV.f;
-  const projList = S.projects.filter(p => !f.client || p.clientId === f.client).sort((a, b) => a.name.localeCompare(b.name));
-  const siteList = S.sites.filter(s => (!f.project || s.projectId === f.project) && (!f.client || IX.proj.get(s.projectId)?.clientId === f.client)).sort((a, b) => a.name.localeCompare(b.name));
   const locked = AV.mode === 'payroll' && S.locks[AV.ym];
-  v.innerHTML = `<div class="shell">
-  <aside class="rail">
-    <div class="fs"><div class="lg">Period</div><div class="grp">
-      <select id="av-mode">${opts([['payroll', 'Payroll month (21st – 20th)'], ['calendar', 'Calendar month (1st – end)']], AV.mode)}</select>
-      <div class="pair"><button class="btn sm" id="av-prev">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next">▶</button></div>
-      <div class="small mono" style="color:var(--ink2)">${fmtDMY(start)} → ${fmtDMY(end)} ${locked ? '<span class="tag bad">Locked</span>' : ''}</div>
-      ${AV.mode === 'payroll' ? `<button class="btn sm" id="av-lock">${locked ? 'Unlock this month' : 'Lock this month'}</button>` : ''}
-    </div></div>
-    <div class="fs"><div class="lg">Mark selected days</div><div class="grp">
-      <div class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? ` <kbd>${c.key.toUpperCase()}</kbd>` : ''}<small>${esc(c.label)}</small></button>`).join('')}
-        <button data-code="" style="background:#fff">✕ <kbd>DEL</kbd><small>Clear</small></button></div>
-      <div id="av-selinfo" class="small muted">No days selected – click or drag in the grid.</div>
-      <button class="btn sm" id="av-edit">Reliever / other site…</button>
-      <label class="chk"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> Fill empty days only</label>
-      <div class="row"><button class="btn sm grow" id="av-all">Select all</button><button class="btn sm grow" id="av-undo">Undo</button></div>
-    </div></div>
-    <div class="fs"><div class="lg">Filter</div><div class="grp">
-      <input type="search" id="f-q" placeholder="Search name or emp ID" value="${esc(f.q)}">
-      <select id="f-client">${opts(S.clients.map(c => [c.id, c.name]), f.client, 'All clients')}</select>
-      <select id="f-project">${opts(projList.map(p => [p.id, p.name]), f.project, 'All projects')}</select>
-      <select id="f-site">${opts(siteList.map(s => [s.id, s.name]), f.site, 'All sites')}</select>
+  const scope = f.site ? siteName(f.site) : f.project ? IX.proj.get(f.project)?.name : f.client ? IX.client.get(f.client)?.name : '';
+  v.innerHTML = docHead('Attendance', `${fmtDMY(start)} – ${fmtDMY(end)}${locked ? ' · <span class="pill neg">locked</span>' : ''}`, `
+      <div class="seg"><button data-mode="payroll" class="${AV.mode === 'payroll' ? 'on' : ''}">Payroll month</button><button data-mode="calendar" class="${AV.mode === 'calendar' ? 'on' : ''}">Calendar month</button></div>
+      <button class="btn sm" id="av-prev" title="Previous month">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next" title="Next month">▶</button>`)
+  + `<div class="dc">
+    <div class="row" style="margin-bottom:8px">
+      <span class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? `<span class="kbd">${c.key.toUpperCase()}</span>` : ''}</button>`).join('')}<button data-code="" title="Clear">✕<span class="kbd">DEL</span></button></span>
+      <label class="chk muted" title="Skip days that already have a code"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> empty days only</label>
+      <span id="av-selinfo" class="muted small">Select days, then click a code or press its key.</span>
+      <span class="spacer"></span>
+      ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="av-unscope" title="Show everyone" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
+      <input type="search" id="f-q" placeholder="Name or ID" value="${esc(f.q)}" style="width:150px">
       <select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select>
       <select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select>
-      <select id="f-type">${opts([['ls', 'LS staff only'], ['sub', 'Subcontractors only']], f.type, 'LS + subcontractors')}</select>
+      <select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select>
       <select id="f-status">${opts([['active', 'Working this period'], ['left', 'Left'], ['all', 'Everyone']], f.status)}</select>
-      <select id="av-sort">${opts([['order', 'Sort: sheet order'], ['name', 'Sort: name'], ['site', 'Sort: site'], ['shift', 'Sort: shift'], ['code', 'Sort: emp ID']], AV.sort)}</select>
-    </div></div>
-  </aside>
-  <section>
-    <div class="ph-row"><div class="grow"><h2 class="ph">Attendance</h2><p class="pd">Select days in the grid (click or drag), then click a code or press its key.</p></div>
-      <button class="btn" id="av-add">+ Add employee</button><button class="btn" id="av-xls">Export Excel</button></div>
+      <select id="av-sort">${opts([['order', 'Sheet order'], ['name', 'By name'], ['site', 'By site'], ['shift', 'By shift'], ['code', 'By emp ID']], AV.sort)}</select>
+    </div>
     ${setupSteps()}
-    <div class="kpis" id="av-kpis"></div>
-    <div id="grid-wrap"></div>
-  </section></div>`;
+    <div class="kpis" id="av-kpis" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div id="grid-wrap" class="fill"></div>
+  </div>`;
 
-  const refilter = () => { AV.sel = null; renderAttendance(); };
-  $('#av-mode').onchange = e => { AV.mode = e.target.value; refilter(); };
-  $('#av-ym').onchange = e => { if (e.target.value) { AV.ym = e.target.value; refilter(); } };
-  $('#av-prev').onclick = () => { AV.ym = addMonths(AV.ym, -1); refilter(); };
-  $('#av-next').onclick = () => { AV.ym = addMonths(AV.ym, 1); refilter(); };
-  $('#f-client').onchange = e => { f.client = e.target.value; f.project = ''; f.site = ''; refilter(); };
-  $('#f-project').onchange = e => { f.project = e.target.value; f.site = ''; refilter(); };
-  for (const k of ['site', 'shift', 'trade', 'type', 'status']) $('#f-' + k).onchange = e => { f[k] = e.target.value; refilter(); };
+  const refilter = () => { AV.sel = null; renderAttendance(); renderStatus(); };
+  v.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { AV.mode = b.dataset.mode; refilter(); renderToolbar(); });
+  $('#av-ym').onchange = e => { if (e.target.value) { AV.ym = e.target.value; refilter(); renderToolbar(); } };
+  $('#av-prev').onclick = () => { AV.ym = addMonths(AV.ym, -1); refilter(); renderToolbar(); };
+  $('#av-next').onclick = () => { AV.ym = addMonths(AV.ym, 1); refilter(); renderToolbar(); };
+  for (const k of ['shift', 'trade', 'type', 'status']) $('#f-' + k).onchange = e => { f[k] = e.target.value; refilter(); };
   $('#f-q').oninput = e => { f.q = e.target.value; clearTimeout(AV._qt); AV._qt = setTimeout(() => { AV.sel = null; renderGrid(); }, 250); };
   $('#av-sort').onchange = e => { AV.sort = e.target.value; refilter(); };
-  $('#av-add').onclick = () => editEmployee(null);
-  $('#av-xls').onclick = () => exportMasterXlsx().catch(e => toast(e.message));
-  if ($('#av-lock')) $('#av-lock').onclick = () => { if (S.locks[AV.ym]) delete S.locks[AV.ym]; else S.locks[AV.ym] = true; markDirty(); renderAttendance(); };
+  if ($('#av-unscope')) $('#av-unscope').onclick = () => clearSel();
   $('#av-empty').onchange = e => AV.onlyEmpty = e.target.checked;
-  $('#av-all').onclick = () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); };
-  $('#av-undo').onclick = undoAtt;
-  $('#av-edit').onclick = () => openCellEditor();
-  $$('.codes button').forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
+  $$('.codes button', v).forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
   renderGrid();
 }
 
@@ -161,8 +139,8 @@ function renderGrid() {
   const wrap = $('#grid-wrap'); if (!wrap) return;
   if (!S.employees.length) {
     $('#av-kpis').innerHTML = '';
-    wrap.outerHTML = `<div id="grid-wrap" class="empty" style="max-height:none"><b>No employees yet</b>Load them from your master attendance Excel, or type them in one by one.
-      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">⬆ Import Excel</button><button class="btn" onclick="editEmployee(null)">+ Add employee</button></div></div>`;
+    wrap.outerHTML = `<div id="grid-wrap" class="empty fill" style="flex:none"><b>No workers yet</b>Import the master attendance workbook, or add workers one by one.
+      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button><button class="btn" onclick="editEmployee(null)">Add worker</button></div></div>`;
     return;
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
@@ -202,17 +180,17 @@ function renderFooter() {
   const cnt = {}; let blank = 0;
   for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
   const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
-  const k = (lbl, v, sub, col) => `<div class="kpi" style="--c:${col}"><div class="k">${lbl}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
-  $('#av-kpis').innerHTML = k('Employees', AV.rows.length, 'in this view', 'var(--accent)') + k('Billable days', all, S.codes.filter(c => c.billable).map(c => c.code).join(' + '), 'var(--pos)')
-    + k('Absent', cnt.A || 0, 'days', 'var(--neg)') + k('Day off', cnt.OFF || 0, 'days', 'var(--line3)') + k('Leave / other', leave, 'AL, SL, EL, SIRA…', 'var(--warn)')
-    + k('Not marked', blank, 'past days left empty', blank ? '#B45309' : 'var(--line3)');
+  const k = (lbl, v, sub, col) => `<div class="kpi" style="--c:${col}"><div class="l">${lbl}</div><div class="v">${v}</div><div class="d">${sub}</div></div>`;
+  $('#av-kpis').innerHTML = k('Workers', AV.rows.length, 'in this view', 'var(--heading)') + k('Billable days', all, S.codes.filter(c => c.billable).map(c => c.code).join(' + '), 'var(--pos)')
+    + k('Absent', cnt.A || 0, 'days', 'var(--neg)') + k('Day off', cnt.OFF || 0, 'days', 'var(--mute)') + k('Leave / other', leave, 'AL, SL, EL, SIRA…', 'var(--warn)')
+    + k('Not marked', blank, 'past days left empty', blank ? 'var(--warn)' : 'var(--mute)');
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
   const wrap = $('#grid-wrap'); if (!wrap) return;
   wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
   const s = AV.sel, si = $('#av-selinfo');
-  if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} day(s) selected</b> · ${s.r1 - s.r0 + 1} worker(s)` : 'No days selected – click or drag in the grid.';
+  if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} day(s)</b> · ${s.r1 - s.r0 + 1} worker(s) selected` : 'Select days, then click a code or press its key.';
   if (!s) return;
   const trs = wrap.querySelectorAll('tbody tr');
   for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
@@ -285,7 +263,7 @@ function openCellEditor() {
 }
 
 document.addEventListener('keydown', e => {
-  if (!$('#v-attendance').classList.contains('on') || $('#modal-bg').classList.contains('on')) return;
+  if (curView !== 'attendance' || $('#modal-bg').classList.contains('on')) return;
   if (e.target.matches('input,select,textarea')) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoAtt(); return; }
   if (!AV.sel) return;
@@ -331,7 +309,7 @@ function setupSteps() {
 }
 function openChecks() {
   const ch = dataChecks();
-  openModal('Data checks', ch.map((c, i) => `<div class="card" style="margin-bottom:10px"><div class="row"><b class="grow">${esc(c.title)} <span class="tag warn">${c.items.length}</span></b>${c.view ? `<button class="btn sm pri" data-go="${c.view}" data-ci="${i}">${esc(c.fix)} →</button>` : `<span class="small muted">${esc(c.fix)}</span>`}</div>
-    <div class="small" style="max-height:140px;overflow:auto;margin-top:6px;columns:2">${c.items.slice(0, 300).map(esc).join('<br>')}${c.items.length > 300 ? '<br>…' : ''}</div></div>`).join('') || '<p>Nothing to fix.</p>', [{ label: 'Close', cls: 'pri' }], { width: 'min(900px,100%)' });
+  openModal('Data checks', ch.map((c, i) => `<div class="comp"><div class="ch"><b class="grow">${esc(c.title)} <span class="pill warn">${c.items.length}</span></b>${c.view ? `<button class="btn sm pri" data-go="${c.view}" data-ci="${i}">${esc(c.fix)}</button>` : `<span class="small muted">${esc(c.fix)}</span>`}</div>
+    <div class="small" style="max-height:140px;overflow:auto;padding:8px 10px;columns:2">${c.items.slice(0, 300).map(esc).join('<br>')}${c.items.length > 300 ? '<br>…' : ''}</div></div>`).join('') || '<p>Nothing to fix.</p>', [{ label: 'Close', cls: 'pri' }], { width: 'min(900px,100%)' });
   $$('#modal [data-go]').forEach(b => b.onclick = () => { ch[+b.dataset.ci].act?.(); closeModal(); showView(b.dataset.go); });
 }

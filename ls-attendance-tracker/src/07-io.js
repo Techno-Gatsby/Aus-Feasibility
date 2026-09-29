@@ -282,9 +282,8 @@ function applyClientImport(parsed, overwrite, ymOverride, shared) {
   return st;
 }
 
-/** One entry point: detects master-attendance sheets and client-timesheet sheets in any workbook. */
-async function importExcel(file) {
-  const wb = await readWorkbook(file);
+/** Detect master-attendance sheets and client-timesheet sheets in a workbook. */
+function detectSheets(wb) {
   const found = [];
   wb.SheetNames.forEach((n, i) => {
     const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
@@ -293,38 +292,48 @@ async function importExcel(file) {
     const c = parseClientSheet(rows);
     if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.multi ? c.projects.length + ' projects' : c.project} · ${c.ym ? fmtMonYY(c.ym) : 'month not in sheet'} · ${c.rows.length} rows` });
   });
-  if (!found.length) { toast('No attendance found in this file. It needs a NAME column and a row of dates (master sheet), or PROJECT NAME + MONTH + SITE NAME (client timesheet).', 7000); return; }
+  return found;
+}
+/** Import the picked sheets. picks = [{ k: index in found, ym?: 'YYYY-MM' }] */
+function runImport(found, picks, ow) {
+  const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null, anyClient = false;
+  for (const { k, ym } of picks) {
+    const f = found[k]; if (!f) continue;
+    const r = f.type === 'master' ? applyMasterImport(f.p, ow) : (anyClient = true, applyClientImport({ ...f.p, ym: ym || f.p.ym }, ow, null, shared));
+    for (const x in t) t[x] += r[x] || 0; r.newCodes?.forEach(x => codes.add(x)); if (r.double) dbl.push(...r.double);
+    if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
+  }
+  clearUntouched(shared.touched, ow);
+  if (anyClient) S.issues = { at: new Date().toISOString(), double: dbl.slice(0, 2000) };
+  pruneSites(); const autoMapped = autoMapSites();
+  if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
+  markDirty();
+  return { t, dbl, codes: [...codes], autoMapped, unm: S.sites.filter(x => !x.projectId).length };
+}
+/** One entry point for the Import Excel button. */
+async function importExcel(file) {
+  const wb = await readWorkbook(file);
+  const found = detectSheets(wb);
+  if (!found.length) { toast('No attendance found. A master sheet needs a NAME column and a row of dates; a client timesheet needs PROJECT NAME, MONTH and SITE NAME.', 7000); return; }
   const master = found.find(f => f.type === 'master');
   const defYm = master ? ymOf(master.p.dates[master.p.dates.length - 1]) : addMonths(ymOf(todayISO()), -1);
-  openModal('Import Excel', `
-    <p style="margin-top:0"><b>${esc(file.name)}</b> – tick the sheets to import.</p>
-    <table class="t"><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
-    ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="tag">hidden</span>' : ''}</td>
-      <td><span class="tag ${f.type === 'master' ? 'ok' : ''}">${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</span></td><td class="small">${esc(f.info)}${f.type === 'client' ? `<div class="row" style="margin-top:4px"><span class="muted">Month:</span><input type="month" data-ym="${k}" value="${f.p.multi && master ? defYm : (f.p.ym || defYm)}">${f.p.ym && f.p.multi && master && f.p.ym !== defYm ? `<span class="tag warn">sheet says ${fmtMonYY(f.p.ym)} – check</span>` : ''}</div>` : ''}</td></tr>`).join('')}
-    </tbody></table>
-    <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace attendance already entered for the same days</label>`,
+  openModal('Import ' + file.name, `
+    <div class="tw"><table><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
+    ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="pill">hidden</span>' : ''}</td>
+      <td>${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</td><td>${esc(f.info)}${f.type === 'client' ? `<div class="row" style="margin-top:4px"><span class="muted">Month</span><input type="month" data-ym="${k}" value="${f.p.multi && master ? defYm : (f.p.ym || defYm)}">${f.p.ym && f.p.multi && master && f.p.ym !== defYm ? `<span class="pill neg">sheet says ${fmtMonYY(f.p.ym)}</span>` : ''}</div>` : ''}</td></tr>`).join('')}
+    </tbody></table></div>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace days already entered</label>`,
     [{ label: 'Cancel' }, {
       label: 'Import', cls: 'pri', onClick: m => {
-        const ow = $('#im-ow', m).checked; const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null;
-        m.querySelectorAll('[data-sh]:checked').forEach(c => {
-          const f = found[+c.dataset.sh];
-          const r = f.type === 'master' ? applyMasterImport(f.p, ow) : applyClientImport({ ...f.p, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value || f.p.ym }, ow, null, shared);
-          for (const k in t) t[k] += r[k] || 0; r.newCodes?.forEach(x => codes.add(x)); if (r.double) dbl.push(...r.double);
-          if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
-        });
-        clearUntouched(shared.touched, ow);
-        if (m.querySelector('[data-sh]:checked') && found.some((f, k) => f.type === 'client' && m.querySelector(`[data-sh="${k}"]`)?.checked)) S.issues = { at: new Date().toISOString(), double: dbl.slice(0, 2000) };
-        const pruned = pruneSites(), autoMapped = autoMapSites();
-        if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
-        markDirty(); renderAll();
-        const unm = S.sites.filter(x => !x.projectId).length;
-        openModal('Import complete', `<div class="kpis">${[['Workers added', t.created], ['Days written', t.cells], ['End dates set', t.ended], ['New sites', t.newSites], ['New projects', t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
-          ${dbl.length ? `<div class="alert"><div><b>${dbl.length} person-day(s) are billed on two rows for the same day</b> in the client timesheet – the tracker keeps the later row. Check these in the source sheet:<div class="small" style="max-height:120px;overflow:auto;margin-top:4px">${dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
-          ${t.conflicts ? `<div class="alert info">${t.conflicts} day(s) differed between the payroll sheet and the client timesheet – the client timesheet was used for client billing.</div>` : ''}
-          ${autoMapped ? `<p>${autoMapped} payroll site label(s) were linked automatically to the client-timesheet project most of their workers belong to.</p>` : ''}
-          ${codes.size ? `<p>New codes added as <b>not billable</b>: ${[...codes].map(esc).join(', ')} (change in Settings).</p>` : ''}
-          ${unm ? `<div class="alert">${unm} site(s) are not linked to a project yet. Link them so they appear on client timesheets and invoices.</div>` : ''}`,
-          unm ? [{ label: 'Later' }, { label: 'Link sites now', cls: 'pri', onClick: () => showView('projects') }] : [{ label: 'OK', cls: 'pri' }]);
+        const picks = [...m.querySelectorAll('[data-sh]:checked')].map(c => ({ k: +c.dataset.sh, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value }));
+        const r = runImport(found, picks, $('#im-ow', m).checked); renderAll();
+        openModal('Import complete', `<div class="kpis">${[['Workers added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+          ${r.dbl.length ? `<div class="alert"><div><b>${r.dbl.length} person-day(s) appear on two rows for the same day</b> – the later row was kept. Check in the source sheet:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
+          ${r.t.conflicts ? `<div class="note">${r.t.conflicts} day(s) differed between payroll and client sheet – the client sheet was used.</div>` : ''}
+          ${r.autoMapped ? `<p>${r.autoMapped} payroll site label(s) linked automatically to their project.</p>` : ''}
+          ${r.codes.length ? `<p>New codes added as not billable: ${r.codes.map(esc).join(', ')}.</p>` : ''}
+          ${r.unm ? `<div class="alert">${r.unm} site(s) not linked to a project – they appear on no client timesheet.</div>` : ''}`,
+          r.unm ? [{ label: 'Later' }, { label: 'Link sites', cls: 'pri', onClick: () => showView('projects') }] : [{ label: 'OK', cls: 'pri' }]);
         return false;
       }
     }]);

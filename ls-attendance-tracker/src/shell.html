@@ -9,36 +9,52 @@
 </style>
 </head>
 <body>
-<header id="topbar">
-  <div class="hrow">
-    <div class="brand">Latinem Securities<small>Attendance &amp; Billing</small></div>
+<div class="app">
+  <div class="menubar">
+    <span class="brand"><span class="mark">LS</span>Attendance Tracker <small>Latinem Securities</small></span>
+    <button class="menu" data-menu="file">File</button>
+    <button class="menu" data-menu="edit">Edit</button>
+    <button class="menu" data-menu="view">View</button>
+    <button class="menu" data-menu="help">Help</button>
     <span class="spacer"></span>
     <span id="savestate"></span>
-    <label class="hbtn solid" title="Import a master attendance or client timesheet workbook">⬆ Import Excel<input type="file" id="hdr-import" accept=".xlsx,.xlsm,.xls" hidden></label>
-    <button class="hbtn" id="hdr-backup" title="Download a backup copy of all data">Backup</button>
   </div>
-  <nav id="tabs">
-    <button data-view="attendance" class="on"><span class="n">1</span>Attendance</button>
-    <button data-view="timesheets"><span class="n">2</span>Client timesheets</button>
-    <button data-view="invoices"><span class="n">3</span>Invoice</button>
-    <span class="sep"></span>
-    <button data-view="employees">Employees</button>
-    <button data-view="projects">Projects &amp; sites</button>
-    <button data-view="data">Settings</button>
-  </nav>
-</header>
-<main>
-  <section id="v-attendance" class="view on"></section>
-  <section id="v-timesheets" class="view"></section>
-  <section id="v-invoices" class="view"></section>
-  <section id="v-employees" class="view"></section>
-  <section id="v-projects" class="view"></section>
-  <section id="v-data" class="view"></section>
-</main>
+  <div class="toolbar" id="toolbar"></div>
+  <div class="body" id="body">
+    <nav class="rail" id="rail">
+      <div class="railhead"><span>Clients · Projects · Sites</span><span class="muted" id="railcount"></span></div>
+      <input type="search" id="tree-q" placeholder="Find project or site">
+      <ul class="tree" id="tree"></ul>
+    </nav>
+    <main class="workspace">
+      <div class="doctabs" id="tabs" role="tablist">
+        <button class="doctab on" data-view="attendance"><span class="n">1</span>Attendance</button>
+        <button class="doctab" data-view="timesheets"><span class="n">2</span>Client timesheets</button>
+        <button class="doctab" data-view="invoices"><span class="n">3</span>Invoice</button>
+        <span class="gap"></span>
+        <button class="doctab" data-view="employees">Employees</button>
+        <button class="doctab" data-view="projects">Projects &amp; sites</button>
+        <button class="doctab" data-view="data">Settings</button>
+      </div>
+      <div class="docarea">
+        <section id="v-attendance" class="doc view on"></section>
+        <section id="v-timesheets" class="doc view"></section>
+        <section id="v-invoices" class="doc view"></section>
+        <section id="v-employees" class="doc view"></section>
+        <section id="v-projects" class="doc view"></section>
+        <section id="v-data" class="doc view"></section>
+      </div>
+    </main>
+  </div>
+  <div class="statusbar"><span id="status">Ready</span><span class="spacer"></span><span id="status2"></span></div>
+</div>
+<input type="file" id="hdr-import" accept=".xlsx,.xlsm,.xls" hidden>
+<div class="dropdown" id="dropdown" hidden></div>
 <div id="modal-bg"><div id="modal"></div></div>
-<div id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 <div id="print-root"></div>
 <script>
+'use strict';
 /*SCRIPT*/
 </script>
 </body>

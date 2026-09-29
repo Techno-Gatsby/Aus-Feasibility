@@ -63,26 +63,25 @@ function numberWords(n) {
 
 function invoiceHTML(dr) {
   const st = S.settings, c = IX.client.get(dr.clientId); const tt = invTotals(dr);
+  const desc = l => { const m = l.desc.match(/^([A-Z][a-z]{2}-\d{2})\s{2,}(.*)$/); return m ? `${esc(m[1])}<br>${esc(m[2])}` : esc(l.desc); };
   return `<div class="sheet port inv">
-    <div class="ihead"><div class="logo">${esc(st.companyShort)}</div><div class="small" style="text-align:right">TRN No : ${esc(st.trn)}<br>Tel : ${esc(st.tel)}</div></div>
-    <div class="ttl">TAX INVOICE</div>
+    <div class="ihead"><div class="logo">${esc(st.companyShort)}</div><div class="small">${new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div></div>
+    <div class="ttl">TAX INVOICE AMOUNT BREAK-UP</div>
     <div class="blocks">
-      <div class="addr"><b>${esc(st.company)}</b>\n${esc(st.address)}\nTel : ${esc(st.tel)}\nTRN No : ${esc(st.trn)}</div>
+      <div class="addr"><b>${esc(dr.entity || c?.name || '')}</b>\n${esc(c?.address || st.address)}\nTel : ${esc(st.tel)}\nTRN No : ${esc(dr.trn || c?.trn || '')}</div>
       <table class="kv">
-        <tr><td>Entity</td><td>${esc(dr.entity || c?.name || '')}</td></tr>
-        <tr><td>TRN NO</td><td>${esc(dr.trn)}</td></tr>
+        <tr><td>Entity</td><td>${esc(st.company)}</td></tr>
+        <tr><td>TRN NO</td><td>${esc(st.trn)}</td></tr>
         <tr><td>Invoice No</td><td>${esc(dr.no)}</td></tr>
         <tr><td>Invoice Date</td><td>${fmtDotDMY(dr.date)}</td></tr>
         <tr><td>PO No</td><td>${esc(dr.poNo)}</td></tr>
         <tr><td>Customer Code</td><td>${esc(dr.customerCode)}</td></tr>
       </table>
     </div>
-    <table class="lines"><thead><tr><th>Sl.No</th><th>Description</th><th>Unit Rate</th><th>Amount Excl VAT</th><th>VAT</th><th>VAT Amount</th><th>Amount Incl VAT</th></tr></thead><tbody>
-    ${dr.lines.map((l, i) => { const va = round2((+l.amount || 0) * (+l.vat || 0) / 100); return `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td><td class="num">${+l.vat || 0}%</td><td class="num">${va ? money(va) : '-'}</td><td class="num">${money((+l.amount || 0) + va)}</td></tr>`; }).join('')}
-    <tr class="tt"><td></td><td colspan="2">TOTAL</td><td class="num">${money(tt.ex)}</td><td></td><td class="num">${tt.vat ? money(tt.vat) : '-'}</td><td class="num">${money(tt.inc)}</td></tr>
+    <table class="lines"><thead><tr><th>Sl.No</th><th>Description</th><th>Unit Rate</th><th>Amount<br>Excl VAT</th><th>VAT</th><th>VAT Amount</th><th>Amount<br>Incl VAT</th></tr></thead><tbody>
+    ${dr.lines.map((l, i) => { const va = round2((+l.amount || 0) * (+l.vat || 0) / 100); return `<tr><td style="text-align:center">${i + 1}</td><td>${desc(l)}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td><td class="num">${+l.vat || 0}%</td><td class="num">${va ? money(va) : '-'}</td><td class="num">${money((+l.amount || 0) + va)}</td></tr>`; }).join('')}
     </tbody></table>
-    <h4 style="margin:18px 0 6px">AMOUNT BREAK-UP</h4>
-    <table class="kv" style="min-width:360px">
+    <table class="kv" style="margin:14px 0 0 auto;min-width:360px">
       <tr><td>Total Amount Excluding VAT</td><td class="num" style="text-align:right">${money(tt.ex)}</td></tr>
       <tr><td>VAT</td><td style="text-align:right">${tt.vat ? money(tt.vat) : '-'}</td></tr>
       <tr><td>Total Amount Including VAT</td><td style="text-align:right"><b>${money(tt.inc)}</b></td></tr>
@@ -115,75 +114,65 @@ function parseSapText(txt, dr) {
 function renderInvoices() {
   const v = $('#v-invoices');
   const dr = IV.draft ||= newInvoiceDraft();
+  const saved = S.invoices.some(x => x.id === dr.id);
   const projs = S.projects.filter(p => !dr.clientId || p.clientId === dr.clientId).sort((a, b) => a.name.localeCompare(b.name));
   const tt = invTotals(dr);
-  v.innerHTML = pageHead(S.invoices.some(x => x.id === dr.id) ? 'Invoice ' + esc(dr.no || '') : 'New invoice', 'Four steps: choose what to bill → SAP details → check lines → save & print.', '<button class="btn" id="iv-new">+ Start a new invoice</button>') + `<div class="row" style="align-items:flex-start;gap:14px">
-  <div style="flex:1 1 640px;min-width:0">
-    <div class="card">
-      <div class="step"><span>1</span>Client, projects &amp; months</div>
-      <div class="grid2">
+  const tot = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
+  v.innerHTML = docHead(saved ? 'Invoice ' + esc(dr.no || '(no number)') : 'New invoice', 'choose what to bill → SAP details → lines → save & print', saved ? statusTag(dr) : '') + `<div class="dc"><div class="split">
+  <div>
+    ${sec('iv1', '1 · Client, projects &amp; months', `
+      <div class="form">
         <label class="f">Client<select id="iv-client">${opts(S.clients.map(c => [c.id, c.name]), dr.clientId, '— all clients —')}</select></label>
         <label class="f">From month<input type="month" id="iv-from" value="${dr.from}"></label>
         <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
       </div>
-      <div style="margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px">
-        ${projs.map(p => `<label class="chk" style="display:flex;margin:3px 0"><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')} · ${esc(IX.client.get(p.clientId)?.name || 'no client')}${rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="tag warn">no rate</span>'}</span></label>`).join('') || '<span class="muted">No projects.</span>'}
-      </div>
-      </div><div class="card"><div class="step"><span>2</span>SAP details <small>from the SAP invoice</small></div>
-      <div class="grid2">
+      <div class="listbox" style="margin-top:8px">
+        ${projs.map(p => `<label><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')}${p.billing?.basis === 'lump' ? ' · fixed ' + money(p.billing.rate) : rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="pill warn">no rate</span>'}</span></label>`).join('') || '<div class="muted" style="padding:8px">No projects.</div>'}
+      </div>`, `<span class="cnt">${dr.projectIds.length} ticked</span>`)}
+    ${sec('iv2', '2 · SAP details', `
+      <div class="form">
         <label class="f">Invoice No<input type="text" data-k="no" value="${esc(dr.no)}" placeholder="2026-0900000689"></label>
         <label class="f">Invoice date<input type="date" data-k="date" value="${esc(dr.date)}"></label>
-        <label class="f">PO No<input type="text" data-k="poNo" value="${esc(dr.poNo)}"></label>
+        <label class="f">PO No<input type="text" data-k="poNo" value="${esc(dr.poNo)}" placeholder="INS-104N135-26-0002"></label>
         <label class="f">Customer code<input type="text" data-k="customerCode" value="${esc(dr.customerCode)}"></label>
-        <label class="f">TRN No<input type="text" data-k="trn" value="${esc(dr.trn)}"></label>
-        <label class="f" style="grid-column:1/-1">Entity<input type="text" data-k="entity" value="${esc(dr.entity)}"></label>
+        <label class="f">Client TRN<input type="text" data-k="trn" value="${esc(dr.trn)}"></label>
+        <label class="f wide">Entity (as on the SAP invoice)<input type="text" data-k="entity" value="${esc(dr.entity)}"></label>
       </div>
-      <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Paste from SAP…</summary>
-        <textarea id="iv-paste" style="width:100%;margin-top:6px" placeholder="Paste lines like 'Invoice No: 2026-0900000689' or a header row + value row copied from an SAP list"></textarea>
-        <button class="btn sm" id="iv-parse">Fill fields</button></details>
-      </div><div class="card"><div class="step"><span>3</span>Invoice lines <small>calculated from attendance – edit if needed</small></div>
-      <div class="row"><button class="btn pri" id="iv-gen">Generate lines from attendance</button><button class="btn sm" id="iv-addl">+ Blank line</button>
-        <label class="chk small"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> include client timesheets after the invoice</label></div>
-      <table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>Description</th><th class="num">Unit rate</th><th class="num">Amount excl VAT</th><th class="num">VAT %</th><th class="num">Incl VAT</th><th></th></tr></thead><tbody>
-      ${dr.lines.map((l, i) => `<tr><td>${i + 1}</td><td><input type="text" data-l="${i}" data-lk="desc" value="${esc(l.desc)}" style="width:100%">${l.src ? `<div class="small muted">${l.src.md} billable days in ${fmtMonYY(l.src.m)}</div>` : ''}</td>
+      <details style="margin-top:8px"><summary class="muted small" style="cursor:pointer">Paste from SAP</summary>
+        <textarea id="iv-paste" style="width:100%;margin-top:6px" placeholder="Lines like 'Invoice No: 2026-0900000689', or a header row + value row copied from SAP"></textarea>
+        <button class="btn sm" id="iv-parse">Fill fields</button></details>`)}
+    ${sec('iv3', '3 · Lines', `
+      <div class="row"><button class="btn pri" id="iv-gen">Generate from attendance</button><button class="btn sm" id="iv-addl">Blank line</button>
+        <label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> timesheets after the break-up</label></div>
+      <div class="tw" style="margin-top:8px"><table><thead><tr><th>#</th><th>Description</th><th class="num">Unit rate</th><th class="num">Excl VAT</th><th class="num">VAT %</th><th class="num">Incl VAT</th><th></th></tr></thead><tbody>
+      ${dr.lines.map((l, i) => `<tr><td>${i + 1}</td><td style="white-space:normal;min-width:260px"><input type="text" data-l="${i}" data-lk="desc" value="${esc(l.desc)}" style="width:100%">${l.src ? `<div class="muted small">${l.src.md} billable days · ${fmtMonYY(l.src.m)}</div>` : ''}</td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="rate" value="${l.rate}" style="width:95px"></td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="amount" value="${l.amount}" style="width:110px"></td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="vat" value="${l.vat}" style="width:60px"></td>
-        <td class="num">${money((+l.amount || 0) * (1 + (+l.vat || 0) / 100))}</td><td><button class="btn sm bad" data-ldel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted" style="padding:14px">Tick a project in step 1, then click <b>Generate lines from attendance</b>.</td></tr>'}
-      <tr><td></td><td><b>Total</b></td><td></td><td class="num"><b>${money(tt.ex)}</b></td><td class="num">${money(tt.vat)}</td><td class="num"><b>${money(tt.inc)}</b></td><td></td></tr>
-      </tbody></table>
-      <label class="f" style="margin-top:10px">Notes on invoice (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>
-    </div><div class="card"><div class="step"><span>4</span>Save &amp; print</div>
-      <div class="row">
-        <b class="mono" style="font-size:16px">AED ${money(tt.inc)}</b><span class="muted small">${dr.lines.length} line(s)${dr.attachTs ? ' + timesheets' : ''}</span><span class="grow"></span>
-        <button class="btn" id="iv-save">Save invoice</button>
-        <button class="btn pri" id="iv-print">Print pack / Save as PDF</button>
-      </div>
-    </div>
-    ${S.invoices.some(x => x.id === dr.id) ? `<div class="card"><div class="step"><span>5</span>Track <small>same stages as the Tax Invoice Tracker</small><span class="grow"></span>${statusTag(dr)}</div>
-      <div class="grid2">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
-      <p class="hint">Changes here save straight away.</p></div>` : ''}
-    <div id="iv-preview">${dr.lines.length ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0">Preview</div>` + invoiceHTML(dr) : ''}</div>
-  </div>
-  <div style="flex:0 1 440px;min-width:320px">
-    <div class="card"><h2>Saved invoices</h2>
-      ${(() => { const r = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
-        return S.invoices.length ? `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="k">Invoiced</div><div class="v" style="font-size:15px">${money(r.i)}</div></div><div class="kpi" style="--c:var(--pos)"><div class="k">Paid</div><div class="v" style="font-size:15px">${money(r.p)}</div></div><div class="kpi" style="--c:var(--neg)"><div class="k">Outstanding</div><div class="v" style="font-size:15px">${money(r.i - r.p)}</div></div></div>` : ''; })()}
-      <table class="t"><tbody>
-      ${[...S.invoices].reverse().map(x => `<tr><td><b>${esc(x.no || '(no number)')}</b><div class="small muted">${esc(IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
-        <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
+        <td class="num">${money((+l.amount || 0) * (1 + (+l.vat || 0) / 100))}</td><td><button class="btn sm bad" data-ldel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted" style="padding:12px">Tick a project, then Generate from attendance.</td></tr>'}
+      <tr class="total"><td></td><td>Total</td><td></td><td class="num">${money(tt.ex)}</td><td class="num">${money(tt.vat)}</td><td class="num">${money(tt.inc)}</td><td></td></tr>
       </tbody></table></div>
-    <div class="card"><h2>Merge PDFs into one pack</h2>
-      <p class="hint" style="margin-top:0">Combine the printed pack, the SAP Work Order Instruction and signed scans into one PDF.</p>
-      <label class="btn wide" style="display:block;text-align:center">+ Add PDF files<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
-      <table class="t" style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small">${i + 1}. ${esc(f.name)}</td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
+      <label class="f" style="margin-top:10px">Notes on the break-up (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>`, `<span class="cnt">AED ${money(tt.inc)}</span>`)}
+    ${saved ? sec('iv5', '4 · Track', `<div class="form">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
+      <p class="muted small" style="margin:8px 0 0">Same stages as the Tax Invoice Tracker. Saves straight away.</p>`, statusTag(dr)) : ''}
+    <div id="iv-preview">${dr.lines.length ? invoiceHTML(dr) : ''}</div>
+  </div>
+  <div>
+    ${sec('ivs', 'Saved invoices', `
+      ${S.invoices.length ? `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="l">Invoiced</div><div class="v" style="font-size:14px">${money(tot.i)}</div></div><div class="kpi" style="--c:var(--pos)"><div class="l">Paid</div><div class="v" style="font-size:14px">${money(tot.p)}</div></div><div class="kpi" style="--c:var(--neg)"><div class="l">Outstanding</div><div class="v" style="font-size:14px">${money(tot.i - tot.p)}</div></div></div>` : ''}
+      <div class="tw" style="max-height:420px"><table><tbody>
+      ${[...S.invoices].reverse().map(x => `<tr class="${x.id === dr.id ? 'on' : ''}"><td style="white-space:normal"><b>${esc(x.no || '(no number)')}</b><div class="muted small">${esc(IX.proj.get(x.projectIds?.[0])?.name || IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
+        <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
+      </tbody></table></div>`, `<span class="cnt">${S.invoices.length}</span>`)}
+    ${sec('ivm', 'Merge PDFs into one pack', `
+      <p class="muted small" style="margin:0 0 8px">SAP invoice + this break-up + timesheets + Work Order Instruction, in order.</p>
+      <label class="btn wide" style="display:block;text-align:center">Add PDF files…<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
+      <table style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small" style="white-space:normal">${i + 1}. ${esc(f.name)}</td><td style="text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
       <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
-      <div class="row end" style="margin-top:8px"><button class="btn pri" id="iv-merge" ${IV.pdfs.length < 1 ? 'disabled' : ''}>Merge &amp; download</button></div>
-    </div>
-  </div></div>`;
-
+      <div class="row end" style="margin-top:8px"><button class="btn pri" id="iv-merge" ${IV.pdfs.length < 1 ? 'disabled' : ''}>Merge &amp; download</button></div>`)}
+  </div></div></div>`;
+  bindSecs(v);
   const rer = () => renderInvoices();
-  $('#iv-new').onclick = () => { IV.draft = newInvoiceDraft(); rer(); };
   $('#iv-client').onchange = e => {
     dr.clientId = e.target.value; dr.projectIds = dr.projectIds.filter(id => !dr.clientId || IX.proj.get(id)?.clientId === dr.clientId);
     const c = IX.client.get(dr.clientId); if (c) { dr.customerCode ||= c.customerCode || ''; dr.trn ||= c.trn || ''; }
@@ -206,22 +195,10 @@ function renderInvoices() {
   v.querySelectorAll('[data-l]').forEach(i => i.onchange = () => { const l = dr.lines[+i.dataset.l]; l[i.dataset.lk] = i.dataset.lk === 'desc' ? i.value : +i.value; rer(); });
   v.querySelectorAll('[data-ldel]').forEach(b => b.onclick = () => { dr.lines.splice(+b.dataset.ldel, 1); rer(); });
   $('#iv-parse').onclick = () => { const n = parseSapText($('#iv-paste').value, dr); toast(n ? `Filled ${n} field(s)` : 'No recognised fields – use "Label: value" lines'); rer(); };
-  $('#iv-gen').onclick = () => {
-    if (!dr.projectIds.length) return toast('Tick at least one project');
-    dr.lines = invoiceLines(dr); rer();
-    const noRate = [...new Set(dr.lines.filter(l => l.noRate).map(l => l.desc.split('@')[0].trim()))];
-    if (noRate.length) toast('No rate for: ' + noRate.join(', ') + ' – set it in Settings → Rate card or on the project', 7000);
-  };
+  $('#iv-gen').onclick = () => ivCmd('gen');
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
   $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
-  $('#iv-save').onclick = () => { saveInvoice(dr); rer(); };
   v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
-  $('#iv-print').onclick = () => {
-    if (!dr.lines.length) return toast('Generate or add lines first');
-    let html = invoiceHTML(dr);
-    if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) html += tsSheetHTML(buildTimesheet(pid, m));
-    printHTML(html);
-  };
   v.querySelectorAll('[data-iopen]').forEach(b => b.onclick = () => { IV.draft = JSON.parse(JSON.stringify(S.invoices.find(x => x.id === b.dataset.iopen))); rer(); });
   v.querySelectorAll('[data-idel]').forEach(b => b.onclick = async () => { if (!await confirmBox('Delete this saved invoice?', 'Delete', 'bad')) return; S.invoices = S.invoices.filter(x => x.id !== b.dataset.idel); markDirty(); rer(); });
   $('#iv-pdfs').onchange = e => { IV.pdfs.push(...e.target.files); rer(); };
@@ -229,6 +206,26 @@ function renderInvoices() {
   v.querySelectorAll('[data-pd]').forEach(b => b.onclick = () => { const i = +b.dataset.pd; if (i < IV.pdfs.length - 1) [IV.pdfs[i + 1], IV.pdfs[i]] = [IV.pdfs[i], IV.pdfs[i + 1]]; rer(); });
   v.querySelectorAll('[data-px]').forEach(b => b.onclick = () => { IV.pdfs.splice(+b.dataset.px, 1); rer(); });
   $('#iv-merge').onclick = () => mergePdfs($('#iv-pdfname').value).catch(e => toast(e.message, 5000));
+}
+/** Toolbar / menu commands */
+function ivCmd(cmd) {
+  if (curView !== 'invoices') showView('invoices');
+  const dr = IV.draft ||= newInvoiceDraft();
+  if (cmd === 'new') { IV.draft = newInvoiceDraft(); renderInvoices(); return; }
+  if (cmd === 'gen') {
+    if (!dr.projectIds.length) return toast('Tick at least one project');
+    dr.lines = invoiceLines(dr); renderInvoices();
+    const noRate = [...new Set(dr.lines.filter(l => l.noRate).map(l => l.desc.split('@')[0].trim()))];
+    if (noRate.length) toast('No rate for: ' + noRate.join(', ') + ' – enter it in Settings → Rate card or on the project', 7000);
+    return;
+  }
+  if (cmd === 'save') { saveInvoice(dr); renderInvoices(); return; }
+  if (cmd === 'print') {
+    if (!dr.lines.length) return toast('Generate or add lines first');
+    let html = invoiceHTML(dr);
+    if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) html += tsSheetHTML(buildTimesheet(pid, m));
+    printHTML(html);
+  }
 }
 function defaultPackName(dr) {
   const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;
@@ -239,11 +236,12 @@ function defaultPackName(dr) {
     : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
   return `Tax Invoice_${who}-${per}.pdf`;
 }
-const TRACK = [['tsSent', 'Timesheet sent to client', 'date'], ['tsApproved', 'Timesheet approved', 'date'], ['invSent', 'Invoice submitted', 'date'], ['invProcessed', 'Invoice processed', 'date'], ['spcNo', 'SPC No', 'text'], ['paidOn', 'Payment received', 'date'], ['paidAmt', 'Amount received (blank = full)', 'number']];
+const TRACK = [['tsSent', 'Timesheet submitted to client', 'date'], ['tsApproved', 'Approval from client', 'date'], ['invSent', 'Invoice submitted to client', 'date'], ['invProcessed', 'Invoice processing', 'date'], ['spcNo', 'SPC No', 'text'], ['paidOn', 'Payment received', 'date'], ['paidAmt', 'Amount received (blank = full)', 'number']];
 function statusTag(x) {
   const t = x.track || {};
-  const [l, c] = t.paidOn ? (t.paidAmt && +t.paidAmt < invTotals(x).inc - 0.01 ? ['Part paid', 'warn'] : ['Paid', 'ok']) : t.invProcessed ? ['Processed', ''] : t.invSent ? ['Invoice sent', ''] : t.tsApproved ? ['TS approved', ''] : t.tsSent ? ['TS sent', ''] : ['Draft', 'warn'];
-  return `<span class="tag ${c}">${l}</span>`;
+  const inc = invTotals(x).inc, paid = +t.paidAmt || 0;
+  const [l, c] = t.paidOn || paid >= inc - 0.01 ? (paid && paid < inc - 0.01 ? ['Part paid', 'warn'] : ['Paid', 'pos']) : paid ? ['Part paid', 'warn'] : t.invProcessed ? ['Processed', ''] : t.invSent ? ['Invoice sent', ''] : t.tsApproved ? ['TS approved', ''] : t.tsSent ? ['TS sent', ''] : ['Draft', 'warn'];
+  return `<span class="pill ${c}">${l}</span>`;
 }
 function saveInvoice(dr) {
   const i = S.invoices.findIndex(x => x.id === dr.id);

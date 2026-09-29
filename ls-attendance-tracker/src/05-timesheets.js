@@ -58,7 +58,7 @@ function tsSheetHTML(ts) {
         <td class="tot">${r.total}</td></tr>`;
     });
   }
-  if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance recorded for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
+  if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
   const legend = TS_LEGEND.map(([a, b]) => `<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('');
   const signs = st.signatories.map(s => `<div><b>${esc(s.label)}</b>${esc([s.name, s.title].filter(Boolean).join(' '))}</div>`).join('');
   return `<div class="sheet land ts-sheet">
@@ -80,29 +80,33 @@ function renderTimesheets() {
   if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
   const chosen = all.filter(x => TV.picked.has(x.p.id));
   const pv = all.find(x => x.p.id === TV.preview) || chosen[0] || null;
-  v.innerHTML = pageHead('Client timesheets', 'Made automatically from Attendance – one sheet per project for the calendar month. Tick projects, then print or export.') + `<div class="card">
-    <div class="row">
-            <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>
+  TV.chosen = chosen;
+  const D = dim(TV.ym), sumDays = all.reduce((a, x) => a + x.ts.total, 0);
+  v.innerHTML = docHead('Client timesheets', `one LS/DO/F-026 sheet per project · ${chosen.length} ticked for print / export`, `
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
-      <span class="grow"></span>
-      <button class="btn" id="tv-xls">Export Excel (1 tab per project)</button>
-      <button class="btn pri" id="tv-print">Print / Save as PDF</button>
-    </div>
-    <div class="scroll" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th>Client</th><th class="num">Staff rows</th><th class="num">Billable days</th><th class="num">≈ Guards (days ÷ ${dim(TV.ym)})</th></tr></thead><tbody>
-    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td>${esc(p.name)}</td><td class="small">${esc(IX.client.get(p.clientId)?.name || '')}</td>
-      <td class="num">${ts.rows.length}</td><td class="num">${ts.total}</td><td class="num">${qtyFmt(ts.total / dim(TV.ym))}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No projects yet – set them up under Clients, projects &amp; sites.</td></tr>'}
-    </tbody></table></div>
-  </div>
-  <div id="tv-sheets">${pv ? `<div class="lg" style="border:1px solid var(--line);border-bottom:0;border-radius:5px 5px 0 0;max-width:1120px;margin:0 auto">Preview – ${esc(pv.p.name)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· click a project above to preview it · ${chosen.length} ticked for print / export</span></div>` + tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>`;
-  $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; renderTimesheets(); } };
-  $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; renderTimesheets(); };
-  $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; renderTimesheets(); };
-  $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; renderTimesheets(); };
-  $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); renderTimesheets(); };
+      <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`)
+  + `<div class="dc"><div class="split" style="grid-template-columns:minmax(360px,460px) 1fr">
+    <div class="tw" style="max-height:calc(100vh - 190px)"><table><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
+    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td title="${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}</td>
+      <td class="num">${ts.rows.length || ''}</td><td class="num">${ts.total || ''}</td><td class="num">${ts.total ? qtyFmt(ts.total / D) : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No projects yet.</td></tr>'}
+    </tbody><tfoot><tr class="total"><td></td><td>${all.length} projects</td><td></td><td class="num">${sumDays}</td><td class="num">${qtyFmt(sumDays / D)}</td></tr></tfoot></table></div>
+    <div id="tv-sheets" style="min-width:0;overflow:auto">${pv ? tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>
+  </div></div>`;
+  const rer = () => { renderTimesheets(); renderStatus(); };
+  $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; rer(); } };
+  $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; rer(); };
+  $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; rer(); };
+  $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; rer(); };
+  $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); rer(); };
   v.querySelectorAll('[data-pv]').forEach(tr => tr.onclick = e => { if (e.target.matches('input')) return; TV.preview = tr.dataset.pv; renderTimesheets(); });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
-  $('#tv-print').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); printHTML(chosen.map(x => tsSheetHTML(x.ts)).join('')); };
-  $('#tv-xls').onclick = () => { if (!chosen.length) return toast('Tick at least one project'); exportTimesheetsXlsx(chosen.map(x => x.ts)).catch(e => toast(e.message)); };
+}
+/** Toolbar / menu commands for the ticked projects */
+function tsCmd(cmd) {
+  if (curView !== 'timesheets') showView('timesheets');
+  const chosen = TV.chosen || []; if (!chosen.length) return toast('Tick at least one project');
+  if (cmd === 'print') printHTML(chosen.map(x => tsSheetHTML(x.ts)).join(''));
+  else exportTimesheetsXlsx(chosen.map(x => x.ts)).catch(e => toast(e.message));
 }
 
 function printHTML(html) {

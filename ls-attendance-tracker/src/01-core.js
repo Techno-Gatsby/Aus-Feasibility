@@ -1,4 +1,3 @@
-'use strict';
 /* =====================================================================
    LS Attendance Tracker - core: utilities, dates, state, persistence
    ===================================================================== */
@@ -161,6 +160,30 @@ function migrate(st) {
   return st;
 }
 
+/* ---------- shipped data: compact encoding of att (one char per day) ---------- */
+const B62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function encodeState(st) {
+  const codes = st.codes.map(c => c.code), extra = [], att = {};
+  for (const [eid, days] of Object.entries(st.att)) {
+    const months = {};
+    for (const [d, v] of Object.entries(days)) {
+      const c = typeof v === 'string' ? v : v.c; let ci = codes.indexOf(c); if (ci < 0) { codes.push(c); ci = codes.length - 1; }
+      (months[d.slice(0, 7)] ||= Array(31).fill('.'))[+d.slice(8) - 1] = B62[ci];
+      if (typeof v === 'object' && (v.s || v.sh)) extra.push([eid, d, v.s || '', v.sh || '']);
+    }
+    att[eid] = Object.fromEntries(Object.entries(months).map(([m, a]) => [m, a.join('').replace(/\.+$/, '')]));
+  }
+  return { ...st, att, _codes: codes, _extra: extra, _enc: 1 };
+}
+function decodeState(x) {
+  if (!x?._enc) return x;
+  const att = {};
+  for (const [eid, months] of Object.entries(x.att)) { const o = att[eid] = {}; for (const [ym, s] of Object.entries(months)) for (let i = 0; i < s.length; i++) if (s[i] !== '.') o[`${ym}-${pad(i + 1)}`] = x._codes[B62.indexOf(s[i])]; }
+  for (const [eid, d, s, sh] of x._extra) { const c = att[eid][d]; att[eid][d] = { c, ...(s ? { s } : {}), ...(sh ? { sh } : {}) }; }
+  const st = { ...x, att }; delete st._codes; delete st._extra; delete st._enc; return st;
+}
+function shippedState() { return typeof SEED !== 'undefined' && SEED ? decodeState(JSON.parse(JSON.stringify(SEED))) : defaultState(); }
+
 /* ---------- attendance helpers ---------- */
 function getCell(empId, d) { const v = S.att[empId]?.[d]; if (!v) return null; return typeof v === 'string' ? { c: v } : v; }
 function putCell(empId, d, val) {
@@ -194,8 +217,13 @@ function setAssignment(emp, from, site, shift) {
 }
 
 /* ---------- small UI helpers ---------- */
-const pageHead = (t, d, act = '') => `<div class="ph-row"><div class="grow"><h2 class="ph">${t}</h2><p class="pd">${d}</p></div>${act}</div>`;
-function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
+/** Document header: title, short sub text, right-hand controls */
+const docHead = (t, sub = '', right = '') => `<div class="dh"><h2>${t}</h2>${sub ? `<span class="sub">${sub}</span>` : ''}<span class="spacer"></span>${right}</div>`;
+/** Collapsible section (state kept per id) */
+const SEC_CLOSED = new Set();
+const sec = (id, title, body, extra = '') => `<div class="sec ${SEC_CLOSED.has(id) ? 'closed' : ''}" data-sec="${id}"><div class="sh"><span class="car">▾</span>${title}${extra}</div><div class="sb">${body}</div></div>`;
+function bindSecs(root) { root.querySelectorAll('.sec>.sh').forEach(h => h.onclick = e => { if (e.target.closest('button,input,select,a')) return; const s = h.parentElement; s.classList.toggle('closed'); s.classList.contains('closed') ? SEC_CLOSED.add(s.dataset.sec) : SEC_CLOSED.delete(s.dataset.sec); }); }
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms); }
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
   const m = $('#modal');
   m.style.width = opts.width || '';
