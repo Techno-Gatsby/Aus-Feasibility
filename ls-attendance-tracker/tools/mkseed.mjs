@@ -72,7 +72,7 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
     lines: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(m => ({ desc: `${fmtMonYY(m)}  4 Security @ ${dim(m)} Days`, rate: 4100, amount: 16400, vat: 0, src: { pid: el.id, m, md: 4 * dim(m) } })), track: { invSent: '2026-08-20' } });
   S.invoices.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   S.settings.rateCard = [{ trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'WOI INS-104N135-26-0002' }, { trade: 'LADY SECURITY GUARD', unit: 'Female Security Guard', rate: 3990, src: 'Tax Invoice Breakup' }, { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Tax Invoice Breakup' }];
-  S.savedAt = null; markDirty();
+  S.savedAt = null; S.seedVer = '2026-09-29'; markDirty();
   // short ids keep the file small (e1…, s1…, p1…, c1…, i1…)
   let json = JSON.stringify(encodeState(S)); const ids = new Map(); let n = 0;
   for (const k of ['employees', 'sites', 'projects', 'clients', 'invoices']) S[k].forEach((x, i) => ids.set(x.id, x.id[0] + (i + 1)));

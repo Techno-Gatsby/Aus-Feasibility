@@ -90,6 +90,13 @@ function renderData() {
     S = defaultState(); reindex(); markDirty(); renderAll(); toast('All data deleted');
   };
 }
+async function restorePrev() {
+  let j = null; try { j = await IDB.get('state-prev'); } catch (e) { }
+  if (!j) return toast('No earlier data saved');
+  const st = JSON.parse(j);
+  if (!await confirmBox(`Replace current data with the data from before the update (${st.employees?.length || 0} workers, ${st.projects?.length || 0} projects)?`, 'Restore', 'bad')) return;
+  st.seedVer = 'restored'; S = migrate(st); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Earlier data restored');
+}
 function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
 
 /* ---------- shell: views, toolbar, menus, tree, status ---------- */
@@ -132,7 +139,7 @@ function renderStatus() {
 const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
-    ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
+    ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
   edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
     ['Add worker…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
   view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Employees', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
@@ -226,7 +233,11 @@ function defaultPeriods() {
 async function init() {
   let st = null;
   try { const j = await IDB.get('state'); if (j) st = JSON.parse(j); } catch (e) { console.warn('IndexedDB unavailable', e); }
+  // data saved by a version without the shipped LS workbook data is replaced by it (old copy kept, File → Restore data from before update)
+  let replaced = false;
+  if (st && !st.seedVer && typeof SEED !== 'undefined' && SEED && location.hash !== '#empty') { try { await IDB.set('state-prev', JSON.stringify(st)); } catch (e) { } st = null; replaced = true; }
   S = migrate(location.hash === '#empty' ? defaultState() : st || shippedState()); reindex(); defaultPeriods();
+  if (replaced) { markDirty(); setTimeout(() => toast('Loaded the LS workbook data. Your previous data is kept: File → Restore data from before update', 8000), 400); }
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });

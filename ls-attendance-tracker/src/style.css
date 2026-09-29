@@ -268,3 +268,27 @@ table.ts tr.gtr td,table.ts tr.gtr:hover td{background:#f2f2f2}
   #print-root .sheet.port{page:port}
   table.ts th,.inv table.lines th,.inv table.kv td,.inv table.lines tr.tt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ---- compact attendance header: one control row + one stat line, grid takes the rest ---- */
+.dh.slim{padding:6px 12px;gap:6px;min-height:40px}
+.dh .sep{width:1px;height:20px;background:var(--line2);margin:0 4px}
+.dh.slim input[type=month]{min-height:26px;padding:2px 6px;width:150px}
+.dh.slim .codes button{padding:2px 6px;font-size:11px}
+.pill .x{border:0;background:none;padding:0 0 0 2px;cursor:pointer;color:var(--mute);font-size:11px}
+.pill .x:hover{color:var(--neg)}
+.statline{display:flex;align-items:center;gap:16px;padding:4px 14px;border-bottom:1px solid var(--line2);background:var(--surface);font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;min-height:30px}
+.statline .st b{font-family:var(--font-mono);font-weight:700}
+.chkbtn{border:1px solid #E8D3A8;background:var(--warn-bg);color:var(--warn);border-radius:999px;padding:2px 10px;font-size:11.5px;cursor:pointer;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chkbtn:hover{filter:brightness(.97)}
+#v-attendance #grid-wrap{flex:1;min-height:0;border:0;border-radius:0}
+#v-attendance #grid-wrap.empty{flex:none;margin:16px}
+.body{grid-template-columns:240px 1fr}
+.form.one{grid-template-columns:1fr}
+table.ag{table-layout:fixed}
+table.ag td{overflow:hidden;text-overflow:ellipsis}
+table.ag td.r{text-align:right;color:var(--faint);font-family:var(--font-mono);font-size:10.5px}
+table.ag .fix.edge{box-shadow:inset -2px 0 0 var(--line2)}
+table.ag thead th .mo{display:block;font:500 8.5px var(--font-body);color:var(--mute);line-height:1}
+table.ag thead tr:nth-child(2) th{line-height:1.05}
+table.ag td.sum{overflow:hidden;text-overflow:ellipsis}
+table.ag tfoot td{font-size:9px;padding:0;text-overflow:clip;letter-spacing:-.03em}

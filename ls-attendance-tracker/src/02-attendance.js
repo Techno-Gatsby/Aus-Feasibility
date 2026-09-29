@@ -4,7 +4,7 @@
 const AV = {
   ym: null, mode: 'payroll',
   f: { client: '', project: '', site: '', shift: '', trade: '', type: '', status: 'active', q: '' },
-  sort: 'order', rows: [], dates: [], sel: null, anchor: null, drag: false, onlyEmpty: false, undo: []
+  sort: 'order', details: false, rows: [], dates: [], sel: null, anchor: null, drag: false, onlyEmpty: false, undo: []
 };
 
 function attPeriod() {
@@ -19,41 +19,49 @@ function renderAttendance() {
   const f = AV.f;
   const locked = AV.mode === 'payroll' && S.locks[AV.ym];
   const scope = f.site ? siteName(f.site) : f.project ? IX.proj.get(f.project)?.name : f.client ? IX.client.get(f.client)?.name : '';
-  v.innerHTML = docHead('Attendance', `${fmtDMY(start)} – ${fmtDMY(end)}${locked ? ' · <span class="pill neg">locked</span>' : ''}`, `
-      <div class="seg"><button data-mode="payroll" class="${AV.mode === 'payroll' ? 'on' : ''}">Payroll month</button><button data-mode="calendar" class="${AV.mode === 'calendar' ? 'on' : ''}">Calendar month</button></div>
-      <button class="btn sm" id="av-prev" title="Previous month">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next" title="Next month">▶</button>`)
-  + `<div class="dc">
-    <div class="row" style="margin-bottom:8px">
-      <span class="codes">${S.codes.map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}">${esc(c.code)}${c.key ? `<span class="kbd">${c.key.toUpperCase()}</span>` : ''}</button>`).join('')}<button data-code="" title="Clear">✕<span class="kbd">DEL</span></button></span>
-      <label class="chk muted" title="Skip days that already have a code"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> empty days only</label>
-      <span id="av-selinfo" class="muted small">Select days, then click a code or press its key.</span>
+  const nf = ['shift', 'trade', 'type'].filter(k => f[k]).length + (f.status !== 'active') + (AV.sort !== 'order') + !!AV.onlyEmpty;
+  v.innerHTML = `<div class="dh slim">
+      <div class="seg"><button data-mode="payroll" class="${AV.mode === 'payroll' ? 'on' : ''}" title="21st – 20th">Payroll</button><button data-mode="calendar" class="${AV.mode === 'calendar' ? 'on' : ''}" title="1st – end of month">Calendar</button></div>
+      <button class="btn sm" id="av-prev" title="Previous month">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next" title="Next month">▶</button>
+      <span class="sub mono">${fmtDMY(start)} – ${fmtDMY(end)}</span>${locked ? '<span class="pill neg">locked</span>' : ''}
+      <span class="sep"></span>
+      <span class="codes">${S.codes.filter(c => c.key || codeUsed(c.code)).map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' · key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}<button data-code="" title="Clear · Del">✕</button></span>
+      <span id="av-selinfo" class="muted small"></span>
       <span class="spacer"></span>
-      ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="av-unscope" title="Show everyone" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
-      <input type="search" id="f-q" placeholder="Name or ID" value="${esc(f.q)}" style="width:150px">
-      <select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select>
-      <select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select>
-      <select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select>
-      <select id="f-status">${opts([['active', 'Working this period'], ['left', 'Left'], ['all', 'Everyone']], f.status)}</select>
-      <select id="av-sort">${opts([['order', 'Sheet order'], ['name', 'By name'], ['site', 'By site'], ['shift', 'By shift'], ['code', 'By emp ID']], AV.sort)}</select>
+      ${scope ? `<span class="pill">${esc(scope)} <button class="x" id="av-unscope" title="Show everyone">✕</button></span>` : ''}
+      <input type="search" id="f-q" placeholder="Name or ID" value="${esc(f.q)}" style="width:140px">
+      <button class="btn sm" id="av-filt">Filters${nf ? ` <span class="pill">${nf}</span>` : ''} ▾</button>
     </div>
-    ${setupSteps()}
-    <div class="kpis" id="av-kpis" style="grid-template-columns:repeat(6,1fr)"></div>
-    <div id="grid-wrap" class="fill"></div>
-  </div>`;
-
+    <div class="statline" id="av-kpis"></div>
+    <div id="grid-wrap"></div>`;
+  v.querySelector('#av-filt').onclick = e => {
+    const dd = $('#dropdown'); const r = e.currentTarget.getBoundingClientRect();
+    dd.innerHTML = `<div class="form one" style="padding:8px;gap:8px;width:230px">
+      <label class="f">Shift<select id="f-shift">${opts(S.settings.shifts, f.shift, 'All shifts')}</select></label>
+      <label class="f">Trade<select id="f-trade">${opts(S.settings.trades, f.trade, 'All trades')}</select></label>
+      <label class="f">Staff<select id="f-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], f.type, 'LS + subcon')}</select></label>
+      <label class="f">Show<select id="f-status">${opts([['active', 'Working this period'], ['left', 'Left'], ['all', 'Everyone']], f.status)}</select></label>
+      <label class="f">Sort<select id="av-sort">${opts([['order', 'Sheet order'], ['name', 'Name'], ['site', 'Site'], ['shift', 'Shift'], ['code', 'Emp ID']], AV.sort)}</select></label>
+      <label class="chk"><input type="checkbox" id="av-det" ${AV.details ? 'checked' : ''}> Show trade &amp; D.O.J columns</label>
+      <label class="chk"><input type="checkbox" id="av-empty" ${AV.onlyEmpty ? 'checked' : ''}> Codes fill empty days only</label></div>`;
+    dd.style.left = Math.max(8, r.right - 246) + 'px'; dd.style.top = r.bottom + 4 + 'px'; dd.hidden = false;
+    for (const k of ['shift', 'trade', 'type', 'status']) $('#f-' + k).onchange = ev => { f[k] = ev.target.value; closeMenu(); refilter(); };
+    $('#av-sort').onchange = ev => { AV.sort = ev.target.value; closeMenu(); refilter(); };
+    $('#av-empty').onchange = ev => { AV.onlyEmpty = ev.target.checked; closeMenu(); renderAttendance(); };
+    $('#av-det').onchange = ev => { AV.details = ev.target.checked; closeMenu(); renderGrid(); };
+  };
   const refilter = () => { AV.sel = null; renderAttendance(); renderStatus(); };
   v.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { AV.mode = b.dataset.mode; refilter(); renderToolbar(); });
   $('#av-ym').onchange = e => { if (e.target.value) { AV.ym = e.target.value; refilter(); renderToolbar(); } };
   $('#av-prev').onclick = () => { AV.ym = addMonths(AV.ym, -1); refilter(); renderToolbar(); };
   $('#av-next').onclick = () => { AV.ym = addMonths(AV.ym, 1); refilter(); renderToolbar(); };
-  for (const k of ['shift', 'trade', 'type', 'status']) $('#f-' + k).onchange = e => { f[k] = e.target.value; refilter(); };
   $('#f-q').oninput = e => { f.q = e.target.value; clearTimeout(AV._qt); AV._qt = setTimeout(() => { AV.sel = null; renderGrid(); }, 250); };
-  $('#av-sort').onchange = e => { AV.sort = e.target.value; refilter(); };
   if ($('#av-unscope')) $('#av-unscope').onclick = () => clearSel();
-  $('#av-empty').onchange = e => AV.onlyEmpty = e.target.checked;
   $$('.codes button', v).forEach(b => b.onclick = () => applyToSel(b.dataset.code ? { c: b.dataset.code } : null));
   renderGrid();
 }
+
+function codeUsed(code) { for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) return true; } return false; }
 
 function computeAttRows() {
   const { start, end } = attPeriod();
@@ -124,32 +132,38 @@ function rowHTML(i) {
   const other = Object.entries(counts).filter(([k]) => k !== 'P').map(([k, n]) => `${k}${n}`).join(' · ');
   const proj = projOfSite(lastSite);
   const left = emp.end && emp.end <= AV.dates[AV.dates.length - 1];
+  const L = gridCols().left, det = AV.details;
   return `<tr data-r="${i}" class="${left ? 'left' : ''}">
-    <td class="fix" style="left:0;width:38px;min-width:38px;text-align:right">${i + 1}</td>
-    <td class="fix nm" style="left:38px;width:210px;min-width:210px" data-emp="${emp.id}" title="${esc(emp.name)} – click to edit">${esc(emp.name)}</td>
-    <td>${esc(empCodeLabel(emp))}</td><td>${esc(shift)}</td><td class="small">${esc(emp.trade || '')}</td>
-    <td class="small" title="${esc(proj ? proj.name : 'Site not mapped to a project')}">${esc(siteName(lastSite))}${sites.size > 1 ? ` <span class="tag">+${sites.size - 1}</span>` : ''}</td>
-    <td class="small">${fmtDMY(emp.doj)}</td>
+    <td class="fix r" style="left:${L[0]}px">${i + 1}</td>
+    <td class="fix nm" style="left:${L[1]}px" data-emp="${emp.id}" title="${esc(emp.name)}${emp.doj ? ' · joined ' + fmtDMY(emp.doj) : ''}${emp.trade ? ' · ' + esc(emp.trade) : ''} – click to edit">${esc(emp.name)}</td>
+    <td class="fix mono" style="left:${L[2]}px">${esc(empCodeLabel(emp))}</td><td class="fix" style="left:${L[3]}px">${esc(shift[0] || '')}</td>
+    <td class="fix edge" style="left:${L[4]}px" title="${esc(siteName(lastSite))} · ${esc(proj ? proj.name : 'site not linked to a project')}">${esc(siteName(lastSite))}${sites.size > 1 ? ` <span class="tag">+${sites.size - 1}</span>` : ''}</td>
+    ${det ? `<td>${esc(emp.trade || '')}</td><td class="mono">${fmtDMY(emp.doj)}</td>` : ''}
     ${cells}
-    <td class="tot">${p}</td><td class="tot" style="color:var(--brand2)">${bill}</td><td class="sum">${esc(other)}</td></tr>`;
+    <td class="tot">${p}</td><td class="tot" style="color:var(--accent)">${bill}</td><td class="sum" title="${esc(other)}">${esc(other)}</td></tr>`;
 }
 
+/** Column widths (px): identity block stays pinned while the days scroll */
+const GW = [34, 190, 76, 26, 150], GD = [112, 78];
+function gridCols() { const left = []; GW.reduce((a, w, i) => (left[i] = a, a + w), 0); return { left, width: GW.reduce((a, b) => a + b, 0) + (AV.details ? GD[0] + GD[1] : 0) + AV.dates.length * 28 + 34 + 38 + 110 }; }
 function renderGrid() {
   computeAttRows();
   const wrap = $('#grid-wrap'); if (!wrap) return;
   if (!S.employees.length) {
     $('#av-kpis').innerHTML = '';
-    wrap.outerHTML = `<div id="grid-wrap" class="empty fill" style="flex:none"><b>No workers yet</b>Import the master attendance workbook, or add workers one by one.
+    wrap.outerHTML = `<div id="grid-wrap" class="empty"><b>No workers yet</b>Import the master attendance workbook, or add workers one by one.
       <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button><button class="btn" onclick="editEmployee(null)">Add worker</button></div></div>`;
     return;
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
-  const dh2 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}" title="${fmtDMY(d)}">${+d.slice(8)}${d.slice(8) === '01' || d === AV.dates[0] ? '<br><span class="small muted">' + MON[+d.slice(5, 7) - 1] + '</span>' : ''}</th>`).join('');
-  wrap.innerHTML = `<table class="ag"><thead>
-    <tr><th class="fix" rowspan="2" style="left:0">#</th><th class="fix" rowspan="2" style="left:38px;text-align:left">Name</th><th rowspan="2">Emp ID</th><th rowspan="2">Shift</th><th rowspan="2">Trade</th><th rowspan="2">Site</th><th rowspan="2">D.O.J</th>${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
+  const dh2 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}" title="${fmtDMY(d)}">${+d.slice(8)}${d.slice(8) === '01' || d === AV.dates[0] ? '<span class="mo">' + MON[+d.slice(5, 7) - 1] + '</span>' : ''}</th>`).join('');
+  const { left: L, width } = gridCols(), det = AV.details;
+  const col = `<colgroup>${GW.map(w => `<col style="width:${w}px">`).join('')}${det ? GD.map(w => `<col style="width:${w}px">`).join('') : ''}${AV.dates.map(() => '<col style="width:28px">').join('')}<col style="width:34px"><col style="width:38px"><col style="width:110px"></colgroup>`;
+  wrap.innerHTML = `<table class="ag" style="width:${width}px">${col}<thead>
+    <tr><th class="fix" rowspan="2" style="left:${L[0]}px">#</th><th class="fix" rowspan="2" style="left:${L[1]}px;text-align:left">Name</th><th class="fix" rowspan="2" style="left:${L[2]}px">Emp ID</th><th class="fix" rowspan="2" style="left:${L[3]}px" title="Shift D/N">S</th><th class="fix edge" rowspan="2" style="left:${L[4]}px;text-align:left">Site</th>${det ? '<th rowspan="2">Trade</th><th rowspan="2">D.O.J</th>' : ''}${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
     <tr>${dh2}</tr></thead>
     <tbody>${AV.rows.map((_, i) => rowHTML(i)).join('')}</tbody>
-    <tfoot><tr><td class="fix" style="left:0"></td><td class="fix" style="left:38px;text-align:left">Billable per day</td><td colspan="5"></td>${AV.dates.map((_, j) => `<td data-f="${j}"></td>`).join('')}<td colspan="3" id="av-ftot"></td></tr></tfoot></table>`;
+    <tfoot><tr><td class="fix edge" colspan="5" style="left:0;text-align:right;padding-right:8px">Billable per day</td>${det ? '<td colspan="2"></td>' : ''}${AV.dates.map((_, j) => `<td data-f="${j}"></td>`).join('')}<td colspan="3" id="av-ftot"></td></tr></tfoot></table>`;
   renderFooter();
   paintSel();
   const tb = wrap.querySelector('tbody');
@@ -175,22 +189,21 @@ function renderFooter() {
     for (const { emp } of AV.rows) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (c && codeDef(c.c).billable) n++; }
     all += n; tf.querySelector(`[data-f="${j}"]`).textContent = n || '';
   });
-  $('#av-ftot').textContent = all + ' billable days';
+  $('#av-ftot').textContent = all.toLocaleString();
   // KPI strip for the visible rows
   const cnt = {}; let blank = 0;
   for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
   const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
-  const k = (lbl, v, sub, col) => `<div class="kpi" style="--c:${col}"><div class="l">${lbl}</div><div class="v">${v}</div><div class="d">${sub}</div></div>`;
-  $('#av-kpis').innerHTML = k('Workers', AV.rows.length, 'in this view', 'var(--heading)') + k('Billable days', all, S.codes.filter(c => c.billable).map(c => c.code).join(' + '), 'var(--pos)')
-    + k('Absent', cnt.A || 0, 'days', 'var(--neg)') + k('Day off', cnt.OFF || 0, 'days', 'var(--mute)') + k('Leave / other', leave, 'AL, SL, EL, SIRA…', 'var(--warn)')
-    + k('Not marked', blank, 'past days left empty', blank ? 'var(--warn)' : 'var(--mute)');
+  const k = (lbl, v, col) => `<span class="st"><b style="color:${col}">${Number(v).toLocaleString()}</b> ${lbl}</span>`;
+  $('#av-kpis').innerHTML = k('workers', AV.rows.length, 'var(--heading)') + k('billable (P+R)', all, 'var(--pos)') + k('absent', cnt.A || 0, 'var(--neg)') + k('off', cnt.OFF || 0, 'var(--text2)')
+    + k('leave / other', leave, 'var(--warn)') + k('not marked', blank, blank ? 'var(--warn)' : 'var(--text2)') + '<span class="spacer"></span>' + setupSteps();
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
   const wrap = $('#grid-wrap'); if (!wrap) return;
   wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
   const s = AV.sel, si = $('#av-selinfo');
-  if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} day(s)</b> · ${s.r1 - s.r0 + 1} worker(s) selected` : 'Select days, then click a code or press its key.';
+  if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} selected</b>` : '';
   if (!s) return;
   const trs = wrap.querySelectorAll('tbody tr');
   for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
@@ -304,8 +317,9 @@ function dataChecks() {
 }
 function setupSteps() {
   if (!S.employees.length) return '';
-  const ch = dataChecks(); if (!ch.length) return '<div class="alert info"><b>✓ All checks passed</b> – every site is linked, every project has a client and every working trade has a rate.</div>';
-  return `<div class="alert"><b>${ch.reduce((a, c) => a + c.items.length, 0)} item(s) to check:</b> ${ch.map(c => `${c.items.length} ${c.short}`).join(' · ')}<span class="grow"></span><button class="btn sm" onclick="openChecks()">Review →</button></div>`;
+  const ch = dataChecks(); if (!ch.length) return '<span class="pill pos">All checks passed</span>';
+  const txt = ch.map(c => `${c.items.length} ${c.short}`).join(' · ');
+  return `<button class="chkbtn" onclick="openChecks()" title="${esc(txt)}"><b>${ch.reduce((a, c) => a + c.items.length, 0)} to check</b> · ${esc(txt)} ›</button>`;
 }
 function openChecks() {
   const ch = dataChecks();

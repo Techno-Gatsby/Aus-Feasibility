@@ -86,6 +86,7 @@ function defaultState() {
   return {
     version: 1,
     savedAt: null,
+    seedVer: 'none',
     settings: {
       company: 'Latinem Securities L.L.C.',
       companyShort: 'LATINEM SECURITIES',
