@@ -293,12 +293,12 @@ function dataChecks() {
   const out = [], add = (title, items, fix, view, short, act) => { if (items.length) out.push({ title, items, fix, view, short, act }); };
   const ym = AV.mode === 'calendar' ? AV.ym : AV.ym, used = new Map();
   for (const rows of monthRows(ym).values()) for (const r of rows.values()) if (r.total) used.set(r.emp.trade || 'SECURITY GUARD', (used.get(r.emp.trade || 'SECURITY GUARD') || 0) + 1);
-  add('Sites not linked to a project – their days are on no client timesheet', S.sites.filter(x => !x.projectId).map(x => x.name), 'Link in Projects & sites', 'projects', 'unlinked sites');
-  add('Projects without a client', S.projects.filter(p => !p.clientId).map(p => p.name), 'Set client in Projects & sites', 'projects', 'projects without client');
+  const today = todayISO(), inUse = new Set(); for (const e of S.employees) { if (employedOn(e, today)) { const a = assignOn(e, today)?.site; if (a) inUse.add(a); } for (const d in S.att[e.id] || {}) { const v = S.att[e.id][d]; if (typeof v === 'object' && v.s && d.startsWith(ym)) inUse.add(v.s); } }
+  add('Sites in use but not linked to a project – their days are on no client timesheet', S.sites.filter(x => !x.projectId && inUse.has(x.id)).map(x => x.name), 'Link in Projects & sites', 'projects', 'unlinked sites in use');
+  add('Projects without a client', S.projects.filter(p => !p.clientId && p.active !== false).map(p => p.name), 'Set client in Projects & sites', 'projects', 'projects without client');
   const noRate = [...used.keys()].filter(t => !S.settings.rateCard.find(r => r.trade === t)?.rate && !S.projects.some(p => p.billing?.rates?.[t]));
   add(`Trades working in ${fmtMonYY(ym)} with no rate – invoice lines would be 0`, noRate.map(t => `${t} (${used.get(t)} worker-rows)`), 'Add to rate card & enter rates', 'data', 'trades without rate', () => { noRate.forEach(t => { if (!S.settings.rateCard.some(r => r.trade === t)) S.settings.rateCard.push({ trade: t, unit: unitFor(t), rate: 0, src: 'enter rate' }); }); markDirty(); });
   add('Double entries in the last client-timesheet import (same person, same day, two rows)', S.issues?.double || [], 'Correct the source sheet, then re-import', null, 'double entries');
-  const today = todayISO();
   add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
   return out;
 }
