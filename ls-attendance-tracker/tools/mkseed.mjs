@@ -72,15 +72,6 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
     lines: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(m => ({ desc: `${fmtMonYY(m)}  4 Security @ ${dim(m)} Days`, rate: 4100, amount: 16400, vat: 0, src: { pid: el.id, m, md: 4 * dim(m) } })), track: { invSent: '2026-08-20' } });
   S.invoices.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   S.settings.rateCard = [{ trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'WOI INS-104N135-26-0002' }, { trade: 'LADY SECURITY GUARD', unit: 'Female Security Guard', rate: 3990, src: 'Tax Invoice Breakup' }, { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Tax Invoice Breakup' }];
-  // 5. clean-up substantiated by the names themselves
-  const proj = n => S.projects.find(p => p.name === n), site = n => S.sites.find(x => x.name === n && !x.projectId);
-  for (const [sn, pn] of [['SEA HAVEN', 'SEA HEAVEN'], ['SONAPUR TR02', 'SONAPUR TR-2'], ['SONAPUR TR 04', 'SONAPUR TR -4'], ['DIC LV TR-05 RELIEVER', 'DIC TR LV-5'], ['DIC LV TR-02 RELIEVER', 'DIC TR LV-2'], ['JEBEL ALI TR-07', 'JEBEL ALI TR-7'], ['CREST KEY HANDLER', 'SCM THE CREST'], ['WAVES', 'SCM WAVES 1'], ['WAVES 1', 'SCM WAVES 1'], ['GPH-1', 'ASTECO GPH 1']]) { const st = site(sn), p = proj(pn); if (st && p) st.projectId = p.id; else log.push('link skipped ' + sn); }
-  const adv = site('SOBHA ADVANCE INDUSTRY');   // tracker line "Advanced Industries" (SCL & Infra); 4 guards, no client-sheet project yet
-  if (adv) { const p = { id: uid('p'), clientId: client('SOBHA CONSTRUCTIONS LLC').id, code: '', name: 'SOBHA ADVANCE INDUSTRY', trackerName: 'Advanced Industries', entityName: '', poNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true }; S.projects.push(p); adv.projectId = p.id; }
-  const cr = S.projects.find(p => /CRUSHER/.test(p.name)); if (cr) { cr.clientId = client('SOBHA CONSTRUCTIONS LLC').id; cr.note = 'client assumed – confirm'; }
-  const rel = proj('RELIEVER'); if (rel) rel.active = false;   // reliever pool, not billed as a project
-  for (const e of S.employees) if (e.trade === 'SALES VILLAGE PATROLLER') e.trade = 'SECURITY GUARD';
-  reindex();
   S.savedAt = null; markDirty();
   // short ids keep the file small (e1…, s1…, p1…, c1…, i1…)
   let json = JSON.stringify(encodeState(S)); const ids = new Map(); let n = 0;
