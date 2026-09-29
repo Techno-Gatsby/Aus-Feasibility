@@ -238,6 +238,15 @@ async function init() {
   if (st && !st.seedVer && typeof SEED !== 'undefined' && SEED && location.hash !== '#empty') { try { await IDB.set('state-prev', JSON.stringify(st)); } catch (e) { } st = null; replaced = true; }
   S = migrate(location.hash === '#empty' ? defaultState() : st || shippedState()); reindex(); defaultPeriods();
   if (replaced) { markDirty(); setTimeout(() => toast('Loaded the LS workbook data. Your previous data is kept: File → Restore data from before update', 8000), 400); }
+  // a newer shipped data set (e.g. Elwood Jan–May 2026 added): offer it once, keep the current data as the restorable copy
+  else if (typeof SEED !== 'undefined' && SEED?.seedVer && S.seedVer && !['none', 'restored', SEED.seedVer].includes(S.seedVer) && S.seedSeen !== SEED.seedVer) {
+    setTimeout(async () => {
+      S.seedSeen = SEED.seedVer; markDirty();
+      if (!await confirmBox('This file contains updated LS data (adds SCL - ELWOOD - INFRA Jan–May 2026 from the signed timesheets and the SAP fields of invoice 2026-0900000689).\n\nLoad it now? Your current data is kept: File → Restore data from before update.', 'Load updated data')) return;
+      try { await IDB.set('state-prev', JSON.stringify(S)); } catch (e) { }
+      S = migrate(shippedState()); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Updated data loaded');
+    }, 300);
+  }
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });

@@ -2,6 +2,8 @@
    Client timesheets (calendar month, one sheet per project, LS/DO/F-026)
    ===================================================================== */
 const TS_LEGEND = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
+/** Legend for a project: day-off is "O" on the SCL TR workbook, "OFF" on the Elwood sheets */
+const tsLegend = p => TS_LEGEND.map(([a, b]) => [a === 'O' ? (p?.tsOff || 'O') : a, b]);
 const TV = { ym: null, client: '', picked: new Set(), all: true, preview: null };
 
 /** One pass over the ledger per month: projectId -> Map(rowKey -> row). Cached until data changes. */
@@ -17,10 +19,10 @@ function monthRows(ym) {
       const c = typeof v === 'string' ? { c: v } : v;
       const cd = codeDef(c.c); if (!cd.billable && !cd.client) continue;
       const site = siteOn(emp, d); const pid = IX.site.get(site)?.projectId; if (!pid) continue;
-      const shift = shiftOn(emp, d) || '', section = c.c === 'R' ? '__REL' : site, key = `${section}|${shift}|${emp.id}`;
+      const shift = shiftOn(emp, d) || '', section = c.c === 'R' ? '__REL' : site, key = `${section}|${shift}|${emp.id}${section === '__REL' ? '|' + site : ''}`;
       let rows = byProj.get(pid); if (!rows) byProj.set(pid, rows = new Map());
       let row = rows.get(key);
-      if (!row) rows.set(key, row = { section, shift, emp, ei, cells: {}, total: 0, sites: new Set() });
+      if (!row) rows.set(key, row = { section, shift, emp, ei, first: +d.slice(8), name: c.n || '', cells: {}, total: 0, sites: new Set() });
       row.cells[+d.slice(8)] = c.c; row.sites.add(site);
       if (cd.billable) row.total++;
     }
@@ -33,7 +35,9 @@ function buildTimesheet(projectId, ym) {
   const siteOrder = sitesOfProject(projectId).map(s => s.id);
   const rows = monthRows(ym).get(projectId) || new Map();
   const secIdx = s => s === '__REL' ? 1e6 : siteOrder.indexOf(s);
-  const list = [...rows.values()].sort((a, b) => secIdx(a.section) - secIdx(b.section) || a.ei - b.ei || a.shift.localeCompare(b.shift));
+  // within a site: DAY before NIGHT, then in order of first day worked (as on the LS/DO/F-026 sheets)
+  const shIdx = x => x === 'DAY' ? 0 : x === 'NIGHT' ? 1 : 2;
+  const list = [...rows.values()].sort((a, b) => secIdx(a.section) - secIdx(b.section) || shIdx(a.shift) - shIdx(b.shift) || a.first - b.first || a.ei - b.ei);
   const sections = [];
   for (const r of list) {
     let sec = sections[sections.length - 1];
@@ -45,31 +49,35 @@ function buildTimesheet(projectId, ym) {
   return { projectId, ym, days: days.length, sections, total, rows: list };
 }
 
+/** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets */
 function tsSheetHTML(ts) {
-  const st = S.settings, p = IX.proj.get(ts.projectId);
-  const N = ts.days;
-  const dayTh = Array.from({ length: N }, (_, i) => `<th>${i + 1}</th>`).join('');
+  const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days;
+  const dayTh = Array.from({ length: N }, (_, i) => `<th class="d">${i + 1}</th>`).join('');
   let body = '';
   for (const sec of ts.sections) {
     sec.rows.forEach((r, i) => {
       body += `<tr>${i === 0 ? `<td class="site" rowspan="${sec.rows.length}">${esc(sec.name)}</td>` : ''}
-        <td>${esc(r.shift)}</td><td class="l">${esc(r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
-        ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return `<td>${c && codeDef(c).client ? esc(c === 'OFF' ? 'O' : c) : ''}</td>`; }).join('')}
+        <td>${esc(r.shift)}</td><td>${esc(r.name || r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
+        ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return c && codeDef(c).client ? `<td>${esc(c === 'OFF' ? (p?.tsOff || 'O') : c)}</td>` : '<td class="x"></td>'; }).join('')}
         <td class="tot">${r.total}</td></tr>`;
     });
   }
   if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
-  const legend = TS_LEGEND.map(([a, b]) => `<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('');
-  const signs = st.signatories.map(s => `<div><b>${esc(s.label)}</b>${esc([s.name, s.title].filter(Boolean).join(' '))}</div>`).join('');
+  const sg = st.signatories;
   return `<div class="sheet land ts-sheet">
-    <div class="ts-head"><div>
-      <div class="t1">${esc(st.companyShort)}</div><div class="t2">${esc(st.tsTitle)}</div>
-      <div class="t3">Form No: ${esc(st.formNo)} &nbsp;&nbsp;&nbsp; REV NO: ${esc(st.revNo)} &nbsp;&nbsp;&nbsp; DATE : ${esc(st.formDate)}</div>
-      <div class="ts-meta"><div><b>MONTH</b> ${fmtMonYY(ts.ym)}</div><div><b>PROJECT NAME</b> ${esc(p?.name || '')}${p?.code ? ` &nbsp;(${esc(p.code)})` : ''}</div></div>
-    </div><table class="ts-legend">${legend}</table></div>
-    <table class="ts"><thead><tr><th>SITE NAME</th><th>SHIFT D/N</th><th>NAME</th><th>EMP. CODE</th>${dayTh}<th>TOTAL DAYS</th></tr></thead>
-    <tbody>${body}<tr class="gtr"><td colspan="${N + 4}" style="text-align:right;padding-right:8px"><b>GRAND TOTAL</b></td><td class="gt">${ts.total}</td></tr></tbody></table>
-    <div class="ts-sign">${signs}</div></div>`;
+    <table class="ts-top"><tbody>
+      <tr><td colspan="3" class="c b">${esc(st.companyShort)}</td><td rowspan="3" class="lg"><img src="${LOGO}" alt=""></td></tr>
+      <tr><td colspan="3" class="c b">${esc(st.tsTitle)}</td></tr>
+      <tr><td class="c b">Form No: ${esc(st.formNo)}</td><td class="c b" style="width:22%">REV NO: ${esc(st.revNo)}</td><td style="width:22%"></td></tr>
+    </tbody></table>
+    <div class="ts-mid">
+      <table class="ts-mb"><tr><td class="k">MONTH</td><td class="v">${fmtMonYY(ts.ym)}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
+      <table class="ts-legend">${tsLegend(p).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+    </div>
+    <table class="ts"><thead><tr><th style="width:10%">SITE NAME</th><th style="width:4%">SHIFT<br>D/N</th><th style="width:15%">NAME</th><th style="width:7%">EMP. CODE</th>${dayTh}<th class="tt" style="width:6%">TOTAL DAYS</th></tr></thead>
+    <tbody>${body}<tr class="gtr"><td colspan="${N - 6 + 4}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
+    <table class="ts-sign"><tr>${sg.map(s => `<td>${esc(s.label)}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
+  </div>`;
 }
 
 function renderTimesheets() {

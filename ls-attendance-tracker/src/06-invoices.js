@@ -6,7 +6,7 @@ const IV = { draft: null, pdfs: [] };
 
 function newInvoiceDraft() {
   const m = addMonths(ymOf(todayISO()), -1);
-  return { id: uid('i'), no: '', date: todayISO(), clientId: '', projectIds: [], from: m, to: m, entity: '', trn: '', customerCode: '', poNo: '', lines: [], attachTs: true, notes: '' };
+  return { id: uid('i'), no: '', date: todayISO(), clientId: '', projectIds: [], from: m, to: m, entity: '', trn: '', customerCode: '', poNo: '', sapProject: '', orderCode: '', custAddress: '', payTerms: S.settings.payTerms, advance: 0, retention: 0, lines: [], withSap: true, attachTs: true, notes: '' };
 }
 
 function invoiceLines(dr) {
@@ -61,35 +61,90 @@ function numberWords(n) {
   return 'AED ' + (out.join(' ') || 'Zero') + (fils ? ` and ${w(fils)} Fils` : '') + ' Only';
 }
 
+/** SAP-style amount in words: EIGHTY-TWO THOUSAND AED */
+function sapWords(n) {
+  const w = numberWords(Math.floor(n)).replace(/^AED /, '').replace(/ Only$/, '').replace(/ and /g, ' ').toUpperCase();
+  const f = Math.round((n - Math.floor(n)) * 100);
+  return w + (f ? ` AND ${numberWords(f).replace(/^AED /, '').replace(/ Only$/, '').toUpperCase()} FILS` : '') + ' ' + (S.settings.currency || 'AED');
+}
+/** Month as typed on the SAP invoices: full name up to 5 letters (March, April, May, June, July), else short (Jan, Feb, Sep) */
+const sapMonth = ym => { const f = MONTH_FULL[+ym.slice(5) - 1]; return f.length <= 5 ? f[0] + f.slice(1).toLowerCase() : MON[+ym.slice(5) - 1]; };
+/** Lines on the SAP invoice: one per month and rate, "Security Services - Jan'26", Qty = persons (amount ÷ rate) */
+function sapLines(dr) {
+  const out = [], by = new Map();
+  for (const l of dr.lines) {
+    if (!l.src?.m) { out.push({ desc: l.desc, qty: l.rate ? round2(l.amount / l.rate) : 1, rate: +l.rate || +l.amount, amount: +l.amount || 0, vat: +l.vat || 0 }); continue; }
+    const k = l.src.m + '|' + l.rate + '|' + (l.vat || 0);
+    const g = by.get(k) || by.set(k, { desc: `Security Services - ${sapMonth(l.src.m)}'${l.src.m.slice(2, 4)}`, qty: 0, rate: +l.rate, amount: 0, vat: +l.vat || 0 }).get(k);
+    g.amount = round2(g.amount + (+l.amount || 0));
+  }
+  for (const g of by.values()) { g.qty = g.rate ? round2(g.amount / g.rate) : 1; out.push(g); }
+  return out;
+}
+const qtyTxt = q => Number.isInteger(q) ? String(q) : qtyFmt(q);
+const int0 = n => (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+/** Page 1 of the pack – the tax invoice with the SAP fields (layout of invoice 2026-0900000689) */
+function sapInvoiceHTML(dr) {
+  const st = S.settings, c = IX.client.get(dr.clientId), tt = invTotals(dr), L = sapLines(dr), bk = st.bank || {};
+  const adv = +dr.advance || 0, ret = +dr.retention || 0, net = round2(tt.inc - adv - ret);
+  const vatTxt = v => v ? v + '%' : 'Out Of Scope';
+  return `<div class="sheet port sap">
+    <div class="sap-logo"><img src="${LOGO}" alt="Latinem Securities"></div>
+    <div class="sap-from">${esc(st.invAddress).replace(/\n/g, '<br>')}</div>
+    <div class="sap-t">Invoice</div>
+    <table class="sap-hd"><tr><td>
+      <div><b>Customer Name</b> &nbsp;: ${esc(c?.name || dr.entity || '')}</div>
+      <div class="pre">${esc(dr.custAddress || c?.address || '')}</div>
+      <div style="margin-top:6px"><b>Customer Ref No</b> :${esc(dr.poNo)}</div>
+      <div><b>Customer TRN</b> &nbsp;&nbsp;&nbsp;: ${esc(dr.trn || c?.trn || '')}</div>
+    </td><td>
+      <table class="kv0">${[['Invoice Number', dr.no], ['Invoice Date', fmtDMY(dr.date)], ['Currency', st.currency || 'AED'], ['Payment Terms', dr.payTerms || st.payTerms], ['Project Name', dr.sapProject], ['Project/Order Code', dr.orderCode]].map(([k, v]) => `<tr><td><b>${k}</b></td><td>:${esc(v || '')}</td></tr>`).join('')}</table>
+    </td></tr></table>
+    <table class="sap-l"><thead><tr><th style="width:44px">Sr.No</th><th>Particulars/description</th><th style="width:48px">Qty</th><th style="width:88px">Rate</th><th style="width:92px">Amount (${esc(st.currency || 'AED')})</th><th style="width:92px">VAT%</th><th style="width:70px">VAT Amt</th><th style="width:94px">Total Amount</th></tr></thead><tbody>
+      ${L.map((l, i) => { const va = round2(l.amount * l.vat / 100); return `<tr><td class="c">${i + 1}</td><td>${esc(l.desc)}</td><td class="c">${qtyTxt(l.qty)}</td><td class="c">${int0(l.rate)}</td><td class="c">${int0(l.amount)}</td><td class="c">${vatTxt(l.vat)}</td><td class="c">${int0(va)}</td><td class="c">${int0(l.amount + va)}</td></tr>`; }).join('')}
+      <tr class="b"><td colspan="2" class="c">Total Amount of Invoice</td><td></td><td></td><td class="c">${int0(tt.ex)}</td><td></td><td class="c">${int0(tt.vat)}</td><td class="c">${int0(tt.inc)}</td></tr>
+      <tr class="b"><td colspan="2" class="c">Advance Adjustment, if any</td><td></td><td></td><td class="c">${int0(adv)}</td><td></td><td></td><td class="c">${int0(adv)}</td></tr>
+      <tr class="b"><td colspan="2" class="c">Retention Adjustment, if any</td><td></td><td></td><td class="c">${int0(ret)}</td><td></td><td></td><td class="c">${int0(ret)}</td></tr>
+      <tr class="b"><td colspan="2" class="c">Net Amount Due for payment</td><td></td><td></td><td class="c">${int0(round2(tt.ex - adv - ret))}</td><td></td><td class="c">${int0(tt.vat)}</td><td class="c"><b>${int0(net)}</b></td></tr>
+    </tbody></table>
+    <div class="sap-w"><b>Amount in words :</b> ${esc(sapWords(net))}</div>
+    <div class="sap-bank"><b>Bank Details</b>
+      <table class="kv0">${[['Account Name', bk.name], ['Bank Name', bk.bank], ['Account Numbe', bk.acct], ['IBAN Number', bk.iban], ['Swift Code', bk.swift]].map(([k, v]) => `<tr><td><b>${k}</b></td><td>: ${esc(v || '')}</td></tr>`).join('')}</table></div>
+    <div class="sap-decl"><b>Declaration / Remarks :</b> &nbsp;&nbsp;&nbsp; ${esc(dr.notes || st.declaration)}</div>
+  </div>`;
+}
+
+/** Page 2 – TAX INVOICE AMOUNT BREAK-UP, as in the Elwood pack */
 function invoiceHTML(dr) {
   const st = S.settings, c = IX.client.get(dr.clientId); const tt = invTotals(dr);
-  const desc = l => { const m = l.desc.match(/^([A-Z][a-z]{2}-\d{2})\s{2,}(.*)$/); return m ? `${esc(m[1])}<br>${esc(m[2])}` : esc(l.desc); };
-  return `<div class="sheet port inv">
-    <div class="ihead"><div class="logo">${esc(st.companyShort)}</div><div class="small">${new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div></div>
-    <div class="ttl">TAX INVOICE AMOUNT BREAK-UP</div>
-    <div class="blocks">
-      <div class="addr"><b>${esc(dr.entity || c?.name || '')}</b>\n${esc(c?.address || st.address)}\nTel : ${esc(st.tel)}\nTRN No : ${esc(dr.trn || c?.trn || '')}</div>
-      <table class="kv">
-        <tr><td>Entity</td><td>${esc(st.company)}</td></tr>
-        <tr><td>TRN NO</td><td>${esc(st.trn)}</td></tr>
-        <tr><td>Invoice No</td><td>${esc(dr.no)}</td></tr>
-        <tr><td>Invoice Date</td><td>${fmtDotDMY(dr.date)}</td></tr>
-        <tr><td>PO No</td><td>${esc(dr.poNo)}</td></tr>
-        <tr><td>Customer Code</td><td>${esc(dr.customerCode)}</td></tr>
-      </table>
-    </div>
-    <table class="lines"><thead><tr><th>Sl.No</th><th>Description</th><th>Unit Rate</th><th>Amount<br>Excl VAT</th><th>VAT</th><th>VAT Amount</th><th>Amount<br>Incl VAT</th></tr></thead><tbody>
-    ${dr.lines.map((l, i) => { const va = round2((+l.amount || 0) * (+l.vat || 0) / 100); return `<tr><td style="text-align:center">${i + 1}</td><td>${desc(l)}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td><td class="num">${+l.vat || 0}%</td><td class="num">${va ? money(va) : '-'}</td><td class="num">${money((+l.amount || 0) + va)}</td></tr>`; }).join('')}
+  const desc = l => { const m = l.desc.match(/^(.*?)([A-Z][a-z]{2}-\d{2})\s{2,}(.*)$/); return m ? `<b>${esc(m[1] + m[2])}</b><br>${esc(m[3])}` : esc(l.desc); };
+  const addr = [...st.address.split('\n'), 'Tel : ' + st.tel, 'TRN No : ' + st.trn];
+  const d = new Date();
+  return `<div class="sheet port bu">
+    <div class="bu-top"><span>${esc(st.companyShort)}</span><span>${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}</span></div>
+    <div class="bu-logo"><img src="${LOGO}" alt=""></div>
+    <div class="bu-t">TAX INVOICE AMOUNT BREAK-UP</div>
+    <table class="bu-hd"><tbody>
+      <tr><td class="l"><b>${esc(dr.entity || c?.name || '')}</b></td><td class="k">Entity</td><td class="v"><b>${esc(st.company)}</b></td></tr>
+      ${[['TRN NO', st.trn], ['Invoice No', dr.no], ['Invoice Date', fmtDotDMY(dr.date)], ['PO No', dr.poNo], ['Customer Code', dr.customerCode]].map(([k, v], i) => `<tr><td class="l"><b>${esc(addr[i] || '')}</b></td><td class="k">${k}</td><td class="v"><b>${esc(v || '')}</b></td></tr>`).join('')}
+      ${addr.slice(5).map(a => `<tr><td class="l"><b>${esc(a)}</b></td><td></td><td></td></tr>`).join('')}
     </tbody></table>
-    <table class="kv" style="margin:14px 0 0 auto;min-width:360px">
-      <tr><td>Total Amount Excluding VAT</td><td class="num" style="text-align:right">${money(tt.ex)}</td></tr>
-      <tr><td>VAT</td><td style="text-align:right">${tt.vat ? money(tt.vat) : '-'}</td></tr>
-      <tr><td>Total Amount Including VAT</td><td style="text-align:right"><b>${money(tt.inc)}</b></td></tr>
-    </table>
-    <div class="words">${esc(numberWords(tt.inc))}</div>
-    ${dr.notes ? `<p style="white-space:pre-line;margin-top:10px">${esc(dr.notes)}</p>` : ''}
-    <div class="foot"><div>Prepared by: ${esc(st.preparedBy)}</div><div>For ${esc(st.company)}<br><br><br>Authorised Signatory</div></div>
+    <table class="bu-l"><thead><tr><th>Sl.No</th><th style="text-align:left">Description</th><th>Unit Rate</th><th>Amount<br>Excl VAT</th><th>VAT</th><th>VAT Amount</th><th>Amount<br>Incl VAT</th></tr></thead><tbody>
+    ${dr.lines.map((l, i) => { const va = round2((+l.amount || 0) * (+l.vat || 0) / 100); return `<tr><td class="c">${i + 1}</td><td>${desc(l)}</td><td class="n">${money(l.rate)}</td><td class="n">${money(l.amount)}</td><td class="c">${+l.vat || 0}%</td><td class="c">${va ? money(va) : '-'}</td><td class="n">${money((+l.amount || 0) + va)}</td></tr>`; }).join('')}
+    </tbody></table>
+    <table class="bu-tot"><tr><td>Total Amount Excluding VAT</td><td>${money(tt.ex)}</td></tr><tr><td>VAT</td><td>${tt.vat ? money(tt.vat) : '-'}</td></tr><tr class="last"><td>Total Amount Including VAT</td><td>${money(tt.inc)}</td></tr></table>
+    <div class="bu-pg">Page 1 of 1</div>
   </div>`;
+}
+
+/** The pack in the Elwood order: 1 SAP invoice · 2 break-up · 3… one client timesheet per month and project */
+function packPages(dr) {
+  const pages = [];
+  if (dr.withSap !== false) pages.push({ t: 'Tax invoice (SAP fields)', html: sapInvoiceHTML(dr) });
+  pages.push({ t: 'Tax invoice amount break-up', html: invoiceHTML(dr) });
+  if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(buildTimesheet(pid, m)) });
+  return pages;
 }
 
 function parseSapText(txt, dr) {
@@ -136,14 +191,20 @@ function renderInvoices() {
         <label class="f">PO No<input type="text" data-k="poNo" value="${esc(dr.poNo)}" placeholder="INS-104N135-26-0002"></label>
         <label class="f">Customer code<input type="text" data-k="customerCode" value="${esc(dr.customerCode)}"></label>
         <label class="f">Client TRN<input type="text" data-k="trn" value="${esc(dr.trn)}"></label>
-        <label class="f wide">Entity (as on the SAP invoice)<input type="text" data-k="entity" value="${esc(dr.entity)}"></label>
+        <label class="f wide">Entity / customer name<input type="text" data-k="entity" value="${esc(dr.entity)}"></label>
+        <label class="f">SAP project name<input type="text" data-k="sapProject" value="${esc(dr.sapProject || '')}" placeholder="SOBHA ELWOOD INFRASTRUCTURE"></label>
+        <label class="f">Project / order code<input type="text" data-k="orderCode" value="${esc(dr.orderCode || '')}" placeholder="3020110P047"></label>
+        <label class="f">Payment terms<input type="text" data-k="payTerms" value="${esc(dr.payTerms ?? S.settings.payTerms)}"></label>
+        <label class="f">Advance adjustment<input type="number" step="0.01" data-k="advance" value="${+dr.advance || 0}"></label>
+        <label class="f">Retention adjustment<input type="number" step="0.01" data-k="retention" value="${+dr.retention || 0}"></label>
+        <label class="f wide">Customer address (SAP invoice)<textarea data-k="custAddress" placeholder="SOBHA SAPPHIRE,13TH FLOOR,AL KHAIL ROAD,BUSINESS BAY">${esc(dr.custAddress || '')}</textarea></label>
       </div>
       <details style="margin-top:8px"><summary class="muted small" style="cursor:pointer">Paste from SAP</summary>
         <textarea id="iv-paste" style="width:100%;margin-top:6px" placeholder="Lines like 'Invoice No: 2026-0900000689', or a header row + value row copied from SAP"></textarea>
         <button class="btn sm" id="iv-parse">Fill fields</button></details>`)}
     ${sec('iv3', '3 · Lines', `
       <div class="row"><button class="btn pri" id="iv-gen">Generate from attendance</button><button class="btn sm" id="iv-addl">Blank line</button>
-        <label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> timesheets after the break-up</label></div>
+</div>
       <div class="tw" style="margin-top:8px"><table><thead><tr><th>#</th><th>Description</th><th class="num">Unit rate</th><th class="num">Excl VAT</th><th class="num">VAT %</th><th class="num">Incl VAT</th><th></th></tr></thead><tbody>
       ${dr.lines.map((l, i) => `<tr><td>${i + 1}</td><td style="white-space:normal;min-width:260px"><input type="text" data-l="${i}" data-lk="desc" value="${esc(l.desc)}" style="width:100%">${l.src ? `<div class="muted small">${l.src.md} billable days · ${fmtMonYY(l.src.m)}</div>` : ''}</td>
         <td class="num"><input type="number" step="0.01" data-l="${i}" data-lk="rate" value="${l.rate}" style="width:95px"></td>
@@ -153,9 +214,16 @@ function renderInvoices() {
       <tr class="total"><td></td><td>Total</td><td></td><td class="num">${money(tt.ex)}</td><td class="num">${money(tt.vat)}</td><td class="num">${money(tt.inc)}</td><td></td></tr>
       </tbody></table></div>
       <label class="f" style="margin-top:10px">Notes on the break-up (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>`, `<span class="cnt">AED ${money(tt.inc)}</span>`)}
-    ${saved ? sec('iv5', '4 · Track', `<div class="form">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
+    ${saved ? sec('iv5', '5 · Track', `<div class="form">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
       <p class="muted small" style="margin:8px 0 0">Same stages as the Tax Invoice Tracker. Saves straight away.</p>`, statusTag(dr)) : ''}
-    <div id="iv-preview">${dr.lines.length ? invoiceHTML(dr) : ''}</div>
+    ${(() => { const pg = packPages(dr); return sec('ivp', '4 · Pack', `
+      <div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="iv-sap" ${dr.withSap !== false ? 'checked' : ''}> Tax invoice page</label><label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> Client timesheets</label>
+        <span class="spacer"></span><button class="btn pri" id="iv-print2" ${dr.lines.length ? '' : 'disabled'}>Print pack / PDF</button></div>
+      <div class="tw"><table><tbody>${pg.map((p, i) => `<tr class="${IV.pv === i ? 'on' : ''}" data-pp="${i}" style="cursor:pointer"><td class="num" style="width:40px">${i + 1}</td><td>${esc(p.t)}</td><td class="muted small">printed here</td></tr>`).join('')}
+        <tr><td class="num">${pg.length + 1}</td><td>Signed timesheet scans, if the client signs on paper</td><td class="muted small">Merge PDFs →</td></tr>
+        <tr><td class="num">${pg.length + 2}</td><td>Work Order Instruction ${esc(IX.proj.get(dr.projectIds[0])?.poNo || dr.poNo || '')} (3 pages)</td><td class="muted small">Merge PDFs →</td></tr></tbody></table></div>
+      <p class="muted small" style="margin:6px 0 0">Same order as Tax Invoice_Elwood Infra-January to May 2026.pdf (10 pages: invoice, break-up, 5 signed timesheets, 3-page WOI). Click a row to preview it.</p>`, `<span class="cnt">${pg.length} page(s) + attachments</span>`); })()}
+    <div id="iv-preview">${dr.lines.length ? (packPages(dr)[IV.pv || 0] || packPages(dr)[0]).html : ''}</div>
   </div>
   <div>
     ${sec('ivs', 'Saved invoices', `
@@ -165,7 +233,7 @@ function renderInvoices() {
         <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>`, `<span class="cnt">${S.invoices.length}</span>`)}
     ${sec('ivm', 'Merge PDFs into one pack', `
-      <p class="muted small" style="margin:0 0 8px">SAP invoice + this break-up + timesheets + Work Order Instruction, in order.</p>
+      <p class="muted small" style="margin:0 0 8px">Printed pack PDF first, then signed timesheet scans and the Work Order Instruction.</p>
       <label class="btn wide" style="display:block;text-align:center">Add PDF files…<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
       <table style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small" style="white-space:normal">${i + 1}. ${esc(f.name)}</td><td style="text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
       <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
@@ -187,17 +255,20 @@ function renderInvoices() {
     if (c.checked && p) {
       if (!dr.clientId && p.clientId) dr.clientId = p.clientId;
       const cl = IX.client.get(p.clientId);
-      dr.poNo ||= p.poNo || ''; dr.entity ||= p.entityName || cl?.name || ''; dr.customerCode ||= cl?.customerCode || ''; dr.trn ||= cl?.trn || '';
+      dr.poNo ||= p.poNo || ''; dr.entity ||= p.entityName || cl?.name || ''; dr.customerCode ||= cl?.customerCode || ''; dr.trn ||= cl?.trn || ''; dr.sapProject ||= p.sapName || ''; dr.orderCode ||= p.orderCode || ''; dr.custAddress ||= cl?.address || '';
     }
     rer();
   });
-  v.querySelectorAll('[data-k]').forEach(i => i.oninput = () => { dr[i.dataset.k] = i.value; });
+  v.querySelectorAll('[data-k]').forEach(i => { i.oninput = () => { dr[i.dataset.k] = i.type === 'number' ? +i.value || 0 : i.value; }; i.onchange = () => { if (dr.lines.length) { const y = $('#v-invoices .dc').scrollTop; rer(); $('#v-invoices .dc').scrollTop = y; } }; });
   v.querySelectorAll('[data-l]').forEach(i => i.onchange = () => { const l = dr.lines[+i.dataset.l]; l[i.dataset.lk] = i.dataset.lk === 'desc' ? i.value : +i.value; rer(); });
   v.querySelectorAll('[data-ldel]').forEach(b => b.onclick = () => { dr.lines.splice(+b.dataset.ldel, 1); rer(); });
   $('#iv-parse').onclick = () => { const n = parseSapText($('#iv-paste').value, dr); toast(n ? `Filled ${n} field(s)` : 'No recognised fields – use "Label: value" lines'); rer(); };
   $('#iv-gen').onclick = () => ivCmd('gen');
   $('#iv-addl').onclick = () => { dr.lines.push({ desc: '', rate: 0, amount: 0, vat: 0 }); rer(); };
-  $('#iv-ts').onchange = e => dr.attachTs = e.target.checked;
+  $('#iv-ts').onchange = e => { dr.attachTs = e.target.checked; IV.pv = 0; rer(); };
+  $('#iv-sap').onchange = e => { dr.withSap = e.target.checked; IV.pv = 0; rer(); };
+  $('#iv-print2').onclick = () => ivCmd('print');
+  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = () => { IV.pv = +r.dataset.pp; rer(); $('#iv-preview').scrollIntoView({ block: 'start' }); });
   v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
   v.querySelectorAll('[data-iopen]').forEach(b => b.onclick = () => { IV.draft = JSON.parse(JSON.stringify(S.invoices.find(x => x.id === b.dataset.iopen))); rer(); });
   v.querySelectorAll('[data-idel]').forEach(b => b.onclick = async () => { if (!await confirmBox('Delete this saved invoice?', 'Delete', 'bad')) return; S.invoices = S.invoices.filter(x => x.id !== b.dataset.idel); markDirty(); rer(); });
@@ -222,9 +293,7 @@ function ivCmd(cmd) {
   if (cmd === 'save') { saveInvoice(dr); renderInvoices(); return; }
   if (cmd === 'print') {
     if (!dr.lines.length) return toast('Generate or add lines first');
-    let html = invoiceHTML(dr);
-    if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) html += tsSheetHTML(buildTimesheet(pid, m));
-    printHTML(html);
+    printHTML(packPages(dr).map(p => p.html).join(''));
   }
 }
 function defaultPackName(dr) {

@@ -271,7 +271,7 @@ function applyClientImport(parsed, overwrite, ymOverride, shared) {
       if (prev && prev.c !== code && !touched.get(e.id)?.has(d)) st.conflicts++;
       ensureCode(code, st);
       const a = assignOn(e, d);
-      putCell(e.id, d, { c: code, s: siteId !== a?.site ? siteId : undefined, sh: shift && shift !== (a?.shift || e.shift) ? shift : undefined });
+      putCell(e.id, d, { c: code, s: siteId !== a?.site ? siteId : undefined, sh: shift && shift !== (a?.shift || e.shift) ? shift : undefined, n: r.name !== e.name ? r.name : undefined });   // name as written on the client sheet
       (touched.get(e.id) || touched.set(e.id, new Set()).get(e.id)).add(d);
       st.cells++;
     }
@@ -359,8 +359,8 @@ async function exportTimesheetsXlsx(list) {
     // Same cell positions as the LS/DO/F-026 workbook: header rows 2-4, legend AI6:AJ9, MONTH row 8, PROJECT row 10, table from row 13
     ws.getCell('B2').value = st.companyShort; ws.getCell('B2').font = { bold: true, size: 14 };
     ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
-    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`; ws.getCell(4, CT - 8).value = `DATE : ${st.formDate}`;
-    TS_LEGEND.forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
+    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`;
+    tsLegend(p).forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
     const [yy, mm] = ts.ym.split('-').map(Number);
     ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
     ws.getCell('B10').value = 'PROJECT NAME'; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
@@ -373,8 +373,8 @@ async function exportTimesheetsXlsx(list) {
       const r0 = r;
       for (const row of sec.rows) {
         ws.getCell(r, 2).value = r === r0 ? sec.name : null;
-        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
-        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? 'O' : code) : null; c.alignment = { horizontal: 'center' }; }
+        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.name || row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
+        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? (p?.tsOff || 'O') : code) : null; c.alignment = { horizontal: 'center' }; }
         const rg = `${colL(C0)}${r}:${colL(C0 + N - 1)}${r}`;
         // template: =COUNTIF(F14:AI14,"P") for site rows, "R" for reliever rows
         const f = (sec.id === '__REL' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';

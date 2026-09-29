@@ -45,17 +45,48 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
     if (hits.length) { for (const p of hits) { p.clientId = client(cn).id; p.trackerName = name; } matched.push(name + ' = ' + hits.map(p => p.name).join(' / ')); }
     else unmatched.push(name);
   }
-  // the Elwood infrastructure project is billed (Jan–May 2026 invoice) but is not in the July attendance by that name
-  if (!S.projects.some(p => /ELWOOD/.test(p.name) && /INFRA/.test(p.name))) S.projects.push({ id: uid('p'), clientId: client('SOBHA CONSTRUCTIONS LLC').id, code: '', name: 'INFRA - SOBHA ELWOOD', trackerName: 'Infra- Sobha Elwood', entityName: '', poNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true });
+  // SCL - ELWOOD - INFRA, Jan–May 2026, transcribed from the signed timesheets in Tax Invoice_Elwood Infra-January to May 2026.pdf (pages 3–7)
+  {
+    const INF = 'INFRA OFFICE', GATE = 'GATE NO 1 (MAIN ENTRANCE)';
+    const EL = {
+      '2026-01': [[INF, 'DAY', 'ANEESH DOMINIC', 'C52392', '1-13,15-31'], [INF, 'NIGHT', 'HARIKUMAR', 'C80453', '1-31'], [GATE, 'DAY', 'AJEESH MANIRAJ', 'C49692', '1-2'], [GATE, 'DAY', 'DEEPAK MOHANAN JANTHA MOHANAN', 'C84306', '3-20,22-31'], [GATE, 'NIGHT', 'RAJNISH KUMAR RAM LAL', 'C37234', '1-14'], [GATE, 'NIGHT', 'NABEEL MOHAMED PAKKER MYDEEN', 'C52293', '15-31'], [INF, 'DAY', 'KRISHNAKUMAR GOKULKUMAR GOKULKUMAR NRAYANA SHENOY', 'C81088', '14', 'R'], [GATE, 'DAY', 'KRISHNAKUMAR GOKULKUMAR GOKULKUMAR NRAYANA SHENOY', 'C81088', '21', 'R']],
+      '2026-02': [[INF, 'DAY', 'ANEESH DOMINIC', 'C52392', '1-28'], [INF, 'NIGHT', 'HARIKUMAR', 'C80453', '1-15'], [INF, 'NIGHT', 'ARSHPREET SINGH RANJIT SINGH', 'C83436', '16-28'], [GATE, 'DAY', 'DEEPAK MOHANAN JANTHA MOHANAN', 'C84306', '1-28'], [GATE, 'NIGHT', 'NABEEL MOHAMED PAKKER MYDEEN', 'C52293', '1-28']],
+      '2026-03': [[INF, 'DAY', 'ANEESH DOMINIC', 'C52392', '1-11'], [INF, 'DAY', 'BIR BAHADUR', 'SUBCON (INTEGRA)', '12-27'], [INF, 'DAY', 'VIKASH SIYAK RICHHPAL SIYAK', 'C36251', '28-31'], [INF, 'NIGHT', 'AGENDIA VLAVIDIKOS', 'SUBCON (AFF)', '1-31'], [GATE, 'DAY', 'PRATHEEK JAGADEESH', 'C66585', '1-31'], [GATE, 'NIGHT', 'SUSHANTH JAYA POOJARY', 'C83541', '1-31']],
+      '2026-04': [[INF, 'DAY', 'VIKASH SIYAK RICHHPAL SIYAK', 'C36251', '1-30'], [INF, 'NIGHT', 'AGENDIA VLAVIDIKOS', 'SUBCON (AFF)', '1-9'], [INF, 'NIGHT', 'PRAVEEN RAJENDRAN SUKUMARI RAJENDRA K', 'C80749', '10-30'], [GATE, 'DAY', 'PRATHEEK JAGADEESH', 'C66585', '1-30'], [GATE, 'NIGHT', 'SUSHANTH JAYA POOJARY', 'C83541', '1-30']],
+      '2026-05': [[INF, 'DAY', 'VIKASH SIYAK RICHHPAL SIYAK', 'C36251', '1-5'], [INF, 'DAY', 'AJI PHILIP JON JHON PHILIP', 'C74946', '7-31'], [INF, 'NIGHT', 'SUSHANTH JAYA POOJARY', 'C83541', '1-31'], [GATE, 'DAY', 'PRATHEEK JAGADEESH', 'C66585', '1-31'], [GATE, 'NIGHT', 'PRAVEEN RAJENDRAN SUKUMARI RAJENDRA K', 'C80749', '1-11,15-31'], [INF, 'DAY', 'RAKESH KUMAR MAKHAN LAL', 'C41976', '6', 'R'], [GATE, 'NIGHT', 'JASBIR SINGH HARBHAJAN SINGH', 'C64887', '12-14', 'R']]
+    };
+    let el = S.projects.find(p => /ELWOOD/.test(p.name) && /INFRA/.test(p.name));
+    if (!el) { el = { id: uid('p'), name: 'SCL - ELWOOD - INFRA', active: true }; S.projects.push(el); }
+    Object.assign(el, { name: 'SCL - ELWOOD - INFRA', clientId: client('SOBHA CONSTRUCTIONS LLC').id, trackerName: 'Infra- Sobha Elwood', code: '104N135', poNo: 'INS-104N135-26-0002', woNo: 'LOR-104N135-24-0001', sapName: 'SOBHA ELWOOD INFRASTRUCTURE', orderCode: '3020110P047', tsOff: 'OFF',
+      entityName: 'SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)', billing: { basis: 'fixed', rate: 4100, vat: 0, posts: 4, unit: 'Security', rates: {} } });   // WOI: 4,100 / guard / month; invoice: 4 Security @ N Days
+    reindex();
+    const siteId = {}; for (const n of [INF, GATE]) { let x = S.sites.find(y => y.projectId === el.id && y.name === n); if (!x) { x = { id: uid('s'), projectId: el.id, name: n }; S.sites.push(x); } siteId[n] = x.id; }
+    reindex();
+    const days = (spec, ym) => spec.split(',').flatMap(r => { const [a, b] = r.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => `${ym}-${pad(a + i)}`); });
+    let added = 0, found = 0;
+    for (const [ym, rows] of Object.entries(EL)) for (const [site, shift, name, id, spec, code] of rows) {
+      const { empCode, agency } = splitIdAgency(id);
+      let e = findEmployee(empCode, name, agency);
+      if (!e) { e = { id: uid('e'), empCode, name, agency, trade: 'SECURITY GUARD', shift, doj: null, end: null, endReason: '', assign: [] }; S.employees.push(e); IX.emp.set(e.id, e); e._elwood = true; added++; } else if (!e._seen) { found++; e._seen = 1; }
+      for (const d of days(spec, ym)) (S.att[e.id] ||= {})[d] = { c: code || 'P', s: siteId[site], sh: shift, ...(norm(e.name) !== name ? { n: name } : {}) };   // keep the name as written on the sheet
+      if (e._elwood) { e._last = !e._last || days(spec, ym).at(-1) > e._last ? days(spec, ym).at(-1) : e._last; if (!e.assign.length) e.assign.push({ from: days(spec, ym)[0], site: siteId[site], shift }); }
+    }
+    // workers only on the Elwood sheets (not on the Jun–Jul payroll): allocation ends with their last day on those sheets
+    for (const e of S.employees) { if (e._elwood) { e.end = e._last; e.endReason = 'LAST ON ELWOOD SHEET'; } delete e._elwood; delete e._last; delete e._seen; }
+    log.push(`elwood: ${added} workers added, ${found} already on payroll`);
+    reindex();
+    const chk = Object.keys(EL).map(m => m + '=' + buildTimesheet(el.id, m).total).join(' ');
+    log.push('elwood totals ' + chk);
+  }
   S.clients = S.clients.filter(c => S.projects.some(p => p.clientId === c.id));
   reindex();
   // 3. known SAP data: Elwood (from the tax invoice pack) and Waves (Trackers → Waves-SCM)
   const el = S.projects.find(p => /ELWOOD/.test(p.name) && /INFRA/.test(p.name));
-  if (el) { el.code = '104N135'; el.poNo = 'INS-104N135-26-0002'; el.entityName = 'SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)'; el.woNo = 'LOR-104N135-24-0001'; }
+
   const wv = S.projects.filter(p => /WAVES/.test(p.name) && !/GRANDE|OPULENCE/.test(p.name)).sort((a, b) => a.name.length - b.name.length)[0];
   const scm = client('SOBHA COMMUNITY MANAGEMENT LLC');
   if (wv) { wv.code = '110P016'; wv.clientId = scm.id; wv.billing = { basis: 'lump', rate: 32795, vat: 0, posts: 0, unit: 'Security', rates: {} }; }
-  const sclC = client('SOBHA CONSTRUCTIONS LLC'); sclC.address = 'P.O.BOX - 25654, DUBAI - UNITED ARAB EMIRATES'; sclC.trn = '100551377300003';
+  const sclC = client('SOBHA CONSTRUCTIONS LLC'); sclC.address = 'SOBHA SAPPHIRE,13TH FLOOR,AL KHAIL ROAD,BUSINESS BAY\nDUBAI,25654\nUnited Arab Emirates'; sclC.trn = '100551377300003';   // as on invoice 2026-0900000689
   // 4. invoice history: Waves-SCM sheet (38 invoices) + the Elwood Jan–May 2026 invoice
   const xd = v => typeof v === 'number' ? parseAnyDate(v) : (parseAnyDate(v) || null);
   const ws = XLSX.utils.sheet_to_json(wb.Sheets['Waves-SCM'], { header: 1, defval: null });
@@ -68,11 +99,11 @@ const out = await pg.evaluate(async ({ master, scl, trk }) => {
       lines: [{ desc: String(r[8] || ''), rate: amt, amount: amt, vat: 0 }], savedAt: new Date().toISOString(),
       track: { invSent: xd(r[4]) || '', paidAmt: paid || '', paidOn: /paid/i.test(status) && paid >= amt - 0.01 ? (xd(r[13]) || '') : '', status } });
   }
-  if (el) S.invoices.push({ id: uid('i'), no: '2026-0900000689', date: '2026-06-01', clientId: sclC.id, projectIds: [el.id], from: '2026-01', to: '2026-05', entity: el.entityName, trn: '100551377300003', customerCode: '', poNo: el.poNo, attachTs: true, notes: '', savedAt: new Date().toISOString(),
+  if (el) S.invoices.push({ id: uid('i'), no: '2026-0900000689', date: '2026-06-01', clientId: sclC.id, projectIds: [el.id], from: '2026-01', to: '2026-05', entity: el.entityName, trn: '100551377300003', customerCode: '', poNo: el.poNo, sapProject: el.sapName, orderCode: el.orderCode, custAddress: sclC.address, payTerms: '30 DAYS CREDIT FROM DT INV SUB', advance: 0, retention: 0, withSap: true, attachTs: true, notes: '', savedAt: new Date().toISOString(),
     lines: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(m => ({ desc: `${fmtMonYY(m)}  4 Security @ ${dim(m)} Days`, rate: 4100, amount: 16400, vat: 0, src: { pid: el.id, m, md: 4 * dim(m) } })), track: { invSent: '2026-08-20' } });
   S.invoices.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   S.settings.rateCard = [{ trade: 'SECURITY GUARD', unit: 'Security', rate: 4100, src: 'WOI INS-104N135-26-0002' }, { trade: 'LADY SECURITY GUARD', unit: 'Female Security Guard', rate: 3990, src: 'Tax Invoice Breakup' }, { trade: 'SECURITY SUPERVISOR', unit: 'Security Supervisor', rate: 8000, src: 'Tax Invoice Breakup' }];
-  S.savedAt = null; S.seedVer = '2026-09-29'; markDirty();
+  S.savedAt = null; S.seedVer = '2026-09-29b'; markDirty();
   // short ids keep the file small (e1…, s1…, p1…, c1…, i1…)
   let json = JSON.stringify(encodeState(S)); const ids = new Map(); let n = 0;
   for (const k of ['employees', 'sites', 'projects', 'clients', 'invoices']) S[k].forEach((x, i) => ids.set(x.id, x.id[0] + (i + 1)));

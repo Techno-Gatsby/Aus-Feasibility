@@ -107,6 +107,10 @@ function editProject(id, presetName, onCreated) {
     <label class="f">Client<select id="ep-client">${opts(S.clients.map(c => [c.id, c.name]), p.clientId, '— choose client —')}</select></label>
     <label class="f">Entity on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
     <label class="f">Name in Tax Invoice Tracker<input type="text" id="ep-tn" value="${esc(p.trackerName || '')}"></label>
+    <label class="f">SAP project name<input type="text" id="ep-sapn" value="${esc(p.sapName || '')}" placeholder="SOBHA ELWOOD INFRASTRUCTURE"></label>
+    <label class="f">SAP project / order code<input type="text" id="ep-oc" value="${esc(p.orderCode || '')}" placeholder="3020110P047"></label>
+    <label class="f">Work order ref<input type="text" id="ep-wo" value="${esc(p.woNo || '')}" placeholder="LOR-104N135-24-0001"></label>
+    <label class="f">Day off on timesheet<select id="ep-off">${opts([['O', 'O (SCL TR sheets)'], ['OFF', 'OFF (Elwood sheets)']], p.tsOff || 'O')}</select></label>
     <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
     <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
     ${id ? `<label class="f">Merge into another project (moves all sites)<select id="ep-merge">${opts(S.projects.filter(x => x.id !== id).map(x => [x.id, x.name]).sort((a, b) => a[1].localeCompare(b[1])), '', "— don't merge —")}</select></label>` : ''}
@@ -132,7 +136,7 @@ function editProject(id, presetName, onCreated) {
       label: 'Save', cls: 'pri', onClick: m => {
         p.name = $('#ep-name', m).value.trim(); if (!p.name) { toast('Name required'); return false; }
         p.code = $('#ep-code', m).value.trim(); p.clientId = $('#ep-client', m).value; p.entityName = $('#ep-entity', m).value.trim();
-        p.poNo = $('#ep-po', m).value.trim(); p.trackerName = $('#ep-tn', m).value.trim(); p.active = $('#ep-active', m).value === '1';
+        p.poNo = $('#ep-po', m).value.trim(); p.trackerName = $('#ep-tn', m).value.trim(); p.sapName = $('#ep-sapn', m).value.trim(); p.orderCode = $('#ep-oc', m).value.trim(); p.woNo = $('#ep-wo', m).value.trim(); p.tsOff = $('#ep-off', m).value; p.active = $('#ep-active', m).value === '1';
         const into = $('#ep-merge', m)?.value;
         if (into) {
           sitesOfProject(id).forEach(x => x.projectId = into);

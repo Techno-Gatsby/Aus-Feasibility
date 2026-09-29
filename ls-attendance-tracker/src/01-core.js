@@ -96,6 +96,11 @@ function defaultState() {
       formNo: 'LS/DO/F-026', revNo: '00', formDate: '06.01.2021',
       tsTitle: 'SECURITY GUARD - MONTHLY BILLING TIME SHEET',
       cycleStartDay: 21,
+      // SAP tax invoice page (as the Elwood invoice 2026-0900000689)
+      invAddress: 'LATINEM SECURITIES LLC\nDubai,United Arab Emirates\nPO BOX: 125250\nTelephone no: +971 4 4238064\nVAT: 100551377300003',
+      payTerms: '30 DAYS CREDIT FROM DT INV SUB', currency: 'AED',
+      bank: { name: 'LATINEM SECURITIES LLC', bank: 'Emirates NBD,DUBAI POLICE ACADEMY,Dubai', acct: '1015899427501', iban: 'AE530260001015899427501', swift: 'EBILAEADXXX' },
+      declaration: 'This is a computer-generated tax invoice and does not require a signature or stamp.',
       preparedBy: 'MUHAMMAD ALI',
       shiftHours: 12,
       // AED per person per month, pro-rata on calendar days (days worked ÷ days in month)
@@ -154,6 +159,7 @@ function migrate(st) {
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
   st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {};
   st.settings.rateCard ||= d.settings.rateCard;
+  st.settings.bank = Object.assign({}, d.settings.bank, st.settings.bank || {});
   for (const e of st.employees) if (e.trade && /^CCTV\b/.test(e.trade)) e.trade = 'CCTV OPERATOR';
   for (const c of d.codes) if (!st.codes.some(x => x.code === c.code)) st.codes.push({ ...c, key: st.codes.some(x => x.key === c.key) ? '' : c.key });
   for (const e of st.employees) { e.assign = (e.assign || []).sort((a, b) => a.from < b.from ? -1 : 1); }
@@ -170,7 +176,7 @@ function encodeState(st) {
     for (const [d, v] of Object.entries(days)) {
       const c = typeof v === 'string' ? v : v.c; let ci = codes.indexOf(c); if (ci < 0) { codes.push(c); ci = codes.length - 1; }
       (months[d.slice(0, 7)] ||= Array(31).fill('.'))[+d.slice(8) - 1] = B62[ci];
-      if (typeof v === 'object' && (v.s || v.sh)) extra.push([eid, d, v.s || '', v.sh || '']);
+      if (typeof v === 'object' && (v.s || v.sh || v.n)) extra.push([eid, d, v.s || '', v.sh || '', ...(v.n ? [v.n] : [])]);
     }
     att[eid] = Object.fromEntries(Object.entries(months).map(([m, a]) => [m, a.join('').replace(/\.+$/, '')]));
   }
@@ -180,7 +186,7 @@ function decodeState(x) {
   if (!x?._enc) return x;
   const att = {};
   for (const [eid, months] of Object.entries(x.att)) { const o = att[eid] = {}; for (const [ym, s] of Object.entries(months)) for (let i = 0; i < s.length; i++) if (s[i] !== '.') o[`${ym}-${pad(i + 1)}`] = x._codes[B62.indexOf(s[i])]; }
-  for (const [eid, d, s, sh] of x._extra) { const c = att[eid][d]; att[eid][d] = { c, ...(s ? { s } : {}), ...(sh ? { sh } : {}) }; }
+  for (const [eid, d, s, sh, n] of x._extra) { const c = att[eid][d]; att[eid][d] = { c, ...(s ? { s } : {}), ...(sh ? { sh } : {}), ...(n ? { n } : {}) }; }
   const st = { ...x, att }; delete st._codes; delete st._extra; delete st._enc; return st;
 }
 function shippedState() { return typeof SEED !== 'undefined' && SEED ? decodeState(JSON.parse(JSON.stringify(SEED))) : defaultState(); }
@@ -190,7 +196,7 @@ function getCell(empId, d) { const v = S.att[empId]?.[d]; if (!v) return null; r
 function putCell(empId, d, val) {
   if (!val || !val.c) { if (S.att[empId]) { delete S.att[empId][d]; } return; }
   (S.att[empId] ||= {});
-  S.att[empId][d] = (val.s || val.sh) ? { c: val.c, ...(val.s ? { s: val.s } : {}), ...(val.sh ? { sh: val.sh } : {}) } : val.c;
+  S.att[empId][d] = (val.s || val.sh || val.n) ? { c: val.c, ...(val.s ? { s: val.s } : {}), ...(val.sh ? { sh: val.sh } : {}), ...(val.n ? { n: val.n } : {}) } : val.c;  // n = name as written on the client timesheet
 }
 function assignOn(emp, d) { let a = null; for (const x of emp.assign || []) { if (x.from <= d) a = x; else break; } return a; }
 function siteOn(emp, d) { const c = getCell(emp.id, d); return c?.s || assignOn(emp, d)?.site || null; }
