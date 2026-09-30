@@ -30,7 +30,7 @@ Import Excel (File menu) accepts the master payroll workbook and client timeshee
 - **Zones:** a punch is accepted when (distance to the site pin − GPS accuracy) ≤ zone radius and accuracy ≤ 50 m. Otherwise it waits in **Worker app → Punches to review**.
 - **No check-in:** there are no leave requests in the app. The supervisor (phone menu → Supervisor) or the admin (**Worker app → No check-in**) decides what the day is: A, OFF, SL, AL, EL, UL, SIRA or P.
 - **Admin, in the tracker:**
-  - **Projects & sites → Edit site:** map (Map / Satellite), search with suggestions, pins and zone radius.
+  - **Projects & sites → Edit project or Edit site:** map (Map / Satellite), search with suggestions, pins and zone radius. A project location covers every site of the project that has no pin of its own; a site pin overrides it.
   - **Employees:** tick workers → **App access…** gives PINs and prints slips.
   - **Worker app → Publish roster**, then **Sync** (automatic every 5 minutes).
   - **Right-click a day** in Attendance → **Punch details**: coordinates, distance, photos and map.

@@ -332,7 +332,7 @@ function dataChecks() {
   add('App punches waiting for review (outside zone, poor GPS, clock)', pendingPunches().map(p => `${p.name} ${fmtDMY(p.workDate)} ${p.type}: ${p.reasons.join(' · ')}`), 'Review in Worker app', 'app', 'punches to review');
   { const y = addDays(today, -1); add(`App workers with no check-in on ${fmtDMY(y)} – decide what the day is`, noCheckIn(y).map(e => `${e.name} ${appCode(e)}`), 'Decide in Worker app', 'app', 'no check-in'); }
   { const used = new Set(S.employees.filter(e => e.app?.on).map(e => assignOn(e, today)?.site).filter(Boolean));
-    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !x.pins?.length).map(x => x.name), 'Set location in Projects & sites', 'projects', 'sites without location'); }
+    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !sitePins(x).length).map(x => x.name), 'Set a project or site location in Projects & sites', 'projects', 'sites without location'); }
   add('App days kept as another code (already entered in the tracker)', S.issues?.app || [], 'Check in Attendance', null, 'app conflicts');
   add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
   return out;

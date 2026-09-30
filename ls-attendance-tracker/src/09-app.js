@@ -44,7 +44,7 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => s.pins?.length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: s.pins || [] }));
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s) }));
   const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
@@ -179,7 +179,7 @@ async function punchDetails(emp, d) {
   if (ps.length) try {
     const map = await LSMap.create($('#pd-map', m), { center: [ps[0].lat, ps[0].lng], zoom: 17, satellite: true });
     const b = window.L.latLngBounds([]);
-    for (const s of new Set(ps.map(p => p.siteId).concat(siteOn(emp, d) || []))) for (const pin of IX.site.get(s)?.pins || []) { LSMap.zone(map, pin, { label: siteName(s) }); b.extend([pin.lat, pin.lng]); }
+    for (const s of new Set(ps.map(p => p.siteId).concat(siteOn(emp, d) || []))) for (const pin of sitePins(IX.site.get(s))) { LSMap.zone(map, pin, { label: siteName(s) }); b.extend([pin.lat, pin.lng]); }
     for (const p of ps) { window.L.circle([p.lat, p.lng], { radius: p.acc, color: '#E0762F', weight: 1, fillOpacity: .1 }).addTo(map); window.L.circleMarker([p.lat, p.lng], { radius: 7, color: '#fff', weight: 2, fillColor: p.type === 'in' ? '#E0762F' : '#5B4AB8', fillOpacity: 1 }).bindTooltip(`${p.type === 'in' ? 'In' : 'Out'} ${t(p.ts)}`, { permanent: true, direction: 'right' }).addTo(map); b.extend([p.lat, p.lng]); }
     map.fitBounds(b.pad(0.4), { maxZoom: 18 });
   } catch (e) { $('#pd-map', m).innerHTML = `<div class="empty" style="height:100%">${esc(e.message)}</div>`; }
@@ -189,14 +189,14 @@ async function punchDetails(emp, d) {
 const AP = { date: '' };
 function renderApp() {
   const v = $('#v-app'), c = appCfg(), cl = appClient();
-  const on = S.employees.filter(appOn), pins = S.sites.filter(s => s.pins?.length), pend = pendingPunches();
+  const on = S.employees.filter(appOn), pins = S.sites.filter(s => sitePins(s).length), pend = pendingPunches();
   AP.date ||= addDays(todayISO(), -1); const miss = noCheckIn(AP.date);
   const today = todayISO(), todays = Object.values(S.punches || {}).filter(p => p.workDate === today);
   const t = ts => ts ? new Date(ts).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never';
   const bySite = new Map(); for (const p of todays) { const k = p.siteName || '—'; const x = bySite.get(k) || bySite.set(k, { in: new Set(), out: new Set() }).get(k); (p.type === 'in' ? x.in : x.out).add(p.wid); }
   v.innerHTML = docHead('Worker app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Worker Attendance.html'}" target="_blank">Open worker page ↗</a>`) + `<div class="dc">
     <div class="kpis">${[['Workers on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
-    ${!on.length ? `<div class="note">Start here: <b>1</b> set each site's location in Projects &amp; sites → Edit site. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
+    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
     ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Worker</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th></th></tr></thead><tbody>
       ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}

@@ -1508,7 +1508,7 @@ function dataChecks() {
   add('App punches waiting for review (outside zone, poor GPS, clock)', pendingPunches().map(p => `${p.name} ${fmtDMY(p.workDate)} ${p.type}: ${p.reasons.join(' · ')}`), 'Review in Worker app', 'app', 'punches to review');
   { const y = addDays(today, -1); add(`App workers with no check-in on ${fmtDMY(y)} – decide what the day is`, noCheckIn(y).map(e => `${e.name} ${appCode(e)}`), 'Decide in Worker app', 'app', 'no check-in'); }
   { const used = new Set(S.employees.filter(e => e.app?.on).map(e => assignOn(e, today)?.site).filter(Boolean));
-    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !x.pins?.length).map(x => x.name), 'Set location in Projects & sites', 'projects', 'sites without location'); }
+    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !sitePins(x).length).map(x => x.name), 'Set a project or site location in Projects & sites', 'projects', 'sites without location'); }
   add('App days kept as another code (already entered in the tracker)', S.issues?.app || [], 'Check in Attendance', null, 'app conflicts');
   add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
   return out;
@@ -1725,10 +1725,13 @@ function renderProjects() {
       <td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td>
       <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div>`) : ''}
-  ${(() => { const withPin = S.sites.filter(x => x.pins?.length); return sec('locations', `Site locations <span class="cnt">${withPin.length} of ${S.sites.length} sites have a zone</span>`, `
-    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${withPin.length ? '' : 'disabled'}>Map of all zones</button><span class="muted small">Set a location with <b>Edit</b> on any site. Punches inside a zone are accepted automatically; others wait for review.</span></div>
-    ${withPin.length ? `<div class="tw" style="max-height:240px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
-    ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}`, '', ); })()}
+  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the worker app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
+    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
+    ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
+    ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
+    ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${!projPin.length && !withPin.length ? '<p class="muted small" style="margin:0">Nothing set yet – use <b>Edit</b> on a project or a site.</p>' : ''}`, '', ); })()}
   ${sec('projects', 'Projects', projRows.map(p => {
       const c = IX.client.get(p.clientId); const b = p.billing || {};
       const ss = sitesOfProject(p.id);
@@ -1739,9 +1742,10 @@ function renderProjects() {
           ${!p.clientId ? '<span class="pill neg">no client</span>' : ''}
           ${!rateFor(p, 'SECURITY GUARD') && !['fixed', 'lump'].includes(b.basis) ? '<span class="pill warn">no rate</span>' : ''}
           ${p.active === false ? '<span class="pill">inactive</span>' : ''}
+          ${p.pins?.length ? `<span class="pill pos" title="Project-wide worker-app zone">📍 project ${p.pins[0].radius} m</span>` : ''}
           <span class="spacer"></span><span class="muted small">${bill} · VAT ${b.vat || 0}%</span>
           <button class="btn sm" data-addsite="${p.id}">Add site</button><button class="btn sm" data-ep="${p.id}">Edit</button></div>
-        <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has a worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
+        <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has its own worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : p.pins?.length ? ' <span class="pill" title="Uses the project zone">📍 project</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
       </div>`;
     }).join('') || '<p class="muted">No projects match.</p>', `<span class="cnt">${projRows.length}</span>`)}
   </div>`;
@@ -1792,7 +1796,8 @@ function editProject(id, presetName, onCreated) {
   const p = id ? JSON.parse(JSON.stringify(IX.proj.get(id))) : { id: uid('p'), clientId: '', code: '', name: presetName || '', entityName: '', poNo: '', woiNo: '', billing: { basis: 'ratecard', rate: 0, vat: 0, posts: 0, unit: 'Security', rates: {} }, active: true };
   p.billing ||= { basis: 'ratecard', rate: 0, vat: 0 };
   p.billing.rates ||= {};
-  openModal(id ? 'Edit project' : 'Add project', `<div class="form">
+  p.pins ||= [];
+  const m = openModal(id ? 'Edit project' : 'Add project', `<div class="form">
     <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
     <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
     <label class="f">Client<select id="ep-client">${opts(S.clients.map(c => [c.id, c.name]), p.clientId, '— choose client —')}</select></label>
@@ -1819,7 +1824,9 @@ function editProject(id, presetName, onCreated) {
     <table><thead><tr><th>Trade</th><th class="num">Rate card</th><th class="num">This project (AED / month)</th></tr></thead><tbody>
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
-    <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>`,
+    <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
+    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
+    ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
       if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
@@ -1837,28 +1844,84 @@ function editProject(id, presetName, onCreated) {
         }
         const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
+        PE.finish();
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
+        if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Worker app to send it to phones', 5000);
       }
-    }]);
+    }], { width: 'min(1500px,94vw)' });
+  const PE = pinEditor(m, p, { px: 'ep', name: p.name, others: [...S.projects.filter(x => x.id !== p.id && x.pins?.length).map(x => ({ name: x.name + ' (project)', pins: x.pins })), ...S.sites.filter(x => x.pins?.length).map(x => ({ name: x.name, pins: x.pins }))], empty: 'No project location yet – search above or click the map. Sites can still have their own pins.' });
+}
+
+/** Pins that apply to a site: its own, else its project's (project-wide coverage) */
+function sitePins(s) { if (!s) return []; if (s.pins?.length) return s.pins; return IX.proj.get(s.projectId)?.pins || []; }
+
+/* ---------- shared location editor (sites and projects) ---------- */
+function pinEditorHTML(px, extraBtn) {
+  return `<div class="row" style="margin-bottom:6px"><div class="grow" style="position:relative;min-width:260px"><input type="text" id="${px}-q" placeholder="Search a place, paste coordinates or a Google Maps link" style="width:100%"></div>
+      <button class="btn sm" id="${px}-add">Add pin at map centre</button>${extraBtn || ''}</div>
+    <div id="${px}-map" class="mapbox"></div>
+    <div class="muted small" style="margin:4px 0 6px">Click the map or drag the pin to move the selected pin. Several pins are allowed (e.g. gate and office). The circle is the coverage: punches inside it are accepted automatically.</div>
+    <div class="tw"><table><thead><tr><th></th><th>Label</th><th>Latitude</th><th>Longitude</th><th>Zone radius (m)</th><th></th></tr></thead><tbody id="${px}-pins"></tbody></table></div>`;
+}
+/** Binds the editor in modal m to owner.pins (edited in place). o: { px, others:[{name,pins}], ghost:{name,pins}|null, empty } */
+function pinEditor(m, owner, o) {
+  const px = o.px, R0 = appCfg().radius; owner.pins ||= [];
+  let sel = 0, map = null, drawn = [], ghost = o.ghost || null;
+  const table = () => {
+    $(`#${px}-pins`, m).innerHTML = owner.pins.map((p, i) => `<tr class="${i === sel ? 'on' : ''}"><td><input type="radio" name="${px}-sel" data-sel="${i}" ${i === sel ? 'checked' : ''}></td>
+      <td><input type="text" data-pk="label" data-pi="${i}" value="${esc(p.label || '')}" placeholder="e.g. Main gate" style="width:130px"></td>
+      <td><input type="number" step="0.000001" data-pk="lat" data-pi="${i}" value="${p.lat}" style="width:120px"></td><td><input type="number" step="0.000001" data-pk="lng" data-pi="${i}" value="${p.lng}" style="width:120px"></td>
+      <td><div class="row" style="flex-wrap:nowrap"><input type="range" min="20" max="1000" step="10" data-pk="radius" data-pi="${i}" value="${p.radius}" style="width:140px"><input type="number" min="10" data-pk="radius" data-pi="${i}" value="${p.radius}" style="width:70px"></div></td>
+      <td><button class="btn sm bad" data-pdel="${i}">✕</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${o.empty || 'No location yet – search above or click the map.'}</td></tr>`;
+    const root = $(`#${px}-pins`, m);
+    root.querySelectorAll('[data-sel]').forEach(r => r.onchange = () => { sel = +r.dataset.sel; table(); draw(true); });
+    root.querySelectorAll('[data-pk]').forEach(i => i.oninput = () => { const p = owner.pins[+i.dataset.pi]; p[i.dataset.pk] = i.dataset.pk === 'label' ? i.value : +i.value; if (i.dataset.pk === 'radius') root.querySelectorAll(`[data-pk=radius][data-pi="${i.dataset.pi}"]`).forEach(x => x !== i && (x.value = i.value)); draw(false); });
+    root.querySelectorAll('[data-pdel]').forEach(b => b.onclick = () => { owner.pins.splice(+b.dataset.pdel, 1); sel = Math.max(0, Math.min(sel, owner.pins.length - 1)); table(); draw(true); });
+  };
+  const place = (lat, lng) => { if (!owner.pins.length) { owner.pins.push({ lat, lng, radius: R0, label: '' }); sel = 0; } else Object.assign(owner.pins[sel], { lat: +lat.toFixed(6), lng: +lng.toFixed(6) }); table(); draw(false); };
+  function draw(fit) {
+    if (!map) return; const L = window.L;
+    drawn.forEach(x => x.remove()); drawn = [];
+    for (const x of o.others || []) for (const p of x.pins || []) drawn.push(LSMap.zone(map, p, { color: '#93A0B5', fill: .05, label: x.name, marker: false }));
+    for (const p of ghost?.pins || []) { const z = LSMap.zone(map, p, { color: '#5B4AB8', fill: .04, label: `${ghost.name} – project zone (${p.radius} m)`, marker: false }); z.c.setStyle({ dashArray: '6 6' }); drawn.push(z); }
+    owner.pins.forEach((p, i) => {
+      const z = LSMap.zone(map, p, { color: i === sel ? '#1766CB' : '#5B4AB8', marker: false }); drawn.push(z);
+      const mk = L.marker([p.lat, p.lng], { draggable: true }).addTo(map).bindTooltip(p.label || o.name || 'pin'); drawn.push({ remove: () => mk.remove() });
+      mk.on('drag', e => { z.c.setLatLng(e.latlng); }); mk.on('dragend', e => { sel = i; place(e.target.getLatLng().lat, e.target.getLatLng().lng); });
+      mk.on('click', () => { sel = i; table(); draw(false); });
+    });
+    const pts = owner.pins.length ? owner.pins : (ghost?.pins || []);
+    if (fit && pts.length) map.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lng])).pad(0.8), { maxZoom: 17 });
+  }
+  table();
+  const c0 = owner.pins[0] || ghost?.pins?.[0];
+  LSMap.create($(`#${px}-map`, m), { zoom: c0 ? 16 : 10, center: c0 ? [c0.lat, c0.lng] : undefined, satellite: true }).then(mp => {
+    map = mp; map.on('click', e => place(e.latlng.lat, e.latlng.lng)); draw(true);
+    const onRs = () => { if (!$(`#${px}-map`, m)?.isConnected) return window.removeEventListener('resize', onRs); try { map.invalidateSize(); } catch (e) { } };
+    window.addEventListener('resize', onRs);
+  }).catch(e => { $(`#${px}-map`, m).innerHTML = `<div class="empty" style="height:100%">${esc(e.message)} – type coordinates in the table instead.</div>`; });
+  LSMap.search($(`#${px}-q`, m), x => { if (map) map.setView([x.lat, x.lng], 17); place(x.lat, x.lng); }, { key: appCfg().arcgisKey });
+  $(`#${px}-add`, m).onclick = () => { const c = map ? map.getCenter() : { lat: 25.2, lng: 55.3 }; owner.pins.push({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6), radius: R0, label: '' }); sel = owner.pins.length - 1; table(); draw(false); };
+  const useBtn = $(`#${px}-use`, m); if (useBtn) useBtn.onclick = () => { if (!ghost?.pins?.length) return toast('The project has no location yet'); owner.pins.splice(0, owner.pins.length, ...ghost.pins.map(p => ({ ...p }))); sel = 0; table(); draw(true); };
+  return {
+    setGhost(g) { ghost = g; if (useBtn) useBtn.hidden = !g?.pins?.length; draw(!owner.pins.length); },
+    finish() { owner.pins = owner.pins.filter(p => isFinite(p.lat) && isFinite(p.lng)).map(p => ({ lat: +(+p.lat).toFixed(6), lng: +(+p.lng).toFixed(6), radius: Math.max(10, Math.round(+p.radius || R0)), label: p.label || '' })); return owner.pins; }
+  };
 }
 
 function editSite(id, projectId) {
   const s = id ? JSON.parse(JSON.stringify(IX.site.get(id))) : { id: uid('s'), projectId: projectId || null, name: '' };
   s.pins ||= [];
-  const refs = id ? countSiteRefs(id) : 0, R0 = appCfg().radius;
-  let sel = 0, map = null, drawn = [];
+  const refs = id ? countSiteRefs(id) : 0;
+  const ghostOf = pid => { const p = pid && IX.proj.get(pid); return p?.pins?.length ? { name: p.name, pins: p.pins } : null; };
   const m = openModal(id ? 'Edit site' : 'Add site', `<div class="form">
     <label class="f">Site name *<input type="text" id="es-name" value="${esc(s.name)}"></label>
     <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
     </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
-    <h3 style="margin:14px 0 6px">Location for the worker app <span class="muted small">– punches inside a zone are accepted automatically</span></h3>
-    <div class="row" style="margin-bottom:6px"><div class="grow" style="position:relative;min-width:260px"><input type="text" id="es-q" placeholder="Search a place, paste coordinates or a Google Maps link" style="width:100%"></div>
-      <button class="btn sm" id="es-add">Add pin at map centre</button></div>
-    <div id="es-map" class="mapbox"></div>
-    <div class="muted small" style="margin:4px 0 6px">Click the map or drag the pin to move the selected pin. A site can have several pins (e.g. gate and office).</div>
-    <div class="tw"><table><thead><tr><th></th><th>Label</th><th>Latitude</th><th>Longitude</th><th>Zone radius (m)</th><th></th></tr></thead><tbody id="es-pins"></tbody></table></div>`,
+    <h3 style="margin:14px 0 6px">Location for the worker app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
+    ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
       S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -1868,49 +1931,21 @@ function editSite(id, projectId) {
         if (merge) { mergeSite(id, merge); return; }
         s.name = $('#es-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase(); if (!s.name) { toast('Name required'); return false; }
         s.projectId = $('#es-proj', m).value || null;
-        s.pins = s.pins.filter(p => isFinite(p.lat) && isFinite(p.lng)).map(p => ({ lat: +(+p.lat).toFixed(6), lng: +(+p.lng).toFixed(6), radius: Math.max(10, Math.round(+p.radius || R0)), label: p.label || '' }));
+        PE.finish();
         if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
         reindex(); markDirty(); renderAll();
-        if (s.pins.length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Worker app to send it to phones', 5000);
+        if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Worker app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
-  const table = () => {
-    $('#es-pins', m).innerHTML = s.pins.map((p, i) => `<tr class="${i === sel ? 'on' : ''}"><td><input type="radio" name="es-sel" data-sel="${i}" ${i === sel ? 'checked' : ''}></td>
-      <td><input type="text" data-pk="label" data-pi="${i}" value="${esc(p.label || '')}" placeholder="e.g. Main gate" style="width:130px"></td>
-      <td><input type="number" step="0.000001" data-pk="lat" data-pi="${i}" value="${p.lat}" style="width:120px"></td><td><input type="number" step="0.000001" data-pk="lng" data-pi="${i}" value="${p.lng}" style="width:120px"></td>
-      <td><div class="row" style="flex-wrap:nowrap"><input type="range" min="20" max="1000" step="10" data-pk="radius" data-pi="${i}" value="${p.radius}" style="width:140px"><input type="number" min="10" data-pk="radius" data-pi="${i}" value="${p.radius}" style="width:70px"></div></td>
-      <td><button class="btn sm bad" data-pdel="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No location yet – search above or click the map.</td></tr>';
-    m.querySelectorAll('[data-sel]').forEach(r => r.onchange = () => { sel = +r.dataset.sel; table(); draw(true); });
-    m.querySelectorAll('[data-pk]').forEach(i => i.oninput = () => { const p = s.pins[+i.dataset.pi]; p[i.dataset.pk] = i.dataset.pk === 'label' ? i.value : +i.value; if (i.dataset.pk === 'radius') m.querySelectorAll(`[data-pk=radius][data-pi="${i.dataset.pi}"]`).forEach(x => x !== i && (x.value = i.value)); draw(false); });
-    m.querySelectorAll('[data-pdel]').forEach(b => b.onclick = () => { s.pins.splice(+b.dataset.pdel, 1); sel = Math.max(0, Math.min(sel, s.pins.length - 1)); table(); draw(true); });
-  };
-  const place = (lat, lng) => { if (!s.pins.length) { s.pins.push({ lat, lng, radius: R0, label: '' }); sel = 0; } else Object.assign(s.pins[sel], { lat: +lat.toFixed(6), lng: +lng.toFixed(6) }); table(); draw(false); };
-  function draw(fit) {
-    if (!map) return; const L = window.L;
-    drawn.forEach(x => x.remove()); drawn = [];
-    for (const o of S.sites) if (o.id !== s.id) for (const p of o.pins || []) drawn.push(LSMap.zone(map, p, { color: '#93A0B5', fill: .05, label: o.name, marker: false }));
-    s.pins.forEach((p, i) => {
-      const z = LSMap.zone(map, p, { color: i === sel ? '#1766CB' : '#5B4AB8', marker: false }); drawn.push(z);
-      const mk = L.marker([p.lat, p.lng], { draggable: true }).addTo(map).bindTooltip(p.label || s.name || 'pin'); drawn.push({ remove: () => mk.remove() });
-      mk.on('drag', e => { z.c.setLatLng(e.latlng); }); mk.on('dragend', e => { sel = i; place(e.target.getLatLng().lat, e.target.getLatLng().lng); });
-      mk.on('click', () => { sel = i; table(); draw(false); });
-    });
-    if (fit && s.pins.length) map.fitBounds(L.latLngBounds(s.pins.map(p => [p.lat, p.lng])).pad(0.8), { maxZoom: 17 });
-  }
-  table();
-  LSMap.create($('#es-map', m), { zoom: s.pins.length ? 16 : 10, center: s.pins[0] ? [s.pins[0].lat, s.pins[0].lng] : undefined, satellite: true }).then(mp => {
-    map = mp; map.on('click', e => place(e.latlng.lat, e.latlng.lng)); draw(true);
-    const onRs = () => { if (!$('#es-map', m)?.isConnected) return window.removeEventListener('resize', onRs); try { map.invalidateSize(); } catch (e) { } };
-    window.addEventListener('resize', onRs);
-  }).catch(e => { $('#es-map', m).innerHTML = `<div class="empty" style="height:100%">${esc(e.message)} – type coordinates in the table instead.</div>`; });
-  LSMap.search($('#es-q', m), x => { if (map) map.setView([x.lat, x.lng], 17); place(x.lat, x.lng); }, { key: appCfg().arcgisKey });
-  $('#es-add', m).onclick = () => { const c = map ? map.getCenter() : { lat: 25.2, lng: 55.3 }; s.pins.push({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6), radius: R0, label: '' }); sel = s.pins.length - 1; table(); draw(false); };
+  const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
+  $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
 }
 /** All zones on one map */
 async function zonesMap() {
-  const m = openModal('Site locations', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
+  const m = openModal('Zones for the worker app', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
   try {
     const map = await LSMap.create($('#zm', m), {}), L = window.L, b = L.latLngBounds([]);
+    for (const pr of S.projects) for (const p of pr.pins || []) { const z = LSMap.zone(map, p, { color: '#5B4AB8', fill: .05, label: `${pr.name} – project zone · ${p.radius} m` }); z.c.setStyle({ dashArray: '6 6' }); z.c.on('click', () => { closeModal(); editProject(pr.id); }); b.extend([p.lat, p.lng]); }
     for (const s of S.sites) for (const p of s.pins || []) { const z = LSMap.zone(map, p, { label: `${s.name} · ${p.radius} m` }); z.c.on('click', () => { closeModal(); editSite(s.id); }); b.extend([p.lat, p.lng]); }
     if (b.isValid()) map.fitBounds(b.pad(0.2), { maxZoom: 16 });
   } catch (e) { $('#zm', m).innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -3142,7 +3177,7 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => s.pins?.length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: s.pins || [] }));
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s) }));
   const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
@@ -3277,7 +3312,7 @@ async function punchDetails(emp, d) {
   if (ps.length) try {
     const map = await LSMap.create($('#pd-map', m), { center: [ps[0].lat, ps[0].lng], zoom: 17, satellite: true });
     const b = window.L.latLngBounds([]);
-    for (const s of new Set(ps.map(p => p.siteId).concat(siteOn(emp, d) || []))) for (const pin of IX.site.get(s)?.pins || []) { LSMap.zone(map, pin, { label: siteName(s) }); b.extend([pin.lat, pin.lng]); }
+    for (const s of new Set(ps.map(p => p.siteId).concat(siteOn(emp, d) || []))) for (const pin of sitePins(IX.site.get(s))) { LSMap.zone(map, pin, { label: siteName(s) }); b.extend([pin.lat, pin.lng]); }
     for (const p of ps) { window.L.circle([p.lat, p.lng], { radius: p.acc, color: '#E0762F', weight: 1, fillOpacity: .1 }).addTo(map); window.L.circleMarker([p.lat, p.lng], { radius: 7, color: '#fff', weight: 2, fillColor: p.type === 'in' ? '#E0762F' : '#5B4AB8', fillOpacity: 1 }).bindTooltip(`${p.type === 'in' ? 'In' : 'Out'} ${t(p.ts)}`, { permanent: true, direction: 'right' }).addTo(map); b.extend([p.lat, p.lng]); }
     map.fitBounds(b.pad(0.4), { maxZoom: 18 });
   } catch (e) { $('#pd-map', m).innerHTML = `<div class="empty" style="height:100%">${esc(e.message)}</div>`; }
@@ -3287,14 +3322,14 @@ async function punchDetails(emp, d) {
 const AP = { date: '' };
 function renderApp() {
   const v = $('#v-app'), c = appCfg(), cl = appClient();
-  const on = S.employees.filter(appOn), pins = S.sites.filter(s => s.pins?.length), pend = pendingPunches();
+  const on = S.employees.filter(appOn), pins = S.sites.filter(s => sitePins(s).length), pend = pendingPunches();
   AP.date ||= addDays(todayISO(), -1); const miss = noCheckIn(AP.date);
   const today = todayISO(), todays = Object.values(S.punches || {}).filter(p => p.workDate === today);
   const t = ts => ts ? new Date(ts).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never';
   const bySite = new Map(); for (const p of todays) { const k = p.siteName || '—'; const x = bySite.get(k) || bySite.set(k, { in: new Set(), out: new Set() }).get(k); (p.type === 'in' ? x.in : x.out).add(p.wid); }
   v.innerHTML = docHead('Worker app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Worker Attendance.html'}" target="_blank">Open worker page ↗</a>`) + `<div class="dc">
     <div class="kpis">${[['Workers on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
-    ${!on.length ? `<div class="note">Start here: <b>1</b> set each site's location in Projects &amp; sites → Edit site. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
+    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
     ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Worker</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th></th></tr></thead><tbody>
       ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}

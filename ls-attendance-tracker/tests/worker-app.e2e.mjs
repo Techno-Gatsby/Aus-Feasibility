@@ -24,6 +24,16 @@ ok(await A.evaluate(() => document.querySelectorAll('.leaflet-control-layers-bas
 
 await A.click('#modal .mf button.pri');
 const pins = await A.evaluate(id => IX.site.get(id).pins, site); ok(pins.length === 1 && pins[0].lat === 25.03 && pins[0].radius === 120, 'pin saved ' + JSON.stringify(pins));
+// 1b. project location: a pin on the project covers its sites without a pin of their own
+const pid = await A.evaluate(id => projOfSite(id).id, site);
+await A.evaluate(id => { editProject(id); }, pid); await A.waitForSelector('#ep-map .leaflet-control-layers');
+await A.click('#ep-add'); await A.fill('#ep-pins input[type=number][data-pk=radius]', '250'); await A.dispatchEvent('#ep-pins input[type=number][data-pk=radius]', 'input');
+await A.click('#modal .mf button.pri'); await A.waitForTimeout(200);
+const projPins = await A.evaluate((pid) => { const p = IX.proj.get(pid), other = sitesOfProject(pid).find(s => !s.pins?.length); return { n: p.pins.length, r: p.pins[0]?.radius, inherited: other ? sitePins(other).length : -1, flagged: dataChecks().some(c => c.short === 'sites without location' && c.items.some(x => x === other?.name)) }; }, pid);
+ok(projPins.n === 1 && projPins.r === 250 && projPins.inherited === 1 && !projPins.flagged, 'project pin saved and inherited by sites without a pin ' + JSON.stringify(projPins));
+await A.evaluate(id => { editSite(id); }, await A.evaluate(pid => sitesOfProject(pid).find(s => !s.pins?.length).id, pid)); await A.waitForSelector('#es-map .leaflet-control-layers');
+ok(await A.evaluate(() => !document.querySelector('#es-use').hidden && /project location/.test(document.querySelector('#es-pins').textContent)), 'site editor shows the project zone option');
+await A.click('#modal .mf button:not(.pri):not(.bad)'); await A.evaluate(pid => { IX.proj.get(pid).pins = []; markDirty(); }, pid);   // keep the rest of the test on the site pin only
 // 2. two workers on that site, app access + PIN slips
 await A.evaluate(id => { for (const c of ['C52392', 'C80453']) { const e = S.employees.find(x => x.empCode === c); setAssignment(e, '2026-09-01', id, c === 'C52392' ? 'DAY' : 'NIGHT'); e.end = null; } reindex(); markDirty(); }, site);
 const pinsOut = await A.evaluate(async () => { const es = ['C52392', 'C80453'].map(c => S.employees.find(x => x.empCode === c)); const sl = await givePins(es); es.forEach(e => e.app.resetDevice = true); await printSlips(sl); return sl.map(x => x.pin); });
