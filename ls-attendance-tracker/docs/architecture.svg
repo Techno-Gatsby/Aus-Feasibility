@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#42506B"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1766CB"/></marker>
+    <style>
+      .t{font-size:17px;font-weight:700;fill:#12305E}.s{font-size:13px;fill:#42506B}.m{font-size:12px;fill:#6B7A94}.w{font-size:13px;fill:#fff;font-weight:600}
+      .box{fill:#fff;stroke:#9DBDE8;stroke-width:1.5;rx:10}.az{fill:#EAF2FD;stroke:#1766CB;stroke-width:2;rx:16}.ext{fill:#F8F1E6;stroke:#C9A96A;stroke-width:1.5;rx:10}
+      .usr{fill:#12305E;rx:10}.ln{stroke:#42506B;stroke-width:1.8;fill:none;marker-end:url(#a)}.lb{stroke:#1766CB;stroke-width:2;fill:none;marker-end:url(#b)}.dash{stroke-dasharray:6 5}
+      .lab{font-size:12px;fill:#16202F;font-weight:600}.labbg{fill:#fff}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="#F4F6FA"/>
+  <text x="40" y="48" font-size="26" font-weight="800" fill="#12305E">LS Attendance – solution architecture</text>
+  <text x="40" y="74" class="s">Latinem Securities · worker mobile attendance (GPS + photo) · admin tracker · Azure Static Web Apps + Functions + Storage</text>
+
+  <!-- users -->
+  <rect x="40" y="120" width="250" height="150" class="usr"/>
+  <text x="60" y="152" font-size="17" font-weight="700" fill="#fff">Workers (~900)</text>
+  <text x="60" y="178" class="w">Android / iPhone browser</text>
+  <text x="60" y="200" class="w">Home-screen web app (PWA)</text>
+  <text x="60" y="222" class="w">Emp ID + 4-digit PIN</text>
+  <text x="60" y="244" class="w">GPS + front camera</text>
+  <rect x="40" y="310" width="250" height="130" class="usr"/>
+  <text x="60" y="342" font-size="17" font-weight="700" fill="#fff">Supervisors</text>
+  <text x="60" y="368" class="w">Phone · Entra ID sign-in</text>
+  <text x="60" y="390" class="w">Site board, punch on behalf,</text>
+  <text x="60" y="412" class="w">mark no-check-in days</text>
+  <rect x="40" y="480" width="250" height="150" class="usr"/>
+  <text x="60" y="512" font-size="17" font-weight="700" fill="#fff">Admin (Ali) · Accounts</text>
+  <text x="60" y="538" class="w">Edge / Chrome on PC</text>
+  <text x="60" y="560" class="w">Entra ID sign-in</text>
+  <text x="60" y="582" class="w">roles: admin · viewer</text>
+  <text x="60" y="604" class="w">Attendance → Timesheets → Invoice</text>
+
+  <!-- Azure boundary -->
+  <rect x="360" y="100" width="820" height="700" class="az"/>
+  <text x="385" y="132" class="t">Microsoft Azure · resource group rg-ls-attendance</text>
+  <text x="385" y="152" class="m">Sobha tenant · Microsoft Entra ID for staff sign-in</text>
+
+  <!-- SWA -->
+  <rect x="390" y="175" width="480" height="300" class="box"/>
+  <text x="410" y="205" class="t">Azure Static Web Apps (Standard)</text>
+  <text x="410" y="226" class="s">HTTPS · custom domain · managed certificate · role routes</text>
+  <rect x="410" y="245" width="210" height="95" rx="8" fill="#EDF1F7" stroke="#C9D2E1"/>
+  <text x="422" y="270" class="lab">/worker/  Worker Attendance</text>
+  <text x="422" y="292" class="m">public page, PIN token for API</text>
+  <text x="422" y="312" class="m">offline queue (IndexedDB)</text>
+  <text x="422" y="330" class="m">service worker</text>
+  <rect x="640" y="245" width="210" height="95" rx="8" fill="#EDF1F7" stroke="#C9D2E1"/>
+  <text x="652" y="270" class="lab">/  Attendance Tracker</text>
+  <text x="652" y="292" class="m">roles admin · supervisor · viewer</text>
+  <text x="652" y="312" class="m">admin data in browser (IndexedDB)</text>
+  <text x="652" y="330" class="m">+ JSON backup</text>
+  <rect x="410" y="355" width="440" height="100" rx="8" fill="#fff" stroke="#1766CB" stroke-width="1.5"/>
+  <text x="422" y="380" class="lab">Managed Azure Functions · Node 20 · /api/{*path}</text>
+  <text x="422" y="402" class="m">worker/login · worker/me · worker/punch   (signed PIN token)</text>
+  <text x="422" y="422" class="m">supervisor/board · supervisor/punch · supervisor/mark</text>
+  <text x="422" y="442" class="m">admin/roster · admin/punches · admin/review · admin/photo · admin/marks</text>
+
+  <!-- Entra -->
+  <rect x="900" y="175" width="250" height="120" class="box"/>
+  <text x="920" y="205" class="t">Microsoft Entra ID</text>
+  <text x="920" y="228" class="s">App registration (single tenant)</text>
+  <text x="920" y="250" class="s">SWA role invitations:</text>
+  <text x="920" y="270" class="s">admin · supervisor · viewer</text>
+
+  <!-- Storage -->
+  <rect x="390" y="520" width="480" height="250" class="box"/>
+  <text x="410" y="550" class="t">Storage account (StorageV2, TLS 1.2, private)</text>
+  <text x="410" y="572" class="s">connection string in SWA app setting LS_STORAGE</text>
+  <rect x="410" y="590" width="210" height="160" rx="8" fill="#EDF1F7" stroke="#C9D2E1"/>
+  <text x="422" y="615" class="lab">Table Storage</text>
+  <text x="422" y="638" class="m">lsworkers – roster, PIN hash, device</text>
+  <text x="422" y="658" class="m">lssites – pins + zone radius</text>
+  <text x="422" y="678" class="m">lspunches – by month partition</text>
+  <text x="422" y="698" class="m">lsmarks – no-check-in decisions</text>
+  <text x="422" y="718" class="m">lsconfig – shift times, rules</text>
+  <rect x="640" y="590" width="210" height="160" rx="8" fill="#EDF1F7" stroke="#C9D2E1"/>
+  <text x="652" y="615" class="lab">Blob Storage</text>
+  <text x="652" y="638" class="m">container ls-photos (private)</text>
+  <text x="652" y="658" class="m">photos/YYYY-MM/&lt;id&gt;.jpg</text>
+  <text x="652" y="678" class="m">~150 KB, watermarked</text>
+  <text x="652" y="698" class="m">lifecycle rule: delete</text>
+  <text x="652" y="718" class="m">after retention (365 d)</text>
+
+  <!-- monitoring -->
+  <rect x="900" y="330" width="250" height="145" class="box"/>
+  <text x="920" y="360" class="t">Monitoring</text>
+  <text x="920" y="383" class="s">Application Insights</text>
+  <text x="920" y="403" class="s">Log Analytics workspace</text>
+  <text x="920" y="423" class="s">Alerts: 5xx, failed logins</text>
+  <text x="920" y="443" class="s">Cost Management budget</text>
+  <rect x="900" y="520" width="250" height="120" class="box"/>
+  <text x="920" y="550" class="t">Delivery</text>
+  <text x="920" y="573" class="s">GitHub repo → GitHub Actions</text>
+  <text x="920" y="593" class="s">(or SWA CLI deploy)</text>
+  <text x="920" y="613" class="s">node build.mjs → azure/web, api</text>
+
+  <!-- external -->
+  <rect x="1240" y="120" width="320" height="330" class="ext"/>
+  <text x="1260" y="152" class="t">External map services</text>
+  <text x="1260" y="176" class="s">(called from the browser)</text>
+  <text x="1260" y="210" class="lab">OpenStreetMap tiles</text><text x="1260" y="228" class="m">tile.openstreetmap.org – Map view</text>
+  <text x="1260" y="258" class="lab">Esri World Imagery (ArcGIS)</text><text x="1260" y="276" class="m">server.arcgisonline.com – Satellite</text>
+  <text x="1260" y="306" class="lab">Photon / Nominatim</text><text x="1260" y="324" class="m">place search + type-ahead (OSM)</text>
+  <text x="1260" y="354" class="lab">ArcGIS Location Platform (optional)</text><text x="1260" y="372" class="m">geocode-api.arcgis.com with API key</text>
+  <text x="1260" y="402" class="lab">cdn.jsdelivr.net</text><text x="1260" y="420" class="m">Leaflet, SheetJS, ExcelJS, pdf-lib, QR</text>
+  <rect x="1240" y="490" width="320" height="140" class="ext"/>
+  <text x="1260" y="522" class="t">Existing files / SAP</text>
+  <text x="1260" y="548" class="s">Excel import: payroll + client sheets</text>
+  <text x="1260" y="570" class="s">Excel / PDF export: LS/DO/F-026,</text>
+  <text x="1260" y="590" class="s">tax invoice + break-up pack</text>
+  <text x="1260" y="612" class="s">SAP fields typed (integration later)</text>
+
+  <!-- arrows -->
+  <path d="M290,195 C340,195 360,290 408,290" class="lb"/>
+  <rect x="300" y="205" width="62" height="18" class="labbg"/><text x="304" y="219" class="lab" fill="#1766CB">HTTPS</text>
+  <path d="M290,375 C345,375 360,300 408,300" class="lb"/>
+  <path d="M290,555 L372,555 L372,238 L745,238 L745,243" class="lb"/>
+  <path d="M515,340 L515,353" class="ln"/><path d="M745,340 L745,353" class="ln"/>
+  <path d="M630,455 L630,518" class="lb"/>
+  <text x="620" y="492" class="lab" text-anchor="end">records + photos</text><text x="620" y="508" class="m" text-anchor="end">SDK: data-tables, storage-blob</text>
+  <path d="M870,235 L898,235" class="ln"/>
+  <path d="M870,400 L898,400" class="ln dash"/>
+  <path d="M1150,280 L1238,280" class="ln dash"/>
+  <text x="1160" y="268" class="m">maps</text>
+  <path d="M760,475 L760,498 L1195,498 L1195,560 L1238,560" class="ln dash"/>
+  <rect x="1000" y="489" width="180" height="18" class="labbg"/><text x="1004" y="502" class="m">Excel in / Excel + PDF out</text>
+
+  <!-- flow legend -->
+  <rect x="40" y="830" width="1520" height="140" rx="12" fill="#fff" stroke="#C9D2E1"/>
+  <text x="60" y="860" class="t">Daily flow</text>
+  <text x="60" y="888" class="s">1  Admin sets site pins + zone radius, gives PINs, Publish roster  →  2  Worker checks in / out: GPS + photo → API checks zone (distance − accuracy ≤ radius, accuracy ≤ 50 m) → accepted or pending review</text>
+  <text x="60" y="912" class="s">3  No check-in: supervisor (phone) or admin (tracker) decides the day – A · OFF · SL · AL · EL · UL · SIRA · P (no phone)  →  4  Tracker syncs every 5 min: accepted = P / R, decisions = their code</text>
+  <text x="60" y="936" class="s">5  Right-click a day: coordinates, distance to pin, both photos, map · approve / reject pending  →  6  Client timesheets (LS/DO/F-026) and tax invoice pack from the same attendance</text>
+  <text x="60" y="958" class="m">Solid blue = user traffic over HTTPS · grey = internal · dashed = monitoring / external services. Location is read only at the moment of a punch; nothing is tracked in the background.</text>
+</svg>

@@ -1,0 +1,2 @@
+{ "name": "LS Worker Attendance", "short_name": "LS Attendance", "start_url": "/worker/", "scope": "/worker/", "display": "standalone", "background_color": "#F4F6FA", "theme_color": "#12305E",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }] }

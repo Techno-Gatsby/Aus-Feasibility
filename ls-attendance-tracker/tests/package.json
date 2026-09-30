@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Test dependencies. npm install here; Playwright's Chromium must be installed.",
+  "scripts": {
+    "api": "node api.test.mjs",
+    "e2e": "node worker-app.e2e.mjs",
+    "e2e:http": "BASE=http://localhost:4280 node worker-app.e2e.mjs",
+    "phone": "node worker-phone.e2e.mjs"
+  },
+  "devDependencies": { "playwright": "^1.47.0", "leaflet": "1.9.4", "qrcode-generator": "1.4.4", "xlsx": "0.18.5", "exceljs": "4.4.0", "pdf-lib": "1.17.1" }
+}

@@ -115,6 +115,8 @@ function cellInner(emp, d) {
   }
   const s = siteOn(emp, d); if (s) title += ` · ${siteName(s)}`;
   const sh = shiftOn(emp, d); if (sh) title += ` · ${sh}`;
+  const ps = S.punches && punchesFor(emp.id, d);
+  if (ps?.length) { const pend = ps.some(p => p.status === 'pending'); html += `<i class="pd ${pend ? 'p' : 'a'}"></i>`; title += ` · app ${ps.map(p => p.type + ' ' + new Date(p.ts).toTimeString().slice(0, 5) + (p.status === 'accepted' ? '' : ' (' + p.status + ')')).join(', ')} – right-click for details`; }
   return { cls, style, html, title };
 }
 
@@ -170,7 +172,7 @@ function renderGrid() {
   tb.onmousedown = e => {
     const nm = e.target.closest('td.nm'); if (nm) { editEmployee(nm.dataset.emp); return; }
     const td = e.target.closest('td.d'); if (!td) return;
-    e.preventDefault();
+    e.preventDefault(); if (e.button === 2) { AV.downTd = td; AV.downAt = Date.now(); const r0 = +td.parentElement.dataset.r, c0 = +td.dataset.c, s0 = AV.sel; if (s0 && r0 >= s0.r0 && r0 <= s0.r1 && c0 >= s0.c0 && c0 <= s0.c1) return; }
     const r = +td.parentElement.dataset.r, c = +td.dataset.c;
     if (e.shiftKey && AV.anchor) setSel(AV.anchor, { r, c });
     else { AV.anchor = { r, c }; setSel(AV.anchor, AV.anchor); }
@@ -178,6 +180,21 @@ function renderGrid() {
   };
   tb.onmouseover = e => { if (!AV.drag) return; const td = e.target.closest('td.d'); if (!td) return; setSel(AV.anchor, { r: +td.parentElement.dataset.r, c: +td.dataset.c }); };
   tb.ondblclick = e => { if (e.target.closest('td.d')) openCellEditor(); };
+  wrap.oncontextmenu = e => {
+    const td = e.target.closest('td.d') || (Date.now() - (AV.downAt || 0) < 800 ? AV.downTd : null); if (!td || td.classList.contains('lk')) return;
+    e.preventDefault();
+    const r = +td.parentElement.dataset.r, c = +td.dataset.c, S0 = AV.sel;
+    if (!S0 || r < S0.r0 || r > S0.r1 || c < S0.c0 || c > S0.c1) { AV.anchor = { r, c }; setSel(AV.anchor, AV.anchor); }
+    const emp = AV.rows[r].emp, d = AV.dates[c], ps = punchesFor(emp.id, d);
+    const dd = $('#dropdown');
+    const items = [[`📍 Punch details${ps.length ? ` (${ps.length})` : ''}…`, () => punchDetails(emp, d), !ps.length], null,
+      ...S.codes.filter(x => x.key).slice(0, 8).map(x => [`Mark ${x.code} – ${x.label}`, () => applyToSel({ c: x.code }), false, x.key.toUpperCase()]),
+      ['Clear', () => applyToSel(null, false), false, 'Del'], null, ['Set site / shift…', () => openCellEditor(), false, 'Enter'], ['Edit worker…', () => editEmployee(emp.id)]];
+    dd.innerHTML = items.map((x, i) => x ? `<button data-mi="${i}" ${x[2] ? 'disabled' : ''}>${esc(x[0])}${x[3] ? `<span class="kbd">${esc(x[3])}</span>` : ''}</button>` : '<hr>').join('');
+    dd.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { closeMenu(); items[+b.dataset.mi][1](); });
+    dd.hidden = false; const w = dd.offsetWidth, h = dd.offsetHeight;
+    dd.style.left = Math.min(e.clientX, innerWidth - w - 8) + 'px'; dd.style.top = Math.min(e.clientY, innerHeight - h - 8) + 'px';
+  };
 }
 document.addEventListener('mouseup', () => AV.drag = false);
 
@@ -312,6 +329,11 @@ function dataChecks() {
   const noRate = [...used.keys()].filter(t => !S.settings.rateCard.find(r => r.trade === t)?.rate && !S.projects.some(p => p.billing?.rates?.[t]));
   add(`Trades working in ${fmtMonYY(ym)} with no rate – invoice lines would be 0`, noRate.map(t => `${t} (${used.get(t)} worker-rows)`), 'Add to rate card & enter rates', 'data', 'trades without rate', () => { noRate.forEach(t => { if (!S.settings.rateCard.some(r => r.trade === t)) S.settings.rateCard.push({ trade: t, unit: unitFor(t), rate: 0, src: 'enter rate' }); }); markDirty(); });
   add('Double entries in the last client-timesheet import (same person, same day, two rows)', S.issues?.double || [], 'Correct the source sheet, then re-import', null, 'double entries');
+  add('App punches waiting for review (outside zone, poor GPS, clock)', pendingPunches().map(p => `${p.name} ${fmtDMY(p.workDate)} ${p.type}: ${p.reasons.join(' · ')}`), 'Review in Worker app', 'app', 'punches to review');
+  { const y = addDays(today, -1); add(`App workers with no check-in on ${fmtDMY(y)} – decide what the day is`, noCheckIn(y).map(e => `${e.name} ${appCode(e)}`), 'Decide in Worker app', 'app', 'no check-in'); }
+  { const used = new Set(S.employees.filter(e => e.app?.on).map(e => assignOn(e, today)?.site).filter(Boolean));
+    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !x.pins?.length).map(x => x.name), 'Set location in Projects & sites', 'projects', 'sites without location'); }
+  add('App days kept as another code (already entered in the tracker)', S.issues?.app || [], 'Check in Attendance', null, 'app conflicts');
   add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
   return out;
 }

@@ -358,3 +358,23 @@ table.ts-sign td{border:1px solid #000;text-align:center;font-weight:700;height:
 table.ts-sign tr.nm td{height:70px;vertical-align:bottom;font-weight:600;padding:4px 6px}
 @media print{table.ts td.x,table.ts td.tot,table.ts th,table.ts tr.gtr td,table.ts-legend td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 table.ts td,table.ts th{white-space:normal;overflow-wrap:anywhere}
+
+/* ---- worker app (admin side) ---- */
+table.ag td.d .pd{position:absolute;bottom:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+table.ag td.d .pd.p{background:#D9A100;box-shadow:0 0 0 1.5px #fff}
+.ph{width:150px;min-height:110px;flex:none;border:1px solid var(--line2);border-radius:5px;display:grid;place-items:center;color:var(--mute);font-size:11px;background:var(--surface2);overflow:hidden}
+.ph img{width:100%;display:block}
+table.kvt{width:auto;font-size:12px}table.kvt td{padding:2px 8px 2px 0;border:0;white-space:normal;vertical-align:top}table.kvt td:first-child{color:var(--mute);white-space:nowrap}
+.doctab .n:empty{display:none}
+.slips{display:grid!important;grid-template-columns:1fr 1fr;gap:10px;font-family:Arial,sans-serif}
+.slip{border:1px dashed #666;border-radius:6px;padding:10px 12px;break-inside:avoid;font-size:12px}
+.slip .sh{display:flex;align-items:center;gap:8px;margin-bottom:6px}.slip .sh img{height:34px}.slip .sh b{font-size:14px}
+.slip table{width:100%;border-collapse:collapse}.slip td{border:0;padding:2px 0;font-size:12px;white-space:normal}.slip td:first-child{color:#555;width:90px}
+.slip .pin{font-size:22px;font-weight:800;letter-spacing:6px}
+.slip .u{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:10.5px;word-break:break-all}.slip .u img{width:74px;height:74px}
+.slip p{margin:6px 0 0;font-size:10.5px;color:#444}
+.leaflet-container{background:#dfe6ee}
+.dh .btn{text-decoration:none}
+.dh.slim{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.dh.slim>*{flex-shrink:0}
+#av-selinfo{display:inline-block;min-width:78px;white-space:nowrap}

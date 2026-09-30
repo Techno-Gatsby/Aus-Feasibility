@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12305E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LS Attendance">
+<title>Worker Attendance</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<style>
+/* Worker page – same tokens as the Attendance Tracker (navy bar, Inter, blue accent, 5 px radius), laid out for a phone */
+:root{
+  color-scheme:light;
+  --canvas:#F4F6FA; --surface:#FFFFFF; --raised:#FBFCFE; --surface2:#F4F6FA; --surface3:#EDF1F7;
+  --line:#E4E9F1; --line2:#C9D2E1; --line3:#A9B6CC;
+  --ink:#16202F; --navy:#12305E; --heading:#12305E; --text:#16202F; --text2:#42506B; --mute:#6B7A94; --faint:#93A0B5;
+  --accent:#1766CB; --accent-soft:#EDF1F7; --accent-soft2:#EAF2FD; --accent-line:#9DBDE8;
+  --pos:#2B6A52; --pos-bg:#ECF5EF; --neg:#8F3C3C; --neg-bg:#FAEEEE; --warn:#7A6740; --warn-bg:#F8F1E6;
+  --sh1:0 1px 2px rgba(15,30,61,.05); --sh2:0 1px 3px rgba(15,30,61,.06),0 4px 12px rgba(15,30,61,.05);
+  --r:5px; --r2:9px;
+  --font-body:"Inter","Aptos Narrow","Segoe UI Variable","Segoe UI",-apple-system,system-ui,"Noto Sans","Noto Sans Devanagari","Noto Nastaliq Urdu","Noto Sans Malayalam",sans-serif;
+  --font-mono:"JetBrains Mono","Aptos Mono","SF Mono","Consolas",ui-monospace,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--canvas)}
+body{color:var(--text);font:15px/1.45 var(--font-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--mute)}.small{font-size:12.5px}
+
+.bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;background:var(--navy);color:#fff;padding:0 12px;height:52px;padding-top:env(safe-area-inset-top,0)}
+.bar .mark{width:28px;height:28px;border-radius:7px;background:#fff;color:#12305E;display:grid;place-items:center;font-size:12px;font-weight:800}
+.bar .t{font-weight:700;font-size:16px;letter-spacing:-.01em}
+.bar .t small{display:block;font-weight:500;font-size:11px;color:rgba(255,255,255,.7);margin-top:-2px}
+.bar .sp{flex:1}
+.bar button{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:6px;height:34px;min-width:34px;padding:0 10px;font-size:13px;font-weight:600;cursor:pointer}
+.demo{background:var(--warn-bg);color:var(--warn);border-bottom:1px solid #E8D3A8;font-size:12px;padding:6px 12px;text-align:center}
+
+main{max-width:520px;margin:0 auto;padding:12px 12px calc(28px + env(safe-area-inset-bottom,0))}
+.card{background:var(--surface);border:1px solid var(--line2);border-radius:var(--r2);box-shadow:var(--sh1);padding:14px;margin-bottom:12px}
+.card h2{margin:0 0 4px;font-size:17px;color:var(--heading);letter-spacing:-.01em}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:650;margin:0 0 6px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;border:1px solid var(--line2);background:var(--surface2);color:var(--text2)}
+.pill.pos{color:var(--pos);background:var(--pos-bg);border-color:#C5DFCF}.pill.neg{color:var(--neg);background:var(--neg-bg);border-color:#E6C4C4}.pill.warn{color:var(--warn);background:var(--warn-bg);border-color:#E8D3A8}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+
+.btn{border:1px solid var(--line2);background:var(--surface);border-radius:var(--r);padding:10px 14px;font-weight:600;font-size:14px;cursor:pointer;color:var(--text);box-shadow:var(--sh1)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45}
+.big{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;min-height:96px;border:0;border-radius:14px;font-size:22px;font-weight:800;letter-spacing:.02em;color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(15,30,61,.18)}
+.big small{font-size:13px;font-weight:500;opacity:.85;letter-spacing:0}
+.big.in{background:linear-gradient(180deg,#1f7ae0,#1766CB)}
+.big.out{background:linear-gradient(180deg,#1b3f78,#12305E)}
+.big:disabled{opacity:.5}
+input.f,select.f,textarea.f{width:100%;border:1px solid var(--line2);border-radius:var(--r);padding:11px 12px;background:#fff;font-size:16px;color:var(--heading)}
+label.fl{display:block;font-size:12.5px;color:var(--text2);font-weight:600;margin:10px 0 4px}
+
+/* PIN */
+.dots{display:flex;gap:14px;justify-content:center;margin:14px 0 18px}
+.dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--heading)}
+.dots i.on{background:var(--heading)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pad button{height:62px;border-radius:12px;border:1px solid var(--line2);background:#fff;font-size:24px;font-weight:600;color:var(--heading);box-shadow:var(--sh1);cursor:pointer}
+.pad button:active{background:var(--accent-soft2)}
+.pad button.fn{font-size:14px;color:var(--mute)}
+.err{color:var(--neg);font-weight:600;text-align:center;min-height:22px;font-size:14px}
+
+/* home */
+.who{display:flex;gap:12px;align-items:center}
+.who .av{width:44px;height:44px;border-radius:50%;background:var(--accent-soft2);color:var(--heading);display:grid;place-items:center;font-weight:800}
+.who b{display:block;color:var(--heading);font-size:16px;line-height:1.2}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px;margin-top:10px}
+.kv span{color:var(--mute)}
+#map{height:190px;border-radius:var(--r);border:1px solid var(--line2);margin:10px 0 8px;background:var(--surface3)}
+.list{margin:0;padding:0;list-style:none}
+.list li{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.list li:last-child{border-bottom:0}
+.list .tm{font-family:var(--font-mono);font-weight:700;color:var(--heading);min-width:52px}
+.q{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--warn);background:var(--warn-bg);border:1px solid #E8D3A8;border-radius:var(--r);padding:8px 10px;margin-bottom:12px}
+
+/* camera */
+.cam{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column}
+.cam video,.cam img{flex:1;min-height:0;width:100%;object-fit:cover;background:#000}
+.cam .ctl{display:flex;gap:10px;padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));background:#0b1b36}
+.cam .ctl .btn{flex:1}
+.cam .shoot{width:74px;height:74px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.25);margin:0 auto;cursor:pointer}
+.cam .hint{color:#fff;text-align:center;font-size:13px;padding:8px;background:rgba(0,0,0,.4);position:absolute;top:calc(10px + env(safe-area-inset-top,0));left:12px;right:12px;border-radius:8px}
+
+/* result */
+.res{text-align:center;padding:28px 16px}
+.res .ic{width:84px;height:84px;border-radius:50%;margin:0 auto 12px;display:grid;place-items:center;font-size:42px;color:#fff}
+.res .ic.ok{background:var(--pos)}.res .ic.pend{background:#b08a2e}.res .ic.q{background:var(--mute)}.res .ic.bad{background:var(--neg)}
+.res h2{font-size:21px}
+.res img{width:120px;border-radius:8px;margin-top:10px;border:1px solid var(--line2)}
+
+/* month */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+.cal .h{font-size:11px;color:var(--mute);text-align:center;font-weight:650}
+.cal .d{aspect-ratio:1;border-radius:6px;border:1px solid var(--line);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--mute)}
+.cal .d b{font-size:12.5px;color:var(--heading);font-family:var(--font-mono)}
+.cal .d.P{background:#c9efd3;border-color:#a7dcb5}.cal .d.R{background:#cfe0ff}.cal .d.A{background:#ffd0cc}.cal .d.OFF{background:#e4e7ec}.cal .d.AL,.cal .d.SL,.cal .d.EL{background:#ffeaa8}
+.cal .d.today{outline:2px solid var(--accent);outline-offset:-1px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;border:1px solid var(--line2);background:#fff;border-radius:var(--r);padding:8px;font-weight:600;color:var(--text2);cursor:pointer}
+.tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.sheet-menu{position:fixed;inset:0;background:rgba(22,32,47,.45);z-index:300;display:flex;align-items:flex-end}
+.sheet-menu .in{background:#fff;width:100%;border-radius:16px 16px 0 0;padding:10px 12px calc(16px + env(safe-area-inset-bottom,0));max-width:520px;margin:0 auto}
+.sheet-menu button{display:flex;width:100%;gap:12px;align-items:center;border:0;background:none;padding:14px 8px;font-size:16px;border-bottom:1px solid var(--line);text-align:start;cursor:pointer;color:var(--ink)}
+.sheet-menu button:last-child{border-bottom:0}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:600;max-width:92vw;text-align:center}
+.toast.show{opacity:1}
+[dir=rtl] .kv{direction:rtl}
+#map{position:relative;z-index:0;isolation:isolate}
+.cam{z-index:2000}.sheet-menu{z-index:2100}.toast{z-index:2200}.bar{z-index:1500}
+.cam img{object-fit:contain}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+'use strict';
+/* =====================================================================
+   LS worker-attendance API core.
+   One file, three hosts: Azure Functions (Node 20), the local dev server,
+   and the in-browser demo mode of both HTML pages. Pure logic over a
+   small storage interface; crypto is WebCrypto (browser + Node 20).
+   ===================================================================== */
+const LSAPI = (() => {
+  const enc = new TextEncoder();
+  const b64u = buf => { let s = ''; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const unb64u = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const b = atob(s); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
+  const hex = buf => [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
+  const subtle = () => globalThis.crypto.subtle;
+  const rid = () => hex(globalThis.crypto.getRandomValues(new Uint8Array(9)));
+
+  /** PBKDF2-SHA256, 100k rounds. The admin tracker hashes the PIN; the server only ever sees hash + salt. */
+  async function hashPin(pin, saltHex) {
+    const salt = saltHex || hex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+    const key = await subtle().importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+    const bits = await subtle().deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: 100000 }, key, 256);
+    return { hash: hex(bits), salt };
+  }
+  async function hmac(secret, data) {
+    const key = await subtle().importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return b64u(await subtle().sign('HMAC', key, enc.encode(data)));
+  }
+  async function signToken(secret, payload) { const body = b64u(enc.encode(JSON.stringify(payload))); return body + '.' + await hmac(secret, body); }
+  async function readToken(secret, tok, now) {
+    if (!tok || !tok.includes('.')) return null;
+    const [body, sig] = tok.split('.');
+    if (await hmac(secret, body) !== sig) return null;
+    const p = JSON.parse(new TextDecoder().decode(unb64u(body)));
+    return p.exp > now ? p : null;
+  }
+
+  /* ---------- geo ---------- */
+  const R = 6371000, rad = x => x * Math.PI / 180;
+  function distance(a, b) {
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  /** Nearest pin of a site to a point: { d, pin, inZone } — in zone when (distance − accuracy) ≤ radius */
+  function nearestPin(site, pt, acc) {
+    let best = null;
+    for (const pin of site?.pins || []) {
+      const d = distance(pt, pin); const r = +pin.radius || 100;
+      const x = { d: Math.round(d), pin, radius: r, inZone: d - (acc || 0) <= r };
+      if (!best || x.d - x.radius < best.d - best.radius) best = x;
+    }
+    return best;
+  }
+
+  /* ---------- dates: all work dates are Dubai time (UTC+4, no DST) ---------- */
+  const DXB = 4 * 3600000;
+  const dxbISO = t => new Date(t + DXB).toISOString();                 // "2026-07-01T07:03:00.000Z" read as local Dubai time
+  const dxbDate = t => dxbISO(t).slice(0, 10);
+  const dxbMin = t => { const s = dxbISO(t); return +s.slice(11, 13) * 60 + +s.slice(14, 16); };
+  const hm = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+
+  /** Codes a supervisor may give a day with no check-in (the tracker's own codes) */
+  const MARK_CODES = [['A', 'Absent'], ['OFF', 'Day off'], ['SL', 'Sick leave'], ['AL', 'Annual leave'], ['EL', 'Emergency leave'], ['UL', 'Unpaid leave'], ['SIRA', 'SIRA exam / training'], ['P', 'Present – no phone (supervisor confirms)']];
+  const DEFAULTS = { radius: 100, maxAcc: 50, windowMin: 60, lateMin: 15, photo: true, bindDevice: true, dupMin: 30, shiftHours: 12, starts: { DAY: '07:00', NIGHT: '19:00' }, lockTries: 5, lockMin: 15, tokenHours: 20 };
+
+  /**
+   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
+   * opts: { store, secret, now: () => ms }
+   */
+  function create({ store, secret, now = () => Date.now() }) {
+    const J = (status, body) => ({ status, body });
+    const err = (status, msg, code) => J(status, { error: msg, code: code || status });
+    const cfg = async () => ({ ...DEFAULTS, ...((await store.get('config', 'app'))?.v || {}) });
+
+    async function worker(req) {
+      const tok = (req.headers?.authorization || '').replace(/^Bearer /i, '');
+      const p = await readToken(secret, tok, now()); if (!p) return null;
+      const w = await store.get('workers', p.sub); if (!w || !w.enabled) return null;
+      if (w.deviceId && p.dev !== w.deviceId) return null;
+      return w;
+    }
+    const roles = req => req.principal?.userRoles || [];
+    const isAdmin = req => roles(req).includes('admin');
+    const isSup = req => isAdmin(req) || roles(req).includes('supervisor');
+    const isViewer = req => isSup(req) || roles(req).includes('viewer');
+    const byCode = async code => { const c = String(code || '').trim().toUpperCase(); return (await store.list('workers', w => w.code === c, { code: c }))[0] || null; };
+
+    async function profile(w) {
+      const c = await cfg(), t = now(), today = dxbDate(t);
+      const sites = await store.list('sites');
+      const mine = await store.list('punches', p => p.wid === w.id && p.workDate >= addDays(today, -1), { wid: w.id, fromDate: addDays(today, -1) });
+      const open = [...mine].filter(p => p.type === 'in' && !p.outId && p.status !== 'rejected' && t - p.ts < 18 * 3600000).sort((a, b) => b.ts - a.ts)[0] || null;
+      return {
+        worker: { id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, trade: w.trade || '' },
+        site: sites.find(s => s.id === w.siteId) || null,
+        sites: sites.filter(s => s.pins?.length).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins })),
+        settings: { radius: c.radius, maxAcc: c.maxAcc, photo: c.photo, windowMin: c.windowMin, starts: c.starts, shiftHours: c.shiftHours },
+        today, punches: mine.map(strip).sort((a, b) => a.ts - b.ts), open: open && strip(open),
+        months: w.months || {}
+      };
+    }
+    const strip = p => { const { photo, ...r } = p; return { ...r, hasPhoto: !!photo }; };
+    const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+    /** The core punch rule, shared by worker and supervisor punches */
+    async function doPunch(w, b, by) {
+      const c = await cfg(), t = now();
+      const type = b.type === 'out' ? 'out' : b.type === 'in' ? 'in' : null; if (!type) return err(400, 'type must be in or out');
+      const lat = +b.lat, lng = +b.lng, acc = Math.round(+b.acc || 0);
+      if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return err(400, 'Location missing – allow location and try again', 'NO_GPS');
+      if (c.photo && !b.photo) return err(400, 'Photo required', 'NO_PHOTO');
+      if (b.photo && b.photo.length > 900000) return err(413, 'Photo too large');
+      if (b.clientId) { const dup = (await store.list('punches', p => p.clientId === b.clientId && p.wid === w.id, { wid: w.id, clientId: b.clientId }))[0]; if (dup) return J(200, { punch: strip(dup), repeat: true }); }
+      // device time: queued offline punches keep their own time, never one in the future
+      let ts = +new Date(b.ts || t); const flags = [];
+      if (!isFinite(ts) || ts > t + 5 * 60000) { ts = t; flags.push('clock'); }
+      if (t - ts > 5 * 60000) flags.push('offline');
+      if (t - ts > 72 * 3600000) return err(400, 'Punch older than 72 hours – ask your supervisor');
+      const mine = await store.list('punches', p => p.wid === w.id && Math.abs(p.ts - ts) < 20 * 3600000 && p.status !== 'rejected', { wid: w.id, fromDate: addDays(dxbDate(ts), -1) });
+      const lastSame = mine.filter(p => p.type === type).sort((a, b) => b.ts - a.ts)[0];
+      if (lastSame && Math.abs(ts - lastSame.ts) < c.dupMin * 60000) return err(409, `Already marked ${type === 'in' ? 'check-in' : 'check-out'} at ${dxbISO(lastSame.ts).slice(11, 16)}`, 'DUPLICATE');
+      // geofence: assigned site first, then any site (reliever)
+      const sites = await store.list('sites');
+      const assigned = sites.find(s => s.id === w.siteId);
+      const pt = { lat, lng };
+      let match = assigned ? nearestPin(assigned, pt, acc) : null, site = assigned, reliever = false;
+      if (!match?.inZone) {
+        const other = sites.filter(s => s.id !== w.siteId).map(s => ({ s, m: nearestPin(s, pt, acc) })).filter(x => x.m?.inZone).sort((a, b) => a.m.d - b.m.d)[0];
+        if (other) { site = other.s; match = other.m; reliever = true; }
+      }
+      const reasons = [];
+      if (!assigned?.pins?.length && !reliever) reasons.push('site has no location pin');
+      else if (!match?.inZone) reasons.push(`outside zone – ${match ? match.d + ' m from ' + (site?.name || 'site') : 'no site nearby'}`);
+      if (acc > c.maxAcc) reasons.push(`GPS accuracy ±${acc} m (limit ${c.maxAcc} m)`);
+      if (flags.includes('clock')) reasons.push('phone clock ahead of server');
+      // pairing, work date and hours
+      let workDate = dxbDate(ts), inP = null, hours = null;
+      if (type === 'out') {
+        inP = mine.filter(p => p.type === 'in' && !p.outId && p.ts < ts && ts - p.ts < 18 * 3600000).sort((a, b) => b.ts - a.ts)[0] || null;
+        if (inP) { workDate = inP.workDate; hours = Math.round((ts - inP.ts) / 36000) / 100; } else reasons.push('no check-in found');
+      }
+      const shift = w.shift || 'DAY', start = hm(c.starts[shift] || '07:00'), m = dxbMin(ts);
+      if (type === 'in') {
+        let late = m - start; if (late < -720) late += 1440; if (late > 720) late -= 1440;
+        if (late > c.lateMin) flags.push('late ' + late + ' min');
+        if (late < -c.windowMin) reasons.push(`too early – check-in opens ${c.windowMin} min before ${c.starts[shift]}`);
+        if (shift === 'NIGHT' && m < 12 * 60) workDate = addDays(workDate, -1);   // night shift started after midnight → belongs to the previous date
+      } else if (inP && hours < c.shiftHours - c.lateMin / 60) flags.push('early leave');
+      const id = rid();
+      let photo = '';
+      if (b.photo) { const m2 = String(b.photo).match(/^data:(image\/[a-z]+);base64,(.*)$/); if (m2) { photo = `photos/${workDate.slice(0, 7)}/${id}.jpg`; await store.putBlob(photo, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]); } }
+      const punch = { id, wid: w.id, code: w.code, name: w.name, type, ts, serverTs: t, workDate, lat, lng, acc, siteId: site?.id || '', siteName: site?.name || '', assignedSiteId: w.siteId || '', dist: match ? match.d : null, radius: match?.radius || null, inZone: !!match?.inZone, reliever, status: reasons.length ? 'pending' : 'accepted', reasons, flags, photo, clientId: b.clientId || '', deviceId: b.deviceId || '', by: by || 'worker', inId: inP?.id || '', hours, shift };
+      await store.put('punches', punch);
+      if (inP) { inP.outId = id; inP.serverTs = t; await store.put('punches', inP); }
+      return J(200, { punch: strip(punch) });
+    }
+
+    const routes = {
+      /* ---------- worker ---------- */
+      'POST worker/login': async req => {
+        const c = await cfg(), b = req.body || {};
+        const w = await byCode(b.code); if (!w || !w.enabled) return err(403, 'This ID is not enabled for the app – ask your supervisor', 'NOT_ENABLED');
+        if (w.lockUntil > now()) return err(423, `Too many wrong PINs – try again after ${dxbISO(w.lockUntil).slice(11, 16)}`, 'LOCKED');
+        const h = await hashPin(b.pin, w.pinSalt);
+        if (!w.pinHash || h.hash !== w.pinHash) {
+          w.fails = (w.fails || 0) + 1; if (w.fails >= c.lockTries) { w.lockUntil = now() + c.lockMin * 60000; w.fails = 0; }
+          await store.put('workers', w); return err(401, 'Wrong PIN', 'BAD_PIN');
+        }
+        if (c.bindDevice && w.deviceId && b.deviceId && w.deviceId !== b.deviceId) return err(403, 'This ID is registered on another phone – ask admin to reset the device', 'OTHER_DEVICE');
+        w.fails = 0; w.lockUntil = 0; if (!w.deviceId && b.deviceId) w.deviceId = b.deviceId; w.lastLogin = now();
+        await store.put('workers', w);
+        const token = await signToken(secret, { sub: w.id, dev: w.deviceId || '', exp: now() + c.tokenHours * 3600000 });
+        return J(200, { token, ...(await profile(w)) });
+      },
+      'GET worker/me': async req => { const w = await worker(req); return w ? J(200, await profile(w)) : err(401, 'Please sign in again', 'AUTH'); },
+      'POST worker/punch': async req => { const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH'); return doPunch(w, req.body || {}, 'worker'); },
+      /* ---------- supervisor ---------- */
+      'GET supervisor/board': async req => {
+        if (!isSup(req)) return err(403, 'Supervisor role required');
+        const today = dxbDate(now()), site = req.query?.site || '';
+        const ws = await store.list('workers', w => w.enabled && (!site || w.siteId === site), { enabled: true });
+        const ps = await store.list('punches', p => p.workDate === today && p.status !== 'rejected', { workDate: today });
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date || '') ? req.query.date : today;
+        const ps2 = date === today ? ps : await store.list('punches', p => p.workDate === date && p.status !== 'rejected', { workDate: date });
+        const ms = await store.list('marks', m => m.date === date, { workDate: date });
+        return J(200, { today, date, codes: MARK_CODES, sites: (await store.list('sites')).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins })), workers: ws.map(w => ({ id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, punches: ps2.filter(p => p.wid === w.id).map(strip), mark: ms.find(m => m.wid === w.id) || null })) });
+      },
+      /** No check-in: the supervisor / admin decides what the day is (A, OFF, SL, AL …). Blank code clears the mark. */
+      'POST supervisor/mark': async req => {
+        if (!isSup(req)) return err(403, 'Supervisor role required');
+        const b = req.body || {}, w = await byCode(b.code); if (!w) return err(404, 'Worker not found');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date || '')) return err(400, 'Date required');
+        const code = String(b.mark || '').toUpperCase().trim();
+        if (code && !MARK_CODES.some(c => c[0] === code)) return err(400, 'Unknown code ' + code);
+        const id = w.id + '|' + b.date, old = await store.get('marks', id);
+        const m = { id, wid: w.id, code: w.code, name: w.name, date: b.date, workDate: b.date, mark: code, note: String(b.note || '').slice(0, 200), by: req.principal?.userDetails || 'supervisor', at: now(), serverTs: now(), prev: old?.mark || '' };
+        await store.put('marks', m); return J(200, { mark: m });
+      },
+      'POST supervisor/punch': async req => {
+        if (!isSup(req)) return err(403, 'Supervisor role required');
+        const w = await byCode(req.body?.code); if (!w || !w.enabled) return err(404, 'Worker not found');
+        return doPunch(w, req.body, 'supervisor: ' + (req.principal?.userDetails || '?'));
+      },
+      /* ---------- admin ---------- */
+      'PUT admin/roster': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const b = req.body || {}; const seen = new Set();
+        for (const x of b.workers || []) {
+          const old = await store.get('workers', x.id) || {};
+          const w = { ...old, id: x.id, code: String(x.code || '').toUpperCase(), name: x.name, trade: x.trade || '', shift: x.shift || 'DAY', siteId: x.siteId || '', enabled: !!x.enabled, months: x.months || {} };
+          if (x.pinHash) { w.pinHash = x.pinHash; w.pinSalt = x.pinSalt; w.fails = 0; w.lockUntil = 0; }
+          if (x.resetDevice) w.deviceId = '';
+          await store.put('workers', w); seen.add(w.id);
+        }
+        if (b.full) for (const w of await store.list('workers')) if (!seen.has(w.id) && w.enabled) { w.enabled = false; await store.put('workers', w); }
+        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
+        if (b.settings) await store.put('config', { id: 'app', v: { ...((await store.get('config', 'app'))?.v || {}), ...b.settings } });
+        return J(200, { workers: seen.size, sites: (b.sites || []).length });
+      },
+      'GET admin/punches': async req => {
+        if (!isViewer(req)) return err(403, 'Role required');
+        const since = +req.query?.since || 0;
+        const ps = await store.list('punches', p => p.serverTs > since, { since });
+        return J(200, { now: now(), punches: ps.map(strip).sort((a, b) => a.serverTs - b.serverTs) });
+      },
+      'POST admin/review': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const p = await store.get('punches', req.body?.id); if (!p) return err(404, 'Punch not found');
+        p.status = req.body.status === 'rejected' ? 'rejected' : 'accepted'; p.reviewNote = String(req.body.note || '').slice(0, 300); p.reviewBy = req.principal?.userDetails || 'admin'; p.serverTs = now();
+        await store.put('punches', p); return J(200, { punch: strip(p) });
+      },
+      'GET admin/photo': async req => {
+        if (!isViewer(req)) return err(403, 'Role required');
+        const p = await store.get('punches', req.query?.id); if (!p?.photo) return err(404, 'No photo');
+        const b = await store.getBlob(p.photo); if (!b) return err(404, 'No photo');
+        return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
+      },
+      'GET admin/marks': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), marks: await store.list('marks', m => m.serverTs > since, { since }) }); },
+      'GET health': async () => J(200, { ok: true, time: now() })
+    };
+
+    /** req: { method, path: 'worker/login', query, body, headers, principal } */
+    async function handle(req) {
+      const r = routes[`${req.method} ${String(req.path).replace(/^\/?(api\/)?/, '').replace(/\/$/, '')}`];
+      if (!r) return err(404, 'Not found');
+      try { return await r(req); } catch (e) { return err(500, 'Server error: ' + (e?.message || e)); }
+    }
+    return { handle, doPunch };
+  }
+
+  /** In-memory store (tests, dev server); optional persist(snapshot) hook */
+  function memoryStore(init, persist) {
+    const T = init?.tables || {}, B = init?.blobs || {};
+    const tab = t => (T[t] ||= {});
+    const save = () => persist?.({ tables: T, blobs: B });
+    return {
+      async get(t, id) { const x = tab(t)[id]; return x ? JSON.parse(JSON.stringify(x)) : null; },
+      async put(t, o) { tab(t)[o.id] = JSON.parse(JSON.stringify(o)); await save(); },
+      async del(t, id) { delete tab(t)[id]; await save(); },
+      async list(t, f) { return Object.values(tab(t)).map(x => JSON.parse(JSON.stringify(x))).filter(x => !f || f(x)); },
+      async putBlob(n, bytes, type) { B[n] = { b64: b64u(bytes), type }; await save(); },
+      async getBlob(n) { const x = B[n]; return x ? { bytes: unb64u(x.b64), type: x.type } : null; },
+      dump: () => ({ tables: T, blobs: B })
+    };
+  }
+
+  return { create, memoryStore, hashPin, distance, nearestPin, dxbDate, DEFAULTS, MARK_CODES, b64u, unb64u };
+})();
+if (typeof module !== 'undefined') module.exports = LSAPI;
+
+/* =====================================================================
+   API client for both pages. With an API address (Azure) it calls fetch;
+   without one it runs the same LSAPI core in the browser against a demo
+   store in IndexedDB, shared by the two pages opened in one browser.
+   ===================================================================== */
+const LSClient = (() => {
+  const DB = 'ls-worker-demo', KEY = 'store';
+  const idb = () => new Promise((res, rej) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const idbGet = async k => { const db = await idb(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+  const idbSet = async (k, v) => { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); };
+  let chain = Promise.resolve();                       // serialise demo calls (load → handle → save)
+
+  /** role: principal used in demo mode ('admin' for the tracker, 'supervisor' for the phone's supervisor screen) */
+  function make({ base = '', role = '' } = {}) {
+    base = String(base || '').trim().replace(/\/+$/, '');
+    const demo = !base;
+    async function demoCall(method, path, body, opt) {
+      const run = async () => {
+        const snap = await idbGet(KEY);
+        let dirty = false;
+        const store = LSAPI.memoryStore(snap, () => { dirty = true; });
+        const api = LSAPI.create({ store, secret: 'ls-demo-secret' });
+        const r = await api.handle({ method, path, body, query: opt.query || {}, headers: opt.token ? { authorization: 'Bearer ' + opt.token } : {}, principal: (opt.role || role) ? { userRoles: [opt.role || role], userDetails: 'demo ' + (opt.role || role) } : null });
+        if (dirty) await idbSet(KEY, store.dump());
+        return r;
+      };
+      const p = chain.then(run, run); chain = p.catch(() => {}); return p;
+    }
+    async function call(method, path, body, opt = {}) {
+      if (demo) { const r = await demoCall(method, path, body, opt); if (r.bytes) return { status: r.status, blob: new Blob([r.bytes], { type: r.type }) }; return r; }
+      const q = opt.query ? '?' + new URLSearchParams(opt.query) : '';
+      const res = await fetch(`${base}/${path}${q}`, { method, credentials: 'include', headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(opt.token ? { Authorization: 'Bearer ' + opt.token } : {}) }, body: body ? JSON.stringify(body) : undefined });
+      if ((res.headers.get('content-type') || '').startsWith('image/')) return { status: res.status, blob: await res.blob() };
+      let j = null; try { j = await res.json(); } catch (e) { j = { error: res.statusText }; }
+      return { status: res.status, body: j };
+    }
+    return { call, demo, base };
+  }
+  return { make, resetDemo: () => idbSet(KEY, null) };
+})();
+
+/* =====================================================================
+   Maps for both pages: Leaflet with OpenStreetMap (Map) and Esri World
+   Imagery (Satellite + place labels), location search with type-ahead
+   (Photon, Nominatim on Enter, ArcGIS when a key is set), zone circles.
+   ===================================================================== */
+const LSMap = (() => {
+  const V = '1.9.4', CDN = `https://cdn.jsdelivr.net/npm/leaflet@${V}/dist/`;
+  let loading = null;
+  function load() {
+    if (window.L?.map) return Promise.resolve(window.L);
+    return loading ||= new Promise((res, rej) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = CDN + 'leaflet.css'; document.head.appendChild(css);
+      const s = document.createElement('script'); s.src = CDN + 'leaflet.js'; s.onload = () => res(window.L); s.onerror = () => { loading = null; rej(new Error('Map could not load – internet connection needed')); }; document.head.appendChild(s);
+    });
+  }
+  const UAE = [25.2, 55.3];
+  /** A map with a Map / Satellite switch. opts: { center, zoom, satellite, zoomControl } */
+  async function create(el, opts = {}) {
+    const L = await load();
+    const map = L.map(el, { zoomControl: opts.zoomControl !== false, attributionControl: true, ...(opts.animate === false ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}) }).setView(opts.center || UAE, opts.zoom || 11);
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' });
+    const sat = L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+    ]);
+    (opts.satellite ? sat : osm).addTo(map);
+    L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: false }).addTo(map);
+    setTimeout(() => { try { if (el.isConnected) map.invalidateSize(); } catch (e) { } }, 60);   // map may be gone by then
+    return map;
+  }
+  /** Circle + pin for a zone */
+  function zone(map, pin, o = {}) {
+    const L = window.L;
+    const c = L.circle([pin.lat, pin.lng], { radius: +pin.radius || 100, color: o.color || '#1766CB', weight: 2, fillOpacity: o.fill ?? .12 }).addTo(map);
+    const m = o.marker === false ? null : L.circleMarker([pin.lat, pin.lng], { radius: 4, color: o.color || '#1766CB', fillOpacity: 1 }).addTo(map);
+    if (o.label) (m || c).bindTooltip(o.label, { permanent: !!o.permanent, direction: 'top' });
+    return { c, m, remove() { c.remove(); m?.remove(); } };
+  }
+  /** "25.1, 55.2", "25.1 N 55.2 E", Google Maps links (@lat,lng · q=lat,lng · !3dlat!4dlng) → {lat,lng} */
+  function parseCoords(t) {
+    const s = String(t || '').trim(); let m;
+    if ((m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+    if ((m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+    if ((m = s.match(/[?&](?:q|query|ll|center)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i))) return ok(m[1], m[2]);
+    if ((m = s.match(/^(-?\d{1,2}\.\d+)\s*°?\s*([NS])?[,\s]+(-?\d{1,3}\.\d+)\s*°?\s*([EW])?$/i))) return ok((m[2] || '').toUpperCase() === 'S' ? -m[1] : m[1], (m[4] || '').toUpperCase() === 'W' ? -m[3] : m[3]);
+    return null;
+    function ok(a, b) { a = +a; b = +b; return Math.abs(a) <= 90 && Math.abs(b) <= 180 ? { lat: a, lng: b } : null; }
+  }
+  /* ---------- search ---------- */
+  const BOX = '51.5,22.6,56.5,26.2';                  // UAE
+  async function suggest(q, key) {
+    if (key) {
+      const r = await fetch(`https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/suggest?f=json&countryCode=ARE&maxSuggestions=6&text=${encodeURIComponent(q)}&token=${encodeURIComponent(key)}`).then(r => r.json());
+      return (r.suggestions || []).map(x => ({ label: x.text, magicKey: x.magicKey }));
+    }
+    const r = await fetch(`https://photon.komoot.io/api/?limit=6&lang=en&lat=25.2&lon=55.3&bbox=${BOX}&q=${encodeURIComponent(q)}`).then(r => r.json());
+    return (r.features || []).map(f => { const p = f.properties || {}; return { label: [p.name, p.street, p.district || p.locality, p.city || p.county, p.state].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }; });
+  }
+  async function resolve(x, key) {
+    if (x.lat != null) return x;
+    const r = await fetch(`https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&magicKey=${encodeURIComponent(x.magicKey)}&SingleLine=${encodeURIComponent(x.label)}&token=${encodeURIComponent(key)}`).then(r => r.json());
+    const c = r.candidates?.[0]; return c ? { label: x.label, lat: c.location.y, lng: c.location.x } : null;
+  }
+  async function nominatim(q) {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ae&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'en' } }).then(r => r.json());
+    return r.map(x => ({ label: x.display_name, lat: +x.lat, lng: +x.lon }));
+  }
+  /** Attach type-ahead to an input. onPick({label, lat, lng}) */
+  function search(input, onPick, { key = '' } = {}) {
+    const box = document.createElement('div'); box.className = 'lsm-sug'; box.hidden = true;
+    input.parentElement.style.position ||= 'relative'; input.after(box); input.setAttribute('autocomplete', 'off');
+    let items = [], hi = -1, t = null, seq = 0;
+    const show = list => {
+      items = list; hi = -1;
+      box.innerHTML = list.length ? list.map((x, i) => `<button type="button" data-i="${i}">${x.label.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</button>`).join('') : '<div class="none">No places found – try another name, or paste coordinates</div>';
+      box.hidden = false;
+      box.querySelectorAll('[data-i]').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(items[+b.dataset.i]); });
+    };
+    const pick = async x => { box.hidden = true; const r = await resolve(x, key).catch(() => null); if (r) { input.value = r.label; onPick(r); } };
+    input.addEventListener('input', () => {
+      clearTimeout(t); const q = input.value.trim();
+      const c = parseCoords(q); if (c) { box.hidden = true; return; }
+      if (q.length < 3) { box.hidden = true; return; }
+      t = setTimeout(async () => { const my = ++seq; box.hidden = false; box.innerHTML = '<div class="none">Searching…</div>'; try { const r = await suggest(q, key); if (my === seq) show(r); } catch (e) { if (my === seq) box.innerHTML = '<div class="none">Search unavailable – paste coordinates instead</div>'; } }, 350);
+    });
+    input.addEventListener('keydown', async e => {
+      const bs = box.querySelectorAll('[data-i]');
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!bs.length) return; hi = (hi + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, i) => b.classList.toggle('on', i === hi)); return; }
+      if (e.key === 'Escape') { box.hidden = true; return; }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const c = parseCoords(input.value); if (c) { box.hidden = true; onPick({ label: `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`, ...c }); return; }
+      if (hi >= 0 && items[hi]) return pick(items[hi]);
+      try { const r = await nominatim(input.value.trim()); r.length === 1 ? pick(r[0]) : show(r); } catch (err) { show([]); }
+    });
+    input.addEventListener('blur', () => setTimeout(() => box.hidden = true, 150));
+    return { close: () => box.hidden = true };
+  }
+  const CSS = `.lsm-sug{position:absolute;left:0;right:0;top:100%;z-index:1200;background:#fff;border:1px solid #C9D2E1;border-radius:5px;box-shadow:0 4px 14px rgba(15,30,61,.12);max-height:260px;overflow:auto;margin-top:2px}
+.lsm-sug button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 10px;font:inherit;font-size:12.5px;cursor:pointer;color:#16202F;border-bottom:1px solid #EEF1F6}
+.lsm-sug button:hover,.lsm-sug button.on{background:#EAF2FD}.lsm-sug .none{padding:8px 10px;color:#6B7A94;font-size:12px}
+.leaflet-control-layers{font:12px Inter,Segoe UI,sans-serif;border-radius:5px!important}.leaflet-container{font-family:Inter,Segoe UI,sans-serif}`;
+  if (typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st); }
+  return { load, create, zone, parseCoords, search };
+})();
+
+/* Strings – English, Hindi, Urdu, Malayalam. Translations are a first draft: have a native speaker check them before go-live. */
+const LANGS = [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['ml', 'മലയാളം']];
+const STR = {
+  en: { title: 'Attendance', signin: 'Sign in', empId: 'Employee ID', empIdPh: 'e.g. C52392', next: 'Next', enterPin: 'Enter your 4-digit PIN', notYou: 'Not you?', wrongPin: 'Wrong PIN', checkIn: 'CHECK IN', checkOut: 'CHECK OUT', site: 'Site', shift: 'Shift', today: 'Today', noPunch: 'No punches yet today', since: 'since', hours: 'hours', locating: 'Finding your location…', inZone: 'In zone', outZone: 'Outside zone', from: 'from', noGps: 'Location is off – allow location for this page', takePhoto: 'Take a photo of yourself at the site', retake: 'Retake', use: 'Use photo', cancel: 'Cancel', sending: 'Sending…', accepted: 'Attendance marked', pending: 'Sent for review', pendingWhy: 'Your supervisor will check it', queued: 'Saved on phone', queuedWhy: 'No signal – it will be sent automatically', failed: 'Not marked', done: 'Done', waiting: 'waiting to send', month: 'My month', signout: 'Sign out', lang: 'Language', supervisor: 'Supervisor', days: 'days worked', back: 'Back', demo: 'Demo mode – data stays on this device. Set the Azure address to go live.', loadDemo: 'Load demo workers (PIN 1234)', camOff: 'Camera not available – tap to choose the camera app', statusAccepted: 'Accepted', statusPending: 'Pending review', statusRejected: 'Rejected', in: 'In', out: 'Out', reliever: 'Reliever at', date: 'Date', noCheckIn: 'no check-in', marked: 'marked', markAs: 'Mark as…', clear: 'Clear', markHint: 'Workers with no check-in: choose what the day is – absent, day off, sick leave… The admin tracker picks it up on sync.' },
+  hi: { title: 'हाज़िरी', signin: 'साइन इन', empId: 'कर्मचारी आईडी', empIdPh: 'जैसे C52392', next: 'आगे', enterPin: 'अपना 4 अंकों का पिन डालें', notYou: 'आप नहीं हैं?', wrongPin: 'गलत पिन', checkIn: 'चेक इन', checkOut: 'चेक आउट', site: 'साइट', shift: 'शिफ्ट', today: 'आज', noPunch: 'आज अभी कोई पंच नहीं', since: 'से', hours: 'घंटे', locating: 'आपकी लोकेशन ढूंढ रहे हैं…', inZone: 'ज़ोन में', outZone: 'ज़ोन से बाहर', from: 'दूर', noGps: 'लोकेशन बंद है – इस पेज को लोकेशन की अनुमति दें', takePhoto: 'साइट पर अपनी फोटो लें', retake: 'दोबारा लें', use: 'फोटो भेजें', cancel: 'रद्द करें', sending: 'भेज रहे हैं…', accepted: 'हाज़िरी लग गई', pending: 'जांच के लिए भेजा गया', pendingWhy: 'आपके सुपरवाइज़र जांच करेंगे', queued: 'फोन में सेव हुआ', queuedWhy: 'नेटवर्क नहीं – अपने आप भेजा जाएगा', failed: 'हाज़िरी नहीं लगी', done: 'ठीक है', waiting: 'भेजना बाकी', month: 'मेरा महीना', signout: 'साइन आउट', lang: 'भाषा', supervisor: 'सुपरवाइज़र', days: 'दिन काम किया', back: 'वापस', demo: 'डेमो मोड – डेटा इसी फोन में रहता है।', loadDemo: 'डेमो कर्मचारी लोड करें (पिन 1234)', camOff: 'कैमरा उपलब्ध नहीं – कैमरा ऐप चुनें', statusAccepted: 'स्वीकृत', statusPending: 'जांच बाकी', statusRejected: 'अस्वीकृत', in: 'इन', out: 'आउट', reliever: 'रिलीवर', date: 'तारीख', noCheckIn: 'चेक-इन नहीं', marked: 'मार्क किए', markAs: 'मार्क करें…', clear: 'हटाएं', markHint: 'जिनका चेक-इन नहीं हुआ: दिन क्या है चुनें – अनुपस्थित, छुट्टी, बीमारी…' },
+  ur: { title: 'حاضری', signin: 'سائن ان', empId: 'ملازم آئی ڈی', empIdPh: 'مثلاً C52392', next: 'آگے', enterPin: 'اپنا 4 ہندسوں کا پن درج کریں', notYou: 'آپ نہیں ہیں؟', wrongPin: 'غلط پن', checkIn: 'چیک اِن', checkOut: 'چیک آؤٹ', site: 'سائٹ', shift: 'شفٹ', today: 'آج', noPunch: 'آج ابھی کوئی پنچ نہیں', since: 'سے', hours: 'گھنٹے', locating: 'آپ کا مقام تلاش ہو رہا ہے…', inZone: 'زون میں', outZone: 'زون سے باہر', from: 'دور', noGps: 'مقام بند ہے – اس صفحے کو اجازت دیں', takePhoto: 'سائٹ پر اپنی تصویر لیں', retake: 'دوبارہ لیں', use: 'تصویر بھیجیں', cancel: 'منسوخ', sending: 'بھیج رہے ہیں…', accepted: 'حاضری لگ گئی', pending: 'جانچ کے لیے بھیجا گیا', pendingWhy: 'آپ کا سپروائزر جانچ کرے گا', queued: 'فون میں محفوظ', queuedWhy: 'نیٹ ورک نہیں – خود بخود بھیجا جائے گا', failed: 'حاضری نہیں لگی', done: 'ٹھیک ہے', waiting: 'بھیجنا باقی', month: 'میرا مہینہ', signout: 'سائن آؤٹ', lang: 'زبان', supervisor: 'سپروائزر', days: 'دن کام کیا', back: 'واپس', demo: 'ڈیمو موڈ – ڈیٹا اسی فون پر رہتا ہے۔', loadDemo: 'ڈیمو ملازمین لوڈ کریں (پن 1234)', camOff: 'کیمرہ دستیاب نہیں – کیمرہ ایپ منتخب کریں', statusAccepted: 'منظور', statusPending: 'جانچ باقی', statusRejected: 'مسترد', in: 'اِن', out: 'آؤٹ', reliever: 'ریلیور', date: 'تاریخ', noCheckIn: 'چیک اِن نہیں', marked: 'نشان زد', markAs: 'نشان لگائیں…', clear: 'ہٹائیں', markHint: 'جن کا چیک اِن نہیں ہوا: دن کیا ہے منتخب کریں – غیر حاضر، چھٹی، بیماری…' },
+  ml: { title: 'ഹാജർ', signin: 'സൈൻ ഇൻ', empId: 'ജീവനക്കാരൻ ഐഡി', empIdPh: 'ഉദാ. C52392', next: 'അടുത്തത്', enterPin: 'നിങ്ങളുടെ 4 അക്ക പിൻ നൽകുക', notYou: 'നിങ്ങളല്ലേ?', wrongPin: 'തെറ്റായ പിൻ', checkIn: 'ചെക്ക് ഇൻ', checkOut: 'ചെക്ക് ഔട്ട്', site: 'സൈറ്റ്', shift: 'ഷിഫ്റ്റ്', today: 'ഇന്ന്', noPunch: 'ഇന്ന് ഇതുവരെ പഞ്ച് ഇല്ല', since: 'മുതൽ', hours: 'മണിക്കൂർ', locating: 'ലൊക്കേഷൻ കണ്ടെത്തുന്നു…', inZone: 'സോണിനുള്ളിൽ', outZone: 'സോണിന് പുറത്ത്', from: 'അകലെ', noGps: 'ലൊക്കേഷൻ ഓഫാണ് – അനുമതി നൽകുക', takePhoto: 'സൈറ്റിൽ നിന്ന് നിങ്ങളുടെ ഫോട്ടോ എടുക്കുക', retake: 'വീണ്ടും എടുക്കുക', use: 'ഫോട്ടോ അയയ്ക്കുക', cancel: 'റദ്ദാക്കുക', sending: 'അയയ്ക്കുന്നു…', accepted: 'ഹാജർ രേഖപ്പെടുത്തി', pending: 'പരിശോധനയ്ക്ക് അയച്ചു', pendingWhy: 'സൂപ്പർവൈസർ പരിശോധിക്കും', queued: 'ഫോണിൽ സേവ് ചെയ്തു', queuedWhy: 'നെറ്റ്‌വർക്ക് ഇല്ല – സ്വയം അയയ്ക്കും', failed: 'ഹാജർ രേഖപ്പെടുത്തിയില്ല', done: 'ശരി', waiting: 'അയയ്ക്കാനുണ്ട്', month: 'എന്റെ മാസം', signout: 'സൈൻ ഔട്ട്', lang: 'ഭാഷ', supervisor: 'സൂപ്പർവൈസർ', days: 'ജോലി ദിവസങ്ങൾ', back: 'തിരികെ', demo: 'ഡെമോ മോഡ് – ഡാറ്റ ഈ ഫോണിൽ മാത്രം.', loadDemo: 'ഡെമോ ജീവനക്കാരെ ലോഡ് ചെയ്യുക (പിൻ 1234)', camOff: 'ക്യാമറ ലഭ്യമല്ല – ക്യാമറ ആപ്പ് തിരഞ്ഞെടുക്കുക', statusAccepted: 'സ്വീകരിച്ചു', statusPending: 'പരിശോധന ബാക്കി', statusRejected: 'നിരസിച്ചു', in: 'ഇൻ', out: 'ഔട്ട്', reliever: 'റിലീവർ', date: 'തീയതി', noCheckIn: 'ചെക്ക്-ഇൻ ഇല്ല', marked: 'അടയാളപ്പെടുത്തി', markAs: 'അടയാളപ്പെടുത്തുക…', clear: 'മായ്ക്കുക', markHint: 'ചെക്ക്-ഇൻ ചെയ്യാത്തവർ: ദിവസം എന്താണെന്ന് തിരഞ്ഞെടുക്കുക – ഹാജരില്ല, അവധി, രോഗം…' }
+};
+let LANG = (() => { try { return localStorage.getItem('ls.lang') || 'en'; } catch (e) { return 'en'; } })();
+const t = k => (STR[LANG] || STR.en)[k] ?? STR.en[k] ?? k;
+function setLang(l) { LANG = STR[l] ? l : 'en'; try { localStorage.setItem('ls.lang', LANG); } catch (e) { } document.documentElement.lang = LANG; document.documentElement.dir = LANG === 'ur' ? 'rtl' : 'ltr'; }
+
+/* =====================================================================
+   Worker Attendance – sign in (remembered Emp ID + PIN), check in / out
+   with GPS and an on-site photo, offline queue, my month, supervisor
+   board (marks days for workers who did not check in). Talks to the Azure API, or to the demo store.
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { } } };
+const ss = { get: k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { } } };
+const hhmm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+function toast(m, ms = 2800) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
+
+// API address: ?api=… (saved), else same-origin /api when served over http(s), else demo
+const Q = new URLSearchParams(location.search);
+if (Q.has('api')) ls.set('ls.api', Q.get('api'));
+const API_BASE = ls.get('ls.api') ?? (location.protocol.startsWith('http') ? '/api' : '');
+const W = { api: LSClient.make({ base: API_BASE }), token: ss.get('ls.tok'), prof: null, code: ls.get('ls.code') || '', pin: '', dev: ls.get('ls.dev') || (() => { const d = uuid(); ls.set('ls.dev', d); return d; })(), gps: null, gpsErr: '', watch: null, map: null, layers: null, busy: false, sup: false };
+
+/* ---------- offline queue (IndexedDB) ---------- */
+const QDB = () => new Promise((res, rej) => { const r = indexedDB.open('ls-worker-queue', 1); r.onupgradeneeded = () => r.result.createObjectStore('q', { keyPath: 'clientId' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const qAll = async () => { const db = await QDB(); return new Promise(res => { const r = db.transaction('q').objectStore('q').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }); };
+const qPut = async x => { const db = await QDB(); return new Promise(res => { const tx = db.transaction('q', 'readwrite'); tx.objectStore('q').put(x); tx.oncomplete = res; }); };
+const qDel = async id => { const db = await QDB(); return new Promise(res => { const tx = db.transaction('q', 'readwrite'); tx.objectStore('q').delete(id); tx.oncomplete = res; }); };
+async function flushQueue() {
+  if (!W.token) return; const items = await qAll(); let sent = 0;
+  for (const x of items) {
+    try {
+      const r = x.sup ? await W.api.call('POST', 'supervisor/punch', x.body) : await W.api.call('POST', 'worker/punch', x.body, { token: W.token });
+      if (r.status === 401) break;
+      await qDel(x.clientId); sent++;
+    } catch (e) { break; }                      // still offline
+  }
+  if (sent) { toast(`☁ → ✓ ${sent}`); await refresh(); } else updateQueueBar();
+}
+window.addEventListener('online', flushQueue);
+setInterval(flushQueue, 60000);
+
+/* ---------- GPS ---------- */
+function startGps() {
+  if (W.watch != null || !navigator.geolocation) { if (!navigator.geolocation) W.gpsErr = t('noGps'); return; }
+  W.watch = navigator.geolocation.watchPosition(p => { W.gps = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy), at: Date.now() }; W.gpsErr = ''; paintGps(); },
+    e => { W.gpsErr = t('noGps'); paintGps(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+}
+function zoneInfo() {
+  const g = W.gps, P = W.prof; if (!g || !P) return null;
+  const own = P.site ? LSAPI.nearestPin(P.site, g, g.acc) : null;
+  if (own?.inZone) return { ...own, site: P.site, own: true };
+  const other = (P.sites || []).filter(s => s.id !== P.site?.id).map(s => ({ s, m: LSAPI.nearestPin(s, g, g.acc) })).filter(x => x.m?.inZone).sort((a, b) => a.m.d - b.m.d)[0];
+  if (other) return { ...other.m, site: other.s, own: false };
+  return own ? { ...own, site: P.site, own: true } : null;
+}
+function paintGps() {
+  const el = $('#gps'); if (!el) return;
+  const g = W.gps, z = zoneInfo();
+  if (!g) el.innerHTML = W.gpsErr ? `<span class="pill neg"><span class="dot"></span>${esc(W.gpsErr)}</span>` : `<span class="pill"><span class="dot"></span>${t('locating')}</span>`;
+  else if (z?.inZone) el.innerHTML = `<span class="pill pos"><span class="dot"></span>${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m</span>${z.own ? '' : ` <span class="pill warn">${t('reliever')} ${esc(z.site.name)}</span>`}`;
+  else el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m</span>`;
+  if (W.map && W.layers && g) {
+    const L = window.L; W.layers.me?.remove(); W.layers.acc?.remove();
+    W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: '#16202F', weight: 1, fillOpacity: .08, dashArray: '3 3' }).addTo(W.map);
+    W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: '#fff', weight: 2, fillColor: '#E0762F', fillOpacity: 1 }).addTo(W.map);
+    if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend([p.lat, p.lng])); W.map.fitBounds(b.pad(0.6), { maxZoom: 17 }); }
+  }
+}
+async function freshFix(maxWait = 15000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxWait) { if (W.gps && Date.now() - W.gps.at < 30000) return W.gps; await new Promise(r => setTimeout(r, 400)); }
+  return W.gps;
+}
+
+/* ---------- camera + watermark ---------- */
+function takePhoto(caption) {
+  return new Promise(resolve => {
+    const box = document.createElement('div'); box.className = 'cam';
+    box.innerHTML = `<div class="hint">${t('takePhoto')}</div><video playsinline autoplay muted></video><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
+    document.body.appendChild(box);
+    const video = $('video', box); let stream = null;
+    const close = v => { stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
+    $('[data-x]', box).onclick = () => close(null);
+    const fromFile = () => {        // fallback: the phone's camera app (capture=user)
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'user';
+      inp.onchange = async () => { const f = inp.files[0]; if (!f) return close(null); const img = new Image(); img.onload = () => review(img, img.naturalWidth, img.naturalHeight); img.src = URL.createObjectURL(f); };
+      $('.hint', box).textContent = t('camOff'); $('[data-s]', box).onclick = () => inp.click(); inp.click();
+    };
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 1280 } }, audio: false })
+      .then(s => { stream = s; video.srcObject = s; $('[data-s]', box).onclick = () => review(video, video.videoWidth, video.videoHeight); })
+      .catch(fromFile) ?? fromFile();
+    function review(src, w, h) {
+      const k = Math.min(1, 720 / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      const g = c.getContext('2d'); g.drawImage(src, 0, 0, c.width, c.height);
+      // watermark: name · ID, date-time, coordinates, site
+      const lines = caption(); const fs = Math.max(13, Math.round(c.width / 34)); g.font = `600 ${fs}px Inter, Arial, sans-serif`;
+      const bh = lines.length * (fs + 6) + 12; g.fillStyle = 'rgba(11,27,54,.72)'; g.fillRect(0, c.height - bh, c.width, bh);
+      g.fillStyle = '#fff'; lines.forEach((l, i) => g.fillText(l, 10, c.height - bh + 8 + (i + 1) * (fs + 6) - 6));
+      let q = .72, url = c.toDataURL('image/jpeg', q); while (url.length > 260000 && q > .35) { q -= .08; url = c.toDataURL('image/jpeg', q); }
+      stream?.getTracks().forEach(x => x.stop());
+      box.innerHTML = `<img src="${url}" alt=""><div class="ctl"><button class="btn" data-r>${t('retake')}</button><button class="btn pri" data-u>${t('use')}</button></div>`;
+      $('[data-r]', box).onclick = () => { box.remove(); takePhoto(caption).then(resolve); };
+      $('[data-u]', box).onclick = () => { box.remove(); resolve(url); };
+    }
+  });
+}
+
+/* ---------- screens ---------- */
+function shell(body) {
+  try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
+  $('#app').innerHTML = `<div class="bar"><span class="mark">LS</span><span class="t">${t('title')}<small>Latinem Securities</small></span><span class="sp"></span>
+    <button id="b-lang" aria-label="${t('lang')}">${esc(LANGS.find(l => l[0] === LANG)[1])}</button>${W.prof || W.sup ? '<button id="b-menu" aria-label="menu">☰</button>' : ''}</div>
+    ${W.api.demo ? `<div class="demo">${t('demo')}</div>` : ''}<main>${body}</main>`;
+  $('#b-lang').onclick = () => menu(LANGS.map(([k, n]) => [n, () => { setLang(k); render(); }]));
+  if ($('#b-menu')) $('#b-menu').onclick = () => menu([
+    ...(W.prof ? [['🏠 ' + t('today'), () => go('home')], ['📅 ' + t('month'), () => go('month')]] : []),
+    ['👷 ' + t('supervisor'), openSupervisor], ['⎋ ' + t('signout'), signOut]]);
+}
+function menu(items) {
+  const m = document.createElement('div'); m.className = 'sheet-menu';
+  m.innerHTML = `<div class="in">${items.map(([l], i) => `<button data-i="${i}">${esc(l)}</button>`).join('')}</div>`;
+  m.onclick = e => { const b = e.target.closest('[data-i]'); m.remove(); if (b) items[+b.dataset.i][1](); };
+  document.body.appendChild(m);
+}
+let SCREEN = 'login';
+const go = s => { SCREEN = s; render(); };
+function render() {
+  if (W.sup) return renderSup();
+  if (!W.token || !W.prof) return renderLogin();
+  ({ home: renderHome, month: renderMonth }[SCREEN] || renderHome)();
+}
+
+function renderLogin() {
+  const known = W.code;
+  if (!known || W.editCode) {
+    shell(`<div class="card"><h2>${t('signin')}</h2><label class="fl">${t('empId')}</label>
+      <input class="f mono" id="code" placeholder="${t('empIdPh')}" value="${esc(known)}" autocapitalize="characters" autocomplete="username">
+      <button class="btn pri wide" id="b-next" style="margin-top:12px">${t('next')}</button>
+      ${W.api.demo ? `<button class="btn wide" id="b-demo" style="margin-top:10px">${t('loadDemo')}</button>` : ''}</div>`);
+    $('#code').focus();
+    const nx = () => { const c = $('#code').value.trim().toUpperCase(); if (!c) return; W.code = c; ls.set('ls.code', c); W.editCode = false; W.pin = ''; render(); };
+    $('#b-next').onclick = nx; $('#code').onkeydown = e => e.key === 'Enter' && nx();
+    if ($('#b-demo')) $('#b-demo').onclick = loadDemo;
+    return;
+  }
+  shell(`<div class="card" style="text-align:center"><div class="lbl">${t('empId')}</div><div class="mono" style="font-size:22px;font-weight:700;color:var(--heading)">${esc(known)}</div>
+    <button class="btn" id="b-not" style="margin-top:6px;padding:4px 10px;font-size:13px">${t('notYou')}</button>
+    <p class="muted" style="margin:14px 0 0">${t('enterPin')}</p><div class="dots">${[0, 1, 2, 3].map(i => `<i class="${i < W.pin.length ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="err" id="err">${esc(W.err || '')}</div>
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button class="fn" data-k="c">✕</button><button data-k="0">0</button><button class="fn" data-k="b">⌫</button></div></div>`);
+  $('#b-not').onclick = () => { W.editCode = true; W.err = ''; ls.set('ls.code', null); W.code = ''; render(); };
+  $$('.pad button').forEach(b => b.onclick = () => key(b.dataset.k));
+  document.onkeydown = e => { if (SCREEN === 'login' && /^[0-9]$/.test(e.key)) key(e.key); if (e.key === 'Backspace') key('b'); };
+  async function key(k) {
+    if (W.busy) return;
+    if (k === 'c') W.pin = ''; else if (k === 'b') W.pin = W.pin.slice(0, -1); else if (W.pin.length < 4) W.pin += k;
+    W.err = ''; render();
+    if (W.pin.length === 4) {
+      W.busy = true;
+      try {
+        const r = await W.api.call('POST', 'worker/login', { code: W.code, pin: W.pin, deviceId: W.dev });
+        W.pin = '';
+        if (r.status !== 200) { W.err = r.body?.code === 'BAD_PIN' ? t('wrongPin') : r.body?.error || t('failed'); }
+        else { W.token = r.body.token; ss.set('ls.tok', W.token); W.prof = r.body; SCREEN = 'home'; document.onkeydown = null; startGps(); flushQueue(); }
+      } catch (e) { W.pin = ''; W.err = 'No connection'; }
+      W.busy = false; render();
+    }
+  }
+}
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+async function refresh(redraw = true) {
+  if (!W.token) return;
+  try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; if (redraw && !W.sup) render(); } } catch (e) { }
+}
+async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `☁ ${n} ${t('waiting')}`; }
+
+function renderHome() {
+  const P = W.prof, w = P.worker, open = P.open;
+  const today = P.punches.filter(p => p.workDate === P.today || (open && p.id === open.id) || (open && p.inId === open.id));
+  const hrs = open ? ((Date.now() - open.ts) / 3600000).toFixed(1) : null;
+  const st = p => p.status === 'accepted' ? `<span class="pill pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="pill warn">${t('statusPending')}</span>` : `<span class="pill neg">${t('statusRejected')}</span>`;
+  shell(`<div class="card"><div class="who"><span class="av">${esc(w.name.split(' ').map(x => x[0]).slice(0, 2).join(''))}</span><div class="grow"><b>${esc(w.name)}</b><span class="mono muted small">${esc(w.code)}</span></div></div>
+      <div class="kv"><span>${t('site')}</span><b>${esc(P.site?.name || '—')}</b><span>${t('shift')}</span><b>${esc(w.shift)}${P.settings?.starts?.[w.shift] ? ' · ' + P.settings.starts[w.shift] : ''}</b></div>
+      <div id="map"></div><div id="gps"></div></div>
+    <div id="qbar" class="q" hidden></div>
+    <button class="big ${open ? 'out' : 'in'}" id="b-punch">${open ? t('checkOut') : t('checkIn')}<small>${open ? `${t('since')} ${hhmm(open.ts)} · ${hrs} ${t('hours')}` : new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'long', day: 'numeric', month: 'long' })}</small></button>
+    <div class="card" style="margin-top:12px"><div class="lbl">${t('today')}</div>
+      ${today.length ? `<ul class="list">${today.map(p => `<li><span class="tm">${hhmm(p.ts)}</span><span class="grow">${p.type === 'in' ? t('in') : t('out')} · ${esc(p.siteName || '')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span>${st(p)}</li>`).join('')}</ul>` : `<p class="muted" style="margin:0">${t('noPunch')}</p>`}</div>`);
+  $('#b-punch').onclick = () => punch(open ? 'out' : 'in');
+  paintGps(); updateQueueBar(); drawMap();
+}
+async function drawMap() {
+  const el = $('#map'); if (!el) return;
+  try {
+    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false });
+    if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
+    W.map = map;
+    W.layers = {};
+    for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? '#1766CB' : '#93A0B5', label: s.name, fill: s.id === W.prof.site?.id ? .14 : .06 });
+    paintGps();
+  } catch (e) { el.hidden = true; }
+}
+
+async function punch(type, forWorker) {
+  if (W.busy) return; W.busy = true;
+  try {
+    const g = await freshFix();
+    if (!g) { toast(W.gpsErr || t('noGps'), 4000); return; }
+    const P = W.prof, who = forWorker || P.worker, z = zoneInfo();
+    const photo = await takePhoto(() => [`${who.name} · ${who.code}`, `${new Date().toLocaleString('en-GB')} · ${type === 'in' ? 'CHECK IN' : 'CHECK OUT'}`, `${g.lat.toFixed(6)}, ${g.lng.toFixed(6)} ±${g.acc} m`, z ? `${z.site.name} · ${z.d} m` : (P?.site?.name || '')]);
+    if (!photo) return;
+    const body = { type, ts: Date.now(), lat: g.lat, lng: g.lng, acc: g.acc, photo, clientId: uuid(), deviceId: W.dev, ...(forWorker ? { code: forWorker.code } : {}) };
+    showResult('send', null, photo);
+    let r;
+    try { r = forWorker ? await W.api.call('POST', 'supervisor/punch', body) : await W.api.call('POST', 'worker/punch', body, { token: W.token }); }
+    catch (e) { await qPut({ clientId: body.clientId, body, sup: !!forWorker }); return showResult('queued', null, photo); }
+    if (r.status === 401) { await qPut({ clientId: body.clientId, body }); return signOut(true); }
+    if (r.status !== 200) return showResult('bad', r.body?.error, photo);
+    showResult(r.body.punch.status === 'accepted' ? 'ok' : 'pend', r.body.punch.status === 'pending' ? r.body.punch.reasons.join(' · ') : (r.body.punch.reliever ? `${t('reliever')} ${r.body.punch.siteName}` : ''), photo);
+    forWorker ? loadBoard(false) : refresh(false);
+  } finally { W.busy = false; }
+}
+function showResult(kind, msg, photo) {
+  const M = { send: ['q', '…', t('sending'), ''], ok: ['ok', '✓', t('accepted'), ''], pend: ['pend', '⏳', t('pending'), t('pendingWhy')], queued: ['q', '☁', t('queued'), t('queuedWhy')], bad: ['bad', '✕', t('failed'), ''] }[kind];
+  shell(`<div class="card res"><div class="ic ${M[0]}">${M[1]}</div><h2>${M[2]}</h2><p class="muted">${esc(msg || M[3])}</p><p class="mono muted">${hhmm(Date.now())}</p>${photo ? `<img src="${photo}" alt="">` : ''}
+    ${kind === 'send' ? '' : `<button class="btn pri wide" id="b-done" style="margin-top:16px">${t('done')}</button>`}</div>`);
+  if ($('#b-done')) $('#b-done').onclick = () => W.sup ? renderSup() : go('home');
+}
+
+function renderMonth() {
+  const P = W.prof, now = new Date(), cur = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  const months = [...new Set([...Object.keys(P.months || {}), cur])].sort().reverse();
+  const ym = W.ym && months.includes(W.ym) ? W.ym : months[0];
+  const codes = (P.months || {})[ym] || [], [y, m] = ym.split('-').map(Number), N = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay();
+  const todayISO = `${cur}-${pad(now.getDate())}`;
+  const live = new Map(P.punches.filter(p => p.type === 'in' && p.status !== 'rejected' && p.workDate.startsWith(ym)).map(p => [+p.workDate.slice(8), p.status === 'accepted' ? 'P' : '…']));
+  const cell = d => { const c = codes[d - 1] || live.get(d) || ''; return `<div class="d ${esc(c)} ${`${ym}-${pad(d)}` === todayISO ? 'today' : ''}"><b>${d}</b>${esc(c)}</div>`; };
+  const worked = [...Array(N)].map((_, i) => codes[i] || live.get(i + 1)).filter(c => c === 'P' || c === 'R').length;
+  shell(`<div class="card"><div class="tabs">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${new Date(+x.slice(0, 4), +x.slice(5) - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</button>`).join('')}</div>
+    <div class="row"><b style="font-size:26px;color:var(--heading)" class="mono">${worked}</b><span class="muted">${t('days')}</span></div>
+    <div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}${[...Array(N)].map((_, i) => cell(i + 1)).join('')}</div></div>
+    <button class="btn wide" id="b-back">${t('back')}</button>`);
+  $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
+  $('#b-back').onclick = () => go('home');
+}
+
+/* ---------- supervisor: site board + punch on behalf ---------- */
+async function openSupervisor() {
+  if (!W.api.demo) {
+    const me = await fetch('/.auth/me').then(r => r.json()).catch(() => null);
+    const roles = me?.clientPrincipal?.userRoles || [];
+    if (!roles.includes('supervisor') && !roles.includes('admin')) { location.href = '/.auth/login/aad?post_login_redirect_uri=' + encodeURIComponent(location.pathname + '#sup'); return; }
+  } else W.api = LSClient.make({ base: API_BASE, role: 'supervisor' });
+  W.sup = true; startGps(); await loadBoard();
+}
+async function loadBoard(redraw = true) {
+  const r = await W.api.call('GET', 'supervisor/board', null, { query: { site: W.supSite || '', date: W.supDate || '' } }).catch(() => null);
+  if (r?.status !== 200) { toast(r?.body?.error || 'No connection'); W.sup = false; return render(); }
+  W.board = r.body; W.prof ||= { sites: r.body.sites, site: null, punches: [] }; if (redraw) renderSup();
+}
+function renderSup() {
+  const B = W.board || { workers: [], sites: [], codes: [] }, isToday = B.date === B.today;
+  const rows = B.workers.filter(w => !W.supSite || w.siteId === W.supSite);
+  const state = w => { const ins = w.punches.filter(p => p.type === 'in'), outs = w.punches.filter(p => p.type === 'out'); return ins.length > outs.length ? 'in' : ins.length ? 'done' : w.mark?.mark ? 'marked' : 'none'; };
+  const n = k => rows.filter(w => state(w) === k).length;
+  shell(`<div class="card"><h2>${t('supervisor')}</h2>
+    <div class="row"><div class="grow"><label class="fl">${t('site')}</label><select class="f" id="sp-site"><option value="">All</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div><label class="fl">${t('date')}</label><input class="f" type="date" id="sp-date" value="${esc(B.date)}" max="${esc(B.today)}"></div></div>
+    <div class="row" style="margin-top:10px"><span class="pill pos">${n('in')} in</span><span class="pill">${n('done')} done</span><span class="pill warn">${n('none')} ${t('noCheckIn')}</span>${n('marked') ? `<span class="pill">${n('marked')} ${t('marked')}</span>` : ''}</div></div>
+    ${n('none') ? `<div class="q">${t('markHint')}</div>` : ''}
+    <div class="card"><ul class="list">${rows.sort((a, b) => ({ none: 0, marked: 1, in: 2, done: 3 }[state(a)] - { none: 0, marked: 1, in: 2, done: 3 }[state(b)])).map(w => { const s = state(w); return `<li style="flex-wrap:wrap"><span class="grow" style="min-width:150px"><b style="color:var(--heading)">${esc(w.name)}</b><br><span class="mono muted small">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
+      ${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}" style="width:auto;padding:6px 8px;font-size:14px"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
+      ${isToday && s !== 'done' ? `<button class="btn" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}" style="padding:6px 10px">${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</li>`; }).join('') || '<li class="muted">—</li>'}</ul></div>
+    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${t('back')}</button>`);
+  $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
+  $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
+  $$('[data-pw]').forEach(b => b.onclick = () => { const w = B.workers.find(x => x.code === b.dataset.pw); punch(b.dataset.t, w); });
+  $$('[data-mk]').forEach(sel => sel.onchange = async () => {
+    const r = await W.api.call('POST', 'supervisor/mark', { code: sel.dataset.mk, date: B.date, mark: sel.value }).catch(() => null);
+    if (r?.status === 200) { toast(sel.value ? `${sel.dataset.mk} → ${sel.value}` : t('clear')); loadBoard(); } else toast(r?.body?.error || 'No connection');
+  });
+  $('#b-exit').onclick = () => { W.sup = false; W.api = LSClient.make({ base: API_BASE }); render(); };
+  paintGps();
+}
+
+function signOut(expired) { W.token = null; W.prof = null; ss.set('ls.tok', null); W.sup = false; SCREEN = 'login'; if (expired === true) W.err = ''; render(); }
+
+/* ---------- demo roster (demo mode only): three workers, zones around where you are ---------- */
+async function loadDemo() {
+  toast(t('locating')); startGps(); const g = await freshFix(8000) || { lat: 25.0, lng: 55.5, acc: 20 };
+  const admin = LSClient.make({ base: '', role: 'admin' }), pin = await LSAPI.hashPin('1234');
+  const off = m => m / 111320;
+  const sites = [{ id: 'demo-s1', name: 'INFRA OFFICE', project: 'SCL - ELWOOD - INFRA', pins: [{ lat: g.lat, lng: g.lng, radius: 100 }] }, { id: 'demo-s2', name: 'GATE NO 1 (MAIN ENTRANCE)', project: 'SCL - ELWOOD - INFRA', pins: [{ lat: g.lat + off(300), lng: g.lng, radius: 80 }] }];
+  const workers = [['C52392', 'ANEESH DOMINIC', 'DAY', 'demo-s1'], ['C80453', 'HARIKUMAR', 'NIGHT', 'demo-s1'], ['C66585', 'PRATHEEK JAGADEESH', 'DAY', 'demo-s2']].map(([code, name, shift, siteId]) => ({ id: 'demo-' + code, code, name, shift, siteId, enabled: true, pinHash: pin.hash, pinSalt: pin.salt, resetDevice: true }));
+  await admin.call('PUT', 'admin/roster', { workers, sites, settings: { starts: { DAY: '07:00', NIGHT: '19:00' } } });
+  W.code = 'C52392'; ls.set('ls.code', W.code); W.editCode = false; toast('Demo: C52392 · PIN 1234', 5000); render();
+}
+
+/* ---------- start ---------- */
+if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+setLang(LANG);
+(async () => {
+  if (W.token) { await refresh(); if (W.prof) { SCREEN = 'home'; startGps(); flushQueue(); } else { W.token = null; } }
+  if (location.hash === '#sup') { history.replaceState(null, '', location.pathname + location.search); await openSupervisor(); return; }
+  render(); document.body.dataset.ready = '1';
+})();
+setInterval(() => { if (W.prof && !W.sup && SCREEN === 'home' && !$('.cam') && !W.busy) refresh(); }, 120000);
+
+</script>
+</body>
+</html>

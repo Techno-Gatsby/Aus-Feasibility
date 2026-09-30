@@ -107,7 +107,10 @@ function editEmployee(id) {
     <p class="muted small" style="margin-top:0">Each row applies from its date until the next. Day exceptions (relieving elsewhere) are set in the grid.</p>
     <table><thead><tr><th>From</th><th>Site (project)</th><th>Shift</th><th></th></tr></thead><tbody id="ee-asg">${asgRows()}</tbody></table>
     <button class="btn sm" id="ee-addasg" style="margin-top:6px">Add allocation</button>
-    ${!isNew ? `<p class="muted small">${nAtt} attendance day(s) on file.</p>` : ''}`,
+    ${!isNew ? `<p class="muted small">${nAtt} attendance day(s) on file.</p>` : ''}
+    ${!isNew ? (() => { const a = e.app || {}, last = Object.values(S.punches || {}).filter(p => p.wid === e.id).sort((x, y) => y.ts - x.ts)[0];
+      return `<h3 style="margin:14px 0 6px">Worker app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
+        <button class="btn sm" id="ee-pin">${a.on ? 'New PIN + slip' : 'Enable + PIN + slip'}</button>${a.on ? '<button class="btn sm" id="ee-dev">Reset phone</button><button class="btn sm bad" id="ee-off">Disable</button>' : ''}</div>`; })() : ''}`,
     [
       ...(!isNew ? [{ label: 'Delete worker', cls: 'bad', onClick: async () => {
         if (!await confirmBox(`Delete ${e.name} and ${nAtt} attendance record(s)?\n\nTo keep history, set an end date instead.`, 'Delete', 'bad')) return;
@@ -141,6 +144,10 @@ function editEmployee(id) {
     m.querySelectorAll('[data-adel]').forEach(b => b.onclick = () => { readAsg(m); e.assign.splice(+b.dataset.adel, 1); $('#ee-asg', m).innerHTML = asgRows(); bindAsg(); });
   }
   bindAsg();
+  const appBtn = (sel, f) => { const b = $(sel, m); if (b) b.onclick = async () => { readAsg(m); const real = IX.emp.get(e.id); await f(real); e.app = real.app; closeModal(); renderAll(); }; };
+  appBtn('#ee-pin', async real => printSlips(await givePins([real])));
+  appBtn('#ee-dev', async real => { real.app.resetDevice = true; markDirty(); toast('Phone reset – Publish roster to apply'); });
+  appBtn('#ee-off', async real => { real.app.on = false; markDirty(); toast('App disabled – Publish roster to apply'); });
   $('#ee-addasg', m).onclick = () => {
     readAsg(m);
     const last = e.assign[e.assign.length - 1];

@@ -140,7 +140,8 @@ function defaultState() {
     employees: [],    // {id,empCode,name,agency,trade,shift,doj,end,endReason,assign:[{from,site,shift}]}
     att: {},          // att[empId][iso] = 'P' | {c:'R', s:siteId, sh:'NIGHT'}
     locks: {},        // locks['2026-07'] = true  (payroll month)
-    invoices: []
+    invoices: [],
+    app: {}, punches: {}, marks: {}   // worker app: settings, synced punches (no photos), supervisor day marks
   };
 }
 
@@ -157,7 +158,7 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {};
+  st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {}; st.app = st.app || {}; st.punches = st.punches || {}; st.marks = st.marks || {}; delete st.leaves;
   st.settings.rateCard ||= d.settings.rateCard;
   st.settings.bank = Object.assign({}, d.settings.bank, st.settings.bank || {});
   for (const e of st.employees) if (e.trade && /^CCTV\b/.test(e.trade)) e.trade = 'CCTV OPERATOR';
@@ -176,7 +177,7 @@ function encodeState(st) {
     for (const [d, v] of Object.entries(days)) {
       const c = typeof v === 'string' ? v : v.c; let ci = codes.indexOf(c); if (ci < 0) { codes.push(c); ci = codes.length - 1; }
       (months[d.slice(0, 7)] ||= Array(31).fill('.'))[+d.slice(8) - 1] = B62[ci];
-      if (typeof v === 'object' && (v.s || v.sh || v.n)) extra.push([eid, d, v.s || '', v.sh || '', ...(v.n ? [v.n] : [])]);
+      if (typeof v === 'object' && (v.s || v.sh || v.n || v.mk)) extra.push([eid, d, v.s || '', v.sh || '', ...(v.n || v.mk ? [v.n || ''] : []), ...(v.mk ? [v.mk] : [])]);
     }
     att[eid] = Object.fromEntries(Object.entries(months).map(([m, a]) => [m, a.join('').replace(/\.+$/, '')]));
   }
@@ -186,7 +187,7 @@ function decodeState(x) {
   if (!x?._enc) return x;
   const att = {};
   for (const [eid, months] of Object.entries(x.att)) { const o = att[eid] = {}; for (const [ym, s] of Object.entries(months)) for (let i = 0; i < s.length; i++) if (s[i] !== '.') o[`${ym}-${pad(i + 1)}`] = x._codes[B62.indexOf(s[i])]; }
-  for (const [eid, d, s, sh, n] of x._extra) { const c = att[eid][d]; att[eid][d] = { c, ...(s ? { s } : {}), ...(sh ? { sh } : {}), ...(n ? { n } : {}) }; }
+  for (const [eid, d, s, sh, n, mk] of x._extra) { const c = att[eid][d]; att[eid][d] = { c, ...(s ? { s } : {}), ...(sh ? { sh } : {}), ...(n ? { n } : {}), ...(mk ? { mk } : {}) }; }
   const st = { ...x, att }; delete st._codes; delete st._extra; delete st._enc; return st;
 }
 function shippedState() { return typeof SEED !== 'undefined' && SEED ? decodeState(JSON.parse(JSON.stringify(SEED))) : defaultState(); }
@@ -196,7 +197,7 @@ function getCell(empId, d) { const v = S.att[empId]?.[d]; if (!v) return null; r
 function putCell(empId, d, val) {
   if (!val || !val.c) { if (S.att[empId]) { delete S.att[empId][d]; } return; }
   (S.att[empId] ||= {});
-  S.att[empId][d] = (val.s || val.sh || val.n) ? { c: val.c, ...(val.s ? { s: val.s } : {}), ...(val.sh ? { sh: val.sh } : {}), ...(val.n ? { n: val.n } : {}) } : val.c;  // n = name as written on the client timesheet
+  S.att[empId][d] = (val.s || val.sh || val.n || val.mk) ? { c: val.c, ...(val.s ? { s: val.s } : {}), ...(val.sh ? { sh: val.sh } : {}), ...(val.n ? { n: val.n } : {}), ...(val.mk ? { mk: val.mk } : {}) } : val.c;   // mk = decided by supervisor/admin for a no-check-in day  // n = name as written on the client timesheet
 }
 function assignOn(emp, d) { let a = null; for (const x of emp.assign || []) { if (x.from <= d) a = x; else break; } return a; }
 function siteOn(emp, d) { const c = getCell(emp.id, d); return c?.s || assignOn(emp, d)?.site || null; }

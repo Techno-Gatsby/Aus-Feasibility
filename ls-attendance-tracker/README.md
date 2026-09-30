@@ -24,3 +24,18 @@ Import Excel (File menu) accepts the master payroll workbook and client timeshee
 - Edit `src/`, then `node build.mjs` → `Attendance Tracker.html`.
 - `src/00-seed.js` is generated: `node tools/mkseed.mjs <folder with real-master.xlsx, real-scl.xlsx, real-trackers.xlsx>` (needs Playwright and the CDN libraries in `<folder>/node_modules`). The workbooks themselves are not in the repo.
 - Excel/PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.
+
+## Worker app (phone) – `Worker Attendance.html`
+- **Workers** sign in with Emp ID (remembered) + 4-digit PIN, then **CHECK IN / CHECK OUT**. Each punch stores GPS (lat, lng, ±accuracy) and a watermarked front-camera photo. With no signal the punch waits on the phone and is sent later.
+- **Zones:** a punch is accepted when (distance to the site pin − GPS accuracy) ≤ zone radius and accuracy ≤ 50 m. Otherwise it waits in **Worker app → Punches to review**.
+- **No check-in:** there are no leave requests in the app. The supervisor (phone menu → Supervisor) or the admin (**Worker app → No check-in**) decides what the day is: A, OFF, SL, AL, EL, UL, SIRA or P.
+- **Admin, in the tracker:**
+  - **Projects & sites → Edit site:** map (Map / Satellite), search with suggestions, pins and zone radius.
+  - **Employees:** tick workers → **App access…** gives PINs and prints slips.
+  - **Worker app → Publish roster**, then **Sync** (automatic every 5 minutes).
+  - **Right-click a day** in Attendance → **Punch details**: coordinates, distance, photos and map.
+- **Demo mode:** opened as files from LS_Documents, both pages share a demo store in the same browser. On Azure they use `/api`. See `azure/README-deploy.md`.
+- **Documents** are in `docs/`: architecture diagram, Azure resource requirements (xlsx) and additional application requirements (docx).
+- **Tests** are in `tests/`:
+  - `node tests/api.test.mjs` runs the API rules.
+  - `worker-app.e2e.mjs` and `worker-phone.e2e.mjs` need Playwright and the libraries in `tests/package.json`.

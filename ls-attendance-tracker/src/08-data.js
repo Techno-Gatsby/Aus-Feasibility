@@ -100,7 +100,7 @@ async function restorePrev() {
 function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
 
 /* ---------- shell: views, toolbar, menus, tree, status ---------- */
-const VIEWS = { attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
+const VIEWS = { app: renderApp, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
 let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
@@ -117,9 +117,10 @@ const TOOLBAR = {
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print pack / PDF', f: () => ivCmd('print'), strong: true, t: 'Break-up sheet followed by the client timesheets' }],
-  employees: () => { const n = EV.checked.size; return [{ l: 'Add worker', f: () => editEmployee(null) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: n ? `${n} ticked` : 'Tick workers for bulk actions', dis: true }]; },
+  employees: () => { const n = EV.checked.size; return [{ l: 'Add worker', f: () => editEmployee(null) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the worker app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick workers for bulk actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }],
-  data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }]
+  data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
+  app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send workers, PINs, site locations and settings to the worker app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick workers, then App access…'); } }]
 };
 function renderToolbar() {
   const tb = $('#toolbar'); const items = TOOLBAR[curView]?.() || [];
@@ -129,6 +130,7 @@ function renderToolbar() {
   tb.querySelector('[data-cmd=tree]').onclick = () => $('#body').classList.toggle('notree');
 }
 function renderStatus() {
+  const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; }
   const unl = S.sites.filter(s => !s.projectId).length;
   const per = curView === 'attendance' && AV.ym ? (() => { const { start, end } = attPeriod(); return `${AV.mode === 'payroll' ? 'Payroll' : 'Calendar'} month ${fmtMonYY(AV.ym)} · ${fmtDMY(start)} – ${fmtDMY(end)}`; })() : curView === 'timesheets' && TV.ym ? `Calendar month ${fmtMonYY(TV.ym)}` : 'Ready';
   $('#status').textContent = per;
@@ -137,12 +139,12 @@ function renderStatus() {
 
 /* menus */
 const MENUS = {
-  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
+  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to worker app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
   edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
     ['Add worker…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
-  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Employees', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
+  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Employees', app: 'Worker app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
   help: () => [['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
@@ -255,5 +257,6 @@ async function init() {
   $('#hdr-import').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importExcel(f).catch(err => toast(err.message, 5000)); };
   $('#tree-q').oninput = e => { TREE.q = e.target.value; clearTimeout(TREE._t); TREE._t = setTimeout(renderTree, 200); };
   renderSaveState(); renderTree(); showView('attendance'); document.body.dataset.ready = '1';
+  if (S.employees.some(e => e.app?.on)) setTimeout(() => syncApp(true), 1500);
 }
 init();
