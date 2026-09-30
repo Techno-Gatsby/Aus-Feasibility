@@ -55,6 +55,7 @@ function paintGps() {
   const el = $('#gps'); if (!el) return;
   const g = W.gps, z = zoneInfo();
   if (!g) el.innerHTML = W.gpsErr ? `<span class="pill neg"><span class="dot"></span>${esc(W.gpsErr)}</span>` : `<span class="pill"><span class="dot"></span>${t('locating')}</span>`;
+  else if (z?.inZone && g.acc > (W.prof?.settings?.maxAcc || 50)) el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m</span>`;
   else if (z?.inZone) el.innerHTML = `<span class="pill pos"><span class="dot"></span>${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m</span>${z.own ? '' : ` <span class="pill warn">${t('reliever')} ${esc(z.site.name)}</span>`}`;
   else el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m</span>`;
   if (W.map && W.layers && g) {
@@ -179,7 +180,7 @@ function renderHome() {
   const hrs = open ? ((Date.now() - open.ts) / 3600000).toFixed(1) : null;
   const st = p => p.status === 'accepted' ? `<span class="pill pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="pill warn">${t('statusPending')}</span>` : `<span class="pill neg">${t('statusRejected')}</span>`;
   shell(`<div class="card"><div class="who"><span class="av">${esc(w.name.split(' ').map(x => x[0]).slice(0, 2).join(''))}</span><div class="grow"><b>${esc(w.name)}</b><span class="mono muted small">${esc(w.code)}</span></div></div>
-      <div class="kv"><span>${t('site')}</span><b>${esc(P.site?.name || '—')}</b><span>${t('shift')}</span><b>${esc(w.shift)}${P.settings?.starts?.[w.shift] ? ' · ' + P.settings.starts[w.shift] : ''}</b></div>
+      <div class="meta"><span class="chip"><span>${t('site')}</span><b>${esc(P.site?.name || '—')}</b></span><span class="chip"><span>${t('shift')}</span><b>${esc(w.shift)}${P.settings?.starts?.[w.shift] ? ' · ' + P.settings.starts[w.shift] : ''}</b></span></div>
       <div class="mapwrap"><div id="map"></div><button id="b-loc" class="loc" aria-label="my location" hidden>◎</button></div><div id="gps"></div></div>
     <div id="qbar" class="q" hidden></div>
     <button class="big ${open ? 'out' : 'in'}" id="b-punch">${open ? t('checkOut') : t('checkIn')}<small>${open ? `${t('since')} ${hhmm(open.ts)} · ${hrs} ${t('hours')}` : new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'long', day: 'numeric', month: 'long' })}</small></button>
