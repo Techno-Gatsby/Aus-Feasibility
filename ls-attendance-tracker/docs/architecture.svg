@@ -100,7 +100,7 @@
   <rect x="1240" y="120" width="320" height="330" class="ext"/>
   <text x="1260" y="152" class="t">External map services</text>
   <text x="1260" y="176" class="s">(called from the browser)</text>
-  <text x="1260" y="210" class="lab">OpenStreetMap tiles</text><text x="1260" y="228" class="m">tile.openstreetmap.org – Map view</text>
+  <text x="1260" y="210" class="lab">Esri World Street Map (ArcGIS)</text><text x="1260" y="228" class="m">server.arcgisonline.com – Map view</text>
   <text x="1260" y="258" class="lab">Esri World Imagery (ArcGIS)</text><text x="1260" y="276" class="m">server.arcgisonline.com – Satellite</text>
   <text x="1260" y="306" class="lab">Photon / Nominatim</text><text x="1260" y="324" class="m">place search + type-ahead (OSM)</text>
   <text x="1260" y="354" class="lab">ArcGIS Location Platform (optional)</text><text x="1260" y="372" class="m">geocode-api.arcgis.com with API key</text>

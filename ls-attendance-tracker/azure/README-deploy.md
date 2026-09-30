@@ -76,9 +76,9 @@ A GitHub Actions workflow can also do this. Point `app_location: ls-attendance-t
 - **One phone per worker:** the first phone to sign in is registered. The admin resets it in Employees → Edit → Worker app → Reset phone, then publishes.
 
 ## Maps and search
-- **Map tiles:** OpenStreetMap (Map) and Esri World Imagery (Satellite), both free for light internal use.
+- **Map tiles:** Esri World Street Map (Map) and Esri World Imagery (Satellite). OpenStreetMap's public tile server is not used: it blocks pages opened from a local file and excludes business use.
 - **Search:** Photon, a free OpenStreetMap service with type-ahead; Nominatim answers on Enter.
-- **Heavy use:** OpenStreetMap's public servers are not for heavy production traffic. For many admins or high volume, add an **ArcGIS Location Platform** key in Worker app → Settings. Search then uses ArcGIS; the satellite tiles need no key.
+- **Heavy use:** the public search servers are not for heavy production traffic. For many admins or high volume, add an **ArcGIS Location Platform** key in Worker app → Settings. Search then uses ArcGIS; the satellite tiles need no key.
 
 ## Run it locally
 ```bash

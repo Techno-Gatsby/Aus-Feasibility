@@ -11,7 +11,7 @@ As built and tested on 30 September 2026.
 | Data | Azure Table Storage + Blob Storage (StorageV2, LRS) | TLS 1.2+ | Tables `lsworkers lssites lspunches lsmarks lsconfig`, container `ls-photos` (private) |
 | Security | WebCrypto PBKDF2-SHA256 (100k rounds) · HMAC-SHA256 tokens | built into browser and Node 20 | PIN hashing, 20-hour worker sessions; Entra ID for staff via SWA |
 | Front end | HTML5 + vanilla JavaScript (ES2020), two single-file pages | n/a | No framework; built by `node build.mjs` |
-| Maps | Leaflet · OpenStreetMap tiles · Esri World Imagery · Photon / Nominatim search | 1.9.4 | Loaded from cdn.jsdelivr.net; optional ArcGIS key |
+| Maps | Leaflet · Esri World Street Map · Esri World Imagery · Photon / Nominatim search | 1.9.4 | Loaded from cdn.jsdelivr.net; optional ArcGIS key |
 | Excel / PDF | SheetJS · ExcelJS · pdf-lib · qrcode-generator | 0.18.5 · 4.4.0 · 1.17.1 · 1.4.4 | Import, LS/DO/F-026 export, invoice pack, PIN-slip QR |
 | Browser storage | IndexedDB · localStorage · Service Worker | built-in | Admin data + backup, offline punch queue, remembered Emp ID |
 | Browsers – admin | Microsoft Edge / Google Chrome | Chromium 110+ | Print dialog for PDFs |
@@ -19,4 +19,4 @@ As built and tested on 30 September 2026.
 | Build / test | Node.js · Playwright + Chromium · Azurite | 20+ (tested 22.22) · 1.47+ · 3.x | `tests/` |
 | Local dev | `azure/dev-server.mjs` | Node 20+ | Stand-in for SWA with in-memory API |
 
-Outbound hosts the browser calls: `cdn.jsdelivr.net`, `tile.openstreetmap.org`, `server.arcgisonline.com`, `photon.komoot.io`, `nominatim.openstreetmap.org`, `geocode-api.arcgis.com` (key only).
+Outbound hosts the browser calls: `cdn.jsdelivr.net`, `server.arcgisonline.com`, `photon.komoot.io`, `nominatim.openstreetmap.org`, `geocode-api.arcgis.com` (key only).

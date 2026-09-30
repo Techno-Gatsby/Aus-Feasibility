@@ -6,7 +6,7 @@ const ctx = await b.newContext({ viewport: { width: 1500, height: 900 }, geoloca
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const libs = { 'xlsx.full.min.js': N + 'xlsx/dist/xlsx.full.min.js', 'exceljs.min.js': N + 'exceljs/dist/exceljs.min.js', 'pdf-lib.min.js': N + 'pdf-lib/dist/pdf-lib.min.js', 'qrcode.js': N + 'qrcode-generator/qrcode.js' };
 await ctx.route('https://cdn.jsdelivr.net/**', r => { const u = r.request().url(); if (u.includes('/leaflet@')) return r.fulfill({ path: N + 'leaflet/dist/' + u.split('/dist/')[1] }); const f = Object.keys(libs).find(k => u.endsWith(k)); return f ? r.fulfill({ path: libs[f], contentType: 'application/javascript' }) : r.abort(); });
-await ctx.route(/tile\.openstreetmap|arcgisonline/, r => r.fulfill({ body: PNG, contentType: 'image/png' }));
+await ctx.route(/arcgisonline/, r => r.fulfill({ body: PNG, contentType: 'image/png' }));
 let searched = '';
 await ctx.route(/photon\.komoot\.io/, r => { searched = new URL(r.request().url()).searchParams.get('q'); r.fulfill({ json: { features: [{ geometry: { coordinates: [55.44, 25.03] }, properties: { name: 'Sobha Elwood', city: 'Dubai', state: 'Dubai' } }, { geometry: { coordinates: [55.45, 25.05] }, properties: { name: 'Al Yufrah', state: 'Dubai' } }] } }); });
 await ctx.addInitScript(() => { window.print = () => { window.__printed = document.getElementById('print-root').innerHTML; }; window.prompt = () => 'test reject'; });

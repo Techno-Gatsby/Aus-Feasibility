@@ -5,11 +5,11 @@ const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--us
 const ctx = await b.newContext({ ...devices['Pixel 7'], geolocation: { latitude: 25.03, longitude: 55.4401, accuracy: 9 }, permissions: ['geolocation', 'camera'] });
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 await ctx.route('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/**', r => r.fulfill({ path: N + 'leaflet/dist/' + r.request().url().split('/dist/')[1] }));
-await ctx.route(/tile\.openstreetmap|arcgisonline/, r => r.fulfill({ body: PNG, contentType: 'image/png' }));
+await ctx.route(/arcgisonline/, r => r.fulfill({ body: PNG, contentType: 'image/png' }));
 let pass = 0, fail = 0; const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
 const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.stack.split('\n').slice(0, 5).join(' | ')));
 // roster: one worker, PIN 2468, site at current position (dev server, admin role)
-await pg.goto('http://localhost:4280/worker/'); await pg.waitForSelector('#code');
+await pg.goto((process.env.BASE || 'http://localhost:4280') + '/worker/'); await pg.waitForSelector('#code');
 await pg.evaluate(async RUN => { const h = await LSAPI.hashPin('2468'); await fetch('/api/admin/roster', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workers: [{ id: 'wq' + RUN, code: 'C7' + RUN, name: 'TEST OFFLINE', shift: 'DAY', siteId: 'sq1', enabled: true, pinHash: h.hash, pinSalt: h.salt, resetDevice: true }], sites: [{ id: 'sq1', name: 'TEST SITE', pins: [{ lat: 25.03, lng: 55.44, radius: 100 }] }], settings: { windowMin: 1440 } }) }); }, RUN);
 await pg.fill('#code', 'C7' + RUN); await pg.click('#b-next'); for (const k of '2468') await pg.click(`.pad [data-k="${k}"]`); await pg.waitForSelector('#b-punch'); await pg.waitForTimeout(600);
 // offline punch → queued
