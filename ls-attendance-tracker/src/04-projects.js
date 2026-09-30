@@ -170,7 +170,7 @@ function editSite(id, projectId) {
     <h3 style="margin:14px 0 6px">Location for the worker app <span class="muted small">– punches inside a zone are accepted automatically</span></h3>
     <div class="row" style="margin-bottom:6px"><div class="grow" style="position:relative;min-width:260px"><input type="text" id="es-q" placeholder="Search a place, paste coordinates or a Google Maps link" style="width:100%"></div>
       <button class="btn sm" id="es-add">Add pin at map centre</button></div>
-    <div id="es-map" style="height:340px;border:1px solid var(--line2);border-radius:5px"></div>
+    <div id="es-map" class="mapbox"></div>
     <div class="muted small" style="margin:4px 0 6px">Click the map or drag the pin to move the selected pin. A site can have several pins (e.g. gate and office).</div>
     <div class="tw"><table><thead><tr><th></th><th>Label</th><th>Latitude</th><th>Longitude</th><th>Zone radius (m)</th><th></th></tr></thead><tbody id="es-pins"></tbody></table></div>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
@@ -187,7 +187,7 @@ function editSite(id, projectId) {
         reindex(); markDirty(); renderAll();
         if (s.pins.length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Worker app to send it to phones', 5000);
       }
-    }], { width: 'min(980px,100%)' });
+    }], { width: 'min(1500px,94vw)' });
   const table = () => {
     $('#es-pins', m).innerHTML = s.pins.map((p, i) => `<tr class="${i === sel ? 'on' : ''}"><td><input type="radio" name="es-sel" data-sel="${i}" ${i === sel ? 'checked' : ''}></td>
       <td><input type="text" data-pk="label" data-pi="${i}" value="${esc(p.label || '')}" placeholder="e.g. Main gate" style="width:130px"></td>
@@ -214,13 +214,15 @@ function editSite(id, projectId) {
   table();
   LSMap.create($('#es-map', m), { zoom: s.pins.length ? 16 : 10, center: s.pins[0] ? [s.pins[0].lat, s.pins[0].lng] : undefined, satellite: true }).then(mp => {
     map = mp; map.on('click', e => place(e.latlng.lat, e.latlng.lng)); draw(true);
+    const onRs = () => { if (!$('#es-map', m)?.isConnected) return window.removeEventListener('resize', onRs); try { map.invalidateSize(); } catch (e) { } };
+    window.addEventListener('resize', onRs);
   }).catch(e => { $('#es-map', m).innerHTML = `<div class="empty" style="height:100%">${esc(e.message)} – type coordinates in the table instead.</div>`; });
   LSMap.search($('#es-q', m), x => { if (map) map.setView([x.lat, x.lng], 17); place(x.lat, x.lng); }, { key: appCfg().arcgisKey });
   $('#es-add', m).onclick = () => { const c = map ? map.getCenter() : { lat: 25.2, lng: 55.3 }; s.pins.push({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6), radius: R0, label: '' }); sel = s.pins.length - 1; table(); draw(false); };
 }
 /** All zones on one map */
 async function zonesMap() {
-  const m = openModal('Site locations', `<div id="zm" style="height:560px;border:1px solid var(--line2);border-radius:5px"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1100px,100%)' });
+  const m = openModal('Site locations', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
   try {
     const map = await LSMap.create($('#zm', m), {}), L = window.L, b = L.latLngBounds([]);
     for (const s of S.sites) for (const p of s.pins || []) { const z = LSMap.zone(map, p, { label: `${s.name} · ${p.radius} m` }); z.c.on('click', () => { closeModal(); editSite(s.id); }); b.extend([p.lat, p.lng]); }

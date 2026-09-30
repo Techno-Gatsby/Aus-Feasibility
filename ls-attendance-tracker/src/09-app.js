@@ -166,9 +166,9 @@ async function punchDetails(emp, d) {
           </tbody></table></div>
           <div class="row" style="margin-top:6px"><a href="https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=18/${p.lat}/${p.lng}" target="_blank" rel="noopener">Open in map</a><span class="spacer"></span>
           ${p.status !== 'accepted' ? `<button class="btn sm pri" data-ok="${p.id}">Approve</button>` : ''}${p.status !== 'rejected' ? `<button class="btn sm bad" data-no="${p.id}">Reject</button>` : ''}</div></div></div>`).join('')}</div>
-      <div><div id="pd-map" style="height:360px;border:1px solid var(--line2);border-radius:5px"></div></div></div>`
+      <div><div id="pd-map" class="mapbox pd"></div></div></div>`
     : '<p class="muted">No app punches for this day. The code was entered in the tracker or imported from Excel.</p>'}`,
-    [{ label: 'Close', cls: 'pri' }], { width: 'min(1000px,100%)' });
+    [{ label: 'Close', cls: 'pri' }], { width: 'min(1300px,94vw)' });
   const cl = appClient();
   for (const p of ps) if (p.hasPhoto) cl.call('GET', 'admin/photo', null, { query: { id: p.id } }).then(r => { const el = m.querySelector(`[data-ph="${p.id}"]`); if (!el) return; if (r.blob) { const u = URL.createObjectURL(r.blob); el.innerHTML = `<a href="${u}" target="_blank"><img src="${u}" alt="photo"></a>`; } else el.textContent = 'photo not available'; }).catch(() => { });
   m.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
