@@ -180,7 +180,7 @@ function renderHome() {
   const st = p => p.status === 'accepted' ? `<span class="pill pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="pill warn">${t('statusPending')}</span>` : `<span class="pill neg">${t('statusRejected')}</span>`;
   shell(`<div class="card"><div class="who"><span class="av">${esc(w.name.split(' ').map(x => x[0]).slice(0, 2).join(''))}</span><div class="grow"><b>${esc(w.name)}</b><span class="mono muted small">${esc(w.code)}</span></div></div>
       <div class="kv"><span>${t('site')}</span><b>${esc(P.site?.name || '—')}</b><span>${t('shift')}</span><b>${esc(w.shift)}${P.settings?.starts?.[w.shift] ? ' · ' + P.settings.starts[w.shift] : ''}</b></div>
-      <div id="map"></div><div id="gps"></div></div>
+      <div class="mapwrap"><div id="map"></div><button id="b-loc" class="loc" aria-label="my location" hidden>◎</button></div><div id="gps"></div></div>
     <div id="qbar" class="q" hidden></div>
     <button class="big ${open ? 'out' : 'in'}" id="b-punch">${open ? t('checkOut') : t('checkIn')}<small>${open ? `${t('since')} ${hhmm(open.ts)} · ${hrs} ${t('hours')}` : new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'long', day: 'numeric', month: 'long' })}</small></button>
     <div class="card" style="margin-top:12px"><div class="lbl">${t('today')}</div>
@@ -191,13 +191,14 @@ function renderHome() {
 async function drawMap() {
   const el = $('#map'); if (!el) return;
   try {
-    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false });
+    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, collapsed: true });
     if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
     W.map = map;
+    const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17)); else toast(W.gpsErr || t('locating')); }; }
     W.layers = {};
     for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? '#1766CB' : '#93A0B5', label: s.name, fill: s.id === W.prof.site?.id ? .14 : .06 });
     paintGps();
-  } catch (e) { el.hidden = true; }
+  } catch (e) { el.parentElement.hidden = true; }
 }
 
 async function punch(type, forWorker) {

@@ -750,7 +750,7 @@ const LSClient = (() => {
 })();
 
 /* =====================================================================
-   Maps for both pages: Leaflet with OpenStreetMap (Map) and Esri World
+   Maps for both pages: Leaflet with Esri World Street Map (Map) and Esri World
    Imagery (Satellite + place labels), location search with type-ahead
    (Photon, Nominatim on Enter, ArcGIS when a key is set), zone circles.
    ===================================================================== */
@@ -765,7 +765,7 @@ const LSMap = (() => {
     });
   }
   const UAE = [25.2, 55.3];
-  /** A map with a Map / Satellite switch. opts: { center, zoom, satellite, zoomControl } */
+  /** A map with a Map / Satellite switch (choice remembered). opts: { center, zoom, satellite, zoomControl, collapsed, animate } */
   async function create(el, opts = {}) {
     const L = await load();
     const map = L.map(el, { zoomControl: opts.zoomControl !== false, attributionControl: true, ...(opts.animate === false ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}) }).setView(opts.center || UAE, opts.zoom || 11);
@@ -775,8 +775,13 @@ const LSMap = (() => {
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
     ]);
-    (opts.satellite ? sat : osm).addTo(map);
-    L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: false }).addTo(map);
+    const pref = (() => { try { return localStorage.getItem('ls.layer'); } catch (e) { return null; } })();
+    const useSat = opts.satellite != null && pref == null ? opts.satellite : pref === 'sat';
+    (useSat ? sat : osm).addTo(map);
+    L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: !!opts.collapsed }).addTo(map);
+    map.on('baselayerchange', e => { try { localStorage.setItem('ls.layer', e.name === 'Satellite' ? 'sat' : 'map'); } catch (x) { } });
+    // If the street tiles are refused (e.g. a blocked host), fall back to the satellite view instead of showing error tiles
+    let errs = 0; osm.on('tileerror', () => { if (++errs >= 4 && map.hasLayer(osm) && el.isConnected) { map.removeLayer(osm); sat.addTo(map); errs = -1e9; } });
     setTimeout(() => { try { if (el.isConnected) map.invalidateSize(); } catch (e) { } }, 60);   // map may be gone by then
     return map;
   }
