@@ -389,6 +389,15 @@ table.kvt{width:auto;font-size:12px}table.kvt td{padding:2px 8px 2px 0;border:0;
 .dh.slim>*{flex-shrink:0}
 #av-selinfo{display:inline-block;min-width:78px;white-space:nowrap}
 
+/* PDF page identification */
+.pstrip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 8px}
+.pth{flex:none;width:132px;border:1px solid var(--line2);border-radius:5px;background:var(--surface);padding:6px;border-top:3px solid var(--c,#93A0B5)}
+.pth .img{height:150px;display:grid;place-items:center;background:var(--surface3);border-radius:3px;overflow:hidden}
+.pth .img img{max-width:100%;max-height:100%;display:block}
+.pth .no{font:650 11px var(--font-mono);color:var(--text2);margin:5px 0 3px}
+.pth select{width:100%;font-size:11.5px;padding:2px 4px;min-height:24px}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:650;margin:0 0 6px}
+
 </style>
 </head>
 <body>
@@ -1007,7 +1016,7 @@ function defaultState() {
       { code: 'WO', label: 'Week off', color: '#e4e7ec', billable: false, client: false, key: 'w' }
     ],
     clients: [],      // {id,name,trn,customerCode,address}
-    projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},active}
+    projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},pins,docs:[{id,kind,name,pages,size,pos}],active}
     sites: [],        // {id,projectId|null,name}
     employees: [],    // {id,empCode,name,agency,trade,shift,doj,end,endReason,assign:[{from,site,shift}]}
     att: {},          // att[empId][iso] = 'P' | {c:'R', s:siteId, sh:'NIGHT'}
@@ -1144,17 +1153,32 @@ function loadScript(url) {
 const LIB = {
   xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   exceljs: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
-  pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'
+  pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+  pdfjs: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
+  pdfjsWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs',
+  html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
 };
 function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
 
 /* ---------- persistence: IndexedDB cache + JSON data file in a chosen folder ---------- */
 const IDB = {
   db: null,
-  open() { return this.db ||= new Promise((res, rej) => { const r = indexedDB.open('ls-attendance-tracker', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  open() { return this.db ||= new Promise((res, rej) => { const r = indexedDB.open('ls-attendance-tracker', 2); r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv'); if (!db.objectStoreNames.contains('files')) db.createObjectStore('files'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
+/* Uploaded documents (PDFs: Work Order Instructions, SAP invoice pages, signed timesheets) – bytes in the 'files' store, metadata in S */
+const Files = {
+  async tx(mode) { const db = await IDB.open(); return db.transaction('files', mode).objectStore('files'); },
+  async put(id, blob) { const o = await this.tx('readwrite'); return new Promise((res, rej) => { const q = o.put(blob, id); q.onsuccess = res; q.onerror = () => rej(q.error); }); },
+  async get(id) { const o = await this.tx('readonly'); return new Promise((res, rej) => { const q = o.get(id); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); },
+  async del(id) { const o = await this.tx('readwrite'); return new Promise((res, rej) => { const q = o.delete(id); q.onsuccess = res; q.onerror = () => rej(q.error); }); },
+  async keys() { const o = await this.tx('readonly'); return new Promise((res, rej) => { const q = o.getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); },
+  /** ids referenced anywhere in the state */
+  referenced(st = S) { const ids = new Set(); for (const p of st.projects) for (const d of p.docs || []) ids.add(d.id); const all = [...st.invoices, ...(typeof IV !== 'undefined' && IV.draft ? [IV.draft] : [])]; for (const i of all) { if (i.sapPdf?.id) ids.add(i.sapPdf.id); for (const x of i.signedTs || []) ids.add(x.id); for (const x of Object.values(i.docOverride || {})) ids.add(x.id); } return ids; },
+  async sweep() { try { const ref = this.referenced(); for (const k of await this.keys()) if (!ref.has(k)) await this.del(k); } catch (e) { } }
+};
+const b64 = { enc: async blob => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, dec: (s, type) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type }); } };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };
 function markDirty() { DATA_VER++; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
@@ -1171,7 +1195,13 @@ function renderSaveState() {
     : store.dirty || store.saving ? 'Saving…'
     : `<b>✓ Saved</b>${store.last ? ' ' + store.last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`;
 }
-function downloadBackup() { downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`); }
+async function downloadBackup() {
+  const out = { ...S, _files: {} };
+  try { for (const id of Files.referenced()) { const b = await Files.get(id); if (b) out._files[id] = { type: b.type || 'application/pdf', data: await b64.enc(b) }; } } catch (e) { }
+  downloadBlob(new Blob([JSON.stringify(out)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`);
+}
+/** Put the documents of a backup back into the files store */
+async function restoreFiles(st) { const f = st._files || {}; delete st._files; for (const [id, x] of Object.entries(f)) { try { await Files.put(id, b64.dec(x.data, x.type)); } catch (e) { } } }
 window.addEventListener('beforeunload', e => { if (store.dirty) { saveNow(); e.preventDefault(); e.returnValue = ''; } });
 
 /* =====================================================================
@@ -1743,6 +1773,7 @@ function renderProjects() {
           ${!rateFor(p, 'SECURITY GUARD') && !['fixed', 'lump'].includes(b.basis) ? '<span class="pill warn">no rate</span>' : ''}
           ${p.active === false ? '<span class="pill">inactive</span>' : ''}
           ${p.pins?.length ? `<span class="pill pos" title="Project-wide worker-app zone">📍 project ${p.pins[0].radius} m</span>` : ''}
+          ${p.docs?.length ? `<span class="pill" title="Documents added to every invoice pack">📄 ${p.docs.map(d => (d.kind === 'woi' ? 'WOI' : d.kind.toUpperCase()) + ' ' + (d.pages || '?') + ' p').join(' · ')}</span>` : ''}
           <span class="spacer"></span><span class="muted small">${bill} · VAT ${b.vat || 0}%</span>
           <button class="btn sm" data-addsite="${p.id}">Add site</button><button class="btn sm" data-ep="${p.id}">Edit</button></div>
         <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has its own worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : p.pins?.length ? ' <span class="pill" title="Uses the project zone">📍 project</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
@@ -1825,6 +1856,9 @@ function editProject(id, presetName, onCreated) {
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
     <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
+    <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
+    <div id="ep-docs"></div>
+    <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
     <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
     ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
@@ -1846,10 +1880,30 @@ function editProject(id, presetName, onCreated) {
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         PE.finish();
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
-        reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
+        reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
         if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Worker app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
+  p.docs ||= [];
+  const DOC_KINDS = [['woi', 'Work Order Instruction'], ['lpo', 'LPO / purchase order'], ['agreement', 'Rate agreement'], ['other', 'Other']];
+  const docsTable = () => {
+    $('#ep-docs', m).innerHTML = p.docs.length ? `<div class="tw"><table><thead><tr><th>Document</th><th>File</th><th class="num">Pages</th><th>Position in pack</th><th></th></tr></thead><tbody>
+      ${p.docs.map((d, i) => `<tr><td><select data-dk="${i}" style="min-width:170px">${opts(DOC_KINDS, d.kind)}</select></td><td class="small" style="white-space:normal"><a href="#" data-dopen="${i}">${esc(d.name)}</a> <span class="muted">${PDFX.fmtSize(d.size || 0)}</span></td><td class="num">${d.pages || '?'}</td>
+        <td><select data-dp="${i}">${opts([['end', 'End of pack (after timesheets)'], ['afterInvoice', 'After the invoice pages']], d.pos || 'end')}</select></td>
+        <td style="text-align:right"><label class="btn sm">Replace<input type="file" data-drep="${i}" accept="application/pdf" hidden></label> <button class="btn sm bad" data-ddel="${i}">✕</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted small" style="margin:0">No documents yet. Upload the Work Order Instruction PDF (the 3 pages at the end of the Elwood pack).</p>';
+    m.querySelectorAll('[data-dk]').forEach(x => x.onchange = () => p.docs[+x.dataset.dk].kind = x.value);
+    m.querySelectorAll('[data-dp]').forEach(x => x.onchange = () => p.docs[+x.dataset.dp].pos = x.value);
+    m.querySelectorAll('[data-dopen]').forEach(a => a.onclick = e => { e.preventDefault(); PDFX.open(p.docs[+a.dataset.dopen].id); });
+    m.querySelectorAll('[data-ddel]').forEach(b => b.onclick = () => { p.docs.splice(+b.dataset.ddel, 1); docsTable(); });
+    m.querySelectorAll('[data-drep]').forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if (!f) return; const old = p.docs[+inp.dataset.drep]; const d = await PDFX.store(f, { name: f.name, kind: old.kind }); p.docs[+inp.dataset.drep] = { ...d, pos: old.pos }; docsTable(); });
+  };
+  docsTable();
+  $('#ep-docfile', m).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; e.target.value = '';
+    try { const d = await PDFX.store(f, { name: f.name, kind: p.docs.some(x => x.kind === 'woi') ? 'other' : 'woi' }); p.docs.push({ ...d, pos: 'end' }); docsTable(); toast(`${f.name} · ${d.pages} page(s) – Save to keep it`); }
+    catch (err) { toast('Could not read the PDF: ' + err.message, 5000); }
+  };
   const PE = pinEditor(m, p, { px: 'ep', name: p.name, others: [...S.projects.filter(x => x.id !== p.id && x.pins?.length).map(x => ({ name: x.name + ' (project)', pins: x.pins })), ...S.sites.filter(x => x.pins?.length).map(x => ({ name: x.name, pins: x.pins }))], empty: 'No project location yet – search above or click the map. Sites can still have their own pins.' });
 }
 
@@ -2244,6 +2298,20 @@ function packPages(dr) {
   return pages;
 }
 
+/** Every part of the pack in order, generated or uploaded: { t, kind, src: 'generated'|'uploaded'|'project', html?, fileId?, pages? } */
+function packSlots(dr) {
+  const out = [], projs = dr.projectIds.map(id => IX.proj.get(id)).filter(Boolean);
+  const docs = pos => projs.flatMap(p => (p.docs || []).filter(d => (d.pos || 'end') === pos).map(d => ({ ...d, proj: p })));
+  const docSlot = d => { const ov = dr.docOverride?.[d.proj.id + ':' + d.kind]; return ov ? { t: `${PDFX.KINDS[d.kind] || d.kind} · ${ov.name} (${ov.pages || '?'} p) – this invoice only`, kind: 'doc', dk: d.proj.id + ':' + d.kind, src: 'uploaded', fileId: ov.id, pages: ov.pages } : { t: `${PDFX.KINDS[d.kind] || d.kind} · ${d.name} (${d.pages || '?'} p) – from project ${d.proj.name}`, kind: 'doc', dk: d.proj.id + ':' + d.kind, src: 'project', fileId: d.id, pages: d.pages }; };
+  if (dr.sapPdf) out.push({ t: `SAP tax invoice · ${dr.sapPdf.name} (${dr.sapPdf.pages || '?'} p)`, kind: 'sap', src: 'uploaded', fileId: dr.sapPdf.id, pages: dr.sapPdf.pages });
+  else if (dr.withSap !== false) out.push({ t: 'Tax invoice (SAP fields, generated)', kind: 'sap', src: 'generated', html: sapInvoiceHTML(dr) });
+  out.push({ t: 'Tax invoice amount break-up', kind: 'breakup', src: 'generated', html: invoiceHTML(dr) });
+  docs('afterInvoice').forEach(d => out.push(docSlot(d)));
+  if (dr.signedTs?.length) dr.signedTs.forEach(f => out.push({ t: `Signed timesheets · ${f.name} (${f.pages || '?'} p)`, kind: 'ts', src: 'uploaded', fileId: f.id, pages: f.pages }));
+  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(buildTimesheet(pid, m)) });
+  docs('end').forEach(d => out.push(docSlot(d)));
+  return out;
+}
 function parseSapText(txt, dr) {
   const map = [[/invoice\s*(no|number|#)/i, 'no'], [/invoice\s*date|doc(ument)?\s*date|billing\s*date/i, 'date'], [/customer\s*(code|no|number)|sold.?to/i, 'customerCode'], [/\bpo\b|purchase\s*order|work\s*order|reference/i, 'poNo'], [/\btrn\b|tax\s*reg/i, 'trn'], [/entity|customer\s*name|bill.?to/i, 'entity']];
   let n = 0;
@@ -2314,14 +2382,20 @@ function renderInvoices() {
       <label class="f" style="margin-top:10px">Notes on the break-up (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>`, `<span class="cnt">AED ${money(tt.inc)}</span>`)}
     ${saved ? sec('iv5', '5 · Track', `<div class="form">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
       <p class="muted small" style="margin:8px 0 0">Same stages as the Tax Invoice Tracker. Saves straight away.</p>`, statusTag(dr)) : ''}
-    ${(() => { const pg = packPages(dr); return sec('ivp', '4 · Pack', `
-      <div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="iv-sap" ${dr.withSap !== false ? 'checked' : ''}> Tax invoice page</label><label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> Client timesheets</label>
-        <span class="spacer"></span><button class="btn pri" id="iv-print2" ${dr.lines.length ? '' : 'disabled'}>Print pack / PDF</button></div>
-      <div class="tw"><table><tbody>${pg.map((p, i) => `<tr class="${IV.pv === i ? 'on' : ''}" data-pp="${i}" style="cursor:pointer"><td class="num" style="width:40px">${i + 1}</td><td>${esc(p.t)}</td><td class="muted small">printed here</td></tr>`).join('')}
-        <tr><td class="num">${pg.length + 1}</td><td>Signed timesheet scans, if the client signs on paper</td><td class="muted small">Merge PDFs →</td></tr>
-        <tr><td class="num">${pg.length + 2}</td><td>Work Order Instruction ${esc(IX.proj.get(dr.projectIds[0])?.poNo || dr.poNo || '')} (3 pages)</td><td class="muted small">Merge PDFs →</td></tr></tbody></table></div>
-      <p class="muted small" style="margin:6px 0 0">Same order as Tax Invoice_Elwood Infra-January to May 2026.pdf (10 pages: invoice, break-up, 5 signed timesheets, 3-page WOI). Click a row to preview it.</p>`, `<span class="cnt">${pg.length} page(s) + attachments</span>`); })()}
-    <div id="iv-preview">${dr.lines.length ? (packPages(dr)[IV.pv || 0] || packPages(dr)[0]).html : ''}</div>
+    ${(() => { const sl = packSlots(dr), np = sl.reduce((a, x) => a + (x.pages || 1), 0), hasWoi = dr.projectIds.some(id => (IX.proj.get(id)?.docs || []).length); return sec('ivp', '4 · Pack', `
+      <div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="iv-sap" ${dr.withSap !== false ? 'checked' : ''} ${dr.sapPdf ? 'disabled' : ''}> Generated invoice page</label><label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''} ${dr.signedTs?.length ? 'disabled' : ''}> Generated timesheets</label>
+        <label class="btn sm" style="display:inline-flex;align-items:center">Identify pages from a PDF…<input type="file" id="iv-ident" accept="application/pdf" hidden></label>
+        <span class="spacer"></span><button class="btn" id="iv-print2" ${dr.lines.length ? '' : 'disabled'}>Print / PDF</button><button class="btn pri" id="iv-build" ${dr.lines.length ? '' : 'disabled'} title="One PDF: uploaded pages as they are, generated pages as A4 images">Download pack PDF</button></div>
+      <div class="tw"><table><thead><tr><th style="width:40px">#</th><th>Page(s)</th><th>Source</th><th></th></tr></thead><tbody>${(() => { let n = 1; return sl.map((x, i) => { const from = n; n += x.pages || 1; const no = x.pages > 1 ? `${from}–${n - 1}` : from;
+        const pill = x.src === 'generated' ? '<span class="pill">generated</span>' : x.src === 'project' ? '<span class="pill pos">project file</span>' : '<span class="pill pos">uploaded</span>';
+        const act = x.kind === 'sap' ? (x.src === 'uploaded' ? `<button class="btn sm" data-sapx>Use generated</button>` : `<label class="btn sm">Upload SAP PDF<input type="file" data-sapup accept="application/pdf" hidden></label>`)
+          : x.kind === 'ts' ? (x.src === 'uploaded' ? `<button class="btn sm" data-tsx>Use generated</button>` : i === sl.findIndex(y => y.kind === 'ts') ? `<label class="btn sm">Upload signed scans<input type="file" data-tsup accept="application/pdf" multiple hidden></label>` : '')
+          : x.kind === 'doc' ? (x.src === 'uploaded' ? `<button class="btn sm" data-docx="${esc(x.dk)}">Back to project file</button>` : `<label class="btn sm">Other file for this invoice<input type="file" data-docup="${esc(x.dk)}" accept="application/pdf" hidden></label>`) : '';
+        return `<tr class="${IV.pv === i ? 'on' : ''}" data-pp="${i}" style="cursor:pointer"><td class="num">${no}</td><td>${esc(x.t)}</td><td>${pill}</td><td style="text-align:right;white-space:nowrap">${x.fileId ? `<button class="btn sm" data-fopen="${esc(x.fileId)}">Open</button> ` : ''}${act}</td></tr>`; }).join(''); })()}
+        ${!hasWoi ? `<tr><td></td><td colspan="3" class="muted small"><span class="pill warn">no Work Order Instruction</span> Upload it once on the project (Projects &amp; sites → Edit project → Documents), or use <b>Identify pages from a PDF</b> on an old pack and save its WOI pages to the project.</td></tr>` : ''}
+        ${dr.signedTs?.length ? '' : `<tr><td></td><td colspan="3" class="muted small">Timesheets are generated from attendance; upload the client-signed scans when you have them and they take their place.</td></tr>`}</tbody></table></div>
+      <p class="muted small" style="margin:6px 0 0">Order as in Tax Invoice_Elwood Infra-January to May 2026.pdf: invoice · break-up · timesheets · Work Order Instruction. ${np} page(s). Click a row to preview a generated page.</p>`, `<span class="cnt">${np} page(s)</span>`); })()}
+    <div id="iv-preview">${(() => { const sl = packSlots(dr); const x = sl[IV.pv || 0] || sl[0]; return x?.html || (x ? `<div class="empty">Uploaded PDF – <a href="#" data-fopen="${esc(x.fileId)}">open it</a></div>` : ''); })()}</div>
   </div>
   <div>
     ${sec('ivs', 'Saved invoices', `
@@ -2330,8 +2404,8 @@ function renderInvoices() {
       ${[...S.invoices].reverse().map(x => `<tr class="${x.id === dr.id ? 'on' : ''}"><td style="white-space:normal"><b>${esc(x.no || '(no number)')}</b><div class="muted small">${esc(IX.proj.get(x.projectIds?.[0])?.name || IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
         <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>`, `<span class="cnt">${S.invoices.length}</span>`)}
-    ${sec('ivm', 'Merge PDFs into one pack', `
-      <p class="muted small" style="margin:0 0 8px">Printed pack PDF first, then signed timesheet scans and the Work Order Instruction.</p>
+    ${sec('ivm', 'Advanced · merge any PDF files', `
+      <p class="muted small" style="margin:0 0 8px">Usually not needed: <b>Download pack PDF</b> in 4 · Pack joins everything. This merges any files in the order listed.</p>
       <label class="btn wide" style="display:block;text-align:center">Add PDF files…<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
       <table style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small" style="white-space:normal">${i + 1}. ${esc(f.name)}</td><td style="text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
       <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
@@ -2366,7 +2440,17 @@ function renderInvoices() {
   $('#iv-ts').onchange = e => { dr.attachTs = e.target.checked; IV.pv = 0; rer(); };
   $('#iv-sap').onchange = e => { dr.withSap = e.target.checked; IV.pv = 0; rer(); };
   $('#iv-print2').onclick = () => ivCmd('print');
-  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = () => { IV.pv = +r.dataset.pp; rer(); $('#iv-preview').scrollIntoView({ block: 'start' }); });
+  $('#iv-build').onclick = () => ivCmd('build');
+  $('#iv-ident').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) identifyPdf(f, dr).catch(err => toast(err.message, 6000)); };
+  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = e => { if (e.target.closest('button,label,input,a')) return; IV.pv = +r.dataset.pp; rer(); $('#iv-preview').scrollIntoView({ block: 'start' }); });
+  v.querySelectorAll('[data-fopen]').forEach(b => b.onclick = e => { e.preventDefault(); PDFX.open(b.dataset.fopen); });
+  const up = async (inp, fn) => { const files = [...inp.files]; inp.value = ''; if (!files.length) return; try { for (const f of files) await fn(f); } catch (err) { toast('Could not read the PDF: ' + err.message, 5000); } IV.pv = 0; rer(); };
+  v.querySelectorAll('[data-sapup]').forEach(i => i.onchange = () => up(i, async f => { dr.sapPdf = await PDFX.store(f, { name: f.name, kind: 'sap' }); }));
+  v.querySelectorAll('[data-sapx]').forEach(b => b.onclick = () => { dr.sapPdf = null; rer(); });
+  v.querySelectorAll('[data-tsup]').forEach(i => i.onchange = () => up(i, async f => { (dr.signedTs ||= []).push(await PDFX.store(f, { name: f.name, kind: 'ts' })); }));
+  v.querySelectorAll('[data-tsx]').forEach(b => b.onclick = () => { dr.signedTs = []; rer(); });
+  v.querySelectorAll('[data-docup]').forEach(i => i.onchange = () => up(i, async f => { (dr.docOverride ||= {})[i.dataset.docup] = await PDFX.store(f, { name: f.name, kind: i.dataset.docup.split(':')[1] }); }));
+  v.querySelectorAll('[data-docx]').forEach(b => b.onclick = () => { delete dr.docOverride[b.dataset.docx]; rer(); });
   v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
   v.querySelectorAll('[data-iopen]').forEach(b => b.onclick = () => { IV.draft = JSON.parse(JSON.stringify(S.invoices.find(x => x.id === b.dataset.iopen))); rer(); });
   v.querySelectorAll('[data-idel]').forEach(b => b.onclick = async () => { if (!await confirmBox('Delete this saved invoice?', 'Delete', 'bad')) return; S.invoices = S.invoices.filter(x => x.id !== b.dataset.idel); markDirty(); rer(); });
@@ -2391,8 +2475,63 @@ function ivCmd(cmd) {
   if (cmd === 'save') { saveInvoice(dr); renderInvoices(); return; }
   if (cmd === 'print') {
     if (!dr.lines.length) return toast('Generate or add lines first');
-    printHTML(packPages(dr).map(p => p.html).join(''));
+    const sl = packSlots(dr); if (sl.some(x => !x.html)) toast('Printing the generated pages only – use "Download pack PDF" for the uploaded pages too', 5000);
+    printHTML(sl.filter(x => x.html).map(p => p.html).join(''));
   }
+  if (cmd === 'build') { if (!dr.lines.length) return toast('Generate or add lines first'); buildPack(dr).catch(e => toast('Pack failed: ' + e.message, 6000)); }
+}
+/** The whole pack as one PDF: uploaded pages copied as they are, generated pages rendered to A4 images */
+async function buildPack(dr) {
+  const sl = packSlots(dr), parts = [];
+  for (const x of sl) { if (x.html) parts.push({ html: x.html }); else { const b = await Files.get(x.fileId); if (!b) throw new Error(`File missing in this browser: ${x.t}`); parts.push({ pdf: b }); } }
+  toast('Building the pack…', 60000);
+  const blob = await PDFX.build(parts, (n, t) => toast(`Building the pack… ${n} / ${t}`, 60000));
+  downloadBlob(blob, defaultPackName(dr));
+  toast(`Pack downloaded · ${sl.reduce((a, x) => a + (x.pages || 1), 0)} page(s)`);
+  if (!dr.track?.invSent) { const sv = S.invoices.find(x => x.id === dr.id); if (sv) toast('Pack downloaded – set "Invoice submitted to client" in 5 · Track when sent', 6000); }
+}
+/** Read any PDF (SAP export, scanned pack, old pack): label each page, pull out invoice fields, let the user apply it */
+async function identifyPdf(file, dr) {
+  toast('Reading PDF…', 30000);
+  const { pages } = await PDFX.pages(file);
+  const proj = IX.proj.get(dr.projectIds[0]);
+  const pg = PDFX.classify(pages, { poNo: proj?.poNo || dr.poNo }), f = PDFX.fields(pages);
+  // which project does the PDF belong to?
+  const byPo = f.poNo && S.projects.find(p => p.poNo === f.poNo), byCode = f.projectCode && S.projects.find(p => p.code === f.projectCode);
+  const match = byPo || byCode || null;
+  const draftMatch = f.poNo && S.invoices.find(x => x.poNo === f.poNo && x.id !== dr.id && (!f.no || x.no === f.no || !x.no));
+  const tot = invTotals(dr).inc, totOk = f.total != null && dr.lines.length ? Math.abs(f.total - tot) < 0.01 : null;
+  $('#toast').classList.remove('show');
+  const m = openModal(`${file.name} · ${pages.length} page(s)`, `
+    <div class="pstrip">${pg.map((p, i) => `<div class="pth" data-i="${i}" style="--c:${PDFX.KIND_COLORS[p.kind]}"><div class="img">${p.thumb ? `<img src="${p.thumb}" alt="">` : '<div class="empty">no preview</div>'}</div>
+      <div class="no">${p.i}${p.hasText ? '' : ' <span class="muted" title="scanned image, no text">▣</span>'}</div><select data-pk="${i}">${opts(Object.entries(PDFX.KINDS), p.kind)}</select></div>`).join('')}</div>
+    <div class="split" style="margin-top:12px;grid-template-columns:1fr 1fr">
+      <div><div class="lbl">Found in the text</div><table class="kvt"><tbody>
+        ${[['PO / WOI no', f.poNo], ['Project code', f.projectCode], ['SAP invoice no', f.no], ['Invoice date', f.date ? fmtDMY(f.date) : ''], ['Order code', f.orderCode], ['Largest amount', f.total != null ? money(f.total) : '']].map(([k, v]) => `<tr><td>${k}</td><td>${v ? `<b>${esc(v)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
+        <tr><td>Project</td><td>${match ? `<b>${esc(match.name)}</b>${dr.projectIds.includes(match.id) ? ' <span class="pill pos">ticked</span>' : ' <span class="pill warn">not ticked on this invoice</span>'}` : '<span class="muted">not recognised – scanned pages carry no text</span>'}</td></tr>
+        ${draftMatch ? `<tr><td>Saved invoice</td><td><b>${esc(draftMatch.no || '(no number)')}</b> ${fmtMonYY(draftMatch.from)}${draftMatch.to !== draftMatch.from ? ' – ' + fmtMonYY(draftMatch.to) : ''} · ${money(invTotals(draftMatch).inc)}</td></tr>` : ''}
+        ${totOk != null ? `<tr><td>Total check</td><td>${totOk ? `<span class="pill pos">matches this break-up (${money(tot)})</span>` : `<span class="pill warn">differs from this break-up (${money(tot)})</span>`}</td></tr>` : ''}
+      </tbody></table></div>
+      <div><div class="lbl">Apply</div>
+        <label class="chk"><input type="checkbox" id="id-sap" checked> Use the <b>SAP invoice</b> page(s) for this invoice</label>
+        <label class="chk"><input type="checkbox" id="id-ts" ${dr.signedTs?.length ? '' : 'checked'}> Use the <b>signed timesheet</b> page(s) for this invoice</label>
+        <label class="chk"><input type="checkbox" id="id-woi" ${proj ? 'checked' : 'disabled'}> Save the <b>Work Order Instruction</b> page(s) to project <b>${esc(proj?.name || '— tick a project first —')}</b>${proj?.docs?.some(d => d.kind === 'woi') ? ' (replaces the current one)' : ''}</label>
+        <label class="chk"><input type="checkbox" id="id-fields" ${f.no || f.date || f.poNo ? 'checked' : 'disabled'}> Fill invoice no, date and PO from the text</label>
+        ${draftMatch ? `<label class="chk"><input type="checkbox" id="id-open"> Open the saved invoice <b>${esc(draftMatch.no || '(no number)')}</b> instead and apply there</label>` : ''}
+        <p class="muted small">Break-up pages are not kept: they are generated here. Pages marked Other are ignored.</p></div>
+    </div>`, [{ label: 'Cancel' }, { label: 'Apply', cls: 'pri', onClick: async m => {
+      const kinds = [...m.querySelectorAll('[data-pk]')].map(x => x.value);
+      const idx = k => kinds.map((x, i) => x === k ? i : -1).filter(i => i >= 0);
+      let target = dr;
+      if ($('#id-open', m)?.checked && draftMatch) { IV.draft = JSON.parse(JSON.stringify(draftMatch)); target = IV.draft; }
+      const sap = idx('sap'), ts = idx('ts'), woi = idx('woi'); let done = [];
+      if ($('#id-sap', m).checked && sap.length) { target.sapPdf = await PDFX.store(file, { name: file.name.replace(/\.pdf$/i, '') + ' – invoice.pdf', kind: 'sap', pages: sap }); done.push(`SAP page${sap.length > 1 ? 's' : ''}`); }
+      if ($('#id-ts', m).checked && ts.length) { target.signedTs = [await PDFX.store(file, { name: file.name.replace(/\.pdf$/i, '') + ' – signed timesheets.pdf', kind: 'ts', pages: ts })]; done.push(`${ts.length} timesheet page(s)`); }
+      if ($('#id-woi', m).checked && woi.length && proj) { const d = await PDFX.store(file, { name: `WOI ${proj.poNo || f.poNo || ''}`.trim() + '.pdf', kind: 'woi', pages: woi }); proj.docs = (proj.docs || []).filter(x => x.kind !== 'woi'); proj.docs.push({ ...d, pos: 'end' }); markDirty(); done.push('WOI saved to project'); }
+      if ($('#id-fields', m).checked) { if (f.no) target.no = f.no; if (f.date) target.date = f.date; if (f.poNo) target.poNo = f.poNo; if (f.orderCode) target.orderCode ||= f.orderCode; done.push('fields'); }
+      IV.pv = 0; renderInvoices(); Files.sweep(); toast(done.length ? 'Applied: ' + done.join(' · ') : 'Nothing applied', 5000);
+    } }], { width: 'min(1500px,94vw)' });
+  m.querySelectorAll('[data-pk]').forEach(sel => sel.onchange = () => { sel.closest('.pth').style.setProperty('--c', PDFX.KIND_COLORS[sel.value]); });
 }
 function defaultPackName(dr) {
   const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;
@@ -2928,7 +3067,7 @@ function renderData() {
     try {
       const st = JSON.parse(await f.text()); if (!st.employees || !st.settings) throw new Error('Not a tracker backup file');
       if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} workers)?`, 'Restore', 'bad')) return;
-      S = migrate(decodeState(st)); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Restored');
+      await restoreFiles(st); S = migrate(decodeState(st)); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Restored'); Files.sweep();
     } catch (err) { toast(err.message); }
   };
   v.querySelectorAll('[data-ci]').forEach(i => i.onchange = () => {
@@ -2986,7 +3125,7 @@ const TOOLBAR = {
     { l: S.locks[AV.ym] ? 'Unlock month' : 'Lock month', f: () => { if (S.locks[AV.ym]) delete S.locks[AV.ym]; else S.locks[AV.ym] = true; markDirty(); renderAttendance(); renderToolbar(); }, t: 'Locked months cannot be edited' }, 'sep',
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
-  invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print pack / PDF', f: () => ivCmd('print'), strong: true, t: 'Break-up sheet followed by the client timesheets' }],
+  invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
   employees: () => { const n = EV.checked.size; return [{ l: 'Add worker', f: () => editEmployee(null) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the worker app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick workers for bulk actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }],
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
@@ -3366,6 +3505,107 @@ function renderApp() {
   v.querySelectorAll('[data-ap]').forEach(i => i.onchange = () => { const k = i.dataset.ap; c[k] = i.tagName === 'SELECT' ? i.value === '1' : i.type === 'number' ? +i.value : i.value.trim(); markDirty(); if (k === 'api') renderApp(); });
   v.querySelectorAll('[data-st]').forEach(i => i.onchange = () => { if (/^\d{1,2}:\d{2}$/.test(i.value)) { c.starts = { ...c.starts, [i.dataset.st]: i.value.padStart(5, '0') }; markDirty(); } else toast('Use HH:MM'); });
 }
+
+/* =====================================================================
+   PDF documents for the invoice pack: read pages (pdf.js), recognise what
+   each page is (SAP invoice · break-up · signed timesheet · Work Order
+   Instruction), pick invoice fields out of the text, render generated
+   sheets to images (html2canvas) and build one pack PDF (pdf-lib).
+   ===================================================================== */
+const PDFX = (() => {
+  let pdfjs = null;
+  async function lib() {
+    if (pdfjs) return pdfjs;
+    const m = await import(LIB.pdfjs);
+    try { m.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([`export * from "${LIB.pdfjsWorker}";`], { type: 'text/javascript' })); } catch (e) { }
+    return pdfjs = m;
+  }
+  /** Pages of a PDF: { i, w, h, land, text, hasText, thumb } */
+  async function pages(blob, { thumbs = true, scale = 0.22 } = {}) {
+    const P = await lib();
+    const doc = await P.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    const out = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const pg = await doc.getPage(i), vp = pg.getViewport({ scale: 1 });
+      const tc = await pg.getTextContent(); const text = tc.items.map(x => x.str).join(' ').replace(/\s+/g, ' ').trim();
+      let thumb = '';
+      if (thumbs) { try { const v2 = pg.getViewport({ scale }); const c = document.createElement('canvas'); c.width = Math.round(v2.width); c.height = Math.round(v2.height); await pg.render({ canvasContext: c.getContext('2d'), viewport: v2 }).promise; thumb = c.toDataURL('image/jpeg', .72); } catch (e) { } }
+      out.push({ i, w: vp.width, h: vp.height, land: vp.width > vp.height, text, hasText: text.length > 40, thumb });
+    }
+    return { n: doc.numPages, pages: out };
+  }
+  const KINDS = { sap: 'SAP tax invoice', breakup: 'Amount break-up', ts: 'Signed timesheet', woi: 'Work Order Instruction', other: 'Other' };
+  const KIND_COLORS = { sap: '#1766CB', breakup: '#6B7A94', ts: '#2B6A52', woi: '#5B4AB8', other: '#93A0B5' };
+  /** Label each page. Text pages by their words; image-only pages by position: a portrait scan before anything else is the SAP invoice, later scans are signed timesheets. */
+  function classify(pages, ctx = {}) {
+    const woiNo = (ctx.poNo || '').trim();
+    let seenInv = false;
+    return pages.map(p => {
+      const t = p.text; let k = 'other';
+      if (/WORK\s*ORDER\s*INSTRUCTION|Sub\s*-?\s*Contractor\s*Name|Procurement\s*Team|End of Page|condition precedent/i.test(t) || (woiNo && t.includes(woiNo) && !/Sl\.?\s*No/i.test(t) && !/Invoice\s*No/i.test(t))) k = 'woi';
+      else if (/Sl\.?\s*No.*Description.*Unit\s*Rate.*Amount/i.test(t) || /AMOUNT\s*BREAK\s*-?\s*UP/i.test(t)) k = 'breakup';
+      else if (/TAX\s*INVOICE|Invoice\s*(No|Number|Date)|Customer\s*Ref|Bill\s*to/i.test(t)) k = 'sap';
+      else if (/TIME\s*SHEET|LS\/DO\/F-026|ATTENDANCE|RELIEVER/i.test(t)) k = 'ts';
+      else if (!p.hasText) k = (!seenInv && !p.land) ? 'sap' : 'ts';
+      if (k === 'sap' || k === 'breakup') seenInv = true;
+      return { ...p, kind: k };
+    });
+  }
+  /** Invoice fields found in the text: PO / WOI number, project code, SAP invoice number, date, order code, largest amount */
+  function fields(pages) {
+    const t = pages.map(p => p.text).join('\n'), f = {}; let m;
+    if ((m = t.match(/\b(INS-[A-Z0-9]+-\d{2}-\d{4})\b/))) f.poNo = m[1];
+    if ((m = t.match(/Project\s*Code\s*:?\s*([0-9]{3}[A-Z][0-9]{3})/i))) f.projectCode = m[1];
+    if ((m = t.match(/\b(\d{4}-\d{10})\b/))) f.no = m[1];
+    if ((m = t.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/))) f.date = `${m[3]}-${m[2]}-${m[1]}`;
+    if ((m = t.match(/\b(3\d{6}P\d{3})\b/))) f.orderCode = m[1];
+    const amts = [...t.matchAll(/(?<![\d.])(\d{1,3}(?:,\d{3})+\.\d{2})(?![\d])/g)].map(x => +x[1].replace(/,/g, ''));
+    if (amts.length) f.total = Math.max(...amts);
+    return f;
+  }
+  /** Render a generated sheet (HTML with class "sheet") to a PNG at 2× */
+  async function htmlToPng(html, land) {
+    await loadScript(LIB.html2canvas);
+    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-30000px;top:0;background:#fff;z-index:-1';
+    host.innerHTML = html; document.body.appendChild(host);
+    const el = host.firstElementChild; Object.assign(el.style, { margin: '0', border: '0', boxShadow: 'none', width: land ? '1120px' : '800px', maxWidth: 'none', overflow: 'visible' });
+    try { const c = await html2canvas(el, { scale: 2, backgroundColor: '#fff', logging: false, useCORS: true }); return { png: c.toDataURL('image/png'), w: c.width, h: c.height }; }
+    finally { host.remove(); }
+  }
+  /** parts: { pdf: Blob, pages?: [0-based] } | { html, land } → one PDF Blob (A4, generated pages placed as images) */
+  async function build(parts, onStep) {
+    await loadScript(LIB.pdflib);
+    const out = await PDFLib.PDFDocument.create(); let n = 0;
+    for (const part of parts) {
+      onStep?.(++n, parts.length);
+      if (part.pdf) {
+        const src = await PDFLib.PDFDocument.load(await part.pdf.arrayBuffer(), { ignoreEncryption: true });
+        const idx = part.pages?.length ? part.pages : src.getPageIndices();
+        (await out.copyPages(src, idx)).forEach(p => out.addPage(p));
+      } else if (part.html) {
+        const land = part.land ?? /class="sheet[^"]*\bland\b/.test(part.html);
+        const img = await htmlToPng(part.html, land);
+        const A4 = land ? [841.89, 595.28] : [595.28, 841.89], pg = out.addPage(A4);
+        const pic = await out.embedPng(img.png), M = 20, W = A4[0] - 2 * M, H = A4[1] - 2 * M;
+        const k = Math.min(W / pic.width, H / pic.height), w = pic.width * k, h = pic.height * k;
+        pg.drawImage(pic, { x: (A4[0] - w) / 2, y: A4[1] - M - h, width: w, height: h });
+      }
+    }
+    return new Blob([await out.save()], { type: 'application/pdf' });
+  }
+  const subset = (blob, idx) => build([{ pdf: blob, pages: idx }]);
+  /** Save a PDF (whole or some pages) into the file store; returns the document record */
+  async function store(blob, { name, kind = 'other', pages: idx } = {}) {
+    const b = idx?.length ? await subset(blob, idx) : blob;
+    let n = idx?.length || 0;
+    if (!n) { try { await loadScript(LIB.pdflib); n = (await PDFLib.PDFDocument.load(await b.arrayBuffer(), { ignoreEncryption: true })).getPageCount(); } catch (e) { } }
+    const id = uid('f'); await Files.put(id, b);
+    return { id, kind, name: name || 'document.pdf', pages: n, size: b.size, addedAt: new Date().toISOString() };
+  }
+  function open(id) { Files.get(id).then(b => { if (!b) return toast('File not found in this browser'); const u = URL.createObjectURL(b); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); }); }
+  const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  return { pages, classify, fields, build, subset, store, open, htmlToPng, KINDS, KIND_COLORS, fmtSize };
+})();
 
 </script>
 </body>

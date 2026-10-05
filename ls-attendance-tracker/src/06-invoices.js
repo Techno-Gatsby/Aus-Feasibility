@@ -147,6 +147,20 @@ function packPages(dr) {
   return pages;
 }
 
+/** Every part of the pack in order, generated or uploaded: { t, kind, src: 'generated'|'uploaded'|'project', html?, fileId?, pages? } */
+function packSlots(dr) {
+  const out = [], projs = dr.projectIds.map(id => IX.proj.get(id)).filter(Boolean);
+  const docs = pos => projs.flatMap(p => (p.docs || []).filter(d => (d.pos || 'end') === pos).map(d => ({ ...d, proj: p })));
+  const docSlot = d => { const ov = dr.docOverride?.[d.proj.id + ':' + d.kind]; return ov ? { t: `${PDFX.KINDS[d.kind] || d.kind} · ${ov.name} (${ov.pages || '?'} p) – this invoice only`, kind: 'doc', dk: d.proj.id + ':' + d.kind, src: 'uploaded', fileId: ov.id, pages: ov.pages } : { t: `${PDFX.KINDS[d.kind] || d.kind} · ${d.name} (${d.pages || '?'} p) – from project ${d.proj.name}`, kind: 'doc', dk: d.proj.id + ':' + d.kind, src: 'project', fileId: d.id, pages: d.pages }; };
+  if (dr.sapPdf) out.push({ t: `SAP tax invoice · ${dr.sapPdf.name} (${dr.sapPdf.pages || '?'} p)`, kind: 'sap', src: 'uploaded', fileId: dr.sapPdf.id, pages: dr.sapPdf.pages });
+  else if (dr.withSap !== false) out.push({ t: 'Tax invoice (SAP fields, generated)', kind: 'sap', src: 'generated', html: sapInvoiceHTML(dr) });
+  out.push({ t: 'Tax invoice amount break-up', kind: 'breakup', src: 'generated', html: invoiceHTML(dr) });
+  docs('afterInvoice').forEach(d => out.push(docSlot(d)));
+  if (dr.signedTs?.length) dr.signedTs.forEach(f => out.push({ t: `Signed timesheets · ${f.name} (${f.pages || '?'} p)`, kind: 'ts', src: 'uploaded', fileId: f.id, pages: f.pages }));
+  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(buildTimesheet(pid, m)) });
+  docs('end').forEach(d => out.push(docSlot(d)));
+  return out;
+}
 function parseSapText(txt, dr) {
   const map = [[/invoice\s*(no|number|#)/i, 'no'], [/invoice\s*date|doc(ument)?\s*date|billing\s*date/i, 'date'], [/customer\s*(code|no|number)|sold.?to/i, 'customerCode'], [/\bpo\b|purchase\s*order|work\s*order|reference/i, 'poNo'], [/\btrn\b|tax\s*reg/i, 'trn'], [/entity|customer\s*name|bill.?to/i, 'entity']];
   let n = 0;
@@ -217,14 +231,20 @@ function renderInvoices() {
       <label class="f" style="margin-top:10px">Notes on the break-up (optional)<textarea data-k="notes">${esc(dr.notes)}</textarea></label>`, `<span class="cnt">AED ${money(tt.inc)}</span>`)}
     ${saved ? sec('iv5', '5 · Track', `<div class="form">${TRACK.map(([k, l, t]) => `<label class="f">${l}<input type="${t}" data-tk="${k}" value="${esc(dr.track?.[k] ?? '')}"${t === 'number' ? ' step="0.01"' : ''}></label>`).join('')}</div>
       <p class="muted small" style="margin:8px 0 0">Same stages as the Tax Invoice Tracker. Saves straight away.</p>`, statusTag(dr)) : ''}
-    ${(() => { const pg = packPages(dr); return sec('ivp', '4 · Pack', `
-      <div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="iv-sap" ${dr.withSap !== false ? 'checked' : ''}> Tax invoice page</label><label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''}> Client timesheets</label>
-        <span class="spacer"></span><button class="btn pri" id="iv-print2" ${dr.lines.length ? '' : 'disabled'}>Print pack / PDF</button></div>
-      <div class="tw"><table><tbody>${pg.map((p, i) => `<tr class="${IV.pv === i ? 'on' : ''}" data-pp="${i}" style="cursor:pointer"><td class="num" style="width:40px">${i + 1}</td><td>${esc(p.t)}</td><td class="muted small">printed here</td></tr>`).join('')}
-        <tr><td class="num">${pg.length + 1}</td><td>Signed timesheet scans, if the client signs on paper</td><td class="muted small">Merge PDFs →</td></tr>
-        <tr><td class="num">${pg.length + 2}</td><td>Work Order Instruction ${esc(IX.proj.get(dr.projectIds[0])?.poNo || dr.poNo || '')} (3 pages)</td><td class="muted small">Merge PDFs →</td></tr></tbody></table></div>
-      <p class="muted small" style="margin:6px 0 0">Same order as Tax Invoice_Elwood Infra-January to May 2026.pdf (10 pages: invoice, break-up, 5 signed timesheets, 3-page WOI). Click a row to preview it.</p>`, `<span class="cnt">${pg.length} page(s) + attachments</span>`); })()}
-    <div id="iv-preview">${dr.lines.length ? (packPages(dr)[IV.pv || 0] || packPages(dr)[0]).html : ''}</div>
+    ${(() => { const sl = packSlots(dr), np = sl.reduce((a, x) => a + (x.pages || 1), 0), hasWoi = dr.projectIds.some(id => (IX.proj.get(id)?.docs || []).length); return sec('ivp', '4 · Pack', `
+      <div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="iv-sap" ${dr.withSap !== false ? 'checked' : ''} ${dr.sapPdf ? 'disabled' : ''}> Generated invoice page</label><label class="chk"><input type="checkbox" id="iv-ts" ${dr.attachTs ? 'checked' : ''} ${dr.signedTs?.length ? 'disabled' : ''}> Generated timesheets</label>
+        <label class="btn sm" style="display:inline-flex;align-items:center">Identify pages from a PDF…<input type="file" id="iv-ident" accept="application/pdf" hidden></label>
+        <span class="spacer"></span><button class="btn" id="iv-print2" ${dr.lines.length ? '' : 'disabled'}>Print / PDF</button><button class="btn pri" id="iv-build" ${dr.lines.length ? '' : 'disabled'} title="One PDF: uploaded pages as they are, generated pages as A4 images">Download pack PDF</button></div>
+      <div class="tw"><table><thead><tr><th style="width:40px">#</th><th>Page(s)</th><th>Source</th><th></th></tr></thead><tbody>${(() => { let n = 1; return sl.map((x, i) => { const from = n; n += x.pages || 1; const no = x.pages > 1 ? `${from}–${n - 1}` : from;
+        const pill = x.src === 'generated' ? '<span class="pill">generated</span>' : x.src === 'project' ? '<span class="pill pos">project file</span>' : '<span class="pill pos">uploaded</span>';
+        const act = x.kind === 'sap' ? (x.src === 'uploaded' ? `<button class="btn sm" data-sapx>Use generated</button>` : `<label class="btn sm">Upload SAP PDF<input type="file" data-sapup accept="application/pdf" hidden></label>`)
+          : x.kind === 'ts' ? (x.src === 'uploaded' ? `<button class="btn sm" data-tsx>Use generated</button>` : i === sl.findIndex(y => y.kind === 'ts') ? `<label class="btn sm">Upload signed scans<input type="file" data-tsup accept="application/pdf" multiple hidden></label>` : '')
+          : x.kind === 'doc' ? (x.src === 'uploaded' ? `<button class="btn sm" data-docx="${esc(x.dk)}">Back to project file</button>` : `<label class="btn sm">Other file for this invoice<input type="file" data-docup="${esc(x.dk)}" accept="application/pdf" hidden></label>`) : '';
+        return `<tr class="${IV.pv === i ? 'on' : ''}" data-pp="${i}" style="cursor:pointer"><td class="num">${no}</td><td>${esc(x.t)}</td><td>${pill}</td><td style="text-align:right;white-space:nowrap">${x.fileId ? `<button class="btn sm" data-fopen="${esc(x.fileId)}">Open</button> ` : ''}${act}</td></tr>`; }).join(''); })()}
+        ${!hasWoi ? `<tr><td></td><td colspan="3" class="muted small"><span class="pill warn">no Work Order Instruction</span> Upload it once on the project (Projects &amp; sites → Edit project → Documents), or use <b>Identify pages from a PDF</b> on an old pack and save its WOI pages to the project.</td></tr>` : ''}
+        ${dr.signedTs?.length ? '' : `<tr><td></td><td colspan="3" class="muted small">Timesheets are generated from attendance; upload the client-signed scans when you have them and they take their place.</td></tr>`}</tbody></table></div>
+      <p class="muted small" style="margin:6px 0 0">Order as in Tax Invoice_Elwood Infra-January to May 2026.pdf: invoice · break-up · timesheets · Work Order Instruction. ${np} page(s). Click a row to preview a generated page.</p>`, `<span class="cnt">${np} page(s)</span>`); })()}
+    <div id="iv-preview">${(() => { const sl = packSlots(dr); const x = sl[IV.pv || 0] || sl[0]; return x?.html || (x ? `<div class="empty">Uploaded PDF – <a href="#" data-fopen="${esc(x.fileId)}">open it</a></div>` : ''); })()}</div>
   </div>
   <div>
     ${sec('ivs', 'Saved invoices', `
@@ -233,8 +253,8 @@ function renderInvoices() {
       ${[...S.invoices].reverse().map(x => `<tr class="${x.id === dr.id ? 'on' : ''}"><td style="white-space:normal"><b>${esc(x.no || '(no number)')}</b><div class="muted small">${esc(IX.proj.get(x.projectIds?.[0])?.name || IX.client.get(x.clientId)?.name || x.entity || '')} · ${fmtMonYY(x.from)}${x.to !== x.from ? ' – ' + fmtMonYY(x.to) : ''}</div></td>
         <td class="num">${money(invTotals(x).inc)}<div>${statusTag(x)}</div></td><td style="text-align:right"><button class="btn sm" data-iopen="${x.id}">Open</button> <button class="btn sm bad" data-idel="${x.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">None yet</td></tr>'}
       </tbody></table></div>`, `<span class="cnt">${S.invoices.length}</span>`)}
-    ${sec('ivm', 'Merge PDFs into one pack', `
-      <p class="muted small" style="margin:0 0 8px">Printed pack PDF first, then signed timesheet scans and the Work Order Instruction.</p>
+    ${sec('ivm', 'Advanced · merge any PDF files', `
+      <p class="muted small" style="margin:0 0 8px">Usually not needed: <b>Download pack PDF</b> in 4 · Pack joins everything. This merges any files in the order listed.</p>
       <label class="btn wide" style="display:block;text-align:center">Add PDF files…<input type="file" id="iv-pdfs" accept="application/pdf" multiple hidden></label>
       <table style="margin-top:6px"><tbody>${IV.pdfs.map((f, i) => `<tr><td class="small" style="white-space:normal">${i + 1}. ${esc(f.name)}</td><td style="text-align:right"><button class="btn sm" data-pu="${i}">↑</button><button class="btn sm" data-pd="${i}">↓</button><button class="btn sm bad" data-px="${i}">✕</button></td></tr>`).join('')}</tbody></table>
       <label class="f" style="margin-top:8px">File name<input type="text" id="iv-pdfname" value="${esc(defaultPackName(dr))}"></label>
@@ -269,7 +289,17 @@ function renderInvoices() {
   $('#iv-ts').onchange = e => { dr.attachTs = e.target.checked; IV.pv = 0; rer(); };
   $('#iv-sap').onchange = e => { dr.withSap = e.target.checked; IV.pv = 0; rer(); };
   $('#iv-print2').onclick = () => ivCmd('print');
-  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = () => { IV.pv = +r.dataset.pp; rer(); $('#iv-preview').scrollIntoView({ block: 'start' }); });
+  $('#iv-build').onclick = () => ivCmd('build');
+  $('#iv-ident').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) identifyPdf(f, dr).catch(err => toast(err.message, 6000)); };
+  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = e => { if (e.target.closest('button,label,input,a')) return; IV.pv = +r.dataset.pp; rer(); $('#iv-preview').scrollIntoView({ block: 'start' }); });
+  v.querySelectorAll('[data-fopen]').forEach(b => b.onclick = e => { e.preventDefault(); PDFX.open(b.dataset.fopen); });
+  const up = async (inp, fn) => { const files = [...inp.files]; inp.value = ''; if (!files.length) return; try { for (const f of files) await fn(f); } catch (err) { toast('Could not read the PDF: ' + err.message, 5000); } IV.pv = 0; rer(); };
+  v.querySelectorAll('[data-sapup]').forEach(i => i.onchange = () => up(i, async f => { dr.sapPdf = await PDFX.store(f, { name: f.name, kind: 'sap' }); }));
+  v.querySelectorAll('[data-sapx]').forEach(b => b.onclick = () => { dr.sapPdf = null; rer(); });
+  v.querySelectorAll('[data-tsup]').forEach(i => i.onchange = () => up(i, async f => { (dr.signedTs ||= []).push(await PDFX.store(f, { name: f.name, kind: 'ts' })); }));
+  v.querySelectorAll('[data-tsx]').forEach(b => b.onclick = () => { dr.signedTs = []; rer(); });
+  v.querySelectorAll('[data-docup]').forEach(i => i.onchange = () => up(i, async f => { (dr.docOverride ||= {})[i.dataset.docup] = await PDFX.store(f, { name: f.name, kind: i.dataset.docup.split(':')[1] }); }));
+  v.querySelectorAll('[data-docx]').forEach(b => b.onclick = () => { delete dr.docOverride[b.dataset.docx]; rer(); });
   v.querySelectorAll('[data-tk]').forEach(i => i.onchange = () => { (dr.track ||= {})[i.dataset.tk] = i.type === 'number' ? (+i.value || '') : i.value; const sv = S.invoices.find(x => x.id === dr.id); if (sv) { sv.track = { ...dr.track }; markDirty(); } rer(); });
   v.querySelectorAll('[data-iopen]').forEach(b => b.onclick = () => { IV.draft = JSON.parse(JSON.stringify(S.invoices.find(x => x.id === b.dataset.iopen))); rer(); });
   v.querySelectorAll('[data-idel]').forEach(b => b.onclick = async () => { if (!await confirmBox('Delete this saved invoice?', 'Delete', 'bad')) return; S.invoices = S.invoices.filter(x => x.id !== b.dataset.idel); markDirty(); rer(); });
@@ -294,8 +324,63 @@ function ivCmd(cmd) {
   if (cmd === 'save') { saveInvoice(dr); renderInvoices(); return; }
   if (cmd === 'print') {
     if (!dr.lines.length) return toast('Generate or add lines first');
-    printHTML(packPages(dr).map(p => p.html).join(''));
+    const sl = packSlots(dr); if (sl.some(x => !x.html)) toast('Printing the generated pages only – use "Download pack PDF" for the uploaded pages too', 5000);
+    printHTML(sl.filter(x => x.html).map(p => p.html).join(''));
   }
+  if (cmd === 'build') { if (!dr.lines.length) return toast('Generate or add lines first'); buildPack(dr).catch(e => toast('Pack failed: ' + e.message, 6000)); }
+}
+/** The whole pack as one PDF: uploaded pages copied as they are, generated pages rendered to A4 images */
+async function buildPack(dr) {
+  const sl = packSlots(dr), parts = [];
+  for (const x of sl) { if (x.html) parts.push({ html: x.html }); else { const b = await Files.get(x.fileId); if (!b) throw new Error(`File missing in this browser: ${x.t}`); parts.push({ pdf: b }); } }
+  toast('Building the pack…', 60000);
+  const blob = await PDFX.build(parts, (n, t) => toast(`Building the pack… ${n} / ${t}`, 60000));
+  downloadBlob(blob, defaultPackName(dr));
+  toast(`Pack downloaded · ${sl.reduce((a, x) => a + (x.pages || 1), 0)} page(s)`);
+  if (!dr.track?.invSent) { const sv = S.invoices.find(x => x.id === dr.id); if (sv) toast('Pack downloaded – set "Invoice submitted to client" in 5 · Track when sent', 6000); }
+}
+/** Read any PDF (SAP export, scanned pack, old pack): label each page, pull out invoice fields, let the user apply it */
+async function identifyPdf(file, dr) {
+  toast('Reading PDF…', 30000);
+  const { pages } = await PDFX.pages(file);
+  const proj = IX.proj.get(dr.projectIds[0]);
+  const pg = PDFX.classify(pages, { poNo: proj?.poNo || dr.poNo }), f = PDFX.fields(pages);
+  // which project does the PDF belong to?
+  const byPo = f.poNo && S.projects.find(p => p.poNo === f.poNo), byCode = f.projectCode && S.projects.find(p => p.code === f.projectCode);
+  const match = byPo || byCode || null;
+  const draftMatch = f.poNo && S.invoices.find(x => x.poNo === f.poNo && x.id !== dr.id && (!f.no || x.no === f.no || !x.no));
+  const tot = invTotals(dr).inc, totOk = f.total != null && dr.lines.length ? Math.abs(f.total - tot) < 0.01 : null;
+  $('#toast').classList.remove('show');
+  const m = openModal(`${file.name} · ${pages.length} page(s)`, `
+    <div class="pstrip">${pg.map((p, i) => `<div class="pth" data-i="${i}" style="--c:${PDFX.KIND_COLORS[p.kind]}"><div class="img">${p.thumb ? `<img src="${p.thumb}" alt="">` : '<div class="empty">no preview</div>'}</div>
+      <div class="no">${p.i}${p.hasText ? '' : ' <span class="muted" title="scanned image, no text">▣</span>'}</div><select data-pk="${i}">${opts(Object.entries(PDFX.KINDS), p.kind)}</select></div>`).join('')}</div>
+    <div class="split" style="margin-top:12px;grid-template-columns:1fr 1fr">
+      <div><div class="lbl">Found in the text</div><table class="kvt"><tbody>
+        ${[['PO / WOI no', f.poNo], ['Project code', f.projectCode], ['SAP invoice no', f.no], ['Invoice date', f.date ? fmtDMY(f.date) : ''], ['Order code', f.orderCode], ['Largest amount', f.total != null ? money(f.total) : '']].map(([k, v]) => `<tr><td>${k}</td><td>${v ? `<b>${esc(v)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
+        <tr><td>Project</td><td>${match ? `<b>${esc(match.name)}</b>${dr.projectIds.includes(match.id) ? ' <span class="pill pos">ticked</span>' : ' <span class="pill warn">not ticked on this invoice</span>'}` : '<span class="muted">not recognised – scanned pages carry no text</span>'}</td></tr>
+        ${draftMatch ? `<tr><td>Saved invoice</td><td><b>${esc(draftMatch.no || '(no number)')}</b> ${fmtMonYY(draftMatch.from)}${draftMatch.to !== draftMatch.from ? ' – ' + fmtMonYY(draftMatch.to) : ''} · ${money(invTotals(draftMatch).inc)}</td></tr>` : ''}
+        ${totOk != null ? `<tr><td>Total check</td><td>${totOk ? `<span class="pill pos">matches this break-up (${money(tot)})</span>` : `<span class="pill warn">differs from this break-up (${money(tot)})</span>`}</td></tr>` : ''}
+      </tbody></table></div>
+      <div><div class="lbl">Apply</div>
+        <label class="chk"><input type="checkbox" id="id-sap" checked> Use the <b>SAP invoice</b> page(s) for this invoice</label>
+        <label class="chk"><input type="checkbox" id="id-ts" ${dr.signedTs?.length ? '' : 'checked'}> Use the <b>signed timesheet</b> page(s) for this invoice</label>
+        <label class="chk"><input type="checkbox" id="id-woi" ${proj ? 'checked' : 'disabled'}> Save the <b>Work Order Instruction</b> page(s) to project <b>${esc(proj?.name || '— tick a project first —')}</b>${proj?.docs?.some(d => d.kind === 'woi') ? ' (replaces the current one)' : ''}</label>
+        <label class="chk"><input type="checkbox" id="id-fields" ${f.no || f.date || f.poNo ? 'checked' : 'disabled'}> Fill invoice no, date and PO from the text</label>
+        ${draftMatch ? `<label class="chk"><input type="checkbox" id="id-open"> Open the saved invoice <b>${esc(draftMatch.no || '(no number)')}</b> instead and apply there</label>` : ''}
+        <p class="muted small">Break-up pages are not kept: they are generated here. Pages marked Other are ignored.</p></div>
+    </div>`, [{ label: 'Cancel' }, { label: 'Apply', cls: 'pri', onClick: async m => {
+      const kinds = [...m.querySelectorAll('[data-pk]')].map(x => x.value);
+      const idx = k => kinds.map((x, i) => x === k ? i : -1).filter(i => i >= 0);
+      let target = dr;
+      if ($('#id-open', m)?.checked && draftMatch) { IV.draft = JSON.parse(JSON.stringify(draftMatch)); target = IV.draft; }
+      const sap = idx('sap'), ts = idx('ts'), woi = idx('woi'); let done = [];
+      if ($('#id-sap', m).checked && sap.length) { target.sapPdf = await PDFX.store(file, { name: file.name.replace(/\.pdf$/i, '') + ' – invoice.pdf', kind: 'sap', pages: sap }); done.push(`SAP page${sap.length > 1 ? 's' : ''}`); }
+      if ($('#id-ts', m).checked && ts.length) { target.signedTs = [await PDFX.store(file, { name: file.name.replace(/\.pdf$/i, '') + ' – signed timesheets.pdf', kind: 'ts', pages: ts })]; done.push(`${ts.length} timesheet page(s)`); }
+      if ($('#id-woi', m).checked && woi.length && proj) { const d = await PDFX.store(file, { name: `WOI ${proj.poNo || f.poNo || ''}`.trim() + '.pdf', kind: 'woi', pages: woi }); proj.docs = (proj.docs || []).filter(x => x.kind !== 'woi'); proj.docs.push({ ...d, pos: 'end' }); markDirty(); done.push('WOI saved to project'); }
+      if ($('#id-fields', m).checked) { if (f.no) target.no = f.no; if (f.date) target.date = f.date; if (f.poNo) target.poNo = f.poNo; if (f.orderCode) target.orderCode ||= f.orderCode; done.push('fields'); }
+      IV.pv = 0; renderInvoices(); Files.sweep(); toast(done.length ? 'Applied: ' + done.join(' · ') : 'Nothing applied', 5000);
+    } }], { width: 'min(1500px,94vw)' });
+  m.querySelectorAll('[data-pk]').forEach(sel => sel.onchange = () => { sel.closest('.pth').style.setProperty('--c', PDFX.KIND_COLORS[sel.value]); });
 }
 function defaultPackName(dr) {
   const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;

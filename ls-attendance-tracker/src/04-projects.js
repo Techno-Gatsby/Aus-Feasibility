@@ -57,6 +57,7 @@ function renderProjects() {
           ${!rateFor(p, 'SECURITY GUARD') && !['fixed', 'lump'].includes(b.basis) ? '<span class="pill warn">no rate</span>' : ''}
           ${p.active === false ? '<span class="pill">inactive</span>' : ''}
           ${p.pins?.length ? `<span class="pill pos" title="Project-wide worker-app zone">📍 project ${p.pins[0].radius} m</span>` : ''}
+          ${p.docs?.length ? `<span class="pill" title="Documents added to every invoice pack">📄 ${p.docs.map(d => (d.kind === 'woi' ? 'WOI' : d.kind.toUpperCase()) + ' ' + (d.pages || '?') + ' p').join(' · ')}</span>` : ''}
           <span class="spacer"></span><span class="muted small">${bill} · VAT ${b.vat || 0}%</span>
           <button class="btn sm" data-addsite="${p.id}">Add site</button><button class="btn sm" data-ep="${p.id}">Edit</button></div>
         <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has its own worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : p.pins?.length ? ' <span class="pill" title="Uses the project zone">📍 project</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
@@ -139,6 +140,9 @@ function editProject(id, presetName, onCreated) {
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
     <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
+    <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
+    <div id="ep-docs"></div>
+    <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
     <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
     ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
@@ -160,10 +164,30 @@ function editProject(id, presetName, onCreated) {
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         PE.finish();
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
-        reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll();
+        reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
         if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Worker app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
+  p.docs ||= [];
+  const DOC_KINDS = [['woi', 'Work Order Instruction'], ['lpo', 'LPO / purchase order'], ['agreement', 'Rate agreement'], ['other', 'Other']];
+  const docsTable = () => {
+    $('#ep-docs', m).innerHTML = p.docs.length ? `<div class="tw"><table><thead><tr><th>Document</th><th>File</th><th class="num">Pages</th><th>Position in pack</th><th></th></tr></thead><tbody>
+      ${p.docs.map((d, i) => `<tr><td><select data-dk="${i}" style="min-width:170px">${opts(DOC_KINDS, d.kind)}</select></td><td class="small" style="white-space:normal"><a href="#" data-dopen="${i}">${esc(d.name)}</a> <span class="muted">${PDFX.fmtSize(d.size || 0)}</span></td><td class="num">${d.pages || '?'}</td>
+        <td><select data-dp="${i}">${opts([['end', 'End of pack (after timesheets)'], ['afterInvoice', 'After the invoice pages']], d.pos || 'end')}</select></td>
+        <td style="text-align:right"><label class="btn sm">Replace<input type="file" data-drep="${i}" accept="application/pdf" hidden></label> <button class="btn sm bad" data-ddel="${i}">✕</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted small" style="margin:0">No documents yet. Upload the Work Order Instruction PDF (the 3 pages at the end of the Elwood pack).</p>';
+    m.querySelectorAll('[data-dk]').forEach(x => x.onchange = () => p.docs[+x.dataset.dk].kind = x.value);
+    m.querySelectorAll('[data-dp]').forEach(x => x.onchange = () => p.docs[+x.dataset.dp].pos = x.value);
+    m.querySelectorAll('[data-dopen]').forEach(a => a.onclick = e => { e.preventDefault(); PDFX.open(p.docs[+a.dataset.dopen].id); });
+    m.querySelectorAll('[data-ddel]').forEach(b => b.onclick = () => { p.docs.splice(+b.dataset.ddel, 1); docsTable(); });
+    m.querySelectorAll('[data-drep]').forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if (!f) return; const old = p.docs[+inp.dataset.drep]; const d = await PDFX.store(f, { name: f.name, kind: old.kind }); p.docs[+inp.dataset.drep] = { ...d, pos: old.pos }; docsTable(); });
+  };
+  docsTable();
+  $('#ep-docfile', m).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; e.target.value = '';
+    try { const d = await PDFX.store(f, { name: f.name, kind: p.docs.some(x => x.kind === 'woi') ? 'other' : 'woi' }); p.docs.push({ ...d, pos: 'end' }); docsTable(); toast(`${f.name} · ${d.pages} page(s) – Save to keep it`); }
+    catch (err) { toast('Could not read the PDF: ' + err.message, 5000); }
+  };
   const PE = pinEditor(m, p, { px: 'ep', name: p.name, others: [...S.projects.filter(x => x.id !== p.id && x.pins?.length).map(x => ({ name: x.name + ' (project)', pins: x.pins })), ...S.sites.filter(x => x.pins?.length).map(x => ({ name: x.name, pins: x.pins }))], empty: 'No project location yet – search above or click the map. Sites can still have their own pins.' });
 }
 

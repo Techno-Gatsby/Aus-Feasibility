@@ -135,7 +135,7 @@ function defaultState() {
       { code: 'WO', label: 'Week off', color: '#e4e7ec', billable: false, client: false, key: 'w' }
     ],
     clients: [],      // {id,name,trn,customerCode,address}
-    projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},active}
+    projects: [],     // {id,clientId,code,name,entityName,poNo,woiNo,billing:{basis,rate,vat,posts},pins,docs:[{id,kind,name,pages,size,pos}],active}
     sites: [],        // {id,projectId|null,name}
     employees: [],    // {id,empCode,name,agency,trade,shift,doj,end,endReason,assign:[{from,site,shift}]}
     att: {},          // att[empId][iso] = 'P' | {c:'R', s:siteId, sh:'NIGHT'}
@@ -272,17 +272,32 @@ function loadScript(url) {
 const LIB = {
   xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   exceljs: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
-  pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'
+  pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+  pdfjs: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
+  pdfjsWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs',
+  html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
 };
 function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
 
 /* ---------- persistence: IndexedDB cache + JSON data file in a chosen folder ---------- */
 const IDB = {
   db: null,
-  open() { return this.db ||= new Promise((res, rej) => { const r = indexedDB.open('ls-attendance-tracker', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  open() { return this.db ||= new Promise((res, rej) => { const r = indexedDB.open('ls-attendance-tracker', 2); r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv'); if (!db.objectStoreNames.contains('files')) db.createObjectStore('files'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
   async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 };
+/* Uploaded documents (PDFs: Work Order Instructions, SAP invoice pages, signed timesheets) – bytes in the 'files' store, metadata in S */
+const Files = {
+  async tx(mode) { const db = await IDB.open(); return db.transaction('files', mode).objectStore('files'); },
+  async put(id, blob) { const o = await this.tx('readwrite'); return new Promise((res, rej) => { const q = o.put(blob, id); q.onsuccess = res; q.onerror = () => rej(q.error); }); },
+  async get(id) { const o = await this.tx('readonly'); return new Promise((res, rej) => { const q = o.get(id); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); },
+  async del(id) { const o = await this.tx('readwrite'); return new Promise((res, rej) => { const q = o.delete(id); q.onsuccess = res; q.onerror = () => rej(q.error); }); },
+  async keys() { const o = await this.tx('readonly'); return new Promise((res, rej) => { const q = o.getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); },
+  /** ids referenced anywhere in the state */
+  referenced(st = S) { const ids = new Set(); for (const p of st.projects) for (const d of p.docs || []) ids.add(d.id); const all = [...st.invoices, ...(typeof IV !== 'undefined' && IV.draft ? [IV.draft] : [])]; for (const i of all) { if (i.sapPdf?.id) ids.add(i.sapPdf.id); for (const x of i.signedTs || []) ids.add(x.id); for (const x of Object.values(i.docOverride || {})) ids.add(x.id); } return ids; },
+  async sweep() { try { const ref = this.referenced(); for (const k of await this.keys()) if (!ref.has(k)) await this.del(k); } catch (e) { } }
+};
+const b64 = { enc: async blob => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, dec: (s, type) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type }); } };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };
 function markDirty() { DATA_VER++; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
@@ -299,5 +314,11 @@ function renderSaveState() {
     : store.dirty || store.saving ? 'Saving…'
     : `<b>✓ Saved</b>${store.last ? ' ' + store.last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`;
 }
-function downloadBackup() { downloadBlob(new Blob([JSON.stringify(S)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`); }
+async function downloadBackup() {
+  const out = { ...S, _files: {} };
+  try { for (const id of Files.referenced()) { const b = await Files.get(id); if (b) out._files[id] = { type: b.type || 'application/pdf', data: await b64.enc(b) }; } } catch (e) { }
+  downloadBlob(new Blob([JSON.stringify(out)], { type: 'application/json' }), `Attendance Tracker backup ${todayISO()}.json`);
+}
+/** Put the documents of a backup back into the files store */
+async function restoreFiles(st) { const f = st._files || {}; delete st._files; for (const [id, x] of Object.entries(f)) { try { await Files.put(id, b64.dec(x.data, x.type)); } catch (e) { } } }
 window.addEventListener('beforeunload', e => { if (store.dirty) { saveNow(); e.preventDefault(); e.returnValue = ''; } });

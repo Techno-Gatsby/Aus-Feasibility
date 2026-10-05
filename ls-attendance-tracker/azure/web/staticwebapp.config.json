@@ -14,7 +14,7 @@
     "401": { "redirect": "/.auth/login/aad?post_login_redirect_uri=.referrer", "statusCode": 302 }
   },
   "globalHeaders": {
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://server.arcgisonline.com https://cdn.jsdelivr.net; connect-src 'self' https://photon.komoot.io https://nominatim.openstreetmap.org https://geocode-api.arcgis.com https://cdn.jsdelivr.net; media-src 'self' blob:; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://server.arcgisonline.com https://cdn.jsdelivr.net; connect-src 'self' https://photon.komoot.io https://nominatim.openstreetmap.org https://geocode-api.arcgis.com https://cdn.jsdelivr.net; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'",
     "Permissions-Policy": "geolocation=(self), camera=(self), microphone=()",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin"

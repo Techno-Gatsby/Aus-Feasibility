@@ -12,7 +12,7 @@ As built and tested on 30 September 2026.
 | Security | WebCrypto PBKDF2-SHA256 (100k rounds) · HMAC-SHA256 tokens | built into browser and Node 20 | PIN hashing, 20-hour worker sessions; Entra ID for staff via SWA |
 | Front end | HTML5 + vanilla JavaScript (ES2020), two single-file pages | n/a | No framework; built by `node build.mjs` |
 | Maps | Leaflet · Esri World Street Map · Esri World Imagery · Photon / Nominatim search | 1.9.4 | Loaded from cdn.jsdelivr.net; optional ArcGIS key |
-| Excel / PDF | SheetJS · ExcelJS · pdf-lib · qrcode-generator | 0.18.5 · 4.4.0 · 1.17.1 · 1.4.4 | Import, LS/DO/F-026 export, invoice pack, PIN-slip QR |
+| Excel / PDF | SheetJS · ExcelJS · pdf-lib · pdf.js · html2canvas · qrcode-generator | 0.18.5 · 4.4.0 · 1.17.1 · 4.10.38 · 1.4.1 · 1.4.4 | Import, LS/DO/F-026 export, invoice pack (page identification, generated pages rendered to A4 images, one PDF), PIN-slip QR |
 | Browser storage | IndexedDB · localStorage · Service Worker | built-in | Admin data + backup, offline punch queue, remembered Emp ID |
 | Browsers – admin | Microsoft Edge / Google Chrome | Chromium 110+ | Print dialog for PDFs |
 | Browsers – worker | Chrome for Android / Safari on iOS | Android 9+ (Chrome 110+) · iOS 16.4+ | Camera and GPS require HTTPS; add to Home screen |
