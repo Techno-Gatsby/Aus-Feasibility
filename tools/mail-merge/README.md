@@ -62,8 +62,9 @@ Any other column can be used as a placeholder.
 Everything is in the **Mail merge** menu, and it always works on the sheet tab you have
 open.
 
-1. **Choose template draft…** lists your recent drafts. Type the number of the template.
-   The sheet remembers your choice, so you only do this once.
+1. **Choose template draft…** lists up to 15 of your drafts. Type the template's number,
+   or its exact subject if it isn't in the list. The sheet remembers your choice, so you
+   only do this once.
 2. **Preview selected row**: click any row, then choose this to see that person's email
    exactly as it will look.
 3. **Send test emails to me** sends the first 3 rows to your own address. Each subject

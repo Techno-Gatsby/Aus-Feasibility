@@ -1,31 +1,11 @@
-/**
- * Gmail mail merge for Google Sheets.
- *
- * One row of the sheet = one email. The template is an ordinary Gmail draft
- * with {{Column Name}} placeholders in its subject and body. Each row's values
- * are filled in and the email is sent from your Gmail account.
- *
- * Setup: open the Google Sheet, Extensions > Apps Script, replace the contents
- * of Code.gs with this file, save, then reload the sheet. A "Mail merge" menu
- * appears. See README.md for the walkthrough.
- *
- * Columns (heading row 1; capitals and spaces don't matter):
- *   Email        required; several addresses separated by , or ;
- *   CC, BCC      optional, per row
- *   Attachments  optional; Google Drive links or file IDs separated by , or ;
- *                (Google Docs/Sheets/Slides are attached as PDF)
- *   Email Sent   added automatically; the script records each send here and
- *                skips rows already marked "Sent" when you run it again
- */
-
 const CONFIG = {
-  SENDER_NAME: '',          // name recipients see, e.g. 'Riverside Estate Sales'. Blank = your Gmail name
-  FROM: '',                 // send from one of your Gmail "Send mail as" aliases. Blank = your own address
-  REPLY_TO: '',             // where replies go. Blank = the sender
-  TEST_ROWS: 3,             // how many rows "Send test emails to me" sends
-  ALLOW_BLANK: false,       // false: stop if a placeholder's cell is empty, so nobody gets "Dear ,"
-  SKIP_INVALID_ROWS: false, // false: stop before sending anything if any row has a problem
-  SKIP_FILTERED_ROWS: true, // true: rows hidden by a filter are left out
+  SENDER_NAME: '',
+  FROM: '',
+  REPLY_TO: '',
+  TEST_ROWS: 3,
+  ALLOW_BLANK: false,
+  SKIP_INVALID_ROWS: false,
+  SKIP_FILTERED_ROWS: true,
   STATUS_COLUMN: 'Email Sent',
 };
 
@@ -37,7 +17,7 @@ const COLUMN_NAMES = {
 };
 const PLACEHOLDER = /\{\{([^{}]+?)\}\}/g;
 const ADDRESS = /^[^@\s<>",;]+@[^@\s<>",;]+\.[^@\s<>",;]+$/;
-const MAX_RUN_MS = 5 * 60 * 1000; // Apps Script stops a run at 6 minutes; finish cleanly before that
+const MAX_RUN_MS = 5 * 60 * 1000;
 const MAX_LISTED_PROBLEMS = 15;
 
 class UserError extends Error {
@@ -49,12 +29,10 @@ class UserError extends Error {
 
 class RowError extends Error {}
 
-// ------------------------------------------------------------------ menu
-
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Mail merge')
-    .addItem('Choose template draft…', 'chooseTemplate')
+    .addItem('Choose template draft...', 'chooseTemplate')
     .addItem('Preview selected row', 'previewRow')
     .addSeparator()
     .addItem('Send test emails to me', 'sendTestEmails')
@@ -114,7 +92,6 @@ function previewRow() {
   });
 }
 
-/** Show a UserError as a dialog; anything else is a bug and surfaces as a normal script error. */
 function withErrors_(fn) {
   try {
     fn();
@@ -125,9 +102,6 @@ function withErrors_(fn) {
   }
 }
 
-// --------------------------------------------------------------- run
-
-/** mode: 'send' | 'draft' | 'test' */
 function run_(mode) {
   const started = Date.now();
   const ui = SpreadsheetApp.getUi();
@@ -144,7 +118,6 @@ function run_(mode) {
     checkTemplate_(template, ctx);
     checkSender_();
 
-    // Fill in every pending row first, so a bad row stops the run before anything goes out.
     const rows = pendingRows_(sheet, ctx, mode === 'test' ? 'send' : mode);
     const emails = [];
     const problems = [];
@@ -152,7 +125,6 @@ function run_(mode) {
     const wanted = mode === 'test' ? rows.slice(0, CONFIG.TEST_ROWS) : rows;
     rows.forEach((r) => {
       try {
-        // Drive files are only fetched for the rows this run will actually send.
         emails.push(buildEmail_(r, ctx, template, wanted.indexOf(r) !== -1 ? fileCache : null));
       } catch (e) {
         if (!(e instanceof RowError)) throw e;
@@ -225,12 +197,22 @@ function deliverAll_(batch, template, mode, sheet, ctx, quota, started) {
     }
     try {
       deliver_(email, template, mode);
-      quota -= mode === 'draft' ? 0 : count;
-      result.done++;
-      if (mode !== 'test') setStatus_(sheet, ctx, email.row, `${mode === 'draft' ? 'Draft' : 'Sent'} ${now_()}`);
     } catch (e) {
       result.failed.push(`Row ${email.row}: ${e.message}`);
       if (mode !== 'test') setStatus_(sheet, ctx, email.row, `Error: ${e.message}`);
+      continue;
+    }
+    quota -= mode === 'draft' ? 0 : count;
+    result.done++;
+    if (mode === 'test') continue;
+    const mark = mode === 'draft' ? 'Draft' : 'Sent';
+    try {
+      setStatus_(sheet, ctx, email.row, `${mark} ${now_()}`);
+    } catch (e) {
+      throw new UserError('Stopped: couldn\'t update the sheet',
+        `Row ${email.row} was ${mode === 'draft' ? 'drafted' : 'sent'}, but its "${CONFIG.STATUS_COLUMN}" cell ` +
+        `couldn't be written (${e.message}).\n\n${result.done} email(s) done this run. Stopped here so nobody ` +
+        `gets a second copy. Type "${mark}" in row ${email.row}'s "${CONFIG.STATUS_COLUMN}" cell before running again.`);
     }
   }
   return result;
@@ -255,17 +237,13 @@ function deliver_(email, template, mode) {
   }
 }
 
-// ------------------------------------------------------------ template
-
 function templateDraft_() {
   const id = PropertiesService.getDocumentProperties().getProperty('templateDraftId');
   if (id) {
     try {
       const draft = GmailApp.getDraft(id);
       if (draft) return draft;
-    } catch (e) {
-      // The draft was sent or deleted; ask again below.
-    }
+    } catch (e) {}
   }
   return pickDraft_();
 }
@@ -297,7 +275,6 @@ function pickDraft_() {
 function loadTemplate_(draft) {
   const message = draft.getMessage();
   const html = message.getBody();
-  // Images pasted into the draft's body are referenced as cid: links; map each to its image so they survive.
   const imagesByName = {};
   message.getAttachments({ includeInlineImages: true, includeAttachments: false })
     .forEach((blob) => { imagesByName[blob.getName()] = blob; });
@@ -337,7 +314,7 @@ function checkTemplate_(template, ctx) {
     const at = leftover.search(/\{\{|\}\}/);
     if (at !== -1) {
       throw new UserError('Broken placeholder in the draft',
-        `Near: "…${leftover.slice(Math.max(0, at - 30), at + 30).replace(/\s+/g, ' ')}…"\n\n` +
+        `Near: "...${leftover.slice(Math.max(0, at - 30), at + 30).replace(/\s+/g, ' ')}..."\n\n` +
         'Placeholders need two braces on each side, like {{First Name}}.');
     }
   });
@@ -349,8 +326,6 @@ function checkSender_() {
       'addresses. Add it in Gmail Settings > Accounts, or clear FROM in the script.');
   }
 }
-
-// --------------------------------------------------------------- sheet
 
 function readSheet_(sheet) {
   const values = sheet.getDataRange().getDisplayValues();
@@ -382,7 +357,6 @@ function readSheet_(sheet) {
   return { values: values, headers: headers, index: index, cols: cols };
 }
 
-/** Row indexes (0-based into ctx.values) still to process. */
 function pendingRows_(sheet, ctx, mode) {
   const filtered = CONFIG.SKIP_FILTERED_ROWS && sheet.getFilter();
   const rows = [];
@@ -410,12 +384,9 @@ function ensureStatusColumn_(sheet, ctx) {
 
 function setStatus_(sheet, ctx, row, text) {
   sheet.getRange(row, ctx.cols.status + 1).setValue(text);
-  SpreadsheetApp.flush(); // write it now, so a run that's cut off never sends the same row twice
+  SpreadsheetApp.flush();
 }
 
-// --------------------------------------------------------------- build
-
-/** fileCache: object to fetch and cache Drive attachments in, or null to skip fetching them. */
 function buildEmail_(r, ctx, template, fileCache) {
   const row = ctx.values[r];
   const to = parseAddresses_(row[ctx.cols.email]);
@@ -487,14 +458,10 @@ function recipientCount_(email) {
   return email.to.length + email.cc.length + email.bcc.length;
 }
 
-// ------------------------------------------------------------- helpers
-
-/** Column/placeholder key: capitals, spaces and underscores don't matter. */
 function norm_(name) {
   return String(name).replace(/[\s_]+/g, '').toLowerCase();
 }
 
-/** Gmail's editor can leave &nbsp; or stray tags inside a placeholder; look past them. */
 function cleanName_(raw) {
   return raw.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').trim();
 }
@@ -515,7 +482,7 @@ function now_() {
 function listProblems_(problems) {
   const shown = problems.slice(0, MAX_LISTED_PROBLEMS).join('\n');
   const more = problems.length - MAX_LISTED_PROBLEMS;
-  return more > 0 ? `${shown}\n…and ${more} more` : shown;
+  return more > 0 ? `${shown}\n...and ${more} more` : shown;
 }
 
 function previewHtml_(email, template) {
