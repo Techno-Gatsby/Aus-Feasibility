@@ -491,7 +491,7 @@ function recipientCount_(email) {
 
 /** Column/placeholder key: capitals, spaces and underscores don't matter. */
 function norm_(name) {
-  return String(name).replace(/[\s_ ]+/g, '').toLowerCase();
+  return String(name).replace(/[\s_]+/g, '').toLowerCase();
 }
 
 /** Gmail's editor can leave &nbsp; or stray tags inside a placeholder; look past them. */
