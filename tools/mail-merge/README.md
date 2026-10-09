@@ -5,6 +5,11 @@ ordinary Gmail draft with `{{Column Name}}` placeholders, so its formatting, lin
 pasted images and attachments all carry over. You run everything from a **Mail merge**
 menu in the sheet.
 
+Emails go out through the Gmail API rather than Apps Script's built-in mail service. The
+built-in service is capped at 100 recipients a day on a free Gmail account. The API
+sends through your Gmail account directly, so it's limited by Gmail's own allowance
+instead, which is about 500 a day.
+
 ## Set up (once per spreadsheet)
 
 1. **Put your list in a Google Sheet.** Put the column headings in row 1 and one person
@@ -13,10 +18,14 @@ menu in the sheet.
 2. **Add the script.** In the sheet, go to **Extensions → Apps Script**. Delete what's in
    `Code.gs`, paste in the contents of [`Code.gs`](Code.gs) from this folder, and click
    **Save** (the disk icon).
-3. **Reload the spreadsheet.** After a few seconds a **Mail merge** menu appears to the
+3. **Turn on the Gmail API.** Still in the Apps Script editor, click **+** next to
+   **Services** in the left sidebar, choose **Gmail API**, and click **Add**. If you skip
+   this, the script tells you to do it the first time you send.
+4. **Reload the spreadsheet.** After a few seconds a **Mail merge** menu appears to the
    right of **Help**.
-4. **Allow access the first time.** The first time you use the menu, Google asks for
-   permission to use your Gmail, Drive and Sheets. Because the script is yours rather
+5. **Allow access the first time.** The first time you use the menu, Google asks for
+   permission to use your Gmail, Drive and Sheets, and to connect to an external service.
+   That last one is how the script reaches the Gmail API. Because the script is yours rather
    than a published app, Google shows *"Google hasn't verified this app"*. Click
    **Advanced → Go to *(project name)* (unsafe) → Allow**. The script only runs in your
    account.
@@ -72,6 +81,8 @@ open.
    is marked as sent.
 4. **Send emails** tells you how many emails it's about to send, and from which address.
    Click **Yes** and it sends them, filling in **Email Sent** as it goes.
+5. **Check sending allowance** shows how many recipients the script has sent to in the
+   last 24 hours, and how many more `DAILY_LIMIT` allows.
 
 You can also choose **Create Gmail drafts** to put every email in your Drafts folder and
 send them yourself.
@@ -96,10 +107,19 @@ stopping, set `SKIP_INVALID_ROWS: true` (see Settings).
   **Email Sent** cell to send to that person again. Rows marked **Error** are retried
   automatically.
 - **Filters work.** If the sheet has a filter on, only the visible rows are sent.
-- **Gmail has a daily limit** on emails sent by scripts: about **100 recipients a day**
-  for a free Gmail account and **1,500** for Google Workspace. CC and BCC addresses count
-  too. The script checks your remaining allowance, sends up to it, then tells you to run
-  again tomorrow for the rest.
+- **The script stops at 450 recipients in any 24 hours** (`DAILY_LIMIT`). CC and BCC
+  addresses count, and so do test emails; drafts don't. It keeps its own count because a
+  free Gmail account that goes over Gmail's limit (about 500 a day) can be blocked from
+  sending *any* email for up to 24 hours. When it reaches the limit, it stops and tells
+  you to run it again later. **Check sending allowance** in the menu shows how much is
+  left.
+- **Leave room for your other email.** The script can't see what you send yourself or
+  through other tools such as Mailmeteor. If you use those on the same day, lower
+  `DAILY_LIMIT` so the total stays under 500.
+- **If Gmail itself refuses** (because of its limit or a rate limit), the run stops
+  straight away, leaves that row unmarked, and tells you to wait before trying again.
+- **On Google Workspace** (a paid company account), Gmail allows about 2,000 a day, so
+  you can raise `DAILY_LIMIT`.
 - **One run lasts about 5 minutes**, enough for a few hundred emails. Google stops
   scripts after 6 minutes, so the script pauses just before that and tells you how many
   are left. Choose **Send emails** again to carry on.
@@ -110,9 +130,10 @@ At the top of `Code.gs`:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `SENDER_NAME` | blank | The name recipients see, e.g. `'Riverside Estate Sales'`. Blank uses your Gmail name. |
+| `SENDER_NAME` | blank | The name recipients see, e.g. `'Riverside Estate Sales'`. If it's blank, Gmail fills in your account's name. Set it if the name looks wrong. |
 | `FROM` | blank | Send from another address. It must already be set up in Gmail under **Settings → Accounts → Send mail as**. |
 | `REPLY_TO` | blank | Where replies should go. |
+| `DAILY_LIMIT` | `450` | The most recipients the script sends to in any 24 hours. |
 | `TEST_ROWS` | `3` | How many rows **Send test emails to me** sends. |
 | `ALLOW_BLANK` | `false` | Set to `true` to allow empty cells in placeholders. |
 | `SKIP_INVALID_ROWS` | `false` | Set to `true` to skip rows with problems instead of stopping. |

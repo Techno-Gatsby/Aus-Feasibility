@@ -2,6 +2,7 @@ const CONFIG = {
   SENDER_NAME: '',
   FROM: '',
   REPLY_TO: '',
+  DAILY_LIMIT: 450,
   TEST_ROWS: 3,
   ALLOW_BLANK: false,
   SKIP_INVALID_ROWS: false,
@@ -19,6 +20,9 @@ const PLACEHOLDER = /\{\{([^{}]+?)\}\}/g;
 const ADDRESS = /^[^@\s<>",;]+@[^@\s<>",;]+\.[^@\s<>",;]+$/;
 const MAX_RUN_MS = 5 * 60 * 1000;
 const MAX_LISTED_PROBLEMS = 15;
+const HOUR_MS = 60 * 60 * 1000;
+const GMAIL_UPLOAD = 'https://gmail.googleapis.com/upload/gmail/v1/users/me/';
+const TURN_ON_API = 'In the Apps Script editor, click + next to "Services", choose "Gmail API" and click Add. Then try again.';
 
 class UserError extends Error {
   constructor(title, message) {
@@ -29,6 +33,13 @@ class UserError extends Error {
 
 class RowError extends Error {}
 
+class GmailApiError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Mail merge')
@@ -38,6 +49,8 @@ function onOpen() {
     .addItem('Send test emails to me', 'sendTestEmails')
     .addItem('Create Gmail drafts', 'createDrafts')
     .addItem('Send emails', 'sendEmails')
+    .addSeparator()
+    .addItem('Check sending allowance', 'checkAllowance')
     .addToUi();
 }
 
@@ -59,6 +72,19 @@ function chooseTemplate() {
     if (draft) {
       SpreadsheetApp.getActive().toast(draft.getMessage().getSubject(), 'Template set', 5);
     }
+  });
+}
+
+function checkAllowance() {
+  withErrors_(() => {
+    const ui = SpreadsheetApp.getUi();
+    const used = sentInLast24h_();
+    ui.alert('Sending allowance',
+      `This script has sent to ${used} recipient(s) in the last 24 hours. With DAILY_LIMIT at ` +
+      `${CONFIG.DAILY_LIMIT}, it will send to ${Math.max(0, CONFIG.DAILY_LIMIT - used)} more before stopping.\n\n` +
+      `Apps Script's separate mail quota shows ${MailApp.getRemainingDailyQuota()} remaining. Emails sent ` +
+      'through the Gmail API should leave that number unchanged.',
+      ui.ButtonSet.OK);
   });
 }
 
@@ -117,6 +143,7 @@ function run_(mode) {
     const ctx = readSheet_(sheet);
     checkTemplate_(template, ctx);
     checkSender_();
+    if (typeof Gmail === 'undefined') throw new UserError('Turn on the Gmail API', TURN_ON_API);
 
     const rows = pendingRows_(sheet, ctx, mode === 'test' ? 'send' : mode);
     const emails = [];
@@ -155,9 +182,10 @@ function run_(mode) {
       }));
     }
 
-    const quota = mode === 'draft' ? Infinity : MailApp.getRemainingDailyQuota();
+    const quota = mode === 'draft' ? Infinity : Math.max(0, CONFIG.DAILY_LIMIT - sentInLast24h_());
     if (quota < 1) {
-      throw new UserError('Daily limit reached', 'Gmail\'s daily sending limit for scripts is used up. Try again tomorrow.');
+      throw new UserError('Daily limit reached', `This script has sent to ${CONFIG.DAILY_LIMIT} recipients in the ` +
+        'last 24 hours, which is its DAILY_LIMIT. Try again later.');
     }
     const needed = batch.reduce((n, e) => n + recipientCount_(e), 0);
     if (mode === 'send') {
@@ -166,8 +194,8 @@ function run_(mode) {
         `using the draft "${template.subject}"?`;
       if (problems.length) message += `\n\n${problems.length} row(s) with problems will be skipped.`;
       if (needed > quota) {
-        message += `\n\nGmail will only let you send to ${quota} more recipient(s) today, so this run stops ` +
-          'there. Run it again tomorrow to send the rest.';
+        message += `\n\nDAILY_LIMIT allows ${quota} more recipient(s) in the next 24 hours, so this run stops ` +
+          'there. Run it again later to send the rest.';
       }
       if (ui.alert('Send emails?', message, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
     }
@@ -181,7 +209,7 @@ function run_(mode) {
 }
 
 function deliverAll_(batch, template, mode, sheet, ctx, quota, started) {
-  const result = { done: 0, failed: [], stoppedFor: '', left: 0 };
+  const result = { done: 0, failed: [], stoppedFor: '', left: 0, error: '' };
   for (let i = 0; i < batch.length; i++) {
     const email = batch[i];
     if (Date.now() - started > MAX_RUN_MS) {
@@ -198,11 +226,22 @@ function deliverAll_(batch, template, mode, sheet, ctx, quota, started) {
     try {
       deliver_(email, template, mode);
     } catch (e) {
+      if (!(e instanceof GmailApiError)) throw e;
+      if (isSetupError_(e)) throw new UserError('Turn on the Gmail API', `${e.message}\n\n${TURN_ON_API}`);
+      if (isLimitError_(e)) {
+        result.stoppedFor = 'gmail';
+        result.left = batch.length - i;
+        result.error = e.message;
+        break;
+      }
       result.failed.push(`Row ${email.row}: ${e.message}`);
       if (mode !== 'test') setStatus_(sheet, ctx, email.row, `Error: ${e.message}`);
       continue;
     }
-    quota -= mode === 'draft' ? 0 : count;
+    if (mode !== 'draft') {
+      quota -= count;
+      recordSends_(count);
+    }
     result.done++;
     if (mode === 'test') continue;
     const mark = mode === 'draft' ? 'Draft' : 'Sent';
@@ -219,22 +258,137 @@ function deliverAll_(batch, template, mode, sheet, ctx, quota, started) {
 }
 
 function deliver_(email, template, mode) {
-  const options = {
-    htmlBody: email.html,
-    attachments: template.attachments.concat(email.files),
-    inlineImages: template.inlineImages,
-  };
-  if (email.cc.length) options.cc = email.cc.join(',');
-  if (email.bcc.length) options.bcc = email.bcc.join(',');
-  if (CONFIG.SENDER_NAME) options.name = CONFIG.SENDER_NAME;
-  if (CONFIG.FROM) options.from = CONFIG.FROM;
-  if (CONFIG.REPLY_TO) options.replyTo = CONFIG.REPLY_TO;
-  const to = email.to.join(',');
-  if (mode === 'draft') {
-    GmailApp.createDraft(to, email.subject, email.text, options);
-  } else {
-    GmailApp.sendEmail(to, email.subject, email.text, options);
+  const response = UrlFetchApp.fetch(GMAIL_UPLOAD + (mode === 'draft' ? 'drafts' : 'messages/send') + '?uploadType=media', {
+    method: 'post',
+    contentType: 'message/rfc822',
+    payload: buildMime_(email, template),
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+  });
+  const status = response.getResponseCode();
+  if (status >= 200 && status < 300) return;
+  let message = response.getContentText();
+  try {
+    message = JSON.parse(message).error.message || message;
+  } catch (e) {}
+  throw new GmailApiError(status, String(message).trim() || `HTTP ${status}`);
+}
+
+function isSetupError_(e) {
+  return e.status === 403 && /has not been used|is disabled|accessNotConfigured/i.test(e.message);
+}
+
+function isLimitError_(e) {
+  return e.status === 429 || /limit|quota|too many/i.test(e.message);
+}
+
+function buildMime_(email, template) {
+  const headers = [];
+  const from = fromHeader_();
+  if (from) headers.push(`From: ${from}`);
+  headers.push(`To: ${email.to.map(encodeAddress_).join(', ')}`);
+  if (email.cc.length) headers.push(`Cc: ${email.cc.map(encodeAddress_).join(', ')}`);
+  if (email.bcc.length) headers.push(`Bcc: ${email.bcc.map(encodeAddress_).join(', ')}`);
+  if (CONFIG.REPLY_TO) headers.push(`Reply-To: ${encodeAddress_(CONFIG.REPLY_TO)}`);
+  headers.push(`Subject: ${encodeText_(email.subject)}`);
+  headers.push('MIME-Version: 1.0');
+
+  let body = multipart_('alternative', [textPart_('plain', email.text), textPart_('html', email.html)]);
+  const cids = Object.keys(template.inlineImages);
+  if (cids.length) {
+    body = multipart_('related', [body].concat(cids.map((cid) => filePart_(template.inlineImages[cid], cid))));
   }
+  const files = template.attachments.concat(email.files);
+  if (files.length) {
+    body = multipart_('mixed', [body].concat(files.map((file) => filePart_(file, null))));
+  }
+  return headers.join('\r\n') + '\r\n' + body;
+}
+
+function multipart_(subtype, parts) {
+  const boundary = 'mm_' + Utilities.getUuid().replace(/-/g, '');
+  return `Content-Type: multipart/${subtype}; boundary="${boundary}"\r\n\r\n` +
+    parts.map((part) => `--${boundary}\r\n${part}\r\n`).join('') + `--${boundary}--`;
+}
+
+function textPart_(subtype, text) {
+  return `Content-Type: text/${subtype}; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
+    wrap_(Utilities.base64Encode(text, Utilities.Charset.UTF_8));
+}
+
+function filePart_(blob, cid) {
+  const type = blob.getContentType() || 'application/octet-stream';
+  const name = quoteName_(blob.getName() || 'attachment');
+  const lines = [`Content-Type: ${type}; name=${name}`, 'Content-Transfer-Encoding: base64'];
+  if (cid) {
+    lines.push(`Content-ID: <${cid}>`, `Content-Disposition: inline; filename=${name}`);
+  } else {
+    lines.push(`Content-Disposition: attachment; filename=${name}`);
+  }
+  return lines.join('\r\n') + '\r\n\r\n' + wrap_(Utilities.base64Encode(blob.getBytes()));
+}
+
+function wrap_(base64) {
+  return (base64.match(/.{1,76}/g) || []).join('\r\n');
+}
+
+function fromHeader_() {
+  if (!CONFIG.SENDER_NAME) return CONFIG.FROM;
+  return `${encodeName_(CONFIG.SENDER_NAME)} <${CONFIG.FROM || Session.getEffectiveUser().getEmail()}>`;
+}
+
+function encodeAddress_(part) {
+  const m = part.match(/^(.*?)\s*<([^<>]+)>\s*$/);
+  if (!m) return oneLine_(part);
+  const name = m[1].replace(/^"(.*)"$/, '$1').trim();
+  return name ? `${encodeName_(name)} <${m[2].trim()}>` : m[2].trim();
+}
+
+function encodeName_(name) {
+  name = oneLine_(name);
+  return /^[\x20-\x7E]*$/.test(name) ? `"${name.replace(/(["\\])/g, '\\$1')}"` : encodeWord_(name);
+}
+
+function encodeText_(text) {
+  text = oneLine_(text);
+  return /^[\x20-\x7E]*$/.test(text) ? text : encodeWord_(text);
+}
+
+function quoteName_(name) {
+  name = oneLine_(name);
+  return /^[\x20-\x7E]*$/.test(name) ? `"${name.replace(/(["\\])/g, '\\$1')}"` : `"${encodeWord_(name)}"`;
+}
+
+function encodeWord_(text) {
+  return `=?UTF-8?B?${Utilities.base64Encode(text, Utilities.Charset.UTF_8)}?=`;
+}
+
+function oneLine_(text) {
+  return String(text).replace(/[\r\n]+/g, ' ').trim();
+}
+
+function sendLog_() {
+  let log = {};
+  try {
+    log = JSON.parse(PropertiesService.getUserProperties().getProperty('sendLog') || '{}');
+  } catch (e) {}
+  const oldest = Math.floor(Date.now() / HOUR_MS) - 23;
+  Object.keys(log).forEach((hour) => {
+    if (Number(hour) < oldest) delete log[hour];
+  });
+  return log;
+}
+
+function sentInLast24h_() {
+  const log = sendLog_();
+  return Object.keys(log).reduce((n, hour) => n + log[hour], 0);
+}
+
+function recordSends_(count) {
+  const log = sendLog_();
+  const hour = Math.floor(Date.now() / HOUR_MS);
+  log[hour] = (log[hour] || 0) + count;
+  PropertiesService.getUserProperties().setProperty('sendLog', JSON.stringify(log));
 }
 
 function templateDraft_() {
@@ -513,7 +667,11 @@ function summaryText_(mode, result, problems, me) {
   if (result.stoppedFor === 'time') {
     text += `\n\n${result.left} left. Apps Script limits how long a run can take; choose the same menu item again to carry on.`;
   } else if (result.stoppedFor === 'quota') {
-    text += `\n\n${result.left} left: Gmail's daily sending limit is used up. Run it again tomorrow to send the rest.`;
+    text += `\n\n${result.left} left: this script reached its DAILY_LIMIT of ${CONFIG.DAILY_LIMIT} recipients ` +
+      'in 24 hours. Run it again later to send the rest.';
+  } else if (result.stoppedFor === 'gmail') {
+    text += `\n\n${result.left} left: Gmail stopped accepting emails (${result.error}). An @gmail.com account can ` +
+      'send to about 500 recipients a day. Wait 24 hours, then run it again; rows already sent are skipped.';
   }
   if (problems.length) {
     text += mode === 'test'
