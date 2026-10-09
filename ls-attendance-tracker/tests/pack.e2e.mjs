@@ -35,6 +35,14 @@ ok(n.pages === 10, 'pack PDF has 10 pages ' + JSON.stringify(n));
 // a new draft for the same project already carries the WOI
 const fresh = await A.evaluate(() => { const d = newInvoiceDraft(); d.projectIds = [IV.draft.projectIds[0]]; return packSlots(d).filter(x => x.kind === 'doc').map(x => x.src + ':' + x.pages); });
 ok(JSON.stringify(fresh) === '["project:3"]', 'next invoice of the project gets the WOI automatically');
+// bulk upload: the same pack as one file → one WOI matched by PO
+await A.evaluate(() => { const p = IX.proj.get(IV.draft.projectIds[0]); p.docs = []; showView('projects'); });
+await A.setInputFiles('#pv-bulkdocs', PDF); await A.waitForSelector('[data-bp]', { timeout: 60000 });
+const bulk = await A.evaluate(() => [...document.querySelectorAll('#modal tbody tr')].map(tr => ({ pages: tr.children[1].textContent, po: tr.children[2].textContent, proj: tr.querySelector('[data-bp]').selectedOptions[0].textContent, how: tr.children[5].textContent })));
+ok(bulk.length === 1 && bulk[0].pages === '3' && bulk[0].po === 'INS-104N135-26-0002' && bulk[0].proj === 'SCL - ELWOOD - INFRA' && bulk[0].how === 'WOI no', 'bulk upload matched the project by WOI number ' + JSON.stringify(bulk));
+await A.click('#modal .mf button.pri'); await A.waitForSelector('[data-bp]', { state: 'detached', timeout: 60000 }); await A.waitForTimeout(300);
+const bulkDoc = await A.evaluate(() => IX.proj.get(IV.draft.projectIds[0]).docs.map(d => d.kind + ':' + d.pages));
+ok(JSON.stringify(bulkDoc) === '["woi:3"]', 'bulk-uploaded WOI saved on the project ' + JSON.stringify(bulkDoc));
 // project card badge + persistence across reload
 await A.evaluate(() => { saveInvoice(IV.draft); showView('projects'); });
 ok(/📄 WOI 3 p/.test(await A.textContent('#v-projects')), 'project card shows the document');

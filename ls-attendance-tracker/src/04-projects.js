@@ -40,7 +40,7 @@ function renderProjects() {
       <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div>`) : ''}
   ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the worker app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
-    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
+    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><label class="btn sm" style="display:inline-flex;align-items:center">Upload documents in bulk…<input type="file" id="pv-bulkdocs" accept="application/pdf" multiple hidden></label><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
     ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
     ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
     ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
@@ -66,6 +66,7 @@ function renderProjects() {
   </div>`;
   bindSecs(v);
   if ($('#pv-zones')) $('#pv-zones').onclick = zonesMap;
+  if ($('#pv-bulkdocs')) $('#pv-bulkdocs').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) bulkDocs(fs).catch(err => toast(err.message, 6000)); };
   if ($('#pv-unfocus')) $('#pv-unfocus').onclick = () => { PV.focus = ''; clearSel(); };
   if ($('#pv-bulk')) {
     $('#pv-all').onchange = e => v.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
@@ -142,7 +143,7 @@ function editProject(id, presetName, onCreated) {
     <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
     <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
     <div id="ep-docs"></div>
-    <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
+    <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. Many WOIs at once: Projects &amp; sites → <b>Upload documents in bulk…</b>. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
     <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
     ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
@@ -277,6 +278,50 @@ function editSite(id, projectId) {
     }], { width: 'min(1500px,94vw)' });
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
   $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
+}
+/** Bulk upload of Work Order Instructions (one PDF per WOI, or one PDF holding several): matched to projects by the WOI / PO number or project code in the text */
+async function bulkDocs(files) {
+  toast(`Reading ${files.length} PDF(s)…`, 60000);
+  const rows = [];
+  for (const f of files) {
+    const all = PDFX.classify((await PDFX.pages(f, { thumbs: false })).pages);
+    // a full invoice pack: keep only its Work Order pages; a plain WOI file: every page
+    const pages = all.some(p => p.kind === 'woi') ? all.filter(p => p.kind === 'woi') : all;
+    // split at every page where a new WORK ORDER INSTRUCTION header appears with a different WOI number
+    const groups = []; let cur = null;
+    pages.forEach(p => { const i = p.i - 1;
+      const head = /WORK\s*ORDER\s*INSTRUCTION/i.test(p.text), po = (p.text.match(/\b(INS-[A-Z0-9]+-\d{2}-\d{4})\b/) || [])[1] || '';
+      if (!cur || (head && po && cur.po && po !== cur.po)) { cur = { po, idx: [], pages: [] }; groups.push(cur); }
+      if (!cur.po && po) cur.po = po; cur.idx.push(i); cur.pages.push(p);
+    });
+    for (const g of groups) {
+      const f2 = PDFX.fields(g.pages), nm = (g.pages.map(p => p.text).join(' ').match(/Project\s*Name\s*:?\s*(.+?)\s+(?:Project\s*Code|Work\s*Order|Sub\s*-?\s*Contractor|$)/i) || [])[1] || '';
+      const proj = (f2.poNo && S.projects.find(p => p.poNo === f2.poNo)) || (f2.projectCode && S.projects.find(p => p.code === f2.projectCode)) || (nm && S.projects.find(p => norm(p.sapName || '') === norm(nm) || norm(p.name).includes(norm(nm)))) || null;
+      rows.push({ file: f, idx: groups.length > 1 || pages.length !== all.length ? g.idx : null, n: g.idx.length, po: f2.poNo || '', code: f2.projectCode || '', name: nm, pid: proj?.id || '', how: proj ? (proj.poNo === f2.poNo ? 'WOI no' : proj.code === f2.projectCode ? 'project code' : 'name') : '', act: 'add' });
+    }
+  }
+  $('#toast').classList.remove('show');
+  if (!rows.length) return toast('No pages found');
+  const popts = opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —');
+  const m = openModal(`Upload documents · ${rows.length} document(s) in ${files.length} file(s)`, `
+    <p class="muted small" style="margin:0 0 8px">Each document is matched to a project by the WOI / PO number (INS-…) or the project code found in its text. Check the project, then Save. A project that already has a WOI gets it replaced.</p>
+    <div class="tw" style="max-height:60vh"><table><thead><tr><th>File</th><th class="num">Pages</th><th>WOI no</th><th>Code</th><th>Project</th><th>Matched by</th><th>Action</th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr><td class="small" style="white-space:normal;max-width:260px">${esc(r.file.name)}${r.idx ? ` <span class="muted">p ${r.idx[0] + 1}–${r.idx[r.idx.length - 1] + 1}</span>` : ''}</td><td class="num">${r.n}</td><td class="mono small">${esc(r.po || '—')}</td><td class="mono small">${esc(r.code || '—')}</td>
+      <td><select data-bp="${i}" style="min-width:240px">${popts.replace(`value="${r.pid}"`, `value="${r.pid}" selected`)}</select></td>
+      <td>${r.how ? `<span class="pill pos">${r.how}</span>` : '<span class="pill warn">not matched</span>'}</td>
+      <td><select data-ba="${i}">${opts([['add', 'Save as WOI'], ['skip', 'Skip']], r.act)}</select></td></tr>`).join('')}</tbody></table></div>`,
+    [{ label: 'Cancel' }, { label: 'Save', cls: 'pri', onClick: async m => {
+      let saved = 0, skipped = 0;
+      for (const [i, r] of rows.entries()) {
+        const pid = m.querySelector(`[data-bp="${i}"]`).value, act = m.querySelector(`[data-ba="${i}"]`).value;
+        const p = IX.proj.get(pid); if (act !== 'add' || !p) { skipped++; continue; }
+        const d = await PDFX.store(r.file, { name: r.po ? `WOI ${r.po}.pdf` : r.file.name, kind: 'woi', pages: r.idx || undefined });
+        p.docs = (p.docs || []).filter(x => x.kind !== 'woi'); p.docs.push({ ...d, pos: 'end' });
+        if (!p.poNo && r.po) p.poNo = r.po; if (!p.code && r.code) p.code = r.code;
+        saved++;
+      }
+      markDirty(); renderAll(); Files.sweep(); toast(`Saved ${saved} Work Order Instruction(s)${skipped ? ` · ${skipped} skipped` : ''}`, 6000);
+    } }], { width: 'min(1300px,94vw)' });
 }
 /** All zones on one map */
 async function zonesMap() {
