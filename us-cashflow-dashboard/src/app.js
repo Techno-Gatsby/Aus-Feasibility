@@ -1189,7 +1189,7 @@
     if (ga || ex) {
       sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true;
       const ent = { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab], V = ga ? window.SobhaGA : window.SobhaExposure;
-      if (V) V.render(sec.querySelector(ga ? '.view-ga' : '.view-exp'), ent);
+      if (V) V.render(sec.querySelector(ga ? '.view-ga' : '.view-exp'), ent, col);
       return;
     }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }

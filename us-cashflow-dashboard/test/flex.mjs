@@ -3,7 +3,9 @@
 // a later model version would change them, and the extraction runs on them:
 //   years    every sheet read by year gets 5 more years after its last one (cashflows FY 2036 …
 //            FY 2040, P&Ls FY 33 … FY 38), headed in the sheet's own style, figures = the last
-//            year's × 1.1 … 1.5, Total columns including them;
+//            year's × 1.1 … 1.5, Total columns including them; likewise the G&A workbook (G&A
+//            sheet: every year block; OHcost-H+V / H / V) and the three Exposure sheets (each
+//            table's periods, before the version-comparison blocks to their right);
 //   project  on top of that, Brook Hollow copied as 'Test Ridge @ Austin - Texas' after the last
 //            project of every per-project sheet (cashflows, P&Ls, Summary val, budgets, property
 //            tax, Timeline Assumptions): its figures 5 periods later (so it runs into the new
@@ -98,6 +100,7 @@ const HEADERS = {
   prt: (row) => clean(row[2]) === 'Sr.no' || clean(row[3]) === 'Particular',
   pl: (row) => Object.values(row).some((v) => /^description$/i.test(clean(v))),
   rpt: (row, g, r) => Object.values(g.v[r + 1] || {}).some((v) => /^rpt transfer to cost of revenue$/i.test(clean(v))),
+  oh: (row) => Object.values(row).some((v) => typeof v === 'string' && FY.test(clean(v))),
 };
 // Sheets the extraction reads by year (in whichever workbook has them).
 const YEAR_SHEETS = {
@@ -105,7 +108,56 @@ const YEAR_SHEETS = {
   'landowner Projectwise cashflow': 'prt', 'Homebuilde Projectwise cashflow': 'prt',
   'landowner Projectwise PL': 'pl', 'Homebuilde Projectwise PL': 'pl', 'Cons P&L': 'pl',
   'Real property tax V2 - updated': 'rpt',
+  'OHcost-H+V': 'oh', 'OHcost-H': 'oh', 'OHcost-V': 'oh',
 };
+const EXPOSURE = ['Cons Exposure', 'HS Exposure'];
+
+// The year columns at index a (width w) copied N times after them; f(x, k, r, j) gives each copy.
+function copyCols(g, a, w, f, rows = null) {
+  const end = a + w - 1, keep = (r) => !rows || (+r >= rows[0] && +r <= rows[1]);
+  for (const t of ['v', 'f']) for (const r of Object.keys(g[t])) {
+    if (!keep(r)) continue;
+    const row = g[t][r], out = {};
+    for (const [c, x] of Object.entries(row)) out[+c > end ? +c + N * w : c] = x;
+    for (let k = 1; k <= N; k++) for (let j = 0; j < w; j++) { const x = row[a + j]; if (x !== undefined) out[end + (k - 1) * w + j + 1] = t === 'v' ? f(x, k, +r, j) : x; }
+    g[t][r] = out;
+  }
+}
+// G&A sheet: blocks of years (cost, TOTAL OH, Sobha Developers % and amounts, Sobha Homes …),
+// each a run of years in the rows above 'Expense Head'. Amounts scale, shares are copied.
+function addGAYears(g) {
+  const h = rowNums(g).find((r) => Object.values(g.v[r]).some((x) => /^expense head$/i.test(clean(x))));
+  const cells = [];
+  for (const r of rowNums(g).filter((r) => r < h + 2)) for (const [c, x] of Object.entries(g.v[r])) if (isNum(x) && x >= 2000 && x <= 2100 && x === Math.round(x)) cells.push({ r, c: +c, y: x });
+  cells.sort((a, b) => a.c - b.c);
+  const blocks = [];
+  for (const x of cells) { const b = blocks[blocks.length - 1]; if (b && x.y > b[b.length - 1].y && x.r === b[0].r) b.push(x); else blocks.push([x]); }
+  let last = null;
+  for (const b of blocks.filter((b) => b.length > 1).reverse()) {
+    const a = b[b.length - 1], w = a.c - b[b.length - 2].c, share = a.r > h;
+    last = a.y;
+    copyCols(g, a.c, w, (x, k, r) => (r === a.r && x === a.y ? a.y + k : isNum(x) && !share && r > h + 1 ? x * factor(k) : x));
+  }
+  return { last, labels: Array.from({ length: N }, (_, i) => 'FY' + (last + i + 1)) };
+}
+// Exposure: each table ('Particulars' header) gets N more periods after its last; the labels
+// ('As at 31 Dec 2033', a date, 'FY 2033') N years later, the figures × factor.
+function addExposureYears(g) {
+  const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const lab = (x) => (isNum(x) ? (x > 40000 && x < 60000 ? x : null) : /^(as at\s+\d{1,2}\s+[a-z]+\s+\d{4}|fy\s*\d{2,4}|till\s+[a-z]{3}[a-z]*\s*'\d{2})$/i.test(clean(x)) ? clean(x) : null);
+  const later = (x, k) => (isNum(x) ? laterBy(x, k) : x.replace(/(\d{4})$/, (m) => String(+m + k)));
+  const heads = rowNums(g).map((r) => ({ r, c: Object.keys(g.v[r]).map(Number).sort((a, b) => a - b).find((c) => /^particulars$/i.test(clean(g.v[r][c]))) })).filter((x) => x.c);
+  let labels = null;
+  heads.forEach((hd, i) => {
+    const row = g.v[hd.r], P = [], seen = new Set();
+    for (const c of Object.keys(row).map(Number).filter((c) => c > hd.c).sort((a, b) => a - b)) { const l = lab(row[c]); if (l == null) continue; if (seen.has(l)) break; seen.add(l); P.push(c); }
+    if (P.length < 2) return;
+    const a = P[P.length - 1], w = Math.min(a - P[P.length - 2], 2), end = i + 1 < heads.length ? heads[i + 1].r - 1 : Math.max(...rowNums(g));
+    copyCols(g, a, w, (x, k, r) => (r === hd.r && lab(x) != null ? later(x, k) : isNum(x) ? x * factor(k) : x), [hd.r, end]);
+    labels = labels || Array.from({ length: N }, (_, k) => String(later(row[a], k + 1)));
+  });
+  return { labels: labels || [] };
+}
 
 // N more years after the last one. A year can span several columns (a P&L's amount and
 // '% of revenue', the property-tax table's six): the last year's columns are copied.
@@ -225,7 +277,9 @@ function addTimelineRows(g) {
 }
 
 const edits = {
-  years: (n) => (YEAR_SHEETS[n] ? [(g, i) => { i.years = addYears(g, YEAR_SHEETS[n]); }] : []),
+  years: (n) => (YEAR_SHEETS[n] ? [(g, i) => { i.years = addYears(g, YEAR_SHEETS[n]); }]
+    : n === 'G&A' ? [(g, i) => { i.years = addGAYears(g); }]
+    : EXPOSURE.includes(n) ? [(g, i) => { i.years = addExposureYears(g); }] : []),
   project: (n) => {
     if (YEAR_SHEETS[n] === 'prt' || YEAR_SHEETS[n] === 'pl' && n !== 'Cons P&L') return [(g, i) => { i.block = addBlock(g, YEAR_SHEETS[n], i.years); }];
     if (n === 'Summary val') return [(g, i) => { i.column = addSummaryColumn(g); }];
@@ -507,6 +561,55 @@ sameRows('years › project_entity', base.data.project_entity, yrs.data.project_
 // Everything else does not depend on the years.
 for (const ds of ['project_summary', 'project_roe', 'project_timeline']) sameRows('years › ' + ds, base.data[ds], yrs.data[ds]);
 sameRows('years › project_profile', base.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), yrs.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), () => true, ['total_direct_cost_m']);
+
+// G&A: every year field gains the new years (amounts × factor, shares as the last year's);
+// the depreciation schedule is read for whichever new years 'Cal.' has.
+{
+  const last = Math.max(...Object.keys(base.data.ga_lines[0]).map((k) => +(k.match(/^cost (\d{4})$/) || [])[1] || 0));
+  const g = 'years › ga_lines', fm = byKey(yrs.data.ga_lines);
+  check(g, yrs.data.ga_lines.length === base.data.ga_lines.length, `${yrs.data.ga_lines.length} rows`);
+  for (const b of base.data.ga_lines) {
+    const f = fm.get(b.key);
+    if (!check(g, f, `${b.key}: missing`)) continue;
+    // (rule_oh / rule_cost read formulas, which this test does not re-point when it inserts columns)
+    for (const k of Object.keys(b)) if (!['source', 'rule_oh', 'rule_cost'].includes(k)) check(g, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`);
+    for (const fld of ['cost', 'oh', 'proj', 'lo', 'hb', 'lo_pct', 'hb_pct']) for (let k = 1; k <= N; k++) {
+      const v = b[fld + ' ' + last], want = !isNum(v) ? v : /_pct$/.test(fld) ? v : v * factor(k);
+      check(g, near(f[fld + ' ' + (last + k)], want, 0.02), `${b.key} . ${fld} ${last + k}: ${fmt(f[fld + ' ' + (last + k)])}, expected ${fmt(want)}`);
+    }
+  }
+  const g2 = 'years › ga_oh', om = byKey(yrs.data.ga_oh);
+  for (const b of base.data.ga_oh) {
+    const f = om.get(b.key);
+    if (!check(g2, f, `${b.key}: missing`)) continue;
+    for (const k of Object.keys(b)) if (k !== 'source') check(g2, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`);
+    for (const p of ['v', 'p']) for (let k = 1; k <= N; k++) { const v = b[p + ' ' + last], want = isNum(v) ? v * factor(k) : v; check(g2, near(f[p + ' ' + (last + k)], want, 0.02), `${b.key} . ${p} ${last + k}: ${fmt(f[p + ' ' + (last + k)])}, expected ${fmt(want)}`); }
+  }
+  sameRows('years › ga_components', base.data.ga_components, yrs.data.ga_components, () => true, Array.from({ length: N }, (_, k) => 'v ' + (last + k + 1)));
+}
+// Exposure: each table's periods, then N more (figures × factor); what a line is made of still adds up.
+{
+  const g = 'years › exposure', fm = byKey(yrs.data.exposure);
+  check(g, yrs.data.exposure.length === base.data.exposure.length, `${yrs.data.exposure.length} rows, was ${base.data.exposure.length}`);
+  for (const b of base.data.exposure) {
+    const f = fm.get(b.key);
+    if (!check(g, f, `${b.key}: missing`)) continue;
+    const sec = base.data.exposure.find((x) => x.key === (b.parent || b.key)), n = Object.keys(sec).filter((k) => /^h\d+$/.test(k)).length;
+    for (const k of Object.keys(b)) check(g, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`);
+    for (let k = 1; k <= N; k++) {
+      if (b.kind === 'section') { check(g, f['h' + (n + k)] != null, `${b.key} . h${n + k}: none`); continue; }
+      const v = b['p' + n], want = isNum(v) ? v * factor(k) : v;
+      check(g, near(f['p' + (n + k)], want, 0.02), `${b.key} . p${n + k}: ${fmt(f['p' + (n + k)])}, expected ${fmt(want)}`);
+    }
+  }
+  const g2 = 'years › exposure_parts', P2 = yrs.data.exposure_parts;
+  const pm = byKey(P2);
+  for (const b of base.data.exposure_parts) { const f = pm.get(b.key); if (check(g2, f, `${b.key}: missing`)) for (const k of Object.keys(b)) check(g2, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`); }
+  for (const r of yrs.data.exposure.filter((r) => P2.some((p) => p.row === r.key))) {
+    const parts = P2.filter((p) => p.row === r.key);
+    for (const k of Object.keys(r).filter((k) => /^p\d+$/.test(k))) if (isNum(r[k])) check(g2, near(sumOf(parts, k), r[k], 1), `${r.key} . ${k}: parts add up to ${fmt(sumOf(parts, k))}, not ${fmt(r[k])}`);
+  }
+}
 
 // ---- project -----------------------------------------------------------------------------
 const isNew = (r) => r.project === NEW;

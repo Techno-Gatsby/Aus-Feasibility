@@ -10,12 +10,18 @@
   const pct = (v) => (isNum(v) ? (v * 100).toFixed(1) + '%' : '');
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '').replace(/s$/, '');
   const cols = (r, p) => Object.keys(r).filter((k) => new RegExp('^' + p + '\\d+$').test(k)).sort((a, b) => a.slice(p.length) - b.slice(p.length));
-  let box = null;
+  let box = null, col = null;
 
-  function render(container, ent) {
+  function render(container, ent, c) {
     box = container || box;
     if (ent) X.ent = ent;
+    if (c) col = c;
     if (!box) return;
+    draw();
+    // 'Collapse all' in the tab's controls, shown while anything is open
+    if (col) { col.hidden = !box.querySelector('[aria-expanded="true"]'); col.onclick = () => { X.open.clear(); render(); }; }
+  }
+  function draw() {
     box.replaceChildren();
     const E = window.dash.data('exposure').data || [], P = window.dash.data('exposure_parts').data || [];
     const mine = E.filter((r) => r.entity === X.ent).sort((a, b) => a.ord - b.ord);

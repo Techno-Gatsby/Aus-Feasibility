@@ -1,9 +1,10 @@
 // G&A tab: the overhead tables of OHcost-H+V (Consol), OHcost-H (Landowner) and OHcost-V
 // (Homebuilder) (dataset ga_oh). A head opens to its split by year and the OPEX lines, or for
-// depreciation the CAPEX lines, behind it (ga_lines, ga_components; see derive-ga.js).
+// depreciation the CAPEX lines, behind it (ga_lines, ga_components; see derive-ga.js). On Consol
+// the table can also show the full cost of each head (overhead and project share).
 (function () {
   'use strict';
-  const G = { ent: 'consol', open: new Set() };
+  const G = { ent: 'consol', open: new Set(), full: false };
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const isNum = (v) => typeof v === 'number' && isFinite(v);
@@ -12,7 +13,7 @@
   const sum = (a) => (a.some(isNum) ? a.reduce((s, v) => s + (isNum(v) ? v : 0), 0) : null);
   const fy = (y) => 'FY ' + String(y).slice(2);
   const srf = (v) => (v == null ? '' : isNum(v) ? String(+v.toFixed(4)) : String(v));
-  let sec = null;
+  let sec = null, col = null;
 
   const years = (rows) => [...new Set(rows.flatMap((r) => Object.keys(r).map((k) => (k.match(/^v (\d{4})$/) || [])[1]).filter(Boolean)))].map(Number).sort((a, b) => a - b);
   // Without the OHcost sheets: the same table from the G&A sheet.
@@ -33,16 +34,35 @@
   const groupRow = (tb, text, span) => { const g = el('tr', 'g'), x = el('td', 'l', text); x.colSpan = span; g.appendChild(x); tb.appendChild(g); };
   const flag = (parent, title) => { const f = el('span', 'gaflag', '!'); f.title = title; parent.appendChild(f); };
 
-  function render(s, ent) {
+  function render(s, ent, c) {
     sec = s || sec;
     if (ent) G.ent = ent;
+    if (c) col = c;
     if (!sec) return;
+    draw();
+    // 'Collapse all' in the tab's controls, shown while anything is open
+    if (col) { col.hidden = !sec.querySelector('[aria-expanded="true"]'); col.onclick = () => { G.open.clear(); render(); }; }
+  }
+  function draw() {
     const O = window.dash.data('ga_oh').data || [], L = window.dash.data('ga_lines').data || [], C = window.dash.data('ga_components').data || [];
     sec.replaceChildren();
     const rows = O.some((r) => r.entity === G.ent) ? O.filter((r) => r.entity === G.ent) : fromLines(L, G.ent);
     if (!rows.length) return;
     const Y = years(rows), byKey = Object.fromEntries(L.map((r) => [r.key, r]));
     const ncol = Y.length + 2;
+    // Consol: overhead only, or overhead plus project share
+    const full = G.ent === 'consol' && G.full && rows.some((r) => byKey[r.ga]);
+    if (G.ent === 'consol' && L.length) {
+      const sg = el('div', 'seg gaseg');
+      sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', 'Show');
+      [['Overhead', false], ['Incl. project costs', true]].forEach(([x, v]) => {
+        const b = el('button', G.full === v ? 'on' : '', x);
+        b.type = 'button'; b.setAttribute('aria-pressed', String(G.full === v));
+        b.onclick = () => { G.full = v; render(); };
+        sg.appendChild(b);
+      });
+      sec.appendChild(sg);
+    }
 
     // the overhead table
     const tw = el('div', 'tw'), t = el('table', 'stmt gat');
@@ -63,7 +83,7 @@
       const lab = el('td', 'l');
       lab.appendChild(el('span', 'sl', r.code || ''));
       if (r.level) lab.style.paddingLeft = '22px';
-      const vals = Y.map((y) => r['v ' + y]);
+      const vals = Y.map((y) => (full && g ? g['cost ' + y] : r['v ' + y]));
       const canOpen = r.kind !== 'header' && g && (comps.length || vals.some((v) => v));
       if (canOpen) { lab.appendChild(el('span', 'chev', '▸')); clickable(tr, r.key); }
       lab.appendChild(document.createTextNode(r.line.replace(/:$/, '')));
@@ -72,7 +92,7 @@
       if (r.kind === 'header') { for (let i = 1; i < ncol; i++) tr.appendChild(el('td')); tb.appendChild(tr); return; }
       nums(tr, vals);
       tb.appendChild(tr);
-      if (canOpen && G.open.has(r.key)) split(tb, g, Y, comps, ncol);
+      if (canOpen && G.open.has(r.key)) split(tb, g, Y, comps, ncol, r.key);
     });
     t.appendChild(tb); tw.appendChild(t); sec.appendChild(tw);
 
@@ -97,21 +117,28 @@
     t2.appendChild(tb2); tw2.appendChild(t2); sec.appendChild(tw2);
   }
 
-  // A head opened: full cost, overhead, project share and the entity split by year, then its lines.
-  function split(tb, g, Y, comps, ncol) {
-    const sub = (label, f) => {
+  // A head opened: full cost, project share and overhead by year (overhead opens to its
+  // Landowner / Homebuilder split), then its lines.
+  function split(tb, g, Y, comps, ncol, k) {
+    const sub = (label, f, cls) => {
       const vals = Y.map((y) => g[f + ' ' + y]);
-      if (!vals.some(isNum)) return;
-      const tr = el('tr', 'p');
-      tr.appendChild(el('td', 'l', label));
+      if (!vals.some(isNum)) return null;
+      const tr = el('tr', 'p' + (cls ? ' ' + cls : '')), lab = el('td', 'l');
+      lab.appendChild(document.createTextNode(label));
+      tr.appendChild(lab);
       nums(tr, vals);
       tb.appendChild(tr);
+      return tr;
     };
     sub('Full cost', 'cost');
-    sub('Overhead' + (isNum(g.oh_pct) ? ' · ' + pc(g.oh_pct) : ''), 'oh');
     sub('Project share (calc.)' + (isNum(g.proj_pct) ? ' · ' + pc(g.proj_pct) : ''), 'proj');
-    sub('Landowner (H)', 'lo');
-    sub('Homebuilder (V)', 'hb');
+    const ok = k + '|oh', has = ['lo', 'hb'].some((f) => Y.some((y) => isNum(g[f + ' ' + y])));
+    const oh = sub('Overhead' + (isNum(g.oh_pct) ? ' · ' + pc(g.oh_pct) : ''), 'oh');
+    if (oh && has) {
+      oh.firstChild.prepend(el('span', 'chev', '▸'));
+      clickable(oh, ok);
+      if (G.open.has(ok)) { sub('Landowner (H)', 'lo', 'gasub'); sub('Homebuilder (V)', 'hb', 'gasub'); }
+    }
     if (!comps.length) return;
     const dr = el('tr', 'dr'), td = el('td'); td.colSpan = ncol;
     const d = el('div', 'dx');

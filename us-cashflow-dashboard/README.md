@@ -55,10 +55,13 @@ actuals for those cells, blank cells keep what the dashboard has.
 Each entity tab has a **G&A** view next to Cashflow, P&L and Actuals: Consol shows OHcost-H+V,
 Landowner OHcost-H and Homebuilder OHcost-V, as laid out in the workbook, with the rows under
 the table (entity split, cost categories, G&A provision per project; click a project for its
-lines). Click a head for LO / HB share by year, full cost, overhead, project share (full cost ×
-Proj. %, calculated) and both entities, then the OPEX lines behind it (Sr No, months, total,
-counted) or, for depreciation, each purchase batch's CAPEX lines. A red ! marks lines counted
-twice or taken from another month.
+lines). LO share and HB share by year sit above the heads. Click a head for its full cost, project
+share (full cost × Proj. %, calculated) and overhead (click it for Landowner and Homebuilder),
+then the OPEX lines behind it (Sr No, months, total, counted) or, for depreciation, each purchase
+batch's CAPEX lines. A red ! marks lines counted twice or taken from another month. On Consol,
+**Incl. project costs** switches the table to the full cost of each head (the G&A sheet's cost
+columns, overhead and project share together; the contingency plug is not a cost there).
+**Collapse all** closes everything opened, as in Cashflow and P&L.
 
 ## Exposure
 
@@ -68,6 +71,7 @@ the sheet. A line opens to the rows behind it (for example working capital per p
 inventory and land sheets; anything not covered shows as Other) and, on Consol, to the same line
 in the Landowner and Homebuilder statements where the two add up to the Consol line (the Consol
 sheet is built from its own schedules, net of intercompany items, so many lines don't).
+**Collapse all** closes every opened line.
 
 ## Using it on your own computer
 
@@ -120,7 +124,8 @@ node test/flex.mjs              # models with 5 more years and a new project (ma
 ```
 
 `test/flex.mjs` changes the fixture workbooks in memory the way a later model would: every sheet
-read by year gets five more years (cashflows to FY 2040), and Brook Hollow is copied as a new
+read by year gets five more years (cashflows to FY 2040; the G&A sheet's year blocks and the
+OHcost sheets to FY 2035; each Exposure table five more periods), and Brook Hollow is copied as a new
 project after the last one in every per-project sheet, running five years later. It checks
 that every dataset picks up the new years and the new project, and runs the Actuals Excel test on
 the result. `--dump=file.json` / `--write=dir` save that data or those workbooks (model figures:
