@@ -56,7 +56,7 @@
 
   X.step('kpi_extra', async (ctx) => {
     const fresh = ENTS.filter((e) => ctx.fresh(e + '_cf'));
-    if (!fresh.length) throw new Error('needs the cashflow statements (Projectwise cash PRT sheets)');
+    if (!fresh.length) throw new Error('needs the cashflow statements (Projectwise cashflow sheets)');
     // Status and plotted lot area are not in the models: they come from the project profile.
     const profile = {};
     for (const p of ctx.get('project_profile')) profile[p.project] = p;

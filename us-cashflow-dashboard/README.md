@@ -98,11 +98,11 @@ Actuals tab.
 
 | Dashboard | Workbook › sheet |
 |---|---|
-| Cashflow tabs | `… Projectwise cash PRT` in each model (Landowner/Homebuilder copies in the Consol model are used if those models aren't uploaded) |
+| Cashflow tabs | Consol `Consol Projectwise cash`, Landowner `landowner Projectwise cashflow`, Homebuilder `Homebuilde Projectwise cashflow` (not the `… PRT` print copies; without the Landowner / Homebuilder model, the copies inside the Consol model are used) |
 | Landowner / Homebuilder P&L | `landowner Projectwise PL`, `Homebuilde Projectwise PL` (first block = all projects, then one block per project; *Corporate level & differences* is the remainder) |
 | Consol P&L | `Cons P&L` for the totals; per project calculated from revenue in the Consol cashflow, costs from `Cons Budgetd Costs new` spread by revenue, property tax from `Real property tax V2 - updated`, tax rates from `Cons Assumption` |
-| Consol line breakdown | which Landowner/Homebuilder lines each `Consol Projectwise cash PRT` cell sums (cells calculated in the Consol sheet itself show as *Consol-sheet override*) |
-| Equity IRR | the XIRR row under each block of the PRT sheets |
+| Consol line breakdown | which Landowner/Homebuilder lines each `Consol Projectwise cash` cell sums (cells calculated in the Consol sheet itself show as *Consol-sheet override*) |
+| Equity IRR | the XIRR row under each block of the three cashflow sheets (n/a where the sheet gives none) |
 | Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model) |
 | Units, cost, peak debt, dates | cashflow lines, `Cons Budgetd Costs new` / `HS Budget costs1` and the timeline |
 | Project details, milestones | `Summary val`, `landowner Projectwise cashflow`, `Homebuilde Projectwise cashflow`, the timeline |

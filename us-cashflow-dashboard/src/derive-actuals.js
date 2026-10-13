@@ -152,7 +152,7 @@
       out.push(o);
     }
 
-    // Cashflows: the PRT sheets' 'All Projects' block is the sum of the projects; a total
+    // Cashflows: the cashflow sheets' 'All Projects' block is the sum of the projects; a total
     // closes the section its header opened.
     const BAL = [[/^opening escrow/, 'eopen'], [/^closing escrow/, 'eclose'], [/^opening/, 'open'], [/^closing/, 'close']];
     for (const st of CFS) {

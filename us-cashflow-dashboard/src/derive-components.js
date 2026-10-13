@@ -4,8 +4,8 @@
   const { clean, lower, isNum, num, r2, pad2 } = X.lib;
 
   // consol_components: the Landowner and Homebuilder cashflow lines each consol cashflow
-  // line is made of. In 'Consol Projectwise cash PRT' every such cell is a SUMIFS over the
-  // landowner / homebuilder PRT sheets by project and line name; this is that table.
+  // line is made of. In 'Consol Projectwise cash' every such cell is a SUMIFS over the
+  // landowner / homebuilder cashflow sheets by project and line name; this is that table.
   // Names are spelt as in those formulas and matched case-insensitively, like SUMIFS.
   // Lines not listed (sales, escrow, brokerage, marketing, taxes) are worked out on the
   // consol sheet from its own revenue, so they have no components.
@@ -71,19 +71,20 @@
       const row = s.row(r), p = clean(row[1]);
       if (p && isNum(row[2]) && clean(row[3])) at[p + '|' + pad2((seen[p] = (seen[p] || 0) + 1))] = r;
     }
-    const names = ['landowner_cf', 'homebuilder_cf'].flatMap((k) => X.SHEETS[k].map((x) => lower(x[1])));
-    const out = {}; let reads = false;
+    // Any landowner / homebuilder cashflow sheet ('landowner Projectwise cashflow', '… cashf new', …).
+    const reads = (f) => /(landowner|homebuilde)\s*projectwise\s*cash/i.test(f);
+    const out = {}; let any = false;
     for (const c of cf) {
       const r = at[c.key];
       if (!COMPONENTS[lower(c.line)] || !r || lower(s.get(r, 3)) !== lower(c.line)) continue;
       out[c.key] = P.map((p) => {
         if (col[p] == null) return false;
         const f = s.formula(r, col[p]);
-        if (f && names.some((n) => lower(f).includes(n))) { reads = true; return false; }
+        if (f && reads(f)) { any = true; return false; }
         return f !== ''; // '' = a formula that could not be read: leave it to the figures
       });
     }
-    return reads ? out : {};
+    return any ? out : {};
   }
 
   X.step('consol_components', async (ctx) => {

@@ -104,8 +104,8 @@ const HEADERS = {
 };
 // Sheets the extraction reads by year (in whichever workbook has them).
 const YEAR_SHEETS = {
-  'Consol Projectwise cash PRT': 'prt', 'landowner Projectwise cashf PRT': 'prt', 'Homebuilde Projectwise cash PRT': 'prt',
-  'landowner Projectwise cashflow': 'prt', 'Homebuilde Projectwise cashflow': 'prt',
+  'Consol Projectwise cash': 'prt', 'landowner Projectwise cashflow': 'prt', 'Homebuilde Projectwise cashflow': 'prt',
+  'landowner Projectwise cashf new': 'prt',
   'landowner Projectwise PL': 'pl', 'Homebuilde Projectwise PL': 'pl', 'Cons P&L': 'pl',
   'Real property tax V2 - updated': 'rpt',
   'OHcost-H+V': 'oh', 'OHcost-H': 'oh', 'OHcost-V': 'oh',

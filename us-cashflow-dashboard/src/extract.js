@@ -9,16 +9,18 @@
   // A file is recognised by the sheets it contains. When a sheet is renamed in a future
   // model version, change it here and in SHEETS below.
   const MODELS = {
-    consol: { label: 'Consol model', need: ['Consol Projectwise cash PRT', 'Cons P&L'] },
-    landowner: { label: 'Landowner model', need: ['landowner Projectwise cashf PRT', 'landowner Projectwise PL', 'Summary val'] },
-    homebuilder: { label: 'Homebuilder model', need: ['Homebuilde Projectwise cash PRT', 'Homebuilde Projectwise PL'] },
+    consol: { label: 'Consol model', need: ['Consol Projectwise cash', 'Cons P&L'] },
+    landowner: { label: 'Landowner model', need: ['landowner Projectwise cashflow', 'landowner Projectwise PL', 'Summary val'] },
+    homebuilder: { label: 'Homebuilder model', need: ['Homebuilde Projectwise cashflow', 'Homebuilde Projectwise PL'] },
     bpinput: { label: 'BP Input Sheets', need: ['Timeline Assumptions'] },
   };
   // Where each input lives, in order of preference: [model, sheet name].
   const SHEETS = {
-    consol_cf: [['consol', 'Consol Projectwise cash PRT']],
-    landowner_cf: [['landowner', 'landowner Projectwise cashf PRT'], ['consol', 'landowner Projectwise cashf PRT']],
-    homebuilder_cf: [['homebuilder', 'Homebuilde Projectwise cash PRT'], ['consol', 'Homebuilde Projectwise cash PRT']],
+    consol_cf: [['consol', 'Consol Projectwise cash']],
+    // The models' own cashflow sheets, not the '… PRT' print copies. Without the Landowner or
+    // Homebuilder model, the copies inside the Consol model (the ones its consol sheet reads).
+    landowner_cf: [['landowner', 'landowner Projectwise cashflow'], ['consol', 'landowner Projectwise cashf new'], ['consol', 'landowner Projectwise cashflow']],
+    homebuilder_cf: [['homebuilder', 'Homebuilde Projectwise cashflow'], ['consol', 'Homebuilde Projectwise cashflow']],
     consol_pl: [['consol', 'Cons P&L']],
     consol_pl_projects: [['consol', 'Consol Projectwise PL']],
     landowner_pl: [['landowner', 'landowner Projectwise PL']],
@@ -92,7 +94,7 @@
     return out;
   }
 
-  // ---- cashflow statements (… Projectwise cash PRT) -----------------------------------
+  // ---- cashflow statements (… Projectwise cashflow / Consol Projectwise cash) ----------
   const CF_FIX = { 'opening escrow balance balance': 'Opening escrow balance', 'croporate cashflows:': 'Corporate cashflows:' };
   function cfKind(line) {
     const l = lower(line);

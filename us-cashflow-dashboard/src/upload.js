@@ -70,7 +70,8 @@
     return A.map(([label, va, f], i) => {
       const vb = B[i][1];
       const d = va != null && vb != null ? vb - va : null;
-      const same = d == null || Math.abs(d) < (label.includes('IRR') ? 1e-6 : 0.5);
+      const same = d == null ? va == null && vb == null : Math.abs(d) < (label.includes('IRR') ? 1e-6 : 0.5);
+      if (d == null && !same) return { label, was: f(va), now: f(vb), change: vb == null ? 'Not given' : 'New', dir: 'same' };
       return { label, was: f(va), now: f(vb), change: same ? 'No change' : label.includes('IRR') ? (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(2) + ' pts' : (d > 0 ? '+' : '−') + f(Math.abs(d)).replace(/^[−$]+/, label === 'Units' || label === 'Projects' ? '' : '$'), dir: same ? 'same' : d > 0 ? 'up' : 'down' };
     });
   }

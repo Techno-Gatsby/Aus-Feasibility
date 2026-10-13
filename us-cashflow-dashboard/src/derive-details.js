@@ -9,7 +9,7 @@
   'use strict';
   const { isNum, num, r2, clean, lower, iso, headerCols, layout, readCF, readSummary, timelineMatch, concept } = X.lib;
 
-  // The models' own cashflow sheets (not the PRT presentation copies) for the equity schedule:
+  // The models' own cashflow sheets for the equity schedule:
   // their infusions add up to 'Summary val' › Total Equity infused, as in the report.
   X.SHEETS.landowner_cf_own = [['landowner', 'landowner Projectwise cashflow']];
   X.SHEETS.homebuilder_cf_own = [['homebuilder', 'Homebuilde Projectwise cashflow'], ['consol', 'Homebuilde Projectwise cashflow']];
@@ -91,7 +91,7 @@
   }
   const MILESTONES = ['timeline', 'land_parcel_receipt', 'sales_commencement', 'development_completion', 'hand_over'];
 
-  // The model's own cashflow per entity (falls back to the PRT dataset), memoised.
+  // The model's own cashflow per entity (falls back to the cashflow dataset), memoised.
   async function ownCF(ctx, ent) {
     return ctx.memo('details:cf:' + ent, async () => {
       const s = await ctx.sheet(ent + '_cf_own');
@@ -241,7 +241,7 @@
         }
       }
     }
-    if (!any) throw new Error("needs 'landowner Projectwise cashf PRT' or 'Homebuilde Projectwise cash PRT'");
+    if (!any) throw new Error("needs 'landowner Projectwise cashflow' or 'Homebuilde Projectwise cashflow'");
     ctx.report.sources.project_sales = 'landowner_cf, homebuilder_cf (Sales, Sales unit)';
     return out;
   });
