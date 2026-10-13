@@ -1,6 +1,6 @@
 // Exposure view: the projected exposure statement of each entity (dataset exposure, built by
 // derive-exposure.js) as laid out in the sheet. A line opens to Landowner and Homebuilder (on
-// Consol) and to the rows behind it (exposure_parts), e.g. working capital per project.
+// Consol, where they add up) and to the rows behind it (exposure_parts), e.g. working capital per project.
 (function () {
   'use strict';
   const X = { open: new Set() };
@@ -45,11 +45,15 @@
         const vals = H.map((h, i) => r['p' + (i + 1)]);
         const parts = P.filter((p) => p.row === r.key);
         const lo = X.ent === 'consol' && !isPct ? twin(r, 'lo') : null, hb = X.ent === 'consol' && !isPct ? twin(r, 'hb') : null;
+        // Landowner + Homebuilder only where they add up to the Consol line (the Consol sheet is
+        // built from its own schedules, net of intercompany items, so many lines do not).
+        const lv = H.map((h, i) => (lo ? at(lo, i) : null)), hv = H.map((h, i) => (hb ? at(hb, i) : null));
+        const split = (lo || hb) && vals.every((v, i) => !isNum(v) || Math.abs(v - (lv[i] || 0) - (hv[i] || 0)) < 1);
         const tr = el('tr', r.kind === 'total' ? 't' : '');
         const lab = el('td', 'l');
         lab.appendChild(el('span', 'sl', r.code || ''));
         if (r.level) lab.style.paddingLeft = '22px';
-        const canOpen = parts.length || lo || hb;
+        const canOpen = parts.length || split;
         if (canOpen) {
           lab.appendChild(el('span', 'chev', '▸'));
           tr.classList.add('k'); tr.tabIndex = 0; tr.dataset.k = r.key;
@@ -64,12 +68,9 @@
         tb.appendChild(tr);
         if (!canOpen || !X.open.has(r.key)) return;
         const sub = (label, vs, cls) => { const x = el('tr', 'p' + (cls ? ' ' + cls : '')); x.appendChild(el('td', 'l', label)); vs.forEach((v) => x.appendChild(el('td', null, fm(v)))); tb.appendChild(x); };
-        if (lo || hb) {
-          const lv = H.map((h, i) => (lo ? at(lo, i) : null)), hv = H.map((h, i) => (hb ? at(hb, i) : null));
+        if (split) {
           if (lo) sub('Landowner', lv);
           if (hb) sub('Homebuilder', hv);
-          const diff = vals.map((v, i) => (isNum(v) ? v - (lv[i] || 0) - (hv[i] || 0) : null));
-          if (diff.some((d) => isNum(d) && Math.abs(d) >= 1)) sub('Difference', diff, 'gadiff');
         }
         let grp;
         parts.slice().sort((a, b) => a.ord - b.ord).forEach((p) => {

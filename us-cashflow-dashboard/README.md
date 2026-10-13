@@ -66,7 +66,8 @@ Each entity tab also has an **Exposure** view: the projected exposure statement 
 Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`) section by section, as laid out in
 the sheet. A line opens to the rows behind it (for example working capital per project from the
 inventory and land sheets; anything not covered shows as Other) and, on Consol, to the same line
-in the Landowner and Homebuilder statements and the difference.
+in the Landowner and Homebuilder statements where the two add up to the Consol line (the Consol
+sheet is built from its own schedules, net of intercompany items, so many lines don't).
 
 ## Using it on your own computer
 
