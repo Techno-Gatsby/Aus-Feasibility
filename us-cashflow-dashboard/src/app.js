@@ -4,9 +4,9 @@
     landowner: { ds: 'landowner_cf' },
     homebuilder: { ds: 'homebuilder_cf' },
   };
-  const NONPER = new Set(['key', 'project', 'ord', 'line', 'kind', 'Budget', 'Total', 'Sheet', 'Rows', 'Cells', 'Formula (FY2027 cell)', 'Basis']);
+  const NONPER = new Set(['key', 'project', 'ord', 'line', 'kind', 'Budget', 'Total', 'Sheet', 'Rows', 'Cells', 'Formula (FY2027 cell)', 'Basis', 'parent', 'level', 'stmt', 'role', 'rule']);
   const TEAL = '#0D9488', PURPLE = '#7C3AED', NAVY = '#1A2B6B';
-  const S = { tab: 'consol', ent: {} };
+  const S = { tab: 'consol', ent: {}, editing: null, draft: null };
   Object.keys(ENT).forEach((k) => (S.ent[k] = { proj: 'All Projects', mix: 'out', lines: new Set(), projs: new Set(), zero: new Set(), comps: new Set(), stmt: 'cf', pl: new Set(), detail: null, detailTop: false }));
 
   const root = document.querySelector('.sb');
@@ -213,7 +213,17 @@
   }
 
   // ---------- statement ----------
+  // Column headers follow the data, so a model rolled forward a year shows its own periods.
+  function setHead(table, P) {
+    const sig = P.join('|');
+    if (!table || table.dataset.cols === sig) return;
+    table.dataset.cols = sig;
+    const tr = table.querySelector('thead tr');
+    const th = (f, t) => { const h = el('th', f === 'line' ? 'l' : 'n', t); h.setAttribute('data-field', f); tr.appendChild(h); };
+    tr.replaceChildren(); th('line', 'Particular'); th('Total', 'Total'); P.forEach((p) => th(p, p.replace('-', '–')));
+  }
   function renderTable(sec, E, st, rows, P) {
+    setHead(sec.querySelector('.view-cf .stmt'), P);
     const tw = sec.querySelector('.tw');
     const width = Math.max(260, tw.clientWidth - 2);
     const ncols = P.length + 2;
@@ -320,7 +330,9 @@
   const mk = (node, ds, field, col, val) => { node.setAttribute('data-source', ds); node.setAttribute('data-field', field); node.setAttribute('data-where', col + '=' + enc(val)); return node; };
   function hasDetails(project) {
     const d = dash.data('project_profile');
-    return d.status === 'ok' && d.data.some((r) => r.project === project);
+    if (d.status === 'ok' && d.data.some((r) => r.project === project)) return true;
+    // A project new in the models has no details yet; editors can add them.
+    return ST().canWrite && project !== 'All Projects' && !/^(Corporate level|Eliminations)/.test(project);
   }
   function detailsBtn(td, project, rowKey, st) {
     if (!hasDetails(project)) return;
@@ -348,11 +360,19 @@
     const box = el('div', 'pdx');
     const prof = dash.data('project_profile'), ent = dash.data('project_entity'), sal = dash.data('project_sales'), tl = dash.data('project_timeline'), pl = dash.data('consol_project_pl');
     if (prof.status !== 'ok') { box.appendChild(el('p', 'note', prof.status === 'error' ? 'Failed to load' : '')); return box; }
+    if (S.editing === project && S.draft) return makeEditor(project);
     const p = prof.data.find((r) => r.project === project);
-    if (!p) return box;
+    const editBtn = () => { const b = el('button', 'btn quiet pdedit', p ? 'Edit details' : 'Add details'); b.type = 'button'; b.addEventListener('click', () => startEdit(project)); return b; };
+    if (!p) {
+      box.appendChild(el('p', 'note', 'No details for ' + project + ' yet. It is in the uploaded models but not in the project details.'));
+      if (ST().canWrite) box.appendChild(editBtn());
+      return box;
+    }
     const head = el('div', 'pdh');
-    head.appendChild(mk(el('h3', null, p.report_name + ', ' + p.location), 'project_profile', 'report_name', 'project', project));
-    head.appendChild(mk(el('span', 'chip ' + norm(p.status).replace(/\s+/g, '-'), p.status), 'project_profile', 'status', 'project', project));
+    head.appendChild(mk(el('h3', null, p.report_name + (p.location ? ', ' + p.location : '')), 'project_profile', 'report_name', 'project', project));
+    if (p.status) head.appendChild(mk(el('span', 'chip ' + norm(p.status).replace(/\s+/g, '-'), p.status), 'project_profile', 'status', 'project', project));
+    if (ST().details[project]) { const t = el('span', 'edtag', 'Edited'); t.title = 'Some details were changed on the dashboard'; head.appendChild(t); }
+    if (ST().canWrite) head.appendChild(editBtn());
     box.appendChild(head);
     if (p.note) box.appendChild(mk(el('p', 'note', p.note), 'project_profile', 'note', 'project', project));
 
@@ -452,7 +472,7 @@
     if (ents.length) {
       rc.appendChild(etable(ents, [['entity', 'Type'], ['pretax_irr', 'Pre-tax IRR'], ['net_revenue_m', 'Net revenue ($Mn)'], ['gp_margin', 'GP margin'], ['net_margin', 'Net margin'], ['equity_release', 'Equity release']],
         (r, f) => { const v = r[f]; if (v == null) return '–'; if (/irr|margin/.test(f)) return pct(v); return typeof v === 'number' ? v.toFixed(1) : v; }));
-      const ys = ["Till Dec'26", 'FY2027', 'FY2028', 'FY2029', 'FY2030', 'FY2031'];
+      const ys = Object.keys(ents[0]).filter((k) => k.startsWith('equity ')).map((k) => k.slice(7));
       const m2 = (v) => (Math.abs(v) < 0.005 ? '–' : v < 0 ? '(' + Math.abs(v).toFixed(2) + ')' : v.toFixed(2));
       const w = el('div', 'tw2'); w.setAttribute('data-source', 'project_entity');
       const t = el('table', 'mini eqs'); const hr = el('tr');
@@ -514,6 +534,201 @@
     t.appendChild(tb); w.appendChild(t); return w;
   }
 
+  // ---------- project details: editing ----------
+  // Edits are saved as overrides on top of the model figures (store.js), field by field, so
+  // a later model upload still refreshes every field nobody changed.
+  const ST = () => window.SobhaStore || { canWrite: false, details: {}, photos: [], modelData: () => window.__DATA };
+  const PF = [ // [field, label, type, group]
+    ['report_name', 'Report name', 'text', 'Overview'], ['location', 'Location', 'text', 'Overview'], ['status', 'Status', 'status', 'Overview'], ['note', 'Note', 'note', 'Overview'],
+    ['acreage', 'Land area (acres)', 'num', 'Development metrics'], ['nsa_sqft', 'Net saleable area / BUA (sqft)', 'num', 'Development metrics'],
+    ['plotted_sqft', 'Proposed plotted area (sqft)', 'num', 'Development metrics'], ['units', 'Number of lots', 'num', 'Development metrics'],
+    ['plotting_eff', 'Plotting efficiency (%)', 'pct', 'Development metrics'], ['avg_home_sqft', 'Average home size (sqft)', 'num', 'Development metrics'],
+    ['gross_revenue_m', 'Gross revenue ($Mn)', 'num', 'Finance metrics'], ['npat_m', 'Net profit after tax ($Mn)', 'num', 'Finance metrics'],
+    ['gross_profit_m', 'Gross profit ($Mn)', 'num', 'Finance metrics'], ['equity_required_m', 'Equity required ($Mn)', 'num', 'Finance metrics'],
+    ['avg_home_price_m', 'Average home price ($Mn)', 'num', 'Finance metrics'], ['pretax_irr', 'Pre-tax IRR (%)', 'pct', 'Finance metrics'],
+    ['land_cost_m', 'Land cost ($Mn)', 'num', 'Finance metrics'], ['infra_cost_m', 'Infrastructure cost ($Mn)', 'num', 'Finance metrics'],
+    ['total_direct_cost_m', 'Total direct cost ($Mn)', 'num', 'Finance metrics'],
+  ];
+  const EF = [
+    ['land_parcel_receipt', 'Land parcel receipt', 'month'], ['sales_commencement', 'Sales commencement', 'month'],
+    ['development_completion', 'Development completion', 'month'], ['hand_over', 'Hand over', 'month'], ['equity_release', 'Equity release', 'month'],
+    ['pretax_irr', 'Pre-tax IRR (%)', 'pct'], ['net_revenue_m', 'Net revenue ($Mn)', 'num'], ['gp_margin', 'GP margin (%)', 'pct'], ['net_margin', 'Net margin (%)', 'pct'],
+  ];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // "Aug'25" <-> "2025-08" for <input type=month>.
+  const monthIn = (s) => { const m = String(s || '').match(/^([A-Za-z]{3})'(\d{2})$/); const i = m ? MONTHS.indexOf(m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) : -1; return i < 0 ? '' : '20' + m[2] + '-' + String(i + 1).padStart(2, '0'); };
+  const monthOut = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})$/); return m ? MONTHS[+m[2] - 1] + "'" + m[1].slice(2) : null; };
+  const show = (v, type) => (v == null || v === '' ? '' : type === 'pct' ? String(+(v * 100).toFixed(2)) : type === 'month' ? monthIn(v) : String(v));
+  const parse = (s, type) => {
+    if (type === 'text' || type === 'note' || type === 'status') return s;
+    if (type === 'month') return s === '' ? null : monthOut(s);
+    s = String(s).replace(/[,\s$%]/g, ''); if (s === '') return null;
+    const n = Number(s); if (!isFinite(n)) return NaN;
+    return type === 'pct' ? Math.round(n * 1e4) / 1e6 : n;
+  };
+  const sameVal = (a, b) => (a == null || a === '' ? b == null || b === '' : typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-9 : a === b);
+  const hint = (v, type) => (v == null || v === '' ? 'blank' : type === 'pct' ? (v * 100).toFixed(1) + '%' : type === 'month' ? v : type === 'num' ? (Math.abs(v) >= 1000 ? f0(v) : String(+(+v).toFixed(4))) : String(v).slice(0, 60));
+
+  function startEdit(project) {
+    const d = ST().details[project] || {};
+    const clone = (o) => JSON.parse(JSON.stringify(o || {}));
+    S.editing = project;
+    S.draft = { project, fields: clone(d.fields), entities: clone(d.entities), photoCaptions: clone(d.photoCaptions), hiddenPhotos: (d.hiddenPhotos || []).slice(), addPhotos: [], dropAdded: [], addedCaptions: {}, msg: '', bad: {} };
+    render();
+  }
+  const endEdit = () => { S.editing = null; S.draft = null; render(); };
+
+  function makeEditor(project) {
+    const D = S.draft, model = ST().modelData();
+    const mp = (model.project_profile || []).find((r) => r.project === project) || {};
+    const ments = (model.project_entity || []).filter((r) => r.project === project);
+    const box = el('div', 'pdx editing');
+    const head = el('div', 'pdh');
+    head.appendChild(el('h3', null, 'Edit details · ' + (mp.report_name || project)));
+    box.appendChild(head);
+    box.appendChild(el('p', 'note', 'Changed fields are highlighted. Each shows the value from the uploaded models underneath; clear a change with ↺ to go back to it.'));
+    const field = (id, label, type, cur, mv, onVal, opts) => {
+      const edited = !sameVal(cur, mv);
+      const f = el('label', 'fld' + (edited ? ' ed' : '') + (D.bad[id] ? ' bad' : '') + (type === 'note' ? ' wide' : ''));
+      const top = el('span', null, label);
+      if (edited) { const r = el('button', 'link', '↺'); r.type = 'button'; r.title = 'Use the model value'; r.addEventListener('click', (e) => { e.preventDefault(); onVal(undefined); delete D.bad[id]; render(); }); top.appendChild(r); }
+      f.appendChild(top);
+      let inp;
+      if (type === 'status') {
+        inp = el('select');
+        const opts2 = [...new Set(['Confirmed', 'Under consideration', 'Pipeline'].concat((model.project_profile || []).map((r) => r.status)).concat([cur]).filter(Boolean))];
+        opts2.forEach((o) => inp.appendChild(new Option(o, o)));
+        inp.value = cur || '';
+      } else if (type === 'note') { inp = el('textarea'); inp.value = cur || ''; }
+      else { inp = el('input'); inp.type = type === 'month' ? 'month' : 'text'; if (type === 'num' || type === 'pct') inp.inputMode = 'decimal'; inp.value = show(cur, type); }
+      inp.id = 'pde-' + id.replace(/[^\w-]/g, '_');
+      inp.addEventListener('change', () => {
+        const v = parse(inp.value, type);
+        if (Number.isNaN(v)) { D.bad[id] = true; f.classList.add('bad'); return; }
+        delete D.bad[id]; f.classList.remove('bad');
+        onVal(sameVal(v, mv) ? undefined : v);
+        render();
+      });
+      f.appendChild(inp);
+      f.appendChild(el('small', null, 'Model: ' + hint(mv, type)));
+      return f;
+    };
+    const set = (obj, k) => (v) => { if (v === undefined) delete obj[k]; else obj[k] = v; };
+    // profile fields, grouped
+    [...new Set(PF.map((x) => x[3]))].forEach((g) => {
+      const fs = el('fieldset', 'fset'); fs.appendChild(el('legend', null, g));
+      const grid = el('div', 'fgrid' + (g === 'Overview' ? ' wide' : ''));
+      PF.filter((x) => x[3] === g).forEach(([k, label, type]) => {
+        const cur = k in D.fields ? D.fields[k] : mp[k];
+        grid.appendChild(field('p-' + k, label, type, cur, mp[k], set(D.fields, k)));
+      });
+      fs.appendChild(grid); box.appendChild(fs);
+    });
+    // milestones and returns per entity
+    if (ments.length) {
+      const fs = el('fieldset', 'fset'); fs.appendChild(el('legend', null, 'Milestones and returns'));
+      ments.forEach((me) => {
+        const ov = (D.entities[me.entity] = D.entities[me.entity] || {});
+        fs.appendChild(el('div', 'ent', me.entity));
+        const grid = el('div', 'fgrid');
+        EF.forEach(([k, label, type]) => {
+          const cur = k in ov ? ov[k] : me[k];
+          grid.appendChild(field('e-' + me.entity + '-' + k, label, type, cur, me[k], (v) => {
+            set(ov, k)(v);
+            // The timeline text reads "land parcel receipt – hand over".
+            if (k === 'land_parcel_receipt' || k === 'hand_over') {
+              const a = 'land_parcel_receipt' in ov ? ov.land_parcel_receipt : me.land_parcel_receipt, b = 'hand_over' in ov ? ov.hand_over : me.hand_over;
+              const t = a && b ? a + ' – ' + b : a || b || '';
+              if (sameVal(t, me.timeline)) delete ov.timeline; else ov.timeline = t;
+            }
+          }));
+        });
+        fs.appendChild(grid);
+      });
+      box.appendChild(fs);
+    }
+    // photos
+    const fs = el('fieldset', 'fset'); fs.appendChild(el('legend', null, 'Photos'));
+    const grid = el('div', 'phedit');
+    const base = (model.project_photos || window.__BASELINE.project_photos || []).filter((r) => r.project === project);
+    const photoTile = (src, caption, gone, onCap, onToggle, toggleLabel, id) => {
+      const fig = el('figure', gone ? 'gone' : '');
+      const img = el('img'); img.src = String(src).startsWith('data:image/') || String(src).startsWith('blob:') ? src : ''; img.alt = caption || 'Project photo'; fig.appendChild(img);
+      const cap = el('input'); cap.type = 'text'; cap.value = caption || ''; cap.placeholder = 'Caption'; cap.id = 'pde-ph-' + id; cap.setAttribute('aria-label', 'Photo caption');
+      cap.addEventListener('change', () => onCap(cap.value));
+      const row = el('div', 'row'); row.appendChild(cap);
+      const b = el('button', 'btn quiet', toggleLabel); b.type = 'button'; b.addEventListener('click', onToggle); row.appendChild(b);
+      fig.appendChild(row); return fig;
+    };
+    base.forEach((r) => {
+      const gone = D.hiddenPhotos.includes(r.key);
+      grid.appendChild(photoTile(r.image, r.key in D.photoCaptions ? D.photoCaptions[r.key] : r.caption, gone,
+        (v) => { if (v === r.caption) delete D.photoCaptions[r.key]; else D.photoCaptions[r.key] = v; },
+        () => { if (gone) D.hiddenPhotos = D.hiddenPhotos.filter((k) => k !== r.key); else D.hiddenPhotos.push(r.key); render(); }, gone ? 'Restore' : 'Remove', 'b' + r.order));
+    });
+    ST().photos.filter((p) => p.project === project).forEach((p) => {
+      const gone = D.dropAdded.includes(p.id);
+      grid.appendChild(photoTile(p.image, p.id in D.addedCaptions ? D.addedCaptions[p.id] : p.caption, gone,
+        (v) => { D.addedCaptions[p.id] = v; },
+        () => { if (gone) D.dropAdded = D.dropAdded.filter((k) => k !== p.id); else D.dropAdded.push(p.id); render(); }, gone ? 'Restore' : 'Remove', 'a' + p.id));
+    });
+    D.addPhotos.forEach((p, i) => grid.appendChild(photoTile(p.image, p.caption, false, (v) => { p.caption = v; }, () => { D.addPhotos.splice(i, 1); render(); }, 'Remove', 'n' + i)));
+    const add = el('label', 'phadd', 'Add photo (JPEG or PNG)');
+    const fi = el('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.multiple = true; fi.hidden = true; fi.id = 'pde-addphoto';
+    fi.addEventListener('change', async () => {
+      const files = [...fi.files]; fi.value = '';
+      for (const f of files) {
+        try { D.addPhotos.push({ caption: f.name.replace(/\.[^.]+$/, ''), kind: base.length || D.addPhotos.length ? 'model' : 'site', image: await shrinkImage(f) }); }
+        catch (e) { D.msg = 'Could not read ' + f.name + ': ' + e.message; }
+      }
+      render();
+    });
+    add.appendChild(fi); grid.appendChild(add);
+    fs.appendChild(grid); box.appendChild(fs);
+    // actions
+    const acts = el('div', 'edacts');
+    acts.appendChild(el('span', 'msg', D.msg || (ST().mode === 'shared' ? 'Saved changes are shown to everyone with the link.' : 'Changes are saved in this browser.')));
+    const btn = (label, cls, fn) => { const b = el('button', 'btn ' + cls, label); b.type = 'button'; b.addEventListener('click', fn); acts.appendChild(b); return b; };
+    const has = Object.keys(ST().details[project] || {}).length;
+    if (has) btn('Undo all edits', 'danger', async () => { D.fields = {}; D.entities = {}; D.photoCaptions = {}; D.hiddenPhotos = []; render(); });
+    btn('Cancel', 'quiet', endEdit);
+    const save = btn('Save details', 'primary', async () => {
+      if (Object.keys(D.bad).length) { D.msg = 'Fix the highlighted fields first.'; render(); return; }
+      save.disabled = true; D.msg = 'Saving…'; render();
+      try {
+        const st = ST();
+        await st.saveDetails(project, { fields: D.fields, entities: D.entities, photoCaptions: D.photoCaptions, hiddenPhotos: D.hiddenPhotos });
+        for (const p of D.addPhotos) await st.addPhoto(project, p);
+        for (const id of D.dropAdded) await st.removePhoto(id);
+        for (const [id, caption] of Object.entries(D.addedCaptions)) if (!D.dropAdded.includes(id)) await st.updatePhoto(id, { caption });
+        endEdit();
+      } catch (e) { D.msg = ST().message || 'Could not save.'; save.disabled = false; render(); }
+    });
+    box.appendChild(acts);
+    return box;
+  }
+
+  // Photos are stored inside the dashboard's own data, so keep them small: at most 1600 px
+  // wide and about 180 KB as JPEG.
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.naturalWidth, h = img.naturalHeight;
+        const c = document.createElement('canvas'), g = c.getContext('2d');
+        for (let max = 1600; max >= 400; max -= 300) {
+          const k = Math.min(1, max / w); c.width = Math.round(w * k); c.height = Math.round(h * k);
+          g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+          for (const q of [0.82, 0.7, 0.58]) { const d = c.toDataURL('image/jpeg', q); if (d.length < 185000) return resolve(d); }
+        }
+        reject(new Error('the image is too large even after shrinking'));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('not an image this browser can read')); };
+      img.src = url;
+    });
+  }
+
   // ---------- P&L ----------
   const CORP = 'Corporate level & differences', ELIM = 'Eliminations & consolidation adjustments';
   function renderPL(sec, key, st) {
@@ -523,7 +738,8 @@
     const projl = sec.querySelector('.projl');
     projl.hidden = false;
     if (d.status !== 'ok') { tb.replaceChildren(); return; }
-    const rows = d.data, P = periodsOf(d).filter((c) => !['parent', 'level'].includes(c));
+    const rows = d.data, P = periodsOf(d);
+    setHead(sec.querySelector('.plt'), P);
     const order = [...new Set(rows.map((r) => r.project))];
     const rank = (p) => (p === CORP || p === ELIM ? 1e6 : order.indexOf(p));
     const kids = (k) => rows.filter((r) => r.parent === k).sort((a, b) => rank(a.project) - rank(b.project));
@@ -641,8 +857,8 @@
     render();
   })();
 
-  const APER = { consol_cf: 10, landowner_cf: 7, homebuilder_cf: 10, consol_pl: 10, landowner_pl: 7, homebuilder_pl: 8 };
-  const allPer = ["Till Dec'26", 'FY2027', 'FY2028', 'FY2029', 'FY2030', 'FY2031', 'FY2032', 'FY2033', 'FY2034', 'FY2035'];
+  // A statement's plan periods: the period columns that hold figures for it.
+  const actPeriods = (rows) => (rows.length ? Object.keys(rows[0]).filter((c) => !NONPER.has(c) && rows.some((r) => r[c] != null)) : []);
   function evalActuals(stmt, rows, P) {
     const byProj = {};
     rows.forEach((r) => { (byProj[r.project] = byProj[r.project] || []).push(r); });
@@ -695,8 +911,8 @@
     fi.onchange = async () => { const f = fi.files[0]; fi.value = ''; if (f) { AST.msg = 'Reading ' + f.name + '…'; render(); try { const n = await importXlsx(f); AST.msg = 'Imported ' + n + ' actual values from ' + f.name + '.'; } catch (e) { AST.msg = 'Could not read ' + f.name + ': ' + e.message; } render(); } };
     const thr = sec.querySelector('.actt thead tr'), tb = sec.querySelector('.actt tbody');
     if (d.status !== 'ok') { tb.replaceChildren(); return; }
-    const P = allPer.slice(0, APER[stmt]);
     const rows = d.data.filter((r) => r.stmt === stmt);
+    const P = actPeriods(rows);
     const A = evalActuals(stmt, rows, P);
     // header
     thr.replaceChildren();
@@ -793,7 +1009,18 @@
     return count;
   }
 
+  // Removing a focused input fires blur/change, which can ask for another render mid-render:
+  // run that one afterwards instead of nesting it.
+  let rendering = false, again = false;
   function render() {
+    if (rendering) { again = true; return; }
+    rendering = true;
+    const fid = document.activeElement && document.activeElement.id;
+    try { renderAll(); } finally { rendering = false; }
+    if (fid) { const f = document.getElementById(fid); if (f && f !== document.activeElement) f.focus(); }
+    if (again) { again = false; render(); }
+  }
+  function renderAll() {
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
@@ -812,7 +1039,8 @@
     const sel = sec.querySelector('.proj');
     if (d.status === 'ok') {
       const projects = [...new Set(d.data.map((r) => r.project))];
-      if (sel.options.length !== projects.length) {
+      if (sel.dataset.sig !== projects.join('\n')) {
+        sel.dataset.sig = projects.join('\n');
         sel.replaceChildren(...projects.map((p) => new Option(projLabel(p), p)));
         sel.onchange = () => { st.proj = sel.value; st.projs.clear(); st.zero.clear(); st.comps.clear(); render(); };
       }

@@ -5,6 +5,8 @@
     return function(v){return nf.format(v);};
   }
   window.d3={format:fmt,min:function(a,f){var m;a.forEach(function(x){var v=f?f(x):x;if(v!=null&&!isNaN(v)&&(m===undefined||v<m))m=+v;});return m;},max:function(a,f){var m;a.forEach(function(x){var v=f?f(x):x;if(v!=null&&!isNaN(v)&&(m===undefined||v>m))m=+v;});return m;},sum:function(a,f){return a.reduce(function(s,x){return s+(+(f?f(x):x)||0);},0);}};
+  // The page as shipped, before anything renders: "Download updated dashboard" rebuilds from it.
+  window.__PRISTINE = document.getElementById('dash-root').outerHTML;
   // The data shipped with the page; uploads replace window.__DATA, never this.
   window.__BASELINE = JSON.parse(document.getElementById('baseline-data').textContent);
   window.__DATA = window.__BASELINE;

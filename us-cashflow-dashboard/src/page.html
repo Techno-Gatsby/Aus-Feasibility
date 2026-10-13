@@ -1,9 +1,7 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sobha USA Cashflow &amp; P&amp;L Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-<title>Sobha USA Cashflow & P&L Dashboard</title>
 <style>html,body{margin:0;background:#fff}#dash-root{min-height:100vh}</style>
-</head><body><div id="dash-root">
+<div id="dash-root">
 <style>#dash-root{--dash-gutter:0}
 .sb{--navy:#462F28;--purple:#865B4D;--teal:#D7A75F;--ink:#462F28;--text:#3D3633;--muted:#808080;--line:#E8E8E8;--soft:#FBF6EE;--pale:#FFF3E1;--neg:#C96250;--peach:#E6B68F;--grad:linear-gradient(110deg,#865B4D 0%,#C9825A 55%,#9E4E1F 100%);
  background:#fff;color:var(--text);color-scheme:light;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.45;font-variant-numeric:tabular-nums;min-height:100%}
@@ -351,8 +349,105 @@
 .sb .kpi.pk b{margin-bottom:0}
 .sb .kpi.pk .ksub{white-space:normal;overflow:visible}
 </style>
+<style>
+/* ===== Update from models, data-source bar, project-detail editor ===== */
+.sb{--good:#0D7A6E;--warn:#9A5B00;--warnbg:#FFF4E5;--goodbg:#E8F7F5;--badbg:#FDECEA}
+.sb .topbar{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:#fff}
+.sb .topbar .tabs{border-bottom:0;flex:1;min-width:0}
+.sb .topacts{display:flex;align-items:center;gap:8px;padding:0 24px;flex:none}
+.sb .updbtn,.sb .btn{font:600 12px/1.3 inherit;font-family:inherit;border:1px solid var(--purple);color:var(--purple);background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.sb .updbtn:hover,.sb .updbtn[aria-expanded=true]{background:var(--purple);color:#fff}
+.sb .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.sb .btn.primary:hover{background:#24398a}
+.sb .btn.quiet{border-color:var(--line);color:var(--text)}
+.sb .btn.quiet:hover{border-color:var(--muted)}
+.sb .btn.danger{border-color:#F3C5BF;color:var(--neg)}
+.sb .btn:disabled{opacity:.45;cursor:default}
+.sb .srcbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:8px 24px;background:var(--soft);border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.sb .srcbar b{color:var(--ink);font-weight:600}
+.sb .srcbar .dot{width:7px;height:7px;border-radius:50%;background:var(--purple);flex:none}
+.sb .srcbar .srctext{flex:1;min-width:0}
+.sb .srcbar.err .dot{background:var(--neg)}
+.sb .updpanel{padding:16px 24px 20px;border-bottom:1px solid var(--line);background:#FBFBFD}
+.sb .updpanel h2{margin:0 0 4px;font-size:15px;font-weight:800;color:var(--ink)}
+.sb .updpanel .lead{margin:0 0 12px;color:var(--muted);max-width:80ch}
+.sb .drop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border:1.5px dashed #C9CED8;border-radius:8px;padding:14px 16px;background:#fff}
+.sb .drop.over{border-color:var(--purple);background:var(--pale)}
+.sb .drop p{margin:0;color:var(--text)}
+.sb .drop small{display:block;color:var(--muted);margin-top:2px}
+.sb .need{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.sb .need span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 9px;border-radius:10px;background:#EEF0F4;color:#4B5563}
+.sb .need span::before{content:'';width:6px;height:6px;border-radius:50%;background:#B8BFCC}
+.sb .need span.on{background:var(--goodbg);color:var(--good)}
+.sb .need span.on::before{background:var(--good)}
+.sb .rv{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;margin-top:14px}
+@media(max-width:900px){.sb .rv{grid-template-columns:1fr}}
+.sb .rv h3{margin:0 0 6px;font-size:12.5px;font-weight:700;color:var(--ink)}
+.sb .rvcard{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.sb .rvcard+.rvcard{margin-top:12px}
+.sb .files{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.sb .files li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:baseline;font-size:12px}
+.sb .files .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb .files .as{color:var(--muted);white-space:nowrap}
+.sb .mark{width:16px;height:16px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:800;color:#fff;background:var(--good);align-self:center}
+.sb .mark.bad{background:var(--neg)}
+.sb .mark.warn{background:#C98A1B}
+.sb table.delta{width:100%;font-size:12px;border-collapse:collapse}
+.sb table.delta th{position:static;background:none;color:var(--muted);font-weight:600;font-size:11px;text-align:right;padding:4px 6px;border-bottom:1px solid var(--line);box-shadow:none}
+.sb table.delta th:first-child,.sb table.delta td:first-child{text-align:left}
+.sb table.delta td{padding:5px 6px;border-bottom:1px solid #F1F2F5;background:none;white-space:nowrap}
+.sb table.delta td.up{color:var(--good)}
+.sb table.delta td.down{color:var(--neg)}
+.sb table.delta td.same{color:var(--muted)}
+.sb .checks{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:12px}
+.sb .checks li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start}
+.sb .checks small{display:block;color:var(--muted)}
+.sb .warns{margin:8px 0 0;padding:8px 10px;border-radius:6px;background:var(--warnbg);color:var(--warn);font-size:12px;list-style:none;display:grid;gap:3px}
+.sb .dsl{font-size:12px;color:var(--muted);margin:0}
+.sb .dsl b{color:var(--text);font-weight:600}
+.sb .rvacts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.sb .rvacts .msg{color:var(--muted);font-size:12px}
+.sb .busy{display:flex;align-items:center;gap:10px;color:var(--muted);margin-top:12px}
+.sb .busy::before{content:'';width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--purple);animation:sbspin .8s linear infinite}
+@keyframes sbspin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.sb .busy::before{animation:none}}
+@media(max-width:600px){.sb .topacts,.sb .srcbar,.sb .updpanel{padding-left:12px;padding-right:12px}.sb .drop{grid-template-columns:1fr}}
+/* project-detail editor */
+.sb .pdh .pdedit{margin-left:auto}
+.sb .pdx.editing{border-color:var(--purple)}
+.sb .fset{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0 0;min-width:0}
+.sb .fset legend{padding:0 6px;font-size:12px;font-weight:700;color:var(--ink)}
+.sb .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 14px}
+.sb .fgrid.wide{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.sb .fld{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:11.5px;color:var(--muted)}
+.sb .fld>span{display:flex;align-items:center;gap:6px}
+.sb .fld>span i{font-style:normal;color:var(--purple);font-weight:700;font-size:10.5px}
+.sb .fld input,.sb .fld select,.sb .fld textarea{font:inherit;font-size:12.5px;color:var(--ink);border:1px solid #D5D9E1;border-radius:6px;padding:5px 8px;background:#fff;min-width:0;width:100%;box-sizing:border-box}
+.sb .fld textarea{min-height:52px;resize:vertical}
+.sb .fld.ed input,.sb .fld.ed select,.sb .fld.ed textarea{border-color:#B9A2F5;background:#FBF9FF}
+.sb .fld input:focus,.sb .fld select:focus,.sb .fld textarea:focus{outline:2px solid var(--purple);outline-offset:0;border-color:var(--purple)}
+.sb .fld.bad input{border-color:var(--neg)}
+.sb .fld small{color:#9AA1AE;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb .ent{font-size:12px;font-weight:700;color:var(--ink);margin:10px 0 6px}
+.sb .ent:first-of-type{margin-top:0}
+.sb .phedit{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.sb .phedit figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.sb .phedit img{width:100%;height:120px;object-fit:cover;border-radius:6px;border:1px solid var(--line);background:var(--soft)}
+.sb .phedit figure.gone img{opacity:.3;filter:grayscale(1)}
+.sb .phedit .row{display:flex;gap:6px;align-items:center}
+.sb .phadd{display:flex;align-items:center;justify-content:center;height:120px;border:1.5px dashed #C9CED8;border-radius:6px;color:var(--purple);font-weight:600;font-size:12px;cursor:pointer;text-align:center;padding:0 10px}
+.sb .phadd:hover{background:var(--pale)}
+.sb .edacts{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px -16px -14px;padding:10px 16px;background:#fff;border-top:1px solid var(--line);border-radius:0 0 8px 8px}
+.sb .edacts .msg{color:var(--muted);font-size:12px;margin-right:auto}
+.sb .edtag{font-size:10.5px;font-weight:700;color:var(--purple);background:#F3EEFF;border-radius:10px;padding:2px 8px}
+</style>
 <div class="sb">
- <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
+ <div class="topbar">
+  <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
+  <div class="topacts"><button type="button" class="updbtn" id="upd-open" aria-expanded="false" aria-controls="upd-panel" hidden>Update from models</button></div>
+ </div>
+ <div class="srcbar" id="src-bar" hidden></div>
+ <section class="updpanel" id="upd-panel" aria-label="Update from models" hidden></section>
  <div class="body">
 <section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
  <div class="ctl">

@@ -21,7 +21,7 @@ const show = +(opt('show') || 8);
 // Load the same scripts the page loads, in the same order.
 const html = readFileSync(join(root, 'build.mjs'), 'utf8');
 const scripts = JSON.parse(html.match(/const SCRIPTS = (\[[^\]]*\])/)[1].replace(/'/g, '"'))
-  .filter((f) => !['shim.js', 'app.js', 'store.js'].includes(f));
+  .filter((f) => f === 'xlsx.js' || f === 'extract.js' || f.startsWith('derive-'));
 for (const f of scripts) {
   try { vm.runInThisContext(readFileSync(join(root, 'src', f), 'utf8'), { filename: f }); }
   catch (e) { console.log(`! ${f} failed to load: ${e.message}`); }

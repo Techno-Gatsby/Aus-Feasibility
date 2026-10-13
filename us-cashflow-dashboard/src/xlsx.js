@@ -50,7 +50,7 @@
   }
 
   function parseSheet(name, xml, shared) {
-    const rows = {};
+    const rows = {}, formulas = {}, sharedF = {};
     let maxRow = 0, maxCol = 0, uncached = 0, errors = 0;
     const rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g;
     const cellRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
@@ -65,6 +65,14 @@
         const ref = attr(cm[1], 'r'), c = ref ? colNum(ref) : lastCol + 1; lastCol = c;
         const body = cm[2] || '';
         const t = attr(cm[1], 't');
+        // Formula text; a shared formula's followers carry only its index, so use the master's text.
+        const fm = body.indexOf('<f') >= 0 && body.match(/<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/);
+        if (fm) {
+          const si = attr(fm[1], 'si');
+          let ft = fm[2] ? unxml(fm[2]) : null;
+          if (si != null) { if (ft) sharedF[si] = ft; else ft = sharedF[si] || null; }
+          (formulas[r] = formulas[r] || {})[c] = ft || '';
+        }
         // <v>1</v>, <v xml:space="preserve"> x</v>, or <v/> for a formula that returned "".
         const vm = body.match(/<v\b[^>]*?(?:\/>|>([\s\S]*?)<\/v>)/);
         let v = null;
@@ -87,6 +95,8 @@
     return {
       name, rows, maxRow, maxCol, uncached, errors,
       get(r, c) { const row = rows[r]; return row ? (row[c] === undefined ? null : row[c]) : null; },
+      // The cell's formula ('' when it has one we could not read), or null for a typed value.
+      formula(r, c) { const row = formulas[r]; return row && row[c] !== undefined ? row[c] : null; },
       row(r) { return rows[r] || {}; },
       rowNums() { return Object.keys(rows).map(Number).sort((a, b) => a - b); },
     };

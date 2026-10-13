@@ -1,7 +1,9 @@
 // Assembles the single-file dashboard from src/.
-//   node build.mjs            -> Sobha_USA_Cashflow_Dashboard.html
+//   node build.mjs
+//     -> Sobha_USA_Cashflow_Dashboard.html   complete page, opens straight from disk
+//     -> dist/artifact.html                  the same page without the document wrapper, for publishing
 // No dependencies: the page, the baseline data and the scripts are inlined as-is.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,14 +18,22 @@ const inlineJs = (s, name) => {
 };
 
 // Order matters: derived datasets run after the ones they read.
-const SCRIPTS = ['shim.js', 'xlsx.js', 'extract.js', 'derive-consol-pl.js', 'derive-components.js', 'derive-kpi.js', 'derive-details.js', 'derive-actuals.js', 'store.js', 'app.js'];
+const SCRIPTS = ['shim.js', 'xlsx.js', 'extract.js', 'derive-consol-pl.js', 'derive-components.js', 'derive-details.js', 'derive-kpi.js', 'derive-actuals.js', 'store.js', 'app.js', 'upload.js'];
 const baseline = JSON.stringify(JSON.parse(src('baseline.json')));
 
-let html = src('page.html').replace(/\s*$/, '\n');
-html += '<script id="baseline-data" type="application/json">' + inlineJson(baseline) + '</script>\n';
-for (const f of SCRIPTS) html += '<script>\n' + inlineJs(src(f), f).replace(/\s*$/, '\n') + '</script>\n';
-html += '</body></html>\n';
+// page.html = <title>, font link and styles, then <div id="dash-root">…
+const page = src('page.html').replace(/\s*$/, '\n');
+const cut = page.indexOf('<div id="dash-root">');
+const headPart = page.slice(0, cut), bodyPart = page.slice(cut);
 
-const out = join(here, 'Sobha_USA_Cashflow_Dashboard.html');
-writeFileSync(out, html);
-console.log('wrote', out, (html.length / 1024 / 1024).toFixed(2) + ' MB');
+let body = bodyPart;
+body += '<script id="baseline-data" type="application/json">' + inlineJson(baseline) + '</script>\n';
+// data-sb marks the page's own scripts, so "Download updated dashboard" can rebuild the file.
+for (const f of SCRIPTS) body += '<script data-sb="' + f + '">\n' + inlineJs(src(f), f).replace(/\s*$/, '\n') + '</script>\n';
+
+const full = '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'
+  + headPart + '</head><body>\n' + body + '</body></html>\n';
+writeFileSync(join(here, 'Sobha_USA_Cashflow_Dashboard.html'), full);
+mkdirSync(join(here, 'dist'), { recursive: true });
+writeFileSync(join(here, 'dist', 'artifact.html'), headPart + body);
+console.log('wrote Sobha_USA_Cashflow_Dashboard.html', (full.length / 1048576).toFixed(2) + ' MB, and dist/artifact.html');
