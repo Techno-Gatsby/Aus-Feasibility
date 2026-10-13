@@ -60,6 +60,14 @@ Proj. %, calculated) and both entities, then the OPEX lines behind it (Sr No, mo
 counted) or, for depreciation, each purchase batch's CAPEX lines. A red ! marks lines counted
 twice or taken from another month.
 
+## Exposure
+
+Each entity tab also has an **Exposure** view: the projected exposure statement (Consol `Cons
+Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`) section by section, as laid out in
+the sheet. A line opens to the rows behind it (for example working capital per project from the
+inventory and land sheets; anything not covered shows as Other) and, on Consol, to the same line
+in the Landowner and Homebuilder statements and the difference.
+
 ## Using it on your own computer
 
 Open `Sobha_USA_Cashflow_Dashboard.html` in Chrome or Edge, straight from the folder; nothing

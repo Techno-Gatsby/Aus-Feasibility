@@ -1154,9 +1154,9 @@
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
-    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga';
-    sec.querySelector('.view-cf').hidden = pl || act || ga; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga;
-    sec.querySelector('.hint-cf').hidden = pl || act || ga; sec.querySelector('.hint-pl').hidden = !pl;
+    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga', ex = st.stmt === 'exp';
+    sec.querySelector('.view-cf').hidden = pl || act || ga || ex; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga; sec.querySelector('.view-exp').hidden = !ex;
+    sec.querySelector('.hint-cf').hidden = pl || act || ga || ex; sec.querySelector('.hint-pl').hidden = !pl;
     sec.querySelectorAll('.stmtseg button').forEach((b) => {
       b.classList.toggle('on', b.dataset.s === st.stmt);
       b.onclick = () => { st.stmt = b.dataset.s; render(); };
@@ -1186,7 +1186,12 @@
     pdt.replaceChildren();
     pdt.hidden = !(canTop && st.detailTop);
     if (canTop && st.detailTop) pdt.appendChild(makeDetails(st.proj));
-    if (ga) { sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true; if (window.SobhaGA) window.SobhaGA.render(sec.querySelector('.view-ga'), { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab]); return; }
+    if (ga || ex) {
+      sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true;
+      const ent = { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab], V = ga ? window.SobhaGA : window.SobhaExposure;
+      if (V) V.render(sec.querySelector(ga ? '.view-ga' : '.view-exp'), ent);
+      return;
+    }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }
     if (pl) {
       renderPL(sec, S.tab, st);

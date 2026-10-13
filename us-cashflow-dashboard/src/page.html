@@ -449,6 +449,10 @@
 .sb .gat tr.p>td:first-child{padding-left:48px}
 .sb .gat .gapct{display:block;color:var(--muted);font-size:10.5px}
 .sb .gabelow{margin-top:14px}
+.sb .gaexp+.gaexp{margin-top:14px}
+.sb .gat tr.gagrp>td{font-weight:700;color:var(--ink)}
+.sb .gat tr.gapart>td:first-child{padding-left:62px}
+.sb .gat tr.gadiff>td{font-style:italic}
 .sb .gat tr.gashare>td{color:var(--muted);font-size:11.5px;background:var(--soft)}
 .sb .gaflag{display:inline-block;margin-left:6px;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:var(--neg);color:#fff;font-size:10px;font-weight:700;cursor:help;vertical-align:1px}
 .sb .nest td.galine{text-align:left;white-space:normal;min-width:200px;max-width:380px}
@@ -466,7 +470,7 @@
  <div class="body">
 <section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -480,6 +484,7 @@
   <div class="tw" id="consol-statement"><table class="stmt" data-source="consol_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
  </div>
  <div class="view-ga" hidden></div>
+ <div class="view-exp" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -495,7 +500,7 @@
 </section>
 <section class="tab" id="landowner" role="tabpanel" aria-labelledby="tab-landowner" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -509,6 +514,7 @@
   <div class="tw" id="landowner-statement"><table class="stmt" data-source="landowner_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th></tr></thead><tbody></tbody></table></div>
  </div>
  <div class="view-ga" hidden></div>
+ <div class="view-exp" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -524,7 +530,7 @@
 </section>
 <section class="tab" id="homebuilder" role="tabpanel" aria-labelledby="tab-homebuilder" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -538,6 +544,7 @@
   <div class="tw" id="homebuilder-statement"><table class="stmt" data-source="homebuilder_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2025" class="n">FY2025</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
  </div>
  <div class="view-ga" hidden></div>
+ <div class="view-exp" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>

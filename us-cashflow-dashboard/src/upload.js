@@ -114,6 +114,15 @@
       const np = top.find((r) => /^net profit before tax/i.test(r.line)), tx = top.find((r) => /^corporate tax/i.test(r.line)), na = top.find((r) => /^net profit( after tax|\s*\/\s*\(loss\))/i.test(r.line));
       if (np && tx && na) { const diff = np.Total - tx.Total - na.Total; out.push({ ok: Math.abs(diff) <= 1, label: `${name} P&L: profit after tax = profit before tax − tax`, detail: Math.abs(diff) > 1 ? `off by ${money(diff)}` : '' }); }
     }
+    if (report.refreshed.includes('exposure')) {
+      const ex = d.exposure || [], bad = [];
+      for (const [e, n] of [['consol', 'Consol'], ['lo', 'Landowner'], ['hb', 'Homebuilder']]) {
+        const tot = (sec) => ex.filter((r) => r.entity === e && r.sec === sec && r.kind === 'total' && /exposure/i.test(r.line)).pop();
+        const a = tot('assets'), l = tot('liabilities');
+        if (a && l && Object.keys(a).some((k) => /^p\d+$/.test(k) && Math.abs((a[k] || 0) - (l[k] || 0)) > 1)) bad.push(n);
+      }
+      out.push({ ok: !bad.length, label: 'Exposure: assets equal equity and liabilities', detail: bad.join(', ') });
+    }
     if (report.refreshed.includes('ga_lines')) {
       const L = d.ga_lines, C = d.ga_components || [], tot = L.find((r) => r.kind === 'total'), cap = L.find((r) => r.kind === 'cap'), Y = gaYears(tot);
       if (tot) {
