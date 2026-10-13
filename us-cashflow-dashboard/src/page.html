@@ -381,7 +381,8 @@
 .sb .need span.on{background:var(--goodbg);color:var(--good)}
 .sb .need span.on::before{background:var(--good)}
 .sb .rv{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;margin-top:14px}
-@media(max-width:900px){.sb .rv{grid-template-columns:1fr}}
+@media(max-width:900px){.sb .rv{grid-template-columns:minmax(0,1fr)}}
+.sb .rv>div{min-width:0}
 .sb .rv h3{margin:0 0 6px;font-size:12.5px;font-weight:700;color:var(--ink)}
 .sb .rvcard{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
 .sb .rvcard+.rvcard{margin-top:12px}
@@ -411,7 +412,8 @@
 .sb .busy::before{content:'';width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--purple);animation:sbspin .8s linear infinite}
 @keyframes sbspin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.sb .busy::before{animation:none}}
-@media(max-width:600px){.sb .topacts,.sb .srcbar,.sb .updpanel{padding-left:12px;padding-right:12px}.sb .drop{grid-template-columns:1fr}}
+.sb .updbtn .us{display:none}
+@media(max-width:600px){.sb .topacts,.sb .srcbar,.sb .updpanel{padding-left:12px;padding-right:12px}.sb .drop{grid-template-columns:1fr}.sb .updbtn .ul{display:none}.sb .updbtn .us{display:inline}.sb .tabs button{padding-left:10px;padding-right:10px}}
 /* project-detail editor */
 .sb .pdh .pdedit{margin-left:auto}
 .sb .pdx.editing{border-color:var(--purple)}
@@ -444,7 +446,7 @@
 <div class="sb">
  <div class="topbar">
   <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
-  <div class="topacts"><button type="button" class="updbtn" id="upd-open" aria-expanded="false" aria-controls="upd-panel" hidden>Update from models</button></div>
+  <div class="topacts"><button type="button" class="updbtn" id="upd-open" aria-expanded="false" aria-controls="upd-panel" hidden><span class="ul">Update from models</span><span class="us">Update</span></button></div>
  </div>
  <div class="srcbar" id="src-bar" hidden></div>
  <section class="updpanel" id="upd-panel" aria-label="Update from models" hidden></section>

@@ -7,6 +7,7 @@
   const NONPER = new Set(['key', 'project', 'ord', 'line', 'kind', 'Budget', 'Total', 'Sheet', 'Rows', 'Cells', 'Formula (FY2027 cell)', 'Basis', 'parent', 'level', 'stmt', 'role', 'rule']);
   const TEAL = '#0D9488', PURPLE = '#7C3AED', NAVY = '#1A2B6B';
   const S = { tab: 'consol', ent: {}, editing: null, draft: null };
+  let rendering = false, again = false; // see render()
   Object.keys(ENT).forEach((k) => (S.ent[k] = { proj: 'All Projects', mix: 'out', lines: new Set(), projs: new Set(), zero: new Set(), comps: new Set(), stmt: 'cf', pl: new Set(), detail: null, detailTop: false }));
 
   const root = document.querySelector('.sb');
@@ -1011,7 +1012,6 @@
 
   // Removing a focused input fires blur/change, which can ask for another render mid-render:
   // run that one afterwards instead of nesting it.
-  let rendering = false, again = false;
   function render() {
     if (rendering) { again = true; return; }
     rendering = true;
