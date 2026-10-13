@@ -104,12 +104,19 @@ Actuals tab.
 | Consol line breakdown | which Landowner/Homebuilder lines each `Consol Projectwise cash PRT` cell sums (cells calculated in the Consol sheet itself show as *Consol-sheet override*) |
 | Equity IRR | the XIRR row under each block of the PRT sheets |
 | Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model) |
-| Units, cost, peak debt, dates | cashflow lines, budget sheets and the timeline |
+| Units, cost, peak debt, dates | cashflow lines, `Cons Budgetd Costs new` / `HS Budget costs1` and the timeline |
+| Project details, milestones | `Summary val`, `landowner Projectwise cashflow`, `Homebuilde Projectwise cashflow`, the timeline |
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
+| Actuals (plan columns) | the cashflow and P&L datasets above, Homebuilder `Cons P&L` |
+| Exposure | Consol `Cons Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`; the breakdown follows each line's formulas into the sheets they point at (inventory, land bank, land under development, schedules, land payable, …) |
 | G&A (in each entity tab) | G&A workbook › `G&A` (cost, OH % / Proj. %, TOTAL OH, Sobha Developers = Landowner (H), Sobha Homes = Homebuilder (V), Allowed); drill-down follows each head's `Cal.` row to the `OPEX` lines and the depreciation batches |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is
-a one-line change there. Timeline rows are matched to model projects by name
+a one-line change there (the G&A and Exposure sheets: top of `src/derive-ga.js`,
+`src/derive-exposure.js`). Within a sheet nothing is read by cell address: rows are found by
+their labels, projects by their blocks or names, years and periods by their headers, so added
+rows, projects and years are picked up. Saved values are read (formulas are not recalculated),
+so save the workbook after Excel recalculates. Timeline rows are matched to model projects by name
 (`TIMELINE_ALIASES` for names that differ, e.g. *Willard - Commercial* → *Creek Park
 Commercial*).
 
