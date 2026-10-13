@@ -124,6 +124,12 @@
         const bad = Y.filter((y) => Math.abs((tot['oh ' + y] || 0) - (cap['oh ' + y] || 0)) > 1);
         out.push({ ok: !bad.length, warn: !!bad.length, label: 'G&A: overhead equals the allowed cap', detail: bad.map((y) => `${y} off by ${money(tot['oh ' + y] - cap['oh ' + y])}`).join('; ') });
       }
+      const oh = d.ga_oh || [], badOh = [];
+      for (const [e, f, n] of [['consol', 'oh', 'Consol'], ['lo', 'lo', 'Landowner'], ['hb', 'hb', 'Homebuilder']]) {
+        const t = oh.find((r) => r.entity === e && r.part === 'main' && r.kind === 'total');
+        if (t && tot && Y.some((y) => Math.abs((t['v ' + y] || 0) - (tot[f + ' ' + y] || 0)) > 1)) badOh.push(n);
+      }
+      if (oh.length) out.push({ ok: !badOh.length, label: 'G&A: OHcost tables equal the G&A sheet', detail: badOh.join(', ') });
       const by = {};
       C.forEach((c) => { if (c['v ' + Y[0]] != null) by[c.head] = (by[c.head] || 0) + c['v ' + Y[0]]; });
       const off = L.filter((r) => by[r.key] != null && Math.abs(by[r.key] - (r['cost ' + Y[0]] || 0)) > 1);
