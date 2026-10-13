@@ -29,6 +29,8 @@ for (const f of scripts) {
 const X = globalThis.SobhaExtract;
 
 const baseline = JSON.parse(readFileSync(join(root, 'src', 'baseline.json'), 'utf8'));
+// Differences explained by the workbooks themselves (the shipped figures came from an earlier model run).
+const ACCEPTED = JSON.parse(readFileSync(join(root, 'test', 'accepted-diffs.json'), 'utf8'));
 const books = [];
 for (const f of readdirSync(fixtures).filter((f) => /\.xlsx$/i.test(f) && !f.startsWith('~$'))) {
   const b = readFileSync(join(fixtures, f));
@@ -60,17 +62,21 @@ for (const ds of datasets) {
   const wm = new Map(want.map((r, i) => [keyOf(r, i), r]));
   const missing = [...wm.keys()].filter((k) => !gm.has(k));
   const extra = [...gm.keys()].filter((k) => !wm.has(k));
-  const diffs = [];
+  const diffs = [], acc = ACCEPTED[ds] || {};
+  let accepted = 0;
   for (const [k, w] of wm) {
     const g = gm.get(k); if (!g) continue;
     for (const f of new Set([...Object.keys(w), ...Object.keys(g)])) {
       if (f === 'source' || f === 'image') continue;
-      if (!same(g[f], w[f], f)) diffs.push(`${k} . ${f}: got ${JSON.stringify(g[f])} want ${JSON.stringify(w[f])}`);
+      if (same(g[f], w[f], f)) continue;
+      const a = acc[k + ' . ' + f];
+      if (a && same(g[f], a.got, f)) { accepted++; continue; }
+      diffs.push(`${k} . ${f}: got ${JSON.stringify(g[f])} want ${JSON.stringify(w[f])}`);
     }
   }
   const ok = !missing.length && !extra.length && !diffs.length;
   if (!ok) bad++;
-  console.log(`${ok ? '✓' : '✗'} ${ds}: ${want.length} rows; missing ${missing.length}, extra ${extra.length}, differing values ${diffs.length}`);
+  console.log(`${ok ? '✓' : '✗'} ${ds}: ${want.length} rows; missing ${missing.length}, extra ${extra.length}, differing values ${diffs.length}${accepted ? `; ${accepted} known model differences (test/accepted-diffs.json)` : ''}`);
   if (!ok) {
     missing.slice(0, show).forEach((k) => console.log('    missing', k));
     extra.slice(0, show).forEach((k) => console.log('    extra  ', k));

@@ -9,8 +9,8 @@
   'use strict';
   const { isNum, num, r2, clean, lower, iso, headerCols, layout, readCF, readSummary, timelineMatch, concept } = X.lib;
 
-  // The models' own cashflow sheets (not the PRT presentation copies): their equity infusion
-  // lines add up to 'Summary val' › Total Equity infused, which is what the report shows.
+  // The models' own cashflow sheets (not the PRT presentation copies) for the equity schedule:
+  // their infusions add up to 'Summary val' › Total Equity infused, as in the report.
   X.SHEETS.landowner_cf_own = [['landowner', 'landowner Projectwise cashflow']];
   X.SHEETS.homebuilder_cf_own = [['homebuilder', 'Homebuilde Projectwise cashflow'], ['consol', 'Homebuilde Projectwise cashflow']];
   // Budget sheets: one row per project with its 'Equity release' date.
@@ -27,9 +27,11 @@
   // Calendar year a cashflow period ends in: 'FY2027' -> 2027, "Till Aug'26" / "Sep-Dec'26" -> 2026.
   const periodYear = (p) => { const m = p.match(/^FY(\d{4})$/) || p.match(/'(\d{2})$/); return m ? (m[1].length === 2 ? 2000 + +m[1] : +m[1]) : null; };
   const prevBy = (ctx, ds, key) => { const m = {}; for (const r of ctx.prev[ds] || []) m[key(r)] = r; return m; };
+  // Input-sheet rows per project, or null when the BP Input Sheets are not uploaded.
+  const timeline = (ctx) => timelineMatch(ctx).then((x) => x.match, (e) => { if (/^needs /.test(e.message)) return null; throw e; });
 
-  // Summary val rows the shared reader does not keep ('Land costs', 'Infra & PID reimbursement'),
-  // per entity block, plus its fields: { landowner: {land: row, ...}, ... }.
+  // 'Summary val' as val(entity, project, field): the shared reader's fields plus two rows it
+  // does not keep ('Land costs', 'Infra & PID reimbursement'). Blocks: landowner, homebuilder, consol.
   const EXTRA = [[/^land costs?$/, 'land'], [/^infra/, 'infra']];
   async function summary(ctx) {
     return ctx.memo('details:summary', async () => {
@@ -94,7 +96,7 @@
     return ctx.memo('details:cf:' + ent, async () => {
       const s = await ctx.sheet(ent + '_cf_own');
       if (s) { const cf = readCF(s); return { rows: cf.rows, periods: cf.periods, src: `${s.file} › ${s.name}` }; }
-      const rows = ctx.get(ent + '_cf'), periods = rows.length ? Object.keys(rows[0]).filter((k) => periodYear(k) && k !== 'Total') : [];
+      const rows = ctx.get(ent + '_cf'), periods = rows.length ? Object.keys(rows[0]).filter(periodYear) : [];
       return { rows, periods, src: ent + '_cf' };
     });
   }
@@ -102,7 +104,7 @@
   // ---- project_profile ---------------------------------------------------------------
   X.step('project_profile', async (ctx) => {
     const { sv, val, projects } = await summary(ctx);
-    const tl = (await ctx.sheet('timeline')) ? (await timelineMatch(ctx)).match : null;
+    const tl = await timeline(ctx);
     const prev = prevBy(ctx, 'project_profile', (r) => r.project);
     const pl = ctx.get('consol_project_pl');
     const sum = (rows, f) => { const v = rows.map((x) => x[f]).filter(isNum); return v.length ? v.reduce((a, b) => a + b, 0) : null; };
@@ -145,7 +147,7 @@
   // ---- project_entity ----------------------------------------------------------------
   X.step('project_entity', async (ctx) => {
     const { sv, val, projects } = await summary(ctx);
-    const tl = (await ctx.sheet('timeline')) ? (await timelineMatch(ctx)).match : null;
+    const tl = await timeline(ctx);
     const prev = prevBy(ctx, 'project_entity', (r) => r.key);
     // Without a budget sheet the release month is kept from the previous data.
     const rel = { landowner: await ctx.sheet('landowner_budget'), homebuilder: await ctx.sheet('budget') };
@@ -153,6 +155,7 @@
     const cf = { landowner: await ownCF(ctx, 'landowner'), homebuilder: await ownCF(ctx, 'homebuilder') };
     // Schedule columns: everything up to the end of the landowner model's stub periods
     // ("Till Aug'26", "Sep-Dec'26"), then calendar years.
+    if (!cf.landowner.periods.length) throw new Error('no landowner cashflow periods');
     const stub = cf.landowner.periods.filter((p) => !/^FY/.test(p)).map(periodYear);
     const cut = stub.length ? Math.max(...stub) : Math.min(...cf.landowner.periods.map(periodYear)) - 1;
     const cols = [{ key: "equity Till Dec'" + String(cut).slice(2), test: (y) => y <= cut }];
@@ -175,15 +178,15 @@
         // The release is shown as equity returned plus net profit (Summary val), in the year(s)
         // the cashflow releases it.
         const line = (re) => cf[ent].rows.find((r) => r.project === p && re.test(r.line));
-        const inf = line(/^equity infusion$/i), out_ = line(/^equity release$/i);
-        const relTot = out_ ? cf[ent].periods.reduce((s, k) => s + num(out_[k]), 0) : 0;
+        const inf = line(/^equity infusion$/i), rls = line(/^equity release$/i);
+        const relTot = rls ? cf[ent].periods.reduce((s, k) => s + num(rls[k]), 0) : 0;
         const back = num(eq) + num(val(ent, p, 'net_profit'));
         const net = cols.map(() => 0);
         let funding = 0;
         for (const k of cf[ent].periods) {
           const i = cols.findIndex((c) => c.test(periodYear(k)));
           if (i < 0) continue;
-          const r = relTot ? (num(out_[k]) / relTot) * back : 0;
+          const r = relTot ? (num(rls[k]) / relTot) * back : 0;
           net[i] += num(inf && inf[k]) - r; funding -= r;
         }
         o.revenue_funding_m = mn(funding);
@@ -198,7 +201,7 @@
 
   // ---- project_sales -----------------------------------------------------------------
   // The cashflow 'Sales' and 'Sales unit' lines by calendar year (the landowner's stub periods
-  // fall into their year).
+  // fall into their year), units rounded to whole homes/lots.
   // 'Sales unit' as saved in the cashflow sheet: the datasets hold it to 2 dp, and 72.4989
   // must round to 72, not (via 72.50) to 73. {project: {period: units}}.
   function rawUnits(s) {
@@ -216,7 +219,7 @@
       const s = await ctx.sheet(ent + '_cf');
       if (s) any = true;
       const rows = ctx.get(ent + '_cf'), raw = s ? await ctx.memo('details:units:' + ent, async () => rawUnits(s)) : {};
-      const periods = rows.length ? Object.keys(rows[0]).filter((k) => k !== 'Total' && periodYear(k)) : [];
+      const periods = rows.length ? Object.keys(rows[0]).filter(periodYear) : [];
       for (const p of [...new Set(rows.map((r) => r.project))]) {
         if (p === 'All Projects') continue;
         const line = (re) => rows.find((r) => r.project === p && re.test(r.line));
@@ -236,5 +239,4 @@
     ctx.report.sources.project_sales = 'landowner_cf, homebuilder_cf (Sales, Sales unit)';
     return out;
   });
-
 })(typeof window !== 'undefined' ? window.SobhaExtract : globalThis.SobhaExtract);

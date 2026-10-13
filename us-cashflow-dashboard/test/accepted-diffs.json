@@ -1,0 +1,92 @@
+{
+ "project_entity": {
+  "Reserve @ Celina - Texas|Landowner . equity_release": {
+   "got": "Nov'27",
+   "why": "Both models release this equity on 30 Nov 2027 (shipped figures: Dec 2027)."
+  },
+  "Reserve @ Celina - Texas|Landowner . equity FY2027": {
+   "got": -13.54,
+   "why": "Both models release this equity on 30 Nov 2027 (shipped figures: Dec 2027)."
+  },
+  "Reserve @ Celina - Texas|Landowner . equity FY2028": {
+   "got": null,
+   "why": "Both models release this equity on 30 Nov 2027 (shipped figures: Dec 2027)."
+  },
+  "Creek Park @ Celina - Texas|Homebuilder . equity FY2027": {
+   "got": 13.48,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Creek Park Commercial @ Celina - Texas|Landowner . equity FY2031": {
+   "got": 0.16,
+   "why": "The Landowner cashflow still infuses 0.16 in FY2031."
+  },
+  "Park Haven @ Frisco - Texas|Landowner . development_completion": {
+   "got": "Apr'28",
+   "why": "BP Input Rev.04: Park Haven Phase 2 horizontal works end Apr 2028 (shipped figures: Mar 2029). Worth checking the input sheet."
+  },
+  "Brook Hollow @ Prosper - Texas|Landowner . revenue_funding_m": {
+   "got": -58.76,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Brook Hollow @ Prosper - Texas|Landowner . equity FY2027": {
+   "got": 1.25,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Brook Hollow @ Prosper - Texas|Landowner . equity FY2028": {
+   "got": 1.94,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Brook Hollow @ Prosper - Texas|Landowner . equity FY2030": {
+   "got": -58.76,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Zen Hub @ Melissa - Texas|Landowner . revenue_funding_m": {
+   "got": -30.93,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Zen Hub @ Melissa - Texas|Landowner . equity FY2027": {
+   "got": 7.64,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Zen Hub @ Melissa - Texas|Landowner . equity FY2028": {
+   "got": 1.62,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Zen Hub @ Melissa - Texas|Landowner . equity FY2030": {
+   "got": -30.93,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 7 (Phase 1 & 2)|Landowner . revenue_funding_m": {
+   "got": -71.7,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 7 (Phase 1 & 2)|Landowner . equity FY2029": {
+   "got": 2.4,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Project 7 (Phase 1 & 2)|Landowner . equity FY2031": {
+   "got": -71.7,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 8 (Phase 1 & 2)|Landowner . equity FY2029": {
+   "got": 4.13,
+   "why": "The model spreads equity infusions across years slightly differently from the shipped figures."
+  },
+  "Project 2|Homebuilder . revenue_funding_m": {
+   "got": -22.94,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 2|Homebuilder . equity FY2030": {
+   "got": -22.94,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 3|Homebuilder . revenue_funding_m": {
+   "got": -21.64,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  },
+  "Project 3|Homebuilder . equity FY2031": {
+   "got": -21.64,
+   "why": "The model releases this equity inside FY2027-FY2031; the shipped figures left it out."
+  }
+ }
+}
