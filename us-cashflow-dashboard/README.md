@@ -107,7 +107,15 @@ node build.mjs                 # -> Sobha_USA_Cashflow_Dashboard.html and dist/a
 node test/parity.mjs           # needs the four workbooks in fixtures/ (gitignored)
 node test/parity.mjs --only=consol_cf,kpi_extra --show=20
 node test/actuals-xlsx.mjs      # Actuals Excel: formulas match the tab, upload round-trips (no fixtures needed)
+node test/flex.mjs              # models with 5 more years and a new project (made from fixtures/ in memory) still read
 ```
+
+`test/flex.mjs` changes the fixture workbooks in memory the way a later model would: every sheet
+read by year gets five more years (cashflows to FY 2040), and Brook Hollow is copied as a new
+project after the last one in every per-project sheet, running five years later. It checks
+that every dataset picks up the new years and the new project, and runs the Actuals Excel test on
+the result. `--dump=file.json` / `--write=dir` save that data or those workbooks (model figures:
+keep them out of the repository) to try in the page.
 
 The parity test runs the page's own extraction code on the workbooks and compares every
 dataset with `src/baseline.json` (the figures the page ships with), within $1. Run it after

@@ -1752,7 +1752,7 @@
 
   const ENTS = [['landowner', 'Landowner'], ['homebuilder', 'Homebuilder']];
   const SQFT_PER_ACRE = 43560;
-  const EQ_YEARS = 5; // equity schedule: 'Till Dec'<cutoff>' then this many calendar years
+  const EQ_YEARS = 5; // equity schedule: 'Till Dec'<cutoff>' then at least this many calendar years
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const mon = (d) => (d ? MON[+d.slice(5, 7) - 1] + "'" + d.slice(2, 4) : null);
   const round = (v, dp) => (v == null ? null : Math.round(v * 10 ** dp) / 10 ** dp);
@@ -1892,8 +1892,14 @@
     if (!cf.landowner.periods.length) throw new Error('no landowner cashflow periods');
     const stub = cf.landowner.periods.filter((p) => !/^FY/.test(p)).map(periodYear);
     const cut = stub.length ? Math.max(...stub) : Math.min(...cf.landowner.periods.map(periodYear)) - 1;
+    // Years run on to the last one in which any project infuses or releases equity, so a model
+    // with more years loses none of it.
+    let last = cut + EQ_YEARS;
+    for (const ent of ['landowner', 'homebuilder']) for (const r of cf[ent].rows) {
+      if (/^equity (infusion|release)$/i.test(r.line)) for (const k of cf[ent].periods) if (Math.abs(num(r[k])) >= 0.5) last = Math.max(last, periodYear(k));
+    }
     const cols = [{ key: "equity Till Dec'" + String(cut).slice(2), test: (y) => y <= cut }];
-    for (let y = cut + 1; y <= cut + EQ_YEARS; y++) cols.push({ key: 'equity FY' + y, test: (x) => x === y });
+    for (let y = cut + 1; y <= last; y++) cols.push({ key: 'equity FY' + y, test: (x) => x === y });
 
     const out = [];
     for (const p of projects) {

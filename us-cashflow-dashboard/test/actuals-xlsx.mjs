@@ -2,7 +2,9 @@
 // random actuals -> workbook -> every formula evaluated (a small evaluator for the forms the
 // page writes) must equal what the tab shows (evalActuals); uploading the file gives the
 // actuals back, typed cells win over the tab and blank ones keep it; the earlier layout works.
-//   node test/actuals-xlsx.mjs [--seed=7]
+//   node test/actuals-xlsx.mjs [--seed=7] [--plan=file.json | --plan=-]
+// --plan: another plan (an actuals_plan array, or datasets holding one; - reads stdin), e.g.
+// the one test/flex.mjs builds from models with more years and another project.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 const src = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', f), 'utf8');
 (0, eval)(src('xlsx.js'));
 (0, eval)(src('xlsx-write.js'));
-const plan = JSON.parse(src('baseline.json')).actuals_plan;
+const planArg = (process.argv.find((x) => x.startsWith('--plan=')) || '').slice(7);
+const given = planArg && JSON.parse(readFileSync(planArg === '-' ? 0 : planArg, 'utf8'));
+const plan = given ? (Array.isArray(given) ? given : given.actuals_plan) : JSON.parse(src('baseline.json')).actuals_plan;
 
 // app.js's Actuals and Excel sections, with the page around them stubbed.
 const app = src('app.js'), a = app.indexOf('  // ---------- Actuals ----------'), b = app.indexOf('  // Removing a focused input');
