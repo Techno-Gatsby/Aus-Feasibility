@@ -17,9 +17,10 @@
     project_summary: 'Profit, equity and ROE tiles', project_roe: 'Return on equity', project_irr: 'Equity IRR',
     kpi_extra: 'Units, cost and debt tiles', project_timeline: 'Timeline', project_profile: 'Project details',
     project_entity: 'Milestones and returns', project_sales: 'Sales timeline', actuals_plan: 'Plan columns on the Actuals tab',
-    project_photos: 'Photos',
+    project_photos: 'Photos', ga_lines: 'G&A', ga_oh: 'G&A tables', ga_components: 'G&A lines (OPEX, CAPEX)',
+    exposure: 'Exposure', exposure_parts: 'Exposure breakdown',
   };
-  const NEEDS = [['consol', 'Consol model'], ['landowner', 'Landowner model'], ['homebuilder', 'Homebuilder model'], ['bpinput', 'BP Input Sheets']];
+  const NEEDS = [['consol', 'Consol model'], ['landowner', 'Landowner model'], ['homebuilder', 'Homebuilder model'], ['bpinput', 'BP Input Sheets'], ['ga', 'G&A budget']];
 
   // ---- reading ---------------------------------------------------------------------------
   async function read(files) {
