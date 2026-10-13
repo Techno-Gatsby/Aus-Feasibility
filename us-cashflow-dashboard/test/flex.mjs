@@ -565,7 +565,8 @@ sameRows('years › project_profile', base.data.project_profile.map((r) => Objec
 // G&A: every year field gains the new years (amounts × factor, shares as the last year's);
 // the depreciation schedule is read for whichever new years 'Cal.' has.
 {
-  const last = Math.max(...Object.keys(base.data.ga_lines[0]).map((k) => +(k.match(/^cost (\d{4})$/) || [])[1] || 0));
+  // (the OHcost tables' years: a G&A workbook may have no G&A sheet, so no ga_lines)
+  const last = Math.max(...base.data.ga_oh.flatMap((r) => Object.keys(r).map((k) => +(k.match(/^v (\d{4})$/) || [])[1] || 0)));
   const g = 'years › ga_lines', fm = byKey(yrs.data.ga_lines);
   check(g, yrs.data.ga_lines.length === base.data.ga_lines.length, `${yrs.data.ga_lines.length} rows`);
   for (const b of base.data.ga_lines) {

@@ -48,7 +48,7 @@
     sec.replaceChildren();
     const rows = O.some((r) => r.entity === G.ent) ? O.filter((r) => r.entity === G.ent) : fromLines(L, G.ent);
     if (!rows.length) return;
-    const Y = years(rows), byKey = Object.fromEntries(L.map((r) => [r.key, r]));
+    const Y = years(rows), byKey = Object.fromEntries(L.map((r) => [r.key, r])), ohKey = Object.fromEntries(O.map((r) => [r.key, r]));
     const ncol = Y.length + 2;
     // Consol: overhead only, or overhead plus project share
     const full = G.ent === 'consol' && G.full && rows.some((r) => byKey[r.ga]);
@@ -69,8 +69,13 @@
     t.appendChild(head([['Expense Head', 'l'], ...Y.map((y) => [fy(y)]), ['Total']]));
     const tb = el('tbody');
     // The yearly split of shared overhead between Landowner and Homebuilder, above the heads.
+    // From the G&A sheet's share, else the Consol table's Land Development / Developer (Homes) split.
     const shared = L.find((r) => r.kind === 'head' && !r.plug && Y.some((y) => r['lo_pct ' + y] > 0));
-    if (shared) [['LO share', (y) => shared['lo_pct ' + y]], ['HB share', (y) => (isNum(shared['lo_pct ' + y]) ? 1 - shared['lo_pct ' + y] : null)]].forEach(([label, f]) => {
+    const split2 = (re) => O.find((r) => r.entity === 'consol' && r.part === 'below' && re.test(r.line) && Y.some((y) => isNum(r['p ' + y])));
+    const sLo = split2(/^land development/i), sHb = split2(/^developer/i);
+    const shares = shared ? [['LO share', (y) => shared['lo_pct ' + y]], ['HB share', (y) => (isNum(shared['lo_pct ' + y]) ? 1 - shared['lo_pct ' + y] : null)]]
+      : sLo && sHb ? [['LO share', (y) => sLo['p ' + y]], ['HB share', (y) => sHb['p ' + y]]] : [];
+    shares.forEach(([label, f]) => {
       const tr = el('tr', 'gashare');
       tr.appendChild(el('td', 'l', label));
       Y.forEach((y) => tr.appendChild(el('td', null, pc(f(y)))));
@@ -84,7 +89,9 @@
       lab.appendChild(el('span', 'sl', r.code || ''));
       if (r.level) lab.style.paddingLeft = '22px';
       const vals = Y.map((y) => (full && g ? g['cost ' + y] : r['v ' + y]));
-      const canOpen = r.kind !== 'header' && g && (comps.length || vals.some((v) => v));
+      // Without the G&A sheet, a Consol head opens to its OHcost-H and OHcost-V rows.
+      const tw2 = g ? [] : [['Landowner (H)', ohKey[r.twin_lo]], ['Homebuilder (V)', ohKey[r.twin_hb]]].filter((x) => x[1]);
+      const canOpen = r.kind !== 'header' && (g ? comps.length || vals.some((v) => v) : tw2.some(([, x]) => Y.some((y) => x['v ' + y])));
       if (canOpen) { lab.appendChild(el('span', 'chev', '▸')); clickable(tr, r.key); }
       lab.appendChild(document.createTextNode(r.line.replace(/:$/, '')));
       if (comps.some((c) => c.flags)) flag(lab, 'Some lines are counted twice or taken from another month');
@@ -92,7 +99,10 @@
       if (r.kind === 'header') { for (let i = 1; i < ncol; i++) tr.appendChild(el('td')); tb.appendChild(tr); return; }
       nums(tr, vals);
       tb.appendChild(tr);
-      if (canOpen && G.open.has(r.key)) split(tb, g, Y, comps, ncol, r.key);
+      if (canOpen && G.open.has(r.key)) {
+        if (g) split(tb, g, Y, comps, ncol, r.key);
+        else tw2.forEach(([label, x]) => { const sr = el('tr', 'p'); sr.appendChild(el('td', 'l', label)); nums(sr, Y.map((y) => x['v ' + y])); tb.appendChild(sr); });
+      }
     });
     t.appendChild(tb); tw.appendChild(t); sec.appendChild(tw);
 

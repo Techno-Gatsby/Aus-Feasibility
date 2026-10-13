@@ -44,7 +44,10 @@
   // ---- what changes ----------------------------------------------------------------------
   const find = (rows, project, re) => (rows || []).find((r) => r.project === project && re.test(String(r.line || '').trim()));
   const gaYears = (r) => Object.keys(r || {}).filter((k) => /^oh \d{4}$/.test(k)).map((k) => k.slice(3));
+  // Total overhead, all years: the Consol OHcost table's total, else the G&A sheet's.
   function gaTotal(d) {
+    const o = (d.ga_oh || []).find((r) => r.entity === 'consol' && r.part === 'main' && r.kind === 'total');
+    if (o) return Object.keys(o).filter((k) => /^v \d{4}$/.test(k)).reduce((s, k) => s + (o[k] || 0), 0);
     const t = (d.ga_lines || []).find((r) => r.kind === 'total');
     return t ? gaYears(t).reduce((s, y) => s + (t['oh ' + y] || 0), 0) : null;
   }
@@ -125,7 +128,17 @@
       }
       out.push({ ok: !bad.length, label: 'Exposure: assets equal equity and liabilities', detail: bad.join(', ') });
     }
-    if (report.refreshed.includes('ga_lines')) {
+    if (report.refreshed.includes('ga_oh')) {
+      // Each Consol head = its Landowner + Homebuilder rows, every year.
+      const O = d.ga_oh || [], by = Object.fromEntries(O.map((r) => [r.key, r])), bad = [];
+      for (const r of O.filter((x) => x.entity === 'consol' && x.part === 'main' && (x.twin_lo || x.twin_hb))) {
+        const lo = by[r.twin_lo] || {}, hb = by[r.twin_hb] || {};
+        const ys = Object.keys(r).filter((k) => /^v \d{4}$/.test(k) && Math.abs((r[k] || 0) - (lo[k] || 0) - (hb[k] || 0)) > 1);
+        if (ys.length) bad.push(`${r.line} (${ys.map((k) => 'FY ' + k.slice(4)).join(', ')})`);
+      }
+      out.push({ ok: !bad.length, label: 'G&A: Landowner + Homebuilder tables = Consol table', detail: bad.slice(0, 3).join('; ') + (bad.length > 3 ? ` and ${bad.length - 3} more` : '') });
+    }
+    if (report.refreshed.includes('ga_lines') && (d.ga_lines || []).length) {
       const L = d.ga_lines, C = d.ga_components || [], tot = L.find((r) => r.kind === 'total'), cap = L.find((r) => r.kind === 'cap'), Y = gaYears(tot);
       if (tot) {
         const bad = Y.filter((y) => Math.abs((tot['lo ' + y] || 0) + (tot['hb ' + y] || 0) - (tot['oh ' + y] || 0)) > 1);

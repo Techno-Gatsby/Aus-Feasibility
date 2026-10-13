@@ -28,8 +28,12 @@
     message: '',
     onChange(fn) { subs.push(fn); },
     // Original figures, the uploaded ones when present, then project-detail edits on top.
-    effective() { return applyDetails((S.plan && S.plan.data) || window.__BASELINE, S.details, S.photos); },
-    modelData() { return (S.plan && S.plan.data) || window.__BASELINE; },
+    effective() { return applyDetails(S.modelData(), S.details, S.photos); },
+    // Uploaded figures are saved without the photos (they stay with the page): add them back.
+    modelData() {
+      const d = (S.plan && S.plan.data) || window.__BASELINE;
+      return d.project_photos ? d : Object.assign({}, d, { project_photos: window.__BASELINE.project_photos || [] });
+    },
   };
   let db = null, user = null, downloads = null, planId = null;
   const notify = () => { window.dash && dash.setData(S.effective()); subs.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); };

@@ -109,7 +109,7 @@ Actuals tab.
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
 | Actuals (plan columns) | the cashflow and P&L datasets above, Homebuilder `Cons P&L` |
 | Exposure | Consol `Cons Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`; the breakdown follows each line's formulas into the sheets they point at (inventory, land bank, land under development, schedules, land payable, …) |
-| G&A (in each entity tab) | G&A workbook › `G&A` (cost, OH % / Proj. %, TOTAL OH, Sobha Developers = Landowner (H), Sobha Homes = Homebuilder (V), Allowed); drill-down follows each head's `Cal.` row to the `OPEX` lines and the depreciation batches |
+| G&A (in each entity tab) | G&A workbook (recognised by `OHcost-H+V`) › `OHcost-H+V` / `OHcost-H` / `OHcost-V` for the three tables; a Consol head opens to its OHcost-H and OHcost-V rows (paired by the G&A row their formulas read, else by label). When the workbook also has `G&A`, `Cal.`, `OPEX` and `CAPEX`: cost, OH % / Proj. %, LO / HB share, the full-cost view and the drill-down to the OPEX lines and depreciation batches. Without them (an OHcost-only workbook), LO / HB share comes from the Land Development / Developer (Homes) rows and the earlier workbook's lines are not kept |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is
 a one-line change there (the G&A and Exposure sheets: top of `src/derive-ga.js`,

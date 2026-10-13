@@ -12,7 +12,9 @@
   'use strict';
   const { isNum, clean, lower } = X.lib;
   const XL = (typeof window !== 'undefined' ? window : globalThis).XLSXLite;
-  X.MODELS.ga = { label: 'G&A budget', need: ['G&A', 'Cal.', 'OPEX'] };
+  // Recognised by its OHcost-H+V table. The G&A, Cal., OPEX and CAPEX sheets behind it are
+  // optional: a workbook of only the OHcost tables (formulas into another file) still reads.
+  X.MODELS.ga = { label: 'G&A budget', need: ['OHcost-H+V'] };
   Object.assign(X.SHEETS, { ga: [['ga', 'G&A']], ga_cal: [['ga', 'Cal.']], ga_opex: [['ga', 'OPEX']], ga_capex: [['ga', 'CAPEX']],
     ga_oh_consol: [['ga', 'OHcost-H+V']], ga_oh_lo: [['ga', 'OHcost-H']], ga_oh_hb: [['ga', 'OHcost-V']] });
 
@@ -233,7 +235,10 @@
   }
 
   X.step('ga_lines', async (ctx) => {
-    const s = await ctx.need('ga');
+    if (!ctx.has('ga')) throw new Error("needs 'G&A'");
+    const s = await ctx.sheet('ga');
+    // A G&A workbook without its G&A sheet: no heads or lines (not the previous workbook's).
+    if (!s) { ctx.data.ga_components = []; ctx.report.sources.ga_lines = 'not in this G&A workbook (only the OHcost tables)'; return []; }
     const L = layout(s), Y = L.years;
     const cal = await ctx.sheet('ga_cal'), op = await ctx.sheet('ga_opex');
     const C = cal && calLayout(cal), O = op && opexLayout(op), cx = await ctx.sheet('ga_capex');
@@ -344,12 +349,17 @@
         return;
       }
       if (!line) return;
+      // A subtotal with no figures at all (e.g. 'Sub Total - Manpower Cost' left blank).
+      if (part === 'main' && !any && /^sub[\s-]*total/i.test(line)) return;
       const row = { key: `oh|${ent}|${String(++ord).padStart(3, '0')}`, entity: ent, ord, part, code: code == null || part === 'below' ? null : String(code), line, kind: null, level: 0, parent: null, ga: null, source: `${s.name}, row ${r}` };
       if (part === 'main') {
         row.kind = /^sub[\s-]*total/i.test(line) ? 'subtotal' : !isNum(code) && !any ? 'header' : 'head';
         row.level = isNum(code) ? 1 : 0;
         const f = s.formula(r, cols[Y[0]]), gr = f ? refsTo(f, 'G&A')[0] : null;
         row.ga = (gr && link.byRow[gr.row]) || link.byLabel[lower(line)] || null;
+        // The G&A row it reads, in this workbook or another ('[3]G&A'!AP19): pairs the tables.
+        const m = f && f.match(/G&A'?!\$?[A-Z]{1,3}\$?(\d+)/);
+        Object.defineProperty(row, 'gaRow', { value: m ? +m[1] : null, enumerable: false });
       } else {
         const next = rows.slice(i + 1).map((x) => clean(s.get(x, h.c))).find(Boolean) || '';
         if (!any) { row.kind = 'section'; project = null; }
@@ -369,15 +379,25 @@
     return out;
   }
   X.step('ga_oh', async (ctx) => {
-    if (!ctx.fresh('ga_lines')) throw new Error("needs 'G&A'");
+    if (!ctx.has('ga')) throw new Error("needs 'OHcost-H+V'");
     const link = { byRow: {}, byLabel: {} };
-    for (const r of ctx.data.ga_lines) { if (r.row) link.byRow[r.row] = r.key; if (r.kind !== 'cap') link.byLabel[lower(r.line)] = link.byLabel[lower(r.line)] || r.key; }
+    for (const r of ctx.fresh('ga_lines') ? ctx.data.ga_lines : []) { if (r.row) link.byRow[r.row] = r.key; if (r.kind !== 'cap') link.byLabel[lower(r.line)] = link.byLabel[lower(r.line)] || r.key; }
     const out = [];
     for (const ent of ['consol', 'lo', 'hb']) {
       const s = await ctx.sheet('ga_oh_' + ent);
       if (s) out.push(...ohRows(s, ent, link));
     }
     if (!out.length) throw new Error("needs 'OHcost-H+V', 'OHcost-H', 'OHcost-V'");
+    // Each Consol head's Landowner (OHcost-H) and Homebuilder (OHcost-V) rows: the same G&A
+    // row, else the same label.
+    const norm = (t) => lower(t).replace(/[^a-z0-9]+/g, '');
+    const main = (e) => out.filter((r) => r.entity === e && r.part === 'main' && r.kind !== 'header');
+    const pick = (pool, r) => {
+      const i = pool.findIndex((x) => (r.gaRow != null && x.gaRow === r.gaRow) || (r.gaRow == null || x.gaRow == null) && norm(x.line) === norm(r.line));
+      return i < 0 ? null : pool.splice(i, 1)[0].key;
+    };
+    const lo = main('lo'), hb = main('hb');
+    for (const r of main('consol')) { r.twin_lo = pick(lo, r); r.twin_hb = pick(hb, r); }
     return out;
   });
 
