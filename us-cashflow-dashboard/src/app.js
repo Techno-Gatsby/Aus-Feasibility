@@ -1153,11 +1153,10 @@
   function renderAll() {
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
-    if (!ENT[S.tab]) { if (window.SobhaGA) window.SobhaGA.render(document.getElementById(S.tab)); return; }
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
-    const pl = st.stmt === 'pl', act = st.stmt === 'act';
-    sec.querySelector('.view-cf').hidden = pl || act; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act;
-    sec.querySelector('.hint-cf').hidden = pl || act; sec.querySelector('.hint-pl').hidden = !pl;
+    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga';
+    sec.querySelector('.view-cf').hidden = pl || act || ga; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga;
+    sec.querySelector('.hint-cf').hidden = pl || act || ga; sec.querySelector('.hint-pl').hidden = !pl;
     sec.querySelectorAll('.stmtseg button').forEach((b) => {
       b.classList.toggle('on', b.dataset.s === st.stmt);
       b.onclick = () => { st.stmt = b.dataset.s; render(); };
@@ -1187,6 +1186,7 @@
     pdt.replaceChildren();
     pdt.hidden = !(canTop && st.detailTop);
     if (canTop && st.detailTop) pdt.appendChild(makeDetails(st.proj));
+    if (ga) { sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true; if (window.SobhaGA) window.SobhaGA.render(sec.querySelector('.view-ga'), { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab]); return; }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }
     if (pl) {
       renderPL(sec, S.tab, st);
@@ -1203,6 +1203,6 @@
 
   root.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; dash.setLink(S.tab); render(); }));
   const h = location.hash.slice(1);
-  if (ENT[h] || h === 'ga') S.tab = h;
+  if (ENT[h]) S.tab = h;
   dash.onData(render);
 })();

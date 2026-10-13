@@ -4,7 +4,6 @@
 (function () {
   'use strict';
   const G = { ent: 'consol', open: new Set() };
-  const ENTS = [['consol', 'Consol (H+V)'], ['lo', 'Landowner (H)'], ['hb', 'Homebuilder (V)']];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const isNum = (v) => typeof v === 'number' && isFinite(v);
@@ -34,16 +33,12 @@
   const groupRow = (tb, text, span) => { const g = el('tr', 'g'), x = el('td', 'l', text); x.colSpan = span; g.appendChild(x); tb.appendChild(g); };
   const flag = (parent, title) => { const f = el('span', 'gaflag', '!'); f.title = title; parent.appendChild(f); };
 
-  function render(s) {
+  function render(s, ent) {
     sec = s || sec;
+    if (ent) G.ent = ent;
     if (!sec) return;
     const O = window.dash.data('ga_oh').data || [], L = window.dash.data('ga_lines').data || [], C = window.dash.data('ga_components').data || [];
     sec.replaceChildren();
-    const ctl = el('div', 'ctl'), seg = el('div', 'seg');
-    seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Entity');
-    ENTS.forEach(([k, t]) => { const b = el('button', k === G.ent ? 'on' : '', t); b.type = 'button'; b.setAttribute('aria-pressed', String(k === G.ent)); b.onclick = () => { G.ent = k; render(); }; seg.appendChild(b); });
-    ctl.append(seg, el('span', 'unit', 'USD'));
-    sec.appendChild(ctl);
     const rows = O.some((r) => r.entity === G.ent) ? O.filter((r) => r.entity === G.ent) : fromLines(L, G.ent);
     if (!rows.length) return;
     const Y = years(rows), byKey = Object.fromEntries(L.map((r) => [r.key, r]));
@@ -95,7 +90,18 @@
 
   // A head opened: full cost, overhead, project share and the entity split by year, then its lines.
   function split(tb, g, Y, comps, ncol) {
-    const lp = Y.map((y) => g['lo_pct ' + y]).filter(isNum);
+    // Landowner share of the overhead by year: the head's ratio, else what its figures give.
+    const lo = Y.map((y) => (isNum(g['lo_pct ' + y]) ? g['lo_pct ' + y] : g['oh ' + y] ? (g['lo ' + y] || 0) / g['oh ' + y] : null));
+    const share = (label, vals) => {
+      if (!vals.some(isNum)) return;
+      const tr = el('tr', 'p');
+      tr.appendChild(el('td', 'l', label));
+      vals.forEach((v) => tr.appendChild(el('td', null, pc(v))));
+      tr.appendChild(el('td'));
+      tb.appendChild(tr);
+    };
+    share('LO share', lo);
+    share('HB share', lo.map((v) => (isNum(v) ? 1 - v : null)));
     const sub = (label, f) => {
       const vals = Y.map((y) => g[f + ' ' + y]);
       if (!vals.some(isNum)) return;
@@ -107,7 +113,7 @@
     sub('Full cost', 'cost');
     sub('Overhead' + (isNum(g.oh_pct) ? ' · ' + pc(g.oh_pct) : ''), 'oh');
     sub('Project share (calc.)' + (isNum(g.proj_pct) ? ' · ' + pc(g.proj_pct) : ''), 'proj');
-    sub('Landowner (H)' + (lp.length ? ' · ' + (lp[0] === lp[lp.length - 1] ? pc(lp[0]) : pc(lp[0]) + '→' + pc(lp[lp.length - 1])) : ''), 'lo');
+    sub('Landowner (H)', 'lo');
     sub('Homebuilder (V)', 'hb');
     if (!comps.length) return;
     const dr = el('tr', 'dr'), td = el('td'); td.colSpan = ncol;

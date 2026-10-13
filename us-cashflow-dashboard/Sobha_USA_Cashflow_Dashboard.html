@@ -460,16 +460,15 @@
 </style>
 <div class="sb">
  <div class="topbar">
-  <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button><button type="button" role="tab" data-t="ga" id="tab-ga">G&amp;A</button></div>
+  <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
   <div class="topacts"><button type="button" class="updbtn" id="upd-open" aria-expanded="false" aria-controls="upd-panel" hidden><span class="ul">Update from models</span><span class="us">Update</span></button></div>
  </div>
  <div class="srcbar" id="src-bar" hidden></div>
  <section class="updpanel" id="upd-panel" aria-label="Update from models" hidden></section>
  <div class="body">
-<section class="tab ga" id="ga" role="tabpanel" aria-labelledby="tab-ga" hidden></section>
 <section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -482,6 +481,7 @@
   <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (homes)</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average home size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per home</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
   <div class="tw" id="consol-statement"><table class="stmt" data-source="consol_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
  </div>
+ <div class="view-ga" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -497,7 +497,7 @@
 </section>
 <section class="tab" id="landowner" role="tabpanel" aria-labelledby="tab-landowner" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -510,6 +510,7 @@
   <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (lots)</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average lot size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per lot</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
   <div class="tw" id="landowner-statement"><table class="stmt" data-source="landowner_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th></tr></thead><tbody></tbody></table></div>
  </div>
+ <div class="view-ga" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -525,7 +526,7 @@
 </section>
 <section class="tab" id="homebuilder" role="tabpanel" aria-labelledby="tab-homebuilder" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -538,6 +539,7 @@
   <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (homes)</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average home size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per home</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
   <div class="tw" id="homebuilder-statement"><table class="stmt" data-source="homebuilder_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2025" class="n">FY2025</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
  </div>
+ <div class="view-ga" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -2973,7 +2975,6 @@
 (function () {
   'use strict';
   const G = { ent: 'consol', open: new Set() };
-  const ENTS = [['consol', 'Consol (H+V)'], ['lo', 'Landowner (H)'], ['hb', 'Homebuilder (V)']];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const isNum = (v) => typeof v === 'number' && isFinite(v);
@@ -3003,16 +3004,12 @@
   const groupRow = (tb, text, span) => { const g = el('tr', 'g'), x = el('td', 'l', text); x.colSpan = span; g.appendChild(x); tb.appendChild(g); };
   const flag = (parent, title) => { const f = el('span', 'gaflag', '!'); f.title = title; parent.appendChild(f); };
 
-  function render(s) {
+  function render(s, ent) {
     sec = s || sec;
+    if (ent) G.ent = ent;
     if (!sec) return;
     const O = window.dash.data('ga_oh').data || [], L = window.dash.data('ga_lines').data || [], C = window.dash.data('ga_components').data || [];
     sec.replaceChildren();
-    const ctl = el('div', 'ctl'), seg = el('div', 'seg');
-    seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Entity');
-    ENTS.forEach(([k, t]) => { const b = el('button', k === G.ent ? 'on' : '', t); b.type = 'button'; b.setAttribute('aria-pressed', String(k === G.ent)); b.onclick = () => { G.ent = k; render(); }; seg.appendChild(b); });
-    ctl.append(seg, el('span', 'unit', 'USD'));
-    sec.appendChild(ctl);
     const rows = O.some((r) => r.entity === G.ent) ? O.filter((r) => r.entity === G.ent) : fromLines(L, G.ent);
     if (!rows.length) return;
     const Y = years(rows), byKey = Object.fromEntries(L.map((r) => [r.key, r]));
@@ -3064,7 +3061,18 @@
 
   // A head opened: full cost, overhead, project share and the entity split by year, then its lines.
   function split(tb, g, Y, comps, ncol) {
-    const lp = Y.map((y) => g['lo_pct ' + y]).filter(isNum);
+    // Landowner share of the overhead by year: the head's ratio, else what its figures give.
+    const lo = Y.map((y) => (isNum(g['lo_pct ' + y]) ? g['lo_pct ' + y] : g['oh ' + y] ? (g['lo ' + y] || 0) / g['oh ' + y] : null));
+    const share = (label, vals) => {
+      if (!vals.some(isNum)) return;
+      const tr = el('tr', 'p');
+      tr.appendChild(el('td', 'l', label));
+      vals.forEach((v) => tr.appendChild(el('td', null, pc(v))));
+      tr.appendChild(el('td'));
+      tb.appendChild(tr);
+    };
+    share('LO share', lo);
+    share('HB share', lo.map((v) => (isNum(v) ? 1 - v : null)));
     const sub = (label, f) => {
       const vals = Y.map((y) => g[f + ' ' + y]);
       if (!vals.some(isNum)) return;
@@ -3076,7 +3084,7 @@
     sub('Full cost', 'cost');
     sub('Overhead' + (isNum(g.oh_pct) ? ' · ' + pc(g.oh_pct) : ''), 'oh');
     sub('Project share (calc.)' + (isNum(g.proj_pct) ? ' · ' + pc(g.proj_pct) : ''), 'proj');
-    sub('Landowner (H)' + (lp.length ? ' · ' + (lp[0] === lp[lp.length - 1] ? pc(lp[0]) : pc(lp[0]) + '→' + pc(lp[lp.length - 1])) : ''), 'lo');
+    sub('Landowner (H)', 'lo');
     sub('Homebuilder (V)', 'hb');
     if (!comps.length) return;
     const dr = el('tr', 'dr'), td = el('td'); td.colSpan = ncol;
@@ -4311,11 +4319,10 @@
   function renderAll() {
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
-    if (!ENT[S.tab]) { if (window.SobhaGA) window.SobhaGA.render(document.getElementById(S.tab)); return; }
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
-    const pl = st.stmt === 'pl', act = st.stmt === 'act';
-    sec.querySelector('.view-cf').hidden = pl || act; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act;
-    sec.querySelector('.hint-cf').hidden = pl || act; sec.querySelector('.hint-pl').hidden = !pl;
+    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga';
+    sec.querySelector('.view-cf').hidden = pl || act || ga; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga;
+    sec.querySelector('.hint-cf').hidden = pl || act || ga; sec.querySelector('.hint-pl').hidden = !pl;
     sec.querySelectorAll('.stmtseg button').forEach((b) => {
       b.classList.toggle('on', b.dataset.s === st.stmt);
       b.onclick = () => { st.stmt = b.dataset.s; render(); };
@@ -4345,6 +4352,7 @@
     pdt.replaceChildren();
     pdt.hidden = !(canTop && st.detailTop);
     if (canTop && st.detailTop) pdt.appendChild(makeDetails(st.proj));
+    if (ga) { sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true; if (window.SobhaGA) window.SobhaGA.render(sec.querySelector('.view-ga'), { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab]); return; }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }
     if (pl) {
       renderPL(sec, S.tab, st);
@@ -4361,7 +4369,7 @@
 
   root.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; dash.setLink(S.tab); render(); }));
   const h = location.hash.slice(1);
-  if (ENT[h] || h === 'ga') S.tab = h;
+  if (ENT[h]) S.tab = h;
   dash.onData(render);
 })();
 </script>

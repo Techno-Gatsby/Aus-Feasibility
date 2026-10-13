@@ -50,18 +50,15 @@ statements (Consol, Landowner, Homebuilder; cash flow and P&L):
 **Upload Excel** reads the filled-in file back: typed yellow cells replace the dashboard's
 actuals for those cells, blank cells keep what the dashboard has.
 
-## G&A tab
+## G&A
 
-Overhead 2026–2030 for Consol, Landowner (Sobha Developers, H) and Homebuilder (Sobha Homes,
-V). For Consol, switch between overhead, full cost and the project share (full cost ×
-Proj. %). The workbook never multiplies the project share out, so the page calculates it
-and labels it as calculated. Click any head to see:
-- its split by year: full cost, OH %, overhead, project share, Landowner % and both entities;
-- how its figures are built: the `Cal.` row behind 2026 and the rule for later years;
-- the OPEX lines (or depreciation batches) behind it.
-
-The drill-down flags lines that `Cal.` counts twice, takes from the wrong month or mislabels.
-*Worth knowing* lists them, along with the contingency share and the Landowner ratios.
+Each entity tab has a **G&A** view next to Cashflow, P&L and Actuals: Consol shows OHcost-H+V,
+Landowner OHcost-H and Homebuilder OHcost-V, as laid out in the workbook, with the rows under
+the table (entity split, cost categories, G&A provision per project; click a project for its
+lines). Click a head for LO / HB share by year, full cost, overhead, project share (full cost ×
+Proj. %, calculated) and both entities, then the OPEX lines behind it (Sr No, months, total,
+counted) or, for depreciation, each purchase batch's CAPEX lines. A red ! marks lines counted
+twice or taken from another month.
 
 ## Using it on your own computer
 
@@ -96,7 +93,7 @@ Actuals tab.
 | Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model) |
 | Units, cost, peak debt, dates | cashflow lines, budget sheets and the timeline |
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
-| G&A tab | G&A workbook › `G&A` (cost, OH % / Proj. %, TOTAL OH, Sobha Developers = Landowner (H), Sobha Homes = Homebuilder (V), Allowed); drill-down follows each head's `Cal.` row to the `OPEX` lines and the depreciation batches |
+| G&A (in each entity tab) | G&A workbook › `G&A` (cost, OH % / Proj. %, TOTAL OH, Sobha Developers = Landowner (H), Sobha Homes = Homebuilder (V), Allowed); drill-down follows each head's `Cal.` row to the `OPEX` lines and the depreciation batches |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is
 a one-line change there. Timeline rows are matched to model projects by name
