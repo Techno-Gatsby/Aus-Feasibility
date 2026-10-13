@@ -909,7 +909,10 @@
     msg.textContent = AST.msg ? AST.msg : modeTxt;
     const upl = sec.querySelector('.upl'); upl.hidden = AST.mode === 'ro';
     const fi = sec.querySelector('.actfile');
-    fi.onchange = async () => { const f = fi.files[0]; fi.value = ''; if (f) { AST.msg = 'Reading ' + f.name + '…'; render(); try { const n = await importXlsx(f); AST.msg = 'Imported ' + n + ' actual values from ' + f.name + '.'; } catch (e) { AST.msg = 'Could not read ' + f.name + ': ' + e.message; } render(); } };
+    fi.onchange = async () => { const f = fi.files[0]; fi.value = ''; if (f) { AST.msg = 'Reading ' + f.name + '…'; render(); try { const n = await importXlsx(f); AST.msg = 'Read ' + n.read + ' actual values from ' + f.name + (n.changed ? ': ' + n.changed + ' changed.' : ': no changes.'); } catch (e) { AST.msg = 'Could not read ' + f.name + ': ' + e.message; } render(); } };
+    const dl = sec.querySelector('.actdl');
+    dl.hidden = d.status !== 'ok' || !window.XLSXWrite || !(window.SobhaStore && SobhaStore.canDownload());
+    dl.onclick = () => downloadActuals(dl);
     const thr = sec.querySelector('.actt thead tr'), tb = sec.querySelector('.actt tbody');
     if (d.status !== 'ok') { tb.replaceChildren(); return; }
     const rows = d.data.filter((r) => r.stmt === stmt);
@@ -951,63 +954,190 @@
     if (focusK) { const f = tb.querySelector(`input[data-k="${CSS.escape(focusK)}"]`); if (f) f.focus(); }
   }
 
-  // ---------- Excel import (reads the yellow Actual cells) ----------
+  // ---------- Excel: download (BP vs Actuals) and upload ----------
+  // The workbook has two sheets with the same rows. 'Actuals': every plan line of the six
+  // statements; the yellow cells take actuals and every other figure is a formula that adds up
+  // as the tab does (evalActuals). 'BP vs Actuals': the plan figures beside links to them.
+  const ACT_STMTS = ['consol_cf', 'landowner_cf', 'homebuilder_cf', 'consol_pl', 'landowner_pl', 'homebuilder_pl'];
+  // The earlier upload layout: one sheet per statement, periods in row 4, 'BP' / 'Actual' in row 5.
   const SHEETS = { 'Consol CF': 'consol_cf', 'Landowner CF': 'landowner_cf', 'Homebuilder CF': 'homebuilder_cf', 'Consol P&L': 'consol_pl', 'Landowner P&L': 'landowner_pl', 'Homebuilder P&L': 'homebuilder_pl' };
-  async function unzip(buf) {
-    const u8 = new Uint8Array(buf), dv = new DataView(buf); let e = -1;
-    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
-    if (e < 0) throw new Error('not an .xlsx file');
-    const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const files = {};
-    for (let i = 0; i < n; i++) {
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
-      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
-      files[name] = { method, csize, off }; p += 46 + nl + xl + cl;
-    }
-    const read = async (name) => {
-      const f = files[name]; if (!f) return null;
-      const lnl = dv.getUint16(f.off + 26, true), lxl = dv.getUint16(f.off + 28, true), s = f.off + 30 + lnl + lxl;
-      const data = u8.slice(s, s + f.csize);
-      if (f.method === 0) return new TextDecoder().decode(data);
-      const out = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
-      return new TextDecoder().decode(out);
+  const stmtLabel = (s) => { const [e, k] = s.split('_'); return e[0].toUpperCase() + e.slice(1) + ' · ' + (k === 'pl' ? 'P&L' : 'Cash flow'); };
+  const loose = (s) => norm(s).replace(/[^a-z&]/g, ''); // 'Consol · P&L', 'Consol P&L' -> 'consolp&l'
+  const STMT_IDS = {};
+  ACT_STMTS.forEach((id) => [id, stmtLabel(id)].forEach((n) => (STMT_IDS[loose(n)] = id)));
+  Object.entries(SHEETS).forEach(([n, id]) => (STMT_IDS[loose(n)] = id));
+  const perYear = (p) => { const m = String(p).match(/(\d{4})\s*$/) || String(p).match(/'(\d{2})\s*$/); return m ? +(m[1].length === 2 ? '20' + m[1] : m[1]) : 9999; };
+  const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  // What a computed cell adds up, as evalActuals does: {terms: [[sign, row, period index]]},
+  // plus range (a section's rows, summed as one range) or carry (last year's closing balance).
+  function actTerms(rows) {
+    const byProj = {};
+    rows.forEach((r) => { (byProj[r.project] = byProj[r.project] || []).push(r); });
+    Object.values(byProj).forEach((a) => a.sort((x, y) => x.ord - y.ord));
+    const lab = (p, l) => (byProj[p] || []).find((r) => r.role !== 'header' && norm(r.line) === l);
+    const sumProj = (r, pi) => Object.keys(byProj).filter((q) => q !== 'All Projects').map((q) => lab(q, norm(r.line))).filter(Boolean).map((x) => [1, x, pi]);
+    const of = (p, pi, list) => list.map(([s, l]) => [s, lab(p, l), pi]).filter((t) => t[1]);
+    return (r, pi) => {
+      const p = r.project, rr = byProj[p];
+      switch (r.role) {
+        case 'sumifs': return { terms: sumProj(r, pi) };
+        case 'expr': return { terms: of(p, pi, JSON.parse(r.rule)) };
+        case 'sec': { const span = rr.slice(rr.findIndex((x) => norm(x.line) === r.rule) + 1, rr.indexOf(r));
+          return { terms: span.filter((x) => x.role !== 'header').map((x) => [1, x, pi]), range: span }; }
+        case 'close': return { terms: of(p, pi, [[1, 'opening balance'], [1, 'total inflows'], [-1, 'total outflows']]) };
+        case 'eclose': return { terms: of(p, pi, [[1, 'opening escrow balance'], [1, 'collected in escrow'], [1, 'less: released from escrow']]) };
+        case 'open': case 'eopen':
+          if (pi === 0) return p === 'All Projects' ? { terms: sumProj(r, 0) } : null;
+          return { terms: of(p, pi - 1, [[1, r.role === 'open' ? 'closing balance' : 'closing escrow balance']]), carry: true };
+      }
+      return null;
     };
-    return read;
   }
-  const colNum = (ref) => { const m = ref.match(/^[A-Z]+/)[0]; let n = 0; for (const ch of m) n = n * 26 + ch.charCodeAt(0) - 64; return n; };
-  async function importXlsx(file) {
-    const read = await unzip(await file.arrayBuffer()), P = new DOMParser();
-    const wbx = P.parseFromString(await read('xl/workbook.xml'), 'application/xml');
-    const rel = P.parseFromString(await read('xl/_rels/workbook.xml.rels'), 'application/xml');
-    const rmap = {}; Array.from(rel.getElementsByTagName('Relationship')).forEach((r) => (rmap[r.getAttribute('Id')] = r.getAttribute('Target')));
-    const ssx = await read('xl/sharedStrings.xml'); const ss = [];
-    if (ssx) Array.from(P.parseFromString(ssx, 'application/xml').getElementsByTagName('si')).forEach((si) => ss.push(Array.from(si.getElementsByTagName('t')).map((t) => t.textContent).join('')));
-    let count = 0; const touched = new Set();
-    for (const sh of Array.from(wbx.getElementsByTagName('sheet'))) {
-      const stmt = SHEETS[sh.getAttribute('name')]; if (!stmt) continue;
-      const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
-      let tgt = rmap[rid]; if (!tgt) continue; tgt = tgt.replace(/^\/?xl\//, ''); const xml = await read('xl/' + tgt); if (!xml) continue;
-      const doc = P.parseFromString(xml, 'application/xml'); const rows = {};
-      Array.from(doc.getElementsByTagName('row')).forEach((rw) => {
-        const rn = +rw.getAttribute('r'); const cells = {};
-        Array.from(rw.getElementsByTagName('c')).forEach((c) => {
-          const t = c.getAttribute('t'), f = c.getElementsByTagName('f')[0], vEl = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
-          let v = vEl ? vEl.textContent : (is ? is.textContent : null);
-          if (t === 's' && v != null) v = ss[+v];
-          else if (v != null && (t == null || t === 'n')) v = Number(v);
-          cells[colNum(c.getAttribute('r'))] = { v, f: !!f };
+  // Excel formula for terms: blank when every term is blank (evalActuals' null), else the signed
+  // sum. SUM and COUNT skip blanks and "" where + and - would fail.
+  function actFormula(t, ref) {
+    if (!t || !t.terms.length) return null;
+    const R = (x) => ref(x[1], x[2]);
+    if (t.carry) { const a = R(t.terms[0]); return 'IF(' + a + '="","",' + a + ')'; }
+    if (t.range) { const pi = t.terms[0][2], a = ref(t.range[0], pi) + ':' + ref(t.range[t.range.length - 1], pi); return 'IF(COUNT(' + a + ')=0,"",SUM(' + a + '))'; }
+    const by = (f) => t.terms.filter(f).map(R).join(',');
+    const pos = by((x) => x[0] === 1), neg = by((x) => x[0] === -1);
+    let e = (pos ? 'SUM(' + pos + ')' : '') + (neg ? '-SUM(' + neg + ')' : '');
+    t.terms.filter((x) => Math.abs(x[0]) !== 1).forEach((x) => (e += (x[0] < 0 ? '-' : '+') + Math.abs(x[0]) + '*SUM(' + R(x) + ')'));
+    return 'IF(COUNT(' + t.terms.map(R).join(',') + ')=0,"",' + e.replace(/^\+/, '') + ')';
+  }
+
+  // plan: the actuals_plan rows; actuals as they are on the tab now. -> .xlsx bytes
+  function actualsWorkbook(plan, when) {
+    const NUM = '#,##0;(#,##0);"–"', UNITS = '#,##0.00;(#,##0.00);"–"', H = 2; // H: header row
+    const X = { title: { b: 1, sz: 12, color: '1A2B6B' }, head: { b: 1, wrap: 1, va: 'top', fill: 'DDE3F3' }, headA: { b: 1, wrap: 1, va: 'top', fill: 'E4DDF8' }, bold: { b: 1 } };
+    const sts = ACT_STMTS.map((id) => { const rows = plan.filter((r) => r.stmt === id); return { id, rows, P: actPeriods(rows) }; }).filter((s) => s.rows.length);
+    const U = [...new Set(sts.flatMap((s) => s.P))].map((p, i) => [p, i]).sort((a, b) => perYear(a[0]) - perYear(b[0]) || a[1] - b[1]).map((x) => x[0]);
+    const C = XLSXWrite.colName, col = (y) => C(4 + U.indexOf(y)), totC = C(4 + U.length);
+    // Sheet rows: statements in order, then projects as listed, lines by ord.
+    const at = new Map(); let n = H;
+    sts.forEach((s) => { const by = new Map(); s.rows.forEach((r) => { if (!by.has(r.project)) by.set(r.project, []); by.get(r.project).push(r); });
+      s.order = [...by.values()].flatMap((a) => a.sort((x, y) => x.ord - y.ord)); s.order.forEach((r) => at.set(r.key, ++n)); });
+    const m = window.SobhaStore && SobhaStore.plan && SobhaStore.plan.meta, d = ymd(when);
+    const src = m ? 'uploaded models' + ((m.files || []).length ? ' (' + m.files.map((f) => f.name).join(', ') + ')' : '') + (m.at ? ', uploaded ' + String(m.at).slice(0, 10) : '') : 'the models built into the dashboard';
+    const A = [], B = [];
+    A[0] = [{ v: 'Actuals as on the dashboard on ' + d + '. Type actuals in the yellow cells (blank = none yet); every other figure is a formula. Dashboard › Actuals › Upload Excel reads this file back.', s: X.title }];
+    B[0] = [{ v: 'Sobha USA · BP vs Actuals · ' + d + ' · BP from ' + src + ' · Actuals from the Actuals sheet (as on the dashboard on ' + d + '; type them there)', s: X.title }];
+    A[H - 1] = ['Statement', 'Project', 'Particular', ...U, 'Total'].map((v) => ({ v, s: X.head }));
+    B[H - 1] = ['Statement', 'Project', 'Particular', 'Total BP', 'Total actual'].map((v, i) => ({ v, s: i === 4 ? X.headA : X.head }))
+      .concat(U.flatMap((y) => [{ v: y + ' BP', s: X.head }, { v: y + ' Actual', s: X.headA }]));
+    const link = (c, v, s) => ({ f: 'IF(Actuals!' + c + '="","",Actuals!' + c + ')', v: v == null ? '' : v, s });
+    sts.forEach((s) => {
+      const V = evalActuals(s.id, s.rows, s.P), T = actTerms(s.rows), label = stmtLabel(s.id);
+      const ref = (x, pi) => col(s.P[pi]) + at.get(x.key);
+      // A cell that would refer back to itself keeps its figure instead of a formula.
+      const loop = new Set(), seen = new Map();
+      const visit = (r, pi) => {
+        const k = r.key + '#' + pi, z = seen.get(k); if (z) return z === 1;
+        seen.set(k, 1);
+        const t = isEditable(r, pi) ? null : T(r, pi);
+        if (t) t.terms.forEach(([, x, q]) => { if (visit(x, q)) loop.add(k); });
+        seen.set(k, 2); return false;
+      };
+      const first = new Map(); // a line typed in twice shares one figure (aget reads by line)
+      s.order.forEach((r) => {
+        const i = at.get(r.key), hdr = r.kind === 'header' || r.role === 'header', tot = r.kind === 'total';
+        const fmt = isUnits(r.line) ? UNITS : NUM, nm = tot ? { fmt, b: 1 } : { fmt }, act = Object.assign({ fill: 'F3F0FC' }, nm);
+        const name = { v: hdr ? r.line.replace(/:$/, '') : r.line, s: hdr || tot ? X.bold : null };
+        const a = A[i - 1] = [label, r.project, name], b = B[i - 1] = [label, r.project, name];
+        if (hdr) return;
+        let tA = null;
+        s.P.forEach((y, pi) => {
+          const u = U.indexOf(y), v = V(r, pi), k = r.key + '#' + pi;
+          if (v != null) tA = (tA || 0) + v;
+          if (isEditable(r, pi)) {
+            const fk = r.project + '\u0000' + r.line + '|' + y, f0 = first.get(fk);
+            if (f0) a[3 + u] = { f: 'IF(' + f0 + '="","",' + f0 + ')', v: v == null ? '' : v, s: nm };
+            else { first.set(fk, col(y) + i); a[3 + u] = { v, s: Object.assign({ fill: 'FFF2CC' }, nm) }; }
+          } else {
+            visit(r, pi);
+            const f = loop.has(k) ? null : actFormula(T(r, pi), ref);
+            a[3 + u] = f ? { f, v: v == null ? '' : v, s: nm } : { v, s: nm };
+          }
+          b[5 + 2 * u] = { v: r[y], s: nm };
+          b[6 + 2 * u] = link(col(y) + i, v, act);
         });
-        rows[rn] = cells;
+        if (r.kind === 'balance') return;
+        const rg = 'D' + i + ':' + C(3 + U.length) + i;
+        a[3 + U.length] = { f: 'IF(COUNT(' + rg + ')=0,"",SUM(' + rg + '))', v: tA == null ? '' : tA, s: nm };
+        b[3] = { v: r.Total, s: nm }; b[4] = link(totC + i, tA, act);
       });
-      const h4 = rows[4] || {}, h5 = rows[5] || {}; const per = {}; let cur = null;
-      const maxc = Math.max(...Object.keys(h5).map(Number));
-      for (let c = 3; c <= maxc; c++) { if (h4[c] && h4[c].v) cur = String(h4[c].v); if (h5[c] && h5[c].v === 'Actual' && cur && cur !== 'Total') per[c] = cur.replace('–', '-'); }
-      Object.keys(rows).map(Number).filter((r) => r > 5).forEach((r) => {
-        const cl = rows[r], p = cl[1] && cl[1].v, line = cl[2] && cl[2].v; if (!p || !line || p === line) return;
-        Object.keys(per).forEach((c) => { const x = cl[c]; if (x && !x.f && typeof x.v === 'number' && isFinite(x.v)) { AST.vals[stmt] = AST.vals[stmt] || {}; AST.vals[stmt][p] = AST.vals[stmt][p] || {}; AST.vals[stmt][p][String(line) + '|' + per[c]] = x.v; touched.add(stmt + '\u0000' + p); count++; } });
+    });
+    const last = (cols) => C(cols) + Math.max(n, H);
+    return XLSXWrite.build({ active: 0, sheets: [
+      { name: 'BP vs Actuals', rows: B, cols: [20, 30, 44, 15, 15, ...U.flatMap(() => [14, 14])], freeze: { rows: H, cols: 3 }, filter: 'A' + H + ':' + last(5 + 2 * U.length) },
+      { name: 'Actuals', rows: A, cols: [20, 30, 44, ...U.map(() => 14), 15], freeze: { rows: H, cols: 3 }, filter: 'A' + H + ':' + last(4 + U.length) },
+    ] });
+  }
+  async function downloadActuals(btn) {
+    const d = dash.data('actuals_plan'); if (d.status !== 'ok') return;
+    const now = new Date(), name = 'Sobha USA - BP vs Actuals - ' + ymd(now) + '.xlsx';
+    btn.disabled = true;
+    try { const bytes = await actualsWorkbook(d.data, now); await SobhaStore.saveFile(name, new Blob([bytes], { type: XLSXWrite.MIME })); AST.msg = 'Downloaded ' + name + '.'; }
+    catch (e) { if (!e || e.code !== 'declined') AST.msg = 'Could not create the Excel file' + (e && e.message ? ': ' + e.message : '') + '.'; }
+    btn.disabled = false; render();
+  }
+
+  // The downloaded layout: an 'Actuals' sheet whose header row names Statement, Project and
+  // Particular, then the periods. Only figures typed into cells the tab takes are read.
+  function readActuals(s, plan, put) {
+    const key = (v) => norm(v).replace(/[‘’]/g, "'");
+    let hr = 0, hc = {};
+    for (const r of s.rowNums()) {
+      const c = {}; Object.entries(s.row(r)).forEach(([k, v]) => { if (typeof v === 'string' && !(key(v) in c)) c[key(v)] = +k; });
+      if (c.statement && c.project && c.particular) { hr = r; hc = c; break; }
+    }
+    if (!hr) return false;
+    const info = {};
+    ACT_STMTS.forEach((id) => {
+      const rows = plan.filter((r) => r.stmt === id), at = new Map(); // project + line -> first row (as lab())
+      rows.slice().sort((a, b) => a.ord - b.ord).forEach((r) => { const k = norm(r.project) + '\u0000' + norm(r.line); if (r.role !== 'header' && !at.has(k)) at.set(k, r); });
+      info[id] = { P: actPeriods(rows), at };
+    });
+    s.rowNums().filter((r) => r > hr).forEach((r) => {
+      const I = info[STMT_IDS[loose(s.get(r, hc.statement))]]; if (!I) return;
+      const x = I.at.get(norm(s.get(r, hc.project)) + '\u0000' + norm(s.get(r, hc.particular))); if (!x) return;
+      I.P.forEach((y, pi) => {
+        const c = hc[key(y)], v = c ? s.get(r, c) : null;
+        if (c && isEditable(x, pi) && s.formula(r, c) == null && typeof v === 'number' && isFinite(v)) put(x.stmt, x.project, x.line, y, v);
+      });
+    });
+    return true;
+  }
+  // Typed figures replace the tab's; blank cells keep what it has. -> {read, changed}
+  async function importXlsx(file) {
+    const wb = await XLSXLite.open(await file.arrayBuffer());
+    const d = dash.data('actuals_plan'), plan = d.status === 'ok' ? d.data : [];
+    let read = 0, changed = 0, known = false; const touched = new Set();
+    const put = (stmt, p, line, per, v) => {
+      read++; if (aget(stmt, p, line, per) === v) return;
+      AST.vals[stmt] = AST.vals[stmt] || {}; AST.vals[stmt][p] = AST.vals[stmt][p] || {};
+      AST.vals[stmt][p][line + '|' + per] = v; touched.add(stmt + '\u0000' + p); changed++;
+    };
+    const sh = wb.has('Actuals') ? await wb.sheet('Actuals') : null;
+    if (sh) known = readActuals(sh, plan, put);
+    for (const name of wb.sheetNames) {
+      const stmt = SHEETS[name], s = stmt ? await wb.sheet(name) : null; if (!s) continue;
+      known = true;
+      const h4 = s.row(4), h5 = s.row(5), per = {}; let cur = null;
+      const maxc = Math.max(0, ...Object.keys(h5).map(Number));
+      for (let c = 3; c <= maxc; c++) { if (h4[c]) cur = String(h4[c]); if (h5[c] === 'Actual' && cur && cur !== 'Total') per[c] = cur.replace('–', '-'); }
+      s.rowNums().filter((r) => r > 5).forEach((r) => {
+        const p = s.get(r, 1), line = s.get(r, 2); if (!p || !line || p === line) return;
+        Object.keys(per).forEach((c) => { const v = s.get(r, +c); if (s.formula(r, +c) == null && typeof v === 'number' && isFinite(v)) put(stmt, p, String(line), per[c], v); });
       });
     }
-    for (const k of touched) { const [s, p] = k.split('\u0000'); await saveDoc(s, p); }
-    return count;
+    if (!known) throw new Error('it has no Actuals sheet (use the workbook from Download Excel)');
+    // Save each changed project with the values read now: a db snapshot may land between saves.
+    const docs = [...touched].map((k) => { const [s, p] = k.split('\u0000'); return [s, p, AST.vals[s][p]]; });
+    for (const [s, p, v] of docs) { (AST.vals[s] = AST.vals[s] || {})[p] = v; await saveDoc(s, p); }
+    return { read, changed };
   }
 
   // Removing a focused input fires blur/change, which can ask for another render mid-render:
@@ -1023,6 +1153,7 @@
   function renderAll() {
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
+    if (!ENT[S.tab]) { if (window.SobhaGA) window.SobhaGA.render(document.getElementById(S.tab)); return; }
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
     const pl = st.stmt === 'pl', act = st.stmt === 'act';
     sec.querySelector('.view-cf').hidden = pl || act; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act;
@@ -1072,6 +1203,6 @@
 
   root.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; dash.setLink(S.tab); render(); }));
   const h = location.hash.slice(1);
-  if (ENT[h]) S.tab = h;
+  if (ENT[h] || h === 'ga') S.tab = h;
   dash.onData(render);
 })();

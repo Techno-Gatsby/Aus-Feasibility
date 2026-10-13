@@ -38,6 +38,18 @@ remove, recaption). Each field shows the value from the models underneath it. An
 overrides that one field; ↺ goes back to the model value. Edits survive later model uploads,
 and every field nobody edited keeps refreshing from the models.
 
+## Actuals in Excel
+
+On any Actuals tab, **Download Excel** saves `Sobha USA - BP vs Actuals - <date>.xlsx` with all six
+statements (Consol, Landowner, Homebuilder; cash flow and P&L):
+- **BP vs Actuals**: the BP figures, and next to each period an Actual column linked to the
+  Actuals sheet.
+- **Actuals**: type actuals into the yellow cells; totals, balances and the All Projects rows
+  are formulas that add up the same way the dashboard does.
+
+**Upload Excel** reads the filled-in file back: typed yellow cells replace the dashboard's
+actuals for those cells, blank cells keep what the dashboard has.
+
 ## G&A tab
 
 Overhead 2026–2030 for Consol, Landowner (Sobha Developers, H) and Homebuilder (Sobha Homes,
@@ -97,6 +109,7 @@ Commercial*).
 node build.mjs                 # -> Sobha_USA_Cashflow_Dashboard.html and dist/artifact.html
 node test/parity.mjs           # needs the four workbooks in fixtures/ (gitignored)
 node test/parity.mjs --only=consol_cf,kpi_extra --show=20
+node test/actuals-xlsx.mjs      # Actuals Excel: formulas match the tab, upload round-trips (no fixtures needed)
 ```
 
 The parity test runs the page's own extraction code on the workbooks and compares every

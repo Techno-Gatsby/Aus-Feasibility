@@ -210,11 +210,13 @@
   };
 
   // Offer a generated file. In the artifact viewer only the downloads capability can save;
-  // a copy opened from disk uses an ordinary download link.
-  S.saveFile = async function (filename, text) {
-    if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'text/html' }) }); return 'saved'; }
+  // a copy opened from disk uses an ordinary download link. data: a string or a Blob; type
+  // applies to a string (default text/html).
+  S.saveFile = async function (filename, data, type) {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'text/html' });
+    if (downloads) { await downloads.save({ filename, data: blob }); return 'saved'; }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
+    a.href = URL.createObjectURL(blob);
     a.download = filename; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     return 'saved';

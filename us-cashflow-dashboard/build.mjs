@@ -18,7 +18,7 @@ const inlineJs = (s, name) => {
 };
 
 // Order matters: derived datasets run after the ones they read.
-const SCRIPTS = ['shim.js', 'xlsx.js', 'extract.js', 'derive-consol-pl.js', 'derive-components.js', 'derive-details.js', 'derive-kpi.js', 'derive-actuals.js', 'store.js', 'app.js', 'upload.js'];
+const SCRIPTS = ['shim.js', 'xlsx.js', 'xlsx-write.js', 'extract.js', 'derive-consol-pl.js', 'derive-components.js', 'derive-details.js', 'derive-kpi.js', 'derive-actuals.js', 'derive-ga.js', 'store.js', 'ga.js', 'app.js', 'upload.js'];
 const baseline = JSON.stringify(JSON.parse(src('baseline.json')));
 
 // page.html = <title>, font link and styles, then <div id="dash-root">…

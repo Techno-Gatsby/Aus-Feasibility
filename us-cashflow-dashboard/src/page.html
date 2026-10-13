@@ -355,7 +355,7 @@
 .sb .topbar{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:#fff}
 .sb .topbar .tabs{border-bottom:0;flex:1;min-width:0}
 .sb .topacts{display:flex;align-items:center;gap:8px;padding:0 24px;flex:none}
-.sb .updbtn,.sb .btn{font:600 12px/1.3 inherit;font-family:inherit;border:1px solid var(--purple);color:var(--purple);background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.sb .updbtn,.sb .btn{font-family:inherit;font-weight:600;font-size:12px;line-height:1.3;border:1px solid var(--purple);color:var(--purple);background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap}
 .sb .updbtn:hover,.sb .updbtn[aria-expanded=true]{background:var(--purple);color:#fff}
 .sb .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
 .sb .btn.primary:hover{background:#24398a}
@@ -413,6 +413,7 @@
 @keyframes sbspin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.sb .busy::before{animation:none}}
 .sb .updbtn .us{display:none}
+.sb .actdl{padding:5px 12px}
 @media(max-width:600px){.sb .topacts,.sb .srcbar,.sb .updpanel{padding-left:12px;padding-right:12px}.sb .drop{grid-template-columns:1fr}.sb .updbtn .ul{display:none}.sb .updbtn .us{display:inline}.sb .tabs button{padding-left:10px;padding-right:10px}}
 /* project-detail editor */
 .sb .pdh .pdedit{margin-left:auto}
@@ -442,15 +443,44 @@
 .sb .edacts{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px -16px -14px;padding:10px 16px;background:#fff;border-top:1px solid var(--line);border-radius:0 0 8px 8px}
 .sb .edacts .msg{color:var(--muted);font-size:12px;margin-right:auto}
 .sb .edtag{font-size:10.5px;font-weight:700;color:var(--purple);background:#F3EEFF;border-radius:10px;padding:2px 8px}
+.sb .ga .kpi{cursor:default}
+.sb .ga .kpi small{display:block;color:var(--muted);font-size:11px;white-space:normal}
+.sb .gasplit{margin-bottom:12px}
+.sb .gasr{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:3px 0;font-size:12px}
+.sb .gay{font-weight:700;color:var(--ink)}
+.sb .gabar{position:relative;display:flex;height:16px;background:#F2EDE6;border-radius:2px}
+.sb .gabar i{display:block;height:100%}
+.sb .gabar i.galo,.sb .gasw.galo{background:var(--purple)}
+.sb .gabar i.gahb,.sb .gasw.gahb{background:var(--teal)}
+.sb .gabar i.gac,.sb .gasw.gac{opacity:.4}
+.sb .gacap{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--ink)}
+.sb .gasw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.sb .gasw.cap{width:2px;background:var(--ink)}
+.sb .gav{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.sb .gat td{font-variant-numeric:tabular-nums}
+.sb .gat td.pct{color:var(--muted)}
+.sb .gat tr.st>td{border-top:1px solid var(--line);background:var(--soft)}
+.sb .gat .edtag{margin-left:8px}
+.sb .gat .ganote{color:var(--muted);font-style:italic}
+.sb .gat tr.dr .src{max-width:90ch}
+.sb .nest tr.tt>td{font-weight:700;border-top:1.5px solid var(--purple)}
+.sb .nest tr.flag>td{background:#FFF6E5}
+.sb .nest td.galine{text-align:left;white-space:normal;min-width:220px;max-width:420px}
+.sb .nest td.galine small{display:block;color:var(--muted);font-size:10.5px}
+.sb .nest td.gaflag{white-space:normal;min-width:220px;color:var(--neg)}
+.sb .ganotes{margin-top:12px}
+.sb .ganotes ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;max-width:110ch}
+@media (max-width:600px){.sb .gasr{grid-template-columns:38px minmax(0,1fr)}.sb .gav{grid-column:2;white-space:normal}}
 </style>
 <div class="sb">
  <div class="topbar">
-  <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
+  <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button><button type="button" role="tab" data-t="ga" id="tab-ga">G&amp;A</button></div>
   <div class="topacts"><button type="button" class="updbtn" id="upd-open" aria-expanded="false" aria-controls="upd-panel" hidden><span class="ul">Update from models</span><span class="us">Update</span></button></div>
  </div>
  <div class="srcbar" id="src-bar" hidden></div>
  <section class="updpanel" id="upd-panel" aria-label="Update from models" hidden></section>
  <div class="body">
+<section class="tab ga" id="ga" role="tabpanel" aria-labelledby="tab-ga" hidden></section>
 <section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
  <div class="ctl">
   <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
@@ -469,7 +499,7 @@
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
-   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label><button type="button" class="updbtn actdl" hidden title="BP vs Actuals for all six statements, with the actuals on the dashboard now">Download Excel</button>
    <span class="actmsg"></span>
   </div>
   <div class="tw" id="consol-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
@@ -497,7 +527,7 @@
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
-   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label><button type="button" class="updbtn actdl" hidden title="BP vs Actuals for all six statements, with the actuals on the dashboard now">Download Excel</button>
    <span class="actmsg"></span>
   </div>
   <div class="tw" id="landowner-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
@@ -525,7 +555,7 @@
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
-   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label><button type="button" class="updbtn actdl" hidden title="BP vs Actuals for all six statements, with the actuals on the dashboard now">Download Excel</button>
    <span class="actmsg"></span>
   </div>
   <div class="tw" id="homebuilder-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
