@@ -48,6 +48,15 @@
     const tw = el('div', 'tw'), t = el('table', 'stmt gat');
     t.appendChild(head([['Expense Head', 'l'], ...Y.map((y) => [fy(y)]), ['Total']]));
     const tb = el('tbody');
+    // The yearly split of shared overhead between Landowner and Homebuilder, above the heads.
+    const shared = L.find((r) => r.kind === 'head' && !r.plug && Y.some((y) => r['lo_pct ' + y] > 0));
+    if (shared) [['LO share', (y) => shared['lo_pct ' + y]], ['HB share', (y) => (isNum(shared['lo_pct ' + y]) ? 1 - shared['lo_pct ' + y] : null)]].forEach(([label, f]) => {
+      const tr = el('tr', 'gashare');
+      tr.appendChild(el('td', 'l', label));
+      Y.forEach((y) => tr.appendChild(el('td', null, pc(f(y)))));
+      tr.appendChild(el('td'));
+      tb.appendChild(tr);
+    });
     rows.filter((r) => r.part === 'main').forEach((r) => {
       const g = byKey[r.ga], comps = g ? C.filter((c) => c.head === g.key) : [];
       const tr = el('tr', r.kind === 'header' ? 'g' : r.kind === 'total' ? 't' : r.kind === 'subtotal' ? 't st' : '');
@@ -90,18 +99,6 @@
 
   // A head opened: full cost, overhead, project share and the entity split by year, then its lines.
   function split(tb, g, Y, comps, ncol) {
-    // Landowner share of the overhead by year: the head's ratio, else what its figures give.
-    const lo = Y.map((y) => (isNum(g['lo_pct ' + y]) ? g['lo_pct ' + y] : g['oh ' + y] ? (g['lo ' + y] || 0) / g['oh ' + y] : null));
-    const share = (label, vals) => {
-      if (!vals.some(isNum)) return;
-      const tr = el('tr', 'p');
-      tr.appendChild(el('td', 'l', label));
-      vals.forEach((v) => tr.appendChild(el('td', null, pc(v))));
-      tr.appendChild(el('td'));
-      tb.appendChild(tr);
-    };
-    share('LO share', lo);
-    share('HB share', lo.map((v) => (isNum(v) ? 1 - v : null)));
     const sub = (label, f) => {
       const vals = Y.map((y) => g[f + ' ' + y]);
       if (!vals.some(isNum)) return;
