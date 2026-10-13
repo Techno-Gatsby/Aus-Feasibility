@@ -49,6 +49,12 @@
     return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);
   }
 
+  // A shared formula's text moved from its master cell by (dr, dc): relative references
+  // shift, $-anchored parts and quoted text stay.
+  const REF = /('[^']*'|"[^"]*")|(?<![A-Za-z0-9_.])(\$?)([A-Z]{1,3})(\$?)(\d+)(?![\d(A-Za-z_])/g;
+  const shiftFormula = (f, dr, dc) => (!dr && !dc ? f : f.replace(REF, (m, q, a, col, b, row) =>
+    q ? q : a + (a ? col : colName(colNum(col) + dc)) + b + (b ? row : +row + dr)));
+
   function parseSheet(name, xml, shared) {
     const rows = {}, formulas = {}, sharedF = {};
     let maxRow = 0, maxCol = 0, uncached = 0, errors = 0;
@@ -65,12 +71,15 @@
         const ref = attr(cm[1], 'r'), c = ref ? colNum(ref) : lastCol + 1; lastCol = c;
         const body = cm[2] || '';
         const t = attr(cm[1], 't');
-        // Formula text; a shared formula's followers carry only its index, so use the master's text.
+        // Formula text; a shared formula's followers carry only its index, so shift the master's text.
         const fm = body.indexOf('<f') >= 0 && body.match(/<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/);
         if (fm) {
           const si = attr(fm[1], 'si');
           let ft = fm[2] ? unxml(fm[2]) : null;
-          if (si != null) { if (ft) sharedF[si] = ft; else ft = sharedF[si] || null; }
+          if (si != null) {
+            const m = sharedF[si];
+            if (ft) sharedF[si] = { t: ft, r, c }; else ft = m ? shiftFormula(m.t, r - m.r, c - m.c) : null;
+          }
           (formulas[r] = formulas[r] || {})[c] = ft || '';
         }
         // <v>1</v>, <v xml:space="preserve"> x</v>, or <v/> for a formula that returned "".

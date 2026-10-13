@@ -1,7 +1,7 @@
 # Sobha USA cashflow & P&L dashboard
 
-A single HTML page with the Consol, Landowner and Homebuilder cashflows, P&Ls, Actuals and
-project details. Its figures can be refreshed by uploading the model workbooks: the page reads
+A single HTML page with the Consol, Landowner and Homebuilder cashflows, P&Ls, Actuals,
+project details and the G&A (overhead) budget. Its figures can be refreshed by uploading the model workbooks: the page reads
 them in the browser, shows what would change, and applies them for everyone who uses the page.
 
 - `Sobha_USA_Cashflow_Dashboard.html` — the built page. Opens straight from disk.
@@ -11,11 +11,12 @@ them in the browser, shows what would change, and applies them for everyone who 
 ## Updating the figures
 
 1. Open the dashboard and click **Update from models** (top right).
-2. Drop in any of these, all four or just the ones that changed:
+2. Drop in any of these, all five or just the ones that changed:
    - `V5_Consol_Cashflow_Sobha_USA.xlsx` (Consol model)
    - `V5_US_Landowner_Sobha_US_2026.xlsx` (Landowner model)
    - `V5_US_Homebuilder_Sobha_US_2026.xlsx` (Homebuilder model)
    - `Sobha_USA - BP Input Sheets ….xlsx` (the timeline)
+   - `Sobha_USA - GA ….xlsx` (the G&A budget)
 
    Files are recognised by their sheets, not their names. Anything you leave out keeps its
    current figures.
@@ -36,6 +37,28 @@ note), development and finance metrics, milestones and returns per entity, and p
 remove, recaption). Each field shows the value from the models underneath it. An edit
 overrides that one field; ↺ goes back to the model value. Edits survive later model uploads,
 and every field nobody edited keeps refreshing from the models.
+
+## G&A tab
+
+Overhead 2026–2030 for Consol, Landowner (Sobha Developers, H) and Homebuilder (Sobha Homes,
+V). For Consol, switch between overhead, full cost and the project share (full cost ×
+Proj. %). The workbook never multiplies the project share out, so the page calculates it
+and labels it as calculated. Click any head to see:
+- its split by year: full cost, OH %, overhead, project share, Landowner % and both entities;
+- how its figures are built: the `Cal.` row behind 2026 and the rule for later years;
+- the OPEX lines (or depreciation batches) behind it.
+
+The drill-down flags lines that `Cal.` counts twice, takes from the wrong month or mislabels.
+*Worth knowing* lists them, along with the contingency share and the Landowner ratios.
+
+## Using it on your own computer
+
+Open `Sobha_USA_Cashflow_Dashboard.html` in Chrome or Edge, straight from the folder; nothing
+needs installing and no internet connection is required (fonts fall back to the system font
+offline). Uploads, detail edits, photos and actuals are saved in that browser for that file:
+keep the file in the same place and use the same browser. To take everything to another
+computer, use **Download updated dashboard** (figures, edits and photos built in) and the
+Actuals Excel download (re-upload it on the Actuals tab there).
 
 ## Where it saves
 
@@ -61,6 +84,7 @@ Actuals tab.
 | Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model) |
 | Units, cost, peak debt, dates | cashflow lines, budget sheets and the timeline |
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
+| G&A tab | G&A workbook › `G&A` (cost, OH % / Proj. %, TOTAL OH, Sobha Developers = Landowner (H), Sobha Homes = Homebuilder (V), Allowed); drill-down follows each head's `Cal.` row to the `OPEX` lines and the depreciation batches |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is
 a one-line change there. Timeline rows are matched to model projects by name

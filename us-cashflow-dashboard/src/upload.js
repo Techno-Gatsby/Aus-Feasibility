@@ -42,6 +42,11 @@
 
   // ---- what changes ----------------------------------------------------------------------
   const find = (rows, project, re) => (rows || []).find((r) => r.project === project && re.test(String(r.line || '').trim()));
+  const gaYears = (r) => Object.keys(r || {}).filter((k) => /^oh \d{4}$/.test(k)).map((k) => k.slice(3));
+  function gaTotal(d) {
+    const t = (d.ga_lines || []).find((r) => r.kind === 'total');
+    return t ? gaYears(t).reduce((s, y) => s + (t['oh ' + y] || 0), 0) : null;
+  }
   function headline(d) {
     const cf = d.consol_cf || [], pl = (d.consol_pl || []).filter((r) => !r.parent);
     const npat = pl.find((r) => /^net profit( after tax|\s*\/\s*\(loss\))/i.test(r.line));
@@ -56,6 +61,7 @@
       ['Equity IRR (pre-tax)', irr ? irr.pretax_equity_irr : null, (v) => (v == null ? '–' : (v * 100).toFixed(2) + '%')],
       ['Peak debt', k ? k.peak_debt : null, money],
       ['Projects', new Set(cf.map((r) => r.project).filter((p) => p !== 'All Projects')).size, (v) => String(v)],
+      ['G&A overhead (all years)', gaTotal(d), money],
     ];
   }
   function deltas(a, b) {
@@ -108,6 +114,23 @@
       const np = top.find((r) => /^net profit before tax/i.test(r.line)), tx = top.find((r) => /^corporate tax/i.test(r.line)), na = top.find((r) => /^net profit( after tax|\s*\/\s*\(loss\))/i.test(r.line));
       if (np && tx && na) { const diff = np.Total - tx.Total - na.Total; out.push({ ok: Math.abs(diff) <= 1, label: `${name} P&L: profit after tax = profit before tax − tax`, detail: Math.abs(diff) > 1 ? `off by ${money(diff)}` : '' }); }
     }
+    if (report.refreshed.includes('ga_lines')) {
+      const L = d.ga_lines, C = d.ga_components || [], tot = L.find((r) => r.kind === 'total'), cap = L.find((r) => r.kind === 'cap'), Y = gaYears(tot);
+      if (tot) {
+        const bad = Y.filter((y) => Math.abs((tot['lo ' + y] || 0) + (tot['hb ' + y] || 0) - (tot['oh ' + y] || 0)) > 1);
+        out.push({ ok: !bad.length, label: 'G&A: Landowner + Homebuilder overhead = total overhead', detail: bad.join(', ') });
+      }
+      if (tot && cap) {
+        const bad = Y.filter((y) => Math.abs((tot['oh ' + y] || 0) - (cap['oh ' + y] || 0)) > 1);
+        out.push({ ok: !bad.length, warn: !!bad.length, label: 'G&A: overhead equals the allowed cap', detail: bad.map((y) => `${y} off by ${money(tot['oh ' + y] - cap['oh ' + y])}`).join('; ') });
+      }
+      const by = {};
+      C.forEach((c) => { if (c['v ' + Y[0]] != null) by[c.head] = (by[c.head] || 0) + c['v ' + Y[0]]; });
+      const off = L.filter((r) => by[r.key] != null && Math.abs(by[r.key] - (r['cost ' + Y[0]] || 0)) > 1);
+      out.push({ ok: !off.length, label: `G&A: each head's ${Y[0]} cost equals the lines behind it`, detail: off.slice(0, 3).map((r) => r.line).join('; ') });
+      const fl = C.filter((c) => c.flags);
+      if (fl.length) out.push({ ok: false, warn: true, label: `G&A: ${fl.length} lines in 'Cal.' are counted twice, taken from another month or mislabelled`, detail: fl.slice(0, 3).map((c) => c.line).join('; ') + (fl.length > 3 ? ` and ${fl.length - 3} more` : '') + '. See the G&A tab.' });
+    }
     return out;
   }
 
@@ -121,10 +144,10 @@
     if (panel.hidden) return;
     panel.replaceChildren();
     panel.appendChild(el('h2', null, 'Update from models'));
-    panel.appendChild(el('p', 'lead', 'Add the latest model workbooks. You can add all four or just the ones that changed: anything you leave out keeps its current figures. The workbooks are read in this browser and nothing changes until you apply.'));
+    panel.appendChild(el('p', 'lead', 'Add the latest model workbooks. You can add all five or just the ones that changed: anything you leave out keeps its current figures. The workbooks are read in this browser and nothing changes until you apply.'));
     const drop = el('div', 'drop');
     const t = el('p', null, 'Drop the .xlsx files here');
-    t.appendChild(el('small', null, 'Consol, Landowner and Homebuilder V5 models, and the BP Input Sheets for the timeline.'));
+    t.appendChild(el('small', null, 'Consol, Landowner and Homebuilder V5 models, the BP Input Sheets (timeline) and the G&A budget.'));
     const pick = el('label', 'btn', 'Choose files');
     const fi = el('input'); fi.type = 'file'; fi.accept = '.xlsx'; fi.multiple = true; fi.hidden = true; fi.id = 'upd-files';
     fi.addEventListener('change', () => { const f = [...fi.files]; fi.value = ''; read(f); });
