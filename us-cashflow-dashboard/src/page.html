@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<title>Sobha USA Cashflow & P&L Dashboard</title>
+<style>html,body{margin:0;background:#fff}#dash-root{min-height:100vh}</style>
+</head><body><div id="dash-root">
+<style>#dash-root{--dash-gutter:0}
+.sb{--navy:#462F28;--purple:#865B4D;--teal:#D7A75F;--ink:#462F28;--text:#3D3633;--muted:#808080;--line:#E8E8E8;--soft:#FBF6EE;--pale:#FFF3E1;--neg:#C96250;--peach:#E6B68F;--grad:linear-gradient(110deg,#865B4D 0%,#C9825A 55%,#9E4E1F 100%);
+ background:#fff;color:var(--text);color-scheme:light;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.45;font-variant-numeric:tabular-nums;min-height:100%}
+.sb button{font-family:inherit}
+.sb .tabs{display:flex;gap:2px;padding:0 24px;border-bottom:1px solid var(--line);background:#fff;overflow-x:auto}
+.sb .tabs button{border:0;background:none;padding:16px 20px 12px;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.sb .tabs button:hover{color:var(--ink)}
+.sb .tabs button[aria-selected=true]{border-color:var(--peach);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sb .body{padding:14px 24px 32px}
+.sb .ctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:10px}
+.sb .ctl label{display:flex;gap:8px;align-items:center;font-weight:600;color:var(--ink)}
+.sb select{font:inherit;padding:6px 28px 6px 10px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--text);max-width:280px}
+.sb .hint{color:var(--muted);font-size:12px;flex:1;min-width:200px}
+.sb .unit{color:var(--muted);font-size:12px}
+.sb .collapse,.sb .link{border:0;background:none;padding:0;color:var(--purple);font-weight:600;font-size:12px;cursor:pointer}
+.sb .tw{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:2px;background:#fff}
+.sb table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+.sb th{position:sticky;top:0;z-index:3;background:var(--navy);color:#fff;font-weight:600;text-align:right;padding:8px 10px;white-space:nowrap}
+.sb th.l{text-align:left}
+.sb .stmt>thead>tr>th:first-child{left:0;z-index:4;min-width:300px}
+.sb td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;background:#fff}
+.sb .stmt>tbody>tr>td:first-child{text-align:left;position:sticky;left:0;z-index:1;max-width:340px;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line)}
+.sb td.bud{color:var(--muted)}
+.sb td.neg{color:var(--neg)}
+.sb td.tot{font-weight:700}
+.sb .chev{display:inline-block;width:14px;color:var(--muted);transition:transform .15s;font-size:10px}
+.sb tr.open>td:first-child .chev{transform:rotate(90deg);color:var(--purple)}
+.sb tr.k{cursor:pointer}
+.sb tr.k:hover>td{background:var(--pale)}
+.sb tr.k:focus-visible{outline:2px solid var(--purple);outline-offset:-2px}
+.sb tr.g>td{background:var(--soft);color:var(--ink);font-weight:700;font-size:11.5px;padding-top:9px}
+.sb tr.t>td{font-weight:700;border-top:1.5px solid var(--navy);color:var(--ink)}
+.sb tr.b>td{color:var(--muted);font-style:italic}
+.sb tr.m>td{color:var(--muted)}
+.sb tr.open.l0>td{background:var(--pale);font-weight:700}
+.sb tr.p>td{background:var(--soft);font-size:11.5px}
+.sb tr.p>td:first-child{padding-left:34px}
+.sb tr.p.zero>td{color:#B9B2AC}
+.sb tr.p.open>td{background:var(--pale)}
+.sb tr.more>td{background:var(--soft);color:var(--purple);font-size:11.5px;font-weight:600;padding-left:34px;cursor:pointer;text-align:left}
+.sb tr.dr>td{background:var(--soft);padding:0;text-align:left;white-space:normal}
+.sb .dx{position:sticky;left:0;padding:12px 14px 14px 34px;box-sizing:border-box}
+.sb .dx h4{margin:0 0 8px;font-size:12.5px;color:var(--ink)}
+.sb .src{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin-bottom:4px;font-size:12px}
+.sb .src dt{color:var(--muted);margin:0}
+.sb .src dd{margin:0;color:var(--text)}
+.sb code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;display:block;max-height:110px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:4px;padding:5px 7px;color:#3D3633}
+.sb .nest{margin-top:12px}
+.sb .nest .tw2{overflow:auto;border:1px solid var(--line);border-radius:2px;background:#fff}
+.sb .nest table{font-size:11.5px}
+.sb .nest th{background:var(--purple);padding:6px 9px;position:static}
+.sb .nest td{padding:5px 9px}
+.sb .nest td:first-child{text-align:left}
+.sb .nest td.l{text-align:left;color:var(--muted)}
+.sb .nest tr.k:hover>td{background:var(--pale)}
+.sb .nest tr.cx>td{background:var(--soft);text-align:left;white-space:normal;padding:9px 12px}
+.sb .nest p{margin:0 0 6px}
+.sb .note{color:var(--muted);font-size:11.5px;margin:6px 0 0}
+.sb .sum-h{margin:26px 0 2px;font-size:15px;font-weight:700;color:var(--ink)}
+.sb .sum-h span{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+.sb .take{margin:0 0 12px;color:var(--muted);max-width:80ch}
+.sb .take span{color:var(--text);font-weight:600}
+.sb .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px}
+.sb .kpi{background:#fff;border:0;border-radius:0;padding:10px 4px 12px;text-align:left;color:inherit;cursor:pointer;min-width:0;transition:box-shadow .15s}
+.sb .kpi:hover b{color:var(--purple)}
+.sb .kpi:focus-visible{outline:2px solid var(--purple);outline-offset:1px}
+.sb .kpi span{display:block;color:var(--purple);font-size:11.5px;font-weight:700}
+.sb .kpi b{display:block;font-size:18px;font-weight:700;color:var(--ink);padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--peach);width:max-content;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb .grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px}
+@media(max-width:900px){.sb .grid{grid-template-columns:1fr}}
+.sb .card{background:#fff;border:1px solid var(--line);border-radius:2px;padding:12px 14px;min-width:0;position:relative}
+.sb .card h3{margin:0;font-size:13px;font-weight:700;color:var(--ink)}
+.sb .ch{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sb .sub{margin:2px 0 8px;color:var(--muted);font-size:11.5px}
+.sb .seg{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.sb .seg button{border:0;background:#fff;padding:4px 10px;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer}
+.sb .seg button.on{background:var(--navy);color:#fff}
+.sb .cw{position:relative;min-height:260px}
+.sb .mix{display:flex;flex-direction:column;gap:2px;min-height:260px;position:relative}
+.sb .hb{display:grid;grid-template-columns:minmax(100px,40%) 1fr auto;gap:8px;align-items:center;padding:4px;border:0;background:none;color:inherit;cursor:pointer;border-radius:4px;text-align:left;font-size:12px}
+.sb .hb:hover{background:var(--pale)}
+.sb .hb .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb .hb .tr{height:10px;background:#F2EDE6;border-radius:5px;position:relative;overflow:hidden}
+.sb .hb .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--purple)}
+.sb .hb.in .tr i{background:var(--teal)}
+.sb .hb .v{font-weight:600;min-width:62px;text-align:right;color:var(--ink)}
+.sb svg text{fill:var(--muted);font-size:11px;font-family:inherit}
+.sb .legend{display:flex;gap:14px;font-size:11.5px;color:var(--muted);margin-top:4px}
+.sb .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.sb .tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:2px;box-shadow:0 6px 20px rgba(70,47,40,.14);padding:6px 9px;font-size:11.5px;z-index:5;white-space:nowrap}
+.sb .tip .h{color:var(--muted);margin-bottom:2px}
+.sb .tip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.sb [data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+.sb [data-dash-source-state=empty]{color:transparent}
+.sb .fail{display:flex;align-items:center;justify-content:center;gap:6px;min-height:200px;color:var(--muted);font-size:11.5px}
+.sb .fail::before{content:'';width:.375rem;height:.375rem;border-radius:50%;background:var(--neg)}
+@media(max-width:600px){.sb .tabs,.sb .body{padding-left:12px;padding-right:12px}.sb .stmt>thead>tr>th:first-child{min-width:200px}.sb .stmt>tbody>tr>td:first-child{width:200px}}
+.sb .stmt>tbody>tr.dr>td{position:static;max-width:none;overflow:visible;border-right:0;text-overflow:clip}
+.sb .stmt>tbody>tr.more>td{max-width:none}
+
+.sb .charts{margin-top:14px}
+.sb .stmtseg button{padding:6px 14px;font-size:12.5px}
+.sb tr.p2>td{background:#FFFCF7;font-size:11.5px}
+.sb tr.p2>td:first-child{padding-left:56px}
+.sb tr.p2.zero>td{color:#B9B2AC}
+.sb tr.corp>td:first-child{font-style:italic}
+.sb .pdtop{border:1px solid var(--purple);background:#fff;color:var(--purple);font-weight:600;font-size:12px;padding:5px 12px;border-radius:2px;cursor:pointer}
+.sb .pdtop.on,.sb .pdtop:hover{background:var(--purple);color:#fff}
+.sb .pd-top{margin-bottom:12px}
+.sb tr.pdr>td{background:var(--pale);padding:0}
+.sb .pdx{background:#fff;border:1px solid var(--line);border-radius:2px;padding:14px 16px;box-sizing:border-box;white-space:normal;text-align:left;font-size:12px}
+.sb .pdx.sticky{position:sticky;left:0;margin:8px 0;border-radius:0 0 8px 8px}
+.sb .pdh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sb .pdh h3{margin:0;font-size:22px;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sb .chip{font-size:11px;font-weight:700;padding:2px 9px;border-radius:2px;background:var(--pale);color:var(--purple)}
+.sb .chip.under-consideration{background:#FBEDE2;color:#C96250}
+.sb .chip.pipeline{background:#F2F0EE;color:#808080}
+.sb .pdgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px;margin-top:12px}
+.sb .pdcard{border:1px solid var(--line);border-radius:2px;padding:12px 14px;min-width:0;margin-top:12px;background:#fff}
+.sb .pdgrid .pdcard{margin-top:0}
+.sb .pdcard h4{margin:0 0 10px;font-size:12px;font-weight:700;color:var(--purple)}
+.sb .pdcard h5{margin:14px 0 6px;font-size:12px;color:var(--ink)}
+.sb .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line)}
+.sb .tile{padding:10px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
+.sb .tile b{display:block;font-size:17px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb .tile span{display:block;color:var(--muted);font-size:11px}
+@media(max-width:600px){.sb .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sb .gantt{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.sb .grow{display:grid;grid-template-columns:150px 1fr 150px;gap:10px;align-items:center;min-height:20px}
+.sb .grow.axis{min-height:18px;border-bottom:1px solid var(--line);margin-bottom:2px}
+.sb .gl{font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb .gd{font-size:11px;color:var(--muted);white-space:nowrap}
+.sb .gtrack{position:relative;height:14px}
+.sb .grow.axis .gtrack{height:16px}
+.sb .gy{position:absolute;top:0;font-size:10.5px;color:var(--muted);text-align:center}
+.sb .gline{position:absolute;top:-3px;bottom:-3px;width:1px;background:#F2EDE6}
+.sb .gb{position:absolute;top:2px;height:10px;border-radius:5px}
+.sb .gm{position:absolute;top:1px;width:11px;height:11px;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.sb .gb.home,.sb .gm.home,.sb .lg.home{background:var(--teal)}
+.sb .gph{font-size:11px;font-weight:700;color:var(--ink);margin-top:6px}
+@media(max-width:700px){.sb .grow{grid-template-columns:96px 1fr}.sb .grow .gd{display:none}}
+.sb table.mini{font-size:11.5px}
+.sb table.mini th{position:static;background:var(--purple);padding:6px 9px}
+.sb table.mini td{padding:5px 9px;text-align:right}
+.sb table.mini td.l{text-align:left}
+.sb table.mini td.ent{font-weight:600;color:var(--ink)}
+.sb table.mini tr.first>td{border-top:1.5px solid #E6B68F}
+.sb table.plmini td:first-child{min-width:200px}
+
+.sb .pdgrid{align-items:stretch}
+.sb .pdgrid .pdcard{display:flex;flex-direction:column}
+.sb .pdgrid .tiles{flex:1;grid-auto-rows:1fr}
+.sb .tile{display:flex;flex-direction:column;justify-content:center}
+
+.sb table.mini.tl td{white-space:nowrap}
+.sb .pdx .pdcard .note{margin-top:6px}
+.sb .gal{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;grid-auto-flow:dense}
+.sb .ph{margin:0;min-width:0}
+.sb .ph.site{grid-column:span 2;grid-row:span 2;display:flex;flex-direction:column}.sb .ph.site img{flex:1;height:auto;min-height:380px}
+.sb .ph.big{grid-column:1/-1}
+.sb .ph img{display:block;width:100%;height:190px;object-fit:cover;border-radius:2px;border:1px solid var(--line);cursor:zoom-in;background:var(--soft)}
+.sb .ph.big img{height:auto;object-fit:contain;cursor:zoom-out}
+.sb .ph figcaption{font-size:11.5px;color:var(--text);margin-top:4px}
+.sb .ph figcaption small{color:var(--muted)}
+@media(max-width:900px){.sb .gal{grid-template-columns:repeat(2,minmax(0,1fr))}.sb .ph.site{grid-row:auto}.sb .ph.site img{min-height:0;height:220px}}@media(max-width:560px){.sb .gal{grid-template-columns:1fr}.sb .ph.site{grid-column:auto}}
+.sb .ph figcaption small{display:block}
+
+/* Sobha brand: quiet, whitespace-led, warm palette */
+.sb .tabs{padding:0 24px;border-bottom:1px solid var(--line)}
+.sb .tabs button:hover{color:var(--purple)}
+.sb th{background:var(--navy);font-weight:700;letter-spacing:.01em}
+.sb .stmt>thead>tr>th:first-child{background:var(--navy)}
+.sb .tw{border-color:var(--line)}
+.sb tr.g>td,.sb tr.g>td:first-child{background:var(--pale);color:var(--purple)}
+.sb tr.t>td{border-top:1px solid var(--peach);color:var(--ink)}
+.sb tr.open.l0>td{background:var(--pale);color:var(--ink)}
+.sb tr.open>td:first-child .chev{color:var(--purple)}
+.sb tr.k:hover>td,.sb tr.k:hover>td:first-child{background:#FFF8EE}
+.sb .collapse,.sb .link{color:var(--purple)}
+.sb .seg button.on{background:var(--purple)}
+.sb .pdtop{border-color:var(--purple);color:var(--purple)}
+.sb .pdtop.on,.sb .pdtop:hover{background:var(--purple);color:#fff}
+.sb .ctl label{color:var(--purple);font-weight:700}
+.sb .unit,.sb .hint{color:var(--muted)}
+.sb .pdcard{border-color:var(--line)}
+.sb .tiles{border-color:var(--line)}
+.sb .tile span{color:var(--muted)}
+.sb table.mini td.ent{color:var(--purple)}
+.sb table.mini tr.first>td{border-top:1px solid var(--peach)}
+.sb .ph img{border-radius:0;border-color:var(--line)}
+.sb .note{color:var(--muted)}
+.sb select{border-color:var(--line)}
+.sb select:focus-visible,.sb button:focus-visible{outline:2px solid var(--peach);outline-offset:1px}
+.sb .kpis{gap:4px 28px;margin-bottom:16px}
+
+.sb .hint{flex:1;min-width:0}
+.sb table.eqs tr.rf td.l:not(.ent){color:var(--neg)}
+.sb table.eqs tr.rf td.ent{color:var(--purple)}
+.sb table.eqs tr.net td{font-weight:700;color:var(--ink);border-top:1px solid var(--line)}
+
+.sb td.tot{border-right:1px solid var(--line);background:#FFFCF7}
+.sb tr.g>td.tot{background:var(--pale)}
+
+.sb .tw.free{max-height:none}
+.sb .chev{transform-origin:50% 50%;text-align:center;line-height:1}
+.sb .stmt>tbody>tr>td:first-child{width:320px;max-width:360px}
+.sb .pdx table th:first-child{position:static;min-width:0}
+.sb .pdx table td:first-child{position:static}
+.sb .nest table th:first-child{position:static;min-width:0;left:auto}
+.sb .stmt>tbody>tr.dr>td{width:auto}
+
+.sb .gal.one{grid-template-columns:1fr}
+.sb .gal.one .ph.site{grid-column:auto;grid-row:auto}
+.sb .gal.one .ph img{height:auto;min-height:0;max-height:560px;object-fit:contain;background:#fff}
+.sb table.mini.ctr td:not(:first-child),.sb table.mini.ctr th:not(:first-child){text-align:center}
+
+.sb [hidden]{display:none!important}
+.sb table.mini{table-layout:fixed;min-width:760px}
+.sb table.mini th,.sb table.mini td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb table.mini th.l{width:130px}
+.sb table.mini th.l+th.l{width:140px}
+.sb table.mini.plmini th.l{width:250px}
+.sb table.mini.tl th.l{width:150px}
+@media(max-width:600px){.sb .stmt>tbody>tr>td:first-child{width:180px;max-width:200px}.sb .stmt>thead>tr>th:first-child{min-width:180px}}
+
+.sb td .nm{vertical-align:middle}
+.sb .stmt td.hasbtn .nm{display:inline-block;max-width:calc(100% - 128px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:600px){.sb .stmt td.hasbtn .nm{max-width:calc(100% - 82px)}}
+.sb table.mini th{white-space:normal;text-overflow:clip;vertical-align:bottom}
+.sb table.mini.tl{min-width:1080px}
+.sb table.mini.ctr{min-width:900px}
+.sb table.mini.eqs{min-width:860px}
+
+.sb table.eqs tr.sub td{color:var(--muted);font-size:11px}
+.sb table.eqs tr.sub td.l:not(.ent){padding-left:22px;font-style:italic}
+.sb table.eqs tr.sub td.neg{color:var(--muted)}
+/* clean: no tinted fills */
+.sb td.tot,.sb tr.g>td.tot,.sb table.mini td.tot{background:transparent}
+.sb td.tot{border-right:1px solid var(--line)}
+.sb tr.g>td,.sb tr.g>td:first-child{background:#fff;color:var(--ink);border-bottom:1px solid var(--line)}
+.sb tr.p>td,.sb tr.p2>td,.sb tr.p.open>td,.sb tr.more>td{background:#fff}
+.sb tr.open.l0>td,.sb tr.open.l0>td:first-child{background:#fff;font-weight:700}
+.sb tr.k:hover>td,.sb tr.k:hover>td:first-child{background:#FAFAFA}
+.sb tr.dr>td,.sb tr.pdr>td{background:#fff}
+.sb .nest .tw2{background:#fff}
+.sb .chip,.sb .chip.under-consideration,.sb .chip.pipeline{background:transparent;border:1px solid var(--line)}
+.sb tr.t>td{border-top:1px solid var(--muted)}
+.sb table.mini tr.first>td{border-top:1px solid var(--muted)}
+.sb .kpi b{border-bottom-color:var(--line)}
+.sb .tabs button[aria-selected=true]{border-color:var(--purple)}
+.sb table.mini.eqs th.l+th.l{width:180px}
+.sb .stmt>tbody>tr>td:first-child{width:380px;max-width:400px}
+.sb .stmt>thead>tr>th:first-child{min-width:380px}
+@media(max-width:600px){.sb .stmt>tbody>tr>td:first-child{width:180px;max-width:200px}.sb .stmt>thead>tr>th:first-child{min-width:180px}}
+
+.sb .pdbtn{display:inline-block;margin-left:10px;padding:2px 8px;border:1px solid #CDBFB8;border-radius:2px;background:#fff;color:var(--purple);font:700 10.5px/1.4 Arial,Helvetica,sans-serif;font-style:normal;letter-spacing:.01em;vertical-align:middle;cursor:pointer;white-space:nowrap}
+.sb .pdbtn:hover,.sb .pdbtn.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.sb .pdbtn .pd-short{display:none}
+@media(max-width:600px){.sb .pdbtn .pd-long{display:none}.sb .pdbtn .pd-short{display:inline}.sb .stmt td.hasbtn .nm{max-width:calc(100% - 82px)}}
+/* ===== Reference style (Australia Cost Benchmarking): white, navy, purple ===== */
+.sb{--navy:#1A2B6B;--purple:#7C3AED;--teal:#0D9488;--ink:#1A2B6B;--text:#1F2A44;--muted:#6B7280;--line:#E4E7EC;--soft:#F7F8FA;--pale:#F3EEFF;--peach:#E4E7EC;--neg:#B42318;
+ font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;background:#fff;color:var(--text)}
+.sb .tabs button{font-size:13px;font-weight:600;padding:10px 16px;color:var(--muted)}
+.sb .tabs button[aria-selected=true]{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--ink);border-color:var(--purple)}
+.sb .tabs button:hover{color:var(--ink)}
+.sb .seg{border-radius:8px}
+.sb .seg button.on{background:var(--navy);color:#fff}
+.sb .ctl label{color:var(--ink)}
+.sb select{border-radius:6px}
+.sb .collapse,.sb .link{color:var(--purple)}
+/* KPI cards as in reference */
+.sb .kpis{gap:8px;margin-bottom:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.sb .kpi{background:#fff;border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:8px;padding:8px 11px;transition:box-shadow .15s,transform .15s}
+.sb .kpi:hover{box-shadow:0 4px 14px rgba(26,43,107,.12);transform:translateY(-1px)}
+.sb .kpi:hover b{color:var(--ink)}
+.sb .kpi span{color:var(--muted);font-weight:400;font-size:11px}
+.sb .kpi b{font-size:17px;font-weight:800;color:var(--ink);border-bottom:0;padding-bottom:0;margin-bottom:0;width:auto}
+/* tables */
+.sb .tw{border-radius:8px;border-color:var(--line)}
+.sb th,.sb .stmt>thead>tr>th:first-child{background:var(--navy);color:#fff;font-weight:600}
+.sb td{color:var(--text)}
+.sb tr.g>td,.sb tr.g>td:first-child{background:#F5F6FA;color:var(--ink);font-weight:700;border-bottom:1px solid var(--line)}
+.sb tr.t>td{font-weight:800;border-top:2px solid var(--navy);color:var(--ink)}
+.sb tr.k:hover>td,.sb tr.k:hover>td:first-child{background:var(--pale)}
+.sb tr.open.l0>td,.sb tr.open.l0>td:first-child{background:var(--pale)}
+.sb tr.open>td:first-child .chev{color:var(--purple)}
+.sb tr.b>td{color:var(--muted)}
+.sb td.neg{color:var(--neg)}
+.sb td.tot{font-weight:700;background:transparent}
+.sb .nest th,.sb table.mini th{background:var(--navy)}
+.sb .nest .tw2,.sb .tw2{border-radius:8px}
+/* details */
+.sb .pdx{border-radius:8px;border:1px solid var(--line)}
+.sb .pdh h3{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--ink);font-size:18px;font-weight:800}
+.sb .pdcard{border-radius:8px}
+.sb .pdcard h4{color:var(--ink);font-size:13px}
+.sb .pdcard h5{color:var(--ink)}
+.sb .tile b{color:var(--ink);font-weight:800}
+.sb .chip{border:0;border-radius:10px;background:#E8F7F5;color:#0B6B62}
+.sb .chip.under-consideration{background:#FFF4E5;color:#9A5B00}
+.sb .chip.pipeline{background:#EEF0F4;color:#4B5563}
+.sb table.mini td.ent{color:var(--ink)}
+.sb table.mini tr.first>td{border-top:1px solid #C9CED8}
+.sb table.eqs tr.rf td.l:not(.ent){color:var(--neg)}
+.sb .pdbtn{border:1px solid #D9CCFB;border-radius:10px;color:var(--purple);font-family:inherit;font-weight:600}
+.sb .pdbtn:hover,.sb .pdbtn.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.sb .pdtop{border-radius:6px;border-color:var(--purple);color:var(--purple)}
+.sb .pdtop.on,.sb .pdtop:hover{background:var(--purple);color:#fff}
+.sb .ph img{border-radius:6px}
+.sb select:focus-visible,.sb button:focus-visible{outline:2px solid var(--purple)}
+.sb th{box-shadow:1px 0 0 var(--navy),-1px 0 0 var(--navy)}
+.sb .stmt>tbody>tr>td:first-child{width:330px;max-width:340px}
+.sb .stmt>thead>tr>th:first-child{min-width:330px}
+@media(max-width:600px){.sb .stmt>tbody>tr>td:first-child{width:180px;max-width:200px}.sb .stmt>thead>tr>th:first-child{min-width:180px}}
+
+.sb .irrt td:nth-child(2){font-weight:800;color:var(--ink)}
+.sb .irrt td:first-child{width:auto}
+.sb .view-irr .tw{max-width:1100px}
+.sb .actbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:10px}
+.sb .upl{display:inline-flex;align-items:center;border:1px solid var(--purple);color:var(--purple);border-radius:6px;padding:5px 12px;font-weight:600;font-size:12px;cursor:pointer}
+.sb .upl:hover{background:var(--purple);color:#fff}
+.sb .actmsg{color:var(--muted);font-size:12px}
+.sb .actt th.act{background:#2B3C7E}
+.sb .actt td.act{color:var(--ink);font-weight:600}
+.sb .actt td{min-width:96px}
+.sb .ai{width:100%;min-width:92px;box-sizing:border-box;text-align:right;font:inherit;font-weight:600;color:var(--ink);padding:3px 6px;border:1px solid #D9CCFB;border-radius:4px;background:#fff}
+.sb .ai:focus{outline:2px solid var(--purple);outline-offset:0;border-color:var(--purple)}
+.sb .ai.bad{border-color:var(--neg)}
+.sb .actt td:has(.ai){padding:3px 6px}
+
+.sb .view-cf .kpis{grid-template-columns:repeat(5,minmax(0,1fr))}
+.sb .kpi .ksub{display:block;color:var(--muted);font-size:11px;font-weight:600;margin-top:1px;min-height:14px}
+.sb .kpi:not(.sumk) b,.sb .kpi.sumk:not([data-sub]) b{margin-bottom:15px}
+@media(max-width:900px){.sb .view-cf .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.sb .kpi.xk:not([data-sub]) b{margin-bottom:15px}
+.sb .kpi[data-sub] b{margin-bottom:0}
+
+.sb .view-cf .kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
+.sb .view-cf .kpi b{font-size:16px}
+@media(max-width:1200px){.sb .view-cf .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.sb .view-cf .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.sb .kpi.pk .ksub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb .kpi.pk b{margin-bottom:0}
+.sb .kpi.pk .ksub{white-space:normal;overflow:visible}
+</style>
+<div class="sb">
+ <div class="tabs" role="tablist" aria-label="Entity"><button type="button" role="tab" data-t="consol" id="tab-consol">Consol</button><button type="button" role="tab" data-t="landowner" id="tab-landowner">Landowner</button><button type="button" role="tab" data-t="homebuilder" id="tab-homebuilder">Homebuilder</button></div>
+ <div class="body">
+<section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
+ <div class="ctl">
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
+  <span class="hint hint-cf"></span>
+  <span class="hint hint-pl" hidden></span>
+  <button type="button" class="pdtop" hidden>Project details</button>
+  <button type="button" class="collapse" hidden>Collapse all</button>
+  <span class="unit">USD</span>
+ </div>
+ <div class="pd-top" hidden></div>
+ <div class="view-cf">
+  <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (homes)</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average home size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per home</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="consol_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
+  <div class="tw" id="consol-statement"><table class="stmt" data-source="consol_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-act" hidden>
+  <div class="actbar">
+   <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <span class="actmsg"></span>
+  </div>
+  <div class="tw" id="consol-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-pl" hidden>
+  <div class="kpis"><button type="button" class="kpi" data-line="Total Revenue"><span>Revenue</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Gross Profit"><span>Gross profit</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Total Overhead Cost"><span>Overheads</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit before taxes"><span>Profit before tax</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Corporate taxes"><span>Corporate tax</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit / (loss)"><span>Net profit after tax</span><b class="dash-skeleton" data-source="consol_pl" data-field="Total">—</b></button></div>
+  <div class="tw" id="consol-pl"><table class="stmt plt" data-source="consol_pl" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th></tr></thead><tbody></tbody></table></div>
+ </div>
+</section>
+<section class="tab" id="landowner" role="tabpanel" aria-labelledby="tab-landowner" hidden>
+ <div class="ctl">
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
+  <span class="hint hint-cf"></span>
+  <span class="hint hint-pl" hidden></span>
+  <button type="button" class="pdtop" hidden>Project details</button>
+  <button type="button" class="collapse" hidden>Collapse all</button>
+  <span class="unit">USD</span>
+ </div>
+ <div class="pd-top" hidden></div>
+ <div class="view-cf">
+  <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (lots)</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average lot size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per lot</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="landowner_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
+  <div class="tw" id="landowner-statement"><table class="stmt" data-source="landowner_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="Till Aug&#x27;26" class="n">Till Aug&#x27;26</th><th data-field="Sep-Dec&#x27;26" class="n">Sep–Dec&#x27;26</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-act" hidden>
+  <div class="actbar">
+   <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <span class="actmsg"></span>
+  </div>
+  <div class="tw" id="landowner-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-pl" hidden>
+  <div class="kpis"><button type="button" class="kpi" data-line="Total Revenue"><span>Revenue</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Gross Profit"><span>Gross profit</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Total Overhead Costs"><span>Overheads</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit before tax"><span>Profit before tax</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Corporate tax"><span>Corporate tax</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit after tax"><span>Net profit after tax</span><b class="dash-skeleton" data-source="landowner_pl" data-field="Total">—</b></button></div>
+  <div class="tw" id="landowner-pl"><table class="stmt plt" data-source="landowner_pl" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th></tr></thead><tbody></tbody></table></div>
+ </div>
+</section>
+<section class="tab" id="homebuilder" role="tabpanel" aria-labelledby="tab-homebuilder" hidden>
+ <div class="ctl">
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button></div>
+  <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
+  <span class="hint hint-cf"></span>
+  <span class="hint hint-pl" hidden></span>
+  <button type="button" class="pdtop" hidden>Project details</button>
+  <button type="button" class="collapse" hidden>Collapse all</button>
+  <span class="unit">USD</span>
+ </div>
+ <div class="pd-top" hidden></div>
+ <div class="view-cf">
+  <div class="kpis"><button type="button" class="kpi pk"><span>Projects</span><b class="dash-skeleton" data-source="kpi_extra" data-field="n_projects">—</b><small class="ksub" data-source="kpi_extra" data-field="status"></small></button><button type="button" class="kpi" data-line="Sales unit"><span>Units (homes)</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_size" data-fmt="sqft"><span>Average home size</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_size">—</b></button><button type="button" class="kpi" data-line="Sales"><span>Sales (topline)</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi xk" data-f="avg_price" data-fmt="money"><span>Average price per unit</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_price">—</b></button><button type="button" class="kpi sumk" data-f="gross_profit" data-fmt="money" data-sub="gp_pct"><span>Gross profit</span><b class="dash-skeleton" data-source="project_summary" data-field="gross_profit">—</b><small class="ksub" data-source="project_summary" data-field="gp_pct"></small></button><button type="button" class="kpi xk" data-f="dev_cost" data-fmt="money"><span>Total development cost</span><b class="dash-skeleton" data-source="kpi_extra" data-field="dev_cost">—</b></button><button type="button" class="kpi xk" data-f="avg_unit_cost" data-fmt="money"><span>Average cost per home</span><b class="dash-skeleton" data-source="kpi_extra" data-field="avg_unit_cost">—</b></button><button type="button" class="kpi" data-line="Equity infusion"><span>Equity infused</span><b class="dash-skeleton" data-source="homebuilder_cf" data-field="Total">—</b></button><button type="button" class="kpi sumk" data-f="net_profit" data-fmt="money" data-sub="np_pct"><span>Net profit</span><b class="dash-skeleton" data-source="project_summary" data-field="net_profit">—</b><small class="ksub" data-source="project_summary" data-field="np_pct"></small></button><button type="button" class="kpi irrk"><span>Net equity IRR (pre-tax)</span><b class="dash-skeleton" data-source="project_irr" data-field="pretax_equity_irr">—</b></button><button type="button" class="kpi sumk" data-f="roe_multiple" data-fmt="x"><span>Return on equity (ROE)</span><b class="dash-skeleton" data-source="project_summary" data-field="roe_multiple">—</b></button></div>
+  <div class="tw" id="homebuilder-statement"><table class="stmt" data-source="homebuilder_cf" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2025" class="n">FY2025</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th><th data-field="FY2034" class="n">FY2034</th><th data-field="FY2035" class="n">FY2035</th></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-act" hidden>
+  <div class="actbar">
+   <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
+   <label class="upl">Upload Excel<input type="file" class="actfile" accept=".xlsx" hidden></label>
+   <span class="actmsg"></span>
+  </div>
+  <div class="tw" id="homebuilder-actuals"><table class="stmt actt" data-source="actuals_plan" data-row-key="key"><thead><tr></tr></thead><tbody></tbody></table></div>
+ </div>
+ <div class="view-pl" hidden>
+  <div class="kpis"><button type="button" class="kpi" data-line="Total Revenue"><span>Revenue</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Gross Profit"><span>Gross profit</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Total Overhead Cost"><span>Overheads</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit before taxes"><span>Profit before tax</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Corporate tax"><span>Corporate tax</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button><button type="button" class="kpi" data-line="Net Profit after tax"><span>Net profit after tax</span><b class="dash-skeleton" data-source="homebuilder_pl" data-field="Total">—</b></button></div>
+  <div class="tw" id="homebuilder-pl"><table class="stmt plt" data-source="homebuilder_pl" data-row-key="key"><thead><tr><th data-field="line" class="l">Particular</th><th data-field="Total" class="n">Total</th><th data-field="FY2026" class="n">FY2026</th><th data-field="FY2027" class="n">FY2027</th><th data-field="FY2028" class="n">FY2028</th><th data-field="FY2029" class="n">FY2029</th><th data-field="FY2030" class="n">FY2030</th><th data-field="FY2031" class="n">FY2031</th><th data-field="FY2032" class="n">FY2032</th><th data-field="FY2033" class="n">FY2033</th></tr></thead><tbody></tbody></table></div>
+ </div>
+</section></div>
+</div>
+
+
+</div>

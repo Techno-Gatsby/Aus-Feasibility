@@ -1,0 +1,849 @@
+(function () {
+  const ENT = {
+    consol: { ds: 'consol_cf', comp: 'consol_components' },
+    landowner: { ds: 'landowner_cf' },
+    homebuilder: { ds: 'homebuilder_cf' },
+  };
+  const NONPER = new Set(['key', 'project', 'ord', 'line', 'kind', 'Budget', 'Total', 'Sheet', 'Rows', 'Cells', 'Formula (FY2027 cell)', 'Basis']);
+  const TEAL = '#0D9488', PURPLE = '#7C3AED', NAVY = '#1A2B6B';
+  const S = { tab: 'consol', ent: {} };
+  Object.keys(ENT).forEach((k) => (S.ent[k] = { proj: 'All Projects', mix: 'out', lines: new Set(), projs: new Set(), zero: new Set(), comps: new Set(), stmt: 'cf', pl: new Set(), detail: null, detailTop: false }));
+
+  const root = document.querySelector('.sb');
+  const enc = (s) => String(s).replace(/%/g, '%25').replace(/&/g, '%26').replace(/=/g, '%3D');
+  const norm = (s) => String(s == null ? '' : s).trim().toLowerCase();
+  const isUnits = (line) => norm(line) === 'sales unit';
+  const fM = d3.format(',.1f'), f0 = d3.format(',.0f'), f1 = d3.format(',.2~f');
+  const cmp = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+  const projLabel = (p) => (p === 'All Projects' ? 'All projects' : p);
+  const isZero = (r, P) => P.every((p) => Math.abs(+r[p] || 0) < 0.5);
+
+  function fmt(v, line) {
+    if (v == null || v === '') return '';
+    v = +v;
+    if (Math.abs(v) < 0.5) return '–';
+    if (isUnits(line)) return f1(v);
+    const s = f0(Math.abs(v));
+    return v < 0 ? '(' + s + ')' : s;
+  }
+  function money(v, line) {
+    if (v == null || v === '') return '–';
+    v = +v;
+    if (isUnits(line)) return f0(v) + ' units';
+    if (Math.abs(v) < 0.5) return '$0';
+    return (v < 0 ? '−$' : '$') + f0(Math.abs(v));
+  }
+  function full(v, line) {
+    if (v == null || v === '') return 'n/a';
+    v = +v;
+    if (isUnits(line)) return f0(v) + ' units';
+    return (v < 0 ? '−$' : '$') + f0(Math.abs(v));
+  }
+  const axisMoney = (v) => (v === 0 ? '0' : (v < 0 ? '−$' : '$') + cmp.format(Math.abs(v)));
+  function periodsOf(d) {
+    const cols = d.columns && d.columns.length ? d.columns : Object.keys((d.data || [])[0] || {});
+    return cols.filter((c) => !NONPER.has(c));
+  }
+  function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function td(tr, text, cls) { const c = el('td', cls, text); tr.appendChild(c); return c; }
+  function mark(node, ds, field, key) { node.setAttribute('data-source', ds); node.setAttribute('data-field', field); node.setAttribute('data-where', 'key=' + enc(key)); return node; }
+  function numCells(tr, r, P, line) {
+    const noTot = r.kind === 'balance' || r.kind === 'header';
+    const t = td(tr, noTot ? '' : fmt(r.Total, line), 'tot'); if (+r.Total < -0.5) t.classList.add('neg');
+    P.forEach((p) => { const c = td(tr, fmt(r[p], line)); if (+r[p] < -0.5) c.classList.add('neg'); });
+  }
+  function clickable(tr, fn, open) {
+    tr.classList.add('k');
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', String(!!open));
+    if (open) tr.classList.add('open');
+    tr.addEventListener('click', fn);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+  }
+  function firstCell(tr, text, chev) {
+    const c = el('td'); c.title = text;
+    if (chev) c.appendChild(el('span', 'chev', '▶'));
+    c.appendChild(el('span', 'nm', text));
+    tr.appendChild(c);
+    return c;
+  }
+  function toggle(set, k) { set.has(k) ? set.delete(k) : set.add(k); render(); }
+  function fail(n) { n.replaceChildren(el('div', 'fail', 'Failed to load')); }
+  // ---------- tooltip ----------
+  function tipFor(box) {
+    let t = box.querySelector(':scope > .tip');
+    if (!t) { t = document.createElement('div'); t.className = 'tip'; t.hidden = true; box.appendChild(t); }
+    return t;
+  }
+  function showTip(box, t, ev, head, lines) {
+    t.replaceChildren();
+    const h = document.createElement('div'); h.className = 'h'; h.textContent = head; t.appendChild(h);
+    lines.forEach(([color, name, val]) => {
+      const row = document.createElement('div');
+      if (color) { const s = document.createElement('span'); s.className = 'sw'; s.style.background = color; if (color === 'line') { s.style.background = NAVY; s.style.height = '2px'; s.style.verticalAlign = 'middle'; } row.appendChild(s); }
+      row.appendChild(document.createTextNode(name + '  '));
+      const b = document.createElement('b'); b.textContent = val; row.appendChild(b);
+      t.appendChild(row);
+    });
+    t.hidden = false;
+    const r = box.getBoundingClientRect();
+    let x = ev.clientX - r.left + 12, y = ev.clientY - r.top + 12;
+    const tw = t.offsetWidth, th = t.offsetHeight;
+    if (x + tw > r.width) x = Math.max(0, ev.clientX - r.left - tw - 12);
+    if (y + th > r.height) y = Math.max(0, r.height - th);
+    t.style.left = x + 'px'; t.style.top = y + 'px';
+  }
+
+  function measure(svg, strings) {
+    const g = svg.append('g').attr('opacity', 0);
+    let w = 0;
+    strings.forEach((s) => { const t = g.append('text').text(s); w = Math.max(w, t.node().getComputedTextLength()); });
+    g.remove();
+    return w;
+  }
+
+  // ---------- flow chart (in vs out vs closing) ----------
+  function drawFlow(el, P, rin, rout, rcl, onPick) {
+    el.querySelectorAll('svg,.legend,.fail').forEach((n) => n.remove());
+    const W = Math.max(280, el.clientWidth || 600), H = 250;
+    const svg = d3.select(el).insert('svg', ':first-child').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const val = (r, p) => (r ? +r[p] || 0 : 0);
+    const all = P.flatMap((p) => [val(rin, p), val(rout, p), val(rcl, p)]);
+    const y = d3.scaleLinear([Math.min(0, d3.min(all)), Math.max(1, d3.max(all))], [H - 30, 10]).nice();
+    const ticks = y.ticks(5);
+    const ml = measure(svg, ticks.map(axisMoney)) + 12;
+    const x0 = d3.scaleBand(P, [ml, W - 8]).padding(0.22);
+    const x1 = d3.scaleBand(['in', 'out'], [0, x0.bandwidth()]).padding(0.08);
+    const lw = measure(svg, P);
+    const rotate = lw > x0.step() - 4;
+    const mb = rotate ? lw * 0.6 + 16 : 22;
+    y.range([H - mb, 10]);
+    svg.append('g').selectAll('line').data(ticks).join('line')
+      .attr('x1', ml).attr('x2', W - 8).attr('y1', (d) => y(d)).attr('y2', (d) => y(d))
+      .style('stroke', (v) => (v === 0 ? '#C9CED8' : '#EEF0F4'));
+    svg.append('g').selectAll('text').data(ticks).join('text')
+      .attr('x', ml - 6).attr('y', (v) => y(v)).attr('dy', '0.32em').attr('text-anchor', 'end').text(axisMoney);
+    svg.append('line').attr('x1', ml).attr('x2', W - 8).attr('y1', y(0)).attr('y2', y(0)).style('stroke', '#C9CED8');
+    const xl = svg.append('g').selectAll('text').data(P).join('text').text((p) => p);
+    if (rotate) xl.attr('transform', (p) => `translate(${x0(p) + x0.bandwidth() / 2},${H - mb + 12}) rotate(-35)`).attr('text-anchor', 'end');
+    else xl.attr('x', (p) => x0(p) + x0.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle');
+
+    const tip = tipFor(el);
+    const groups = svg.append('g').selectAll('g').data(P).join('g').attr('transform', (p) => `translate(${x0(p)},0)`);
+    groups.append('rect').attr('x', 0).attr('width', x0.bandwidth()).attr('y', 0).attr('height', H - mb).style('fill', 'transparent');
+    [['in', rin, TEAL, 'Total inflows'], ['out', rout, PURPLE, 'Total outflows']].forEach(([k, r, c, line]) => {
+      groups.append('rect')
+        .attr('x', x1(k)).attr('width', x1.bandwidth())
+        .attr('y', (p) => y(Math.max(0, val(r, p)))).attr('height', (p) => Math.abs(y(val(r, p)) - y(0)))
+        .attr('rx', 3).style('fill', c).style('cursor', 'pointer')
+        .on('click', () => onPick(line));
+    });
+    groups.on('mousemove', (ev, p) => showTip(el, tip, ev, p, [
+      [TEAL, 'Inflows', money(val(rin, p))], [PURPLE, 'Outflows', money(val(rout, p))], ['line', 'Closing cash', money(val(rcl, p))],
+    ])).on('mouseleave', () => (tip.hidden = true));
+    if (rcl) {
+      const line = d3.line().x((p) => x0(p) + x0.bandwidth() / 2).y((p) => y(val(rcl, p)));
+      svg.append('path').datum(P).attr('d', line).style('fill', 'none').style('stroke', NAVY)
+        .style('stroke-width', 2).style('stroke-linecap', 'round').style('stroke-linejoin', 'round').style('pointer-events', 'none');
+      svg.append('g').selectAll('circle').data(P).join('circle').attr('r', 3)
+        .attr('cx', (p) => x0(p) + x0.bandwidth() / 2).attr('cy', (p) => y(val(rcl, p)))
+        .style('fill', '#fff').style('stroke', NAVY).style('stroke-width', 1.5).style('pointer-events', 'none');
+    }
+    const lg = document.createElement('div'); lg.className = 'legend';
+    [[TEAL, 'Inflows'], [PURPLE, 'Outflows'], [NAVY, 'Closing cash (line)']].forEach(([c, n]) => {
+      const s = document.createElement('span'); const i = document.createElement('i'); i.style.background = c; s.append(i, n); lg.appendChild(s);
+    });
+    el.appendChild(lg);
+  }
+
+  // ---------- horizontal bars ----------
+  function hbars(el, items, cls, onPick) {
+    el.replaceChildren();
+    const max = d3.max(items, (i) => Math.abs(i.v)) || 1;
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hb ' + (cls || '') + (it.v < 0 ? ' neg' : '');
+      const lb = document.createElement('span'); lb.className = 'lb'; lb.textContent = it.label; lb.title = it.label;
+      const tr = document.createElement('span'); tr.className = 'tr';
+      const i = document.createElement('i'); i.style.width = (Math.abs(it.v) / max) * 100 + '%'; tr.appendChild(i);
+      const v = document.createElement('span'); v.className = 'v'; v.textContent = money(it.v, it.line);
+      b.append(lb, tr, v);
+      b.addEventListener('click', () => onPick(it));
+      el.appendChild(b);
+    });
+    if (!items.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'No amounts on this line for the selection.'; el.appendChild(p); }
+  }
+
+
+  // ---------- detail row (where a figure comes from) ----------
+  function compsFor(r) {
+    const cd = dash.data('consol_components');
+    if (cd.status !== 'ok' || r.project === 'All Projects') return [];
+    return cd.data.filter((c) => c.project === r.project && norm(c.consol_line) === norm(r.line));
+  }
+  function detailRow(tb, r, E, st, P, width, ncols) {
+    const tr = el('tr', 'dr');
+    const c = el('td'); c.colSpan = ncols;
+    const dx = el('div', 'dx'); dx.style.width = width + 'px';
+    dx.appendChild(components(r, st, P));
+    c.appendChild(dx); tr.appendChild(c); tb.appendChild(tr);
+  }
+
+  function components(r, st, P) {
+    const box = el('div', 'nest');
+    const comps = compsFor(r);
+    box.appendChild(el('h4', null, 'Built from these Landowner and Homebuilder lines'));
+    const w = el('div', 'tw2');
+    const t = el('table'); t.setAttribute('data-source', 'consol_components'); t.setAttribute('data-row-key', 'key');
+    const hr = el('tr');
+    [['component', 'Component', 'l'], ['entity', 'Model', 'l'], ['sign', '+/−', ''], ['Total', 'Total', 'n']].concat(P.map((p) => [p, p.replace('-', '–'), 'n']))
+      .forEach(([f, l, cls]) => { const th = el('th', cls, l); th.setAttribute('data-field', f); hr.appendChild(th); });
+    const th = el('thead'); th.appendChild(hr); t.appendChild(th);
+    const tb = el('tbody');
+    comps.forEach((c) => {
+      const tr = el('tr'); tr.dataset.key = c.key;
+      firstCell(tr, c.component, false); td(tr, c.entity, 'l'); td(tr, c.sign);
+      const tt = td(tr, fmt(c.Total, c.component), 'tot'); if (+c.Total < -0.5) tt.classList.add('neg');
+      P.forEach((p) => { const x = td(tr, fmt(c[p], c.component)); if (+c[p] < -0.5) x.classList.add('neg'); });
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); w.appendChild(t); box.appendChild(w);
+    return box;
+  }
+
+  // ---------- statement ----------
+  function renderTable(sec, E, st, rows, P) {
+    const tw = sec.querySelector('.tw');
+    const width = Math.max(260, tw.clientWidth - 2);
+    const ncols = P.length + 2;
+    const tb = sec.querySelector('.stmt tbody');
+    tb.replaceChildren();
+    const order = [...new Set(rows.map((r) => r.project))];
+    const prow = rows.filter((r) => r.project === st.proj).sort((a, b) => a.ord - b.ord);
+    prow.forEach((r) => {
+      const tr = el('tr', ({ header: 'g', total: 't', balance: 'b', memo: 'm', item: '' }[r.kind] || '') + ' l0');
+      tr.dataset.key = r.key;
+      if (r.kind === 'header') { firstCell(tr, r.line.replace(/:$/, ''), false); for (let i = 0; i < P.length + 1; i++) td(tr, ''); tb.appendChild(tr); return; }
+      const lk = norm(r.line), open = st.lines.has(lk);
+      const single = st.proj !== 'All Projects';
+      const can = !single || (E.comp && compsFor(r).length);
+      firstCell(tr, r.line, !!can); numCells(tr, r, P, r.line);
+      if (can) clickable(tr, () => toggle(st.lines, lk), open);
+      tb.appendChild(tr);
+      if (!open || !can) return;
+      if (single) { detailRow(tb, r, E, st, P, width, ncols); return; }
+      const pr = rows.filter((x) => x.project !== 'All Projects' && norm(x.line) === lk)
+        .sort((a, b) => order.indexOf(a.project) - order.indexOf(b.project));
+      pr.forEach((x) => {
+        const ptr = el('tr', 'p' + (isZero(x, P) ? ' zero' : ''));
+        ptr.dataset.key = x.key;
+        const pk = lk + '|' + x.project, popen = st.projs.has(pk);
+        const pcan = E.comp && compsFor(x).length;
+        const fc = firstCell(ptr, x.project, !!pcan); detailsBtn(fc, x.project, x.key, st); numCells(ptr, x, P, x.line);
+        if (pcan) clickable(ptr, () => toggle(st.projs, pk), popen);
+        tb.appendChild(ptr);
+        if (st.detail === x.key) detailsRow(tb, x.project, width, ncols);
+        if (popen && pcan) detailRow(tb, x, E, st, P, width, ncols);
+      });
+    });
+    const col = sec.querySelector('.collapse');
+    col.hidden = !st.lines.size;
+    col.onclick = () => { st.lines.clear(); st.projs.clear(); st.comps.clear(); render(); };
+  }
+
+  function between(rows, a, b) {
+    const s = rows.find((r) => norm(r.line) === norm(a)), e = rows.find((r) => norm(r.line) === norm(b));
+    return s && e ? rows.filter((r) => r.ord > s.ord && r.ord < e.ord && r.kind === 'item') : [];
+  }
+
+  function openLine(line) {
+    const st = S.ent[S.tab], sec = document.getElementById(S.tab);
+    st.lines.add(norm(line));
+    render();
+    const d = dash.data(ENT[S.tab].ds);
+    const r = d.status === 'ok' && d.data.find((x) => x.project === st.proj && norm(x.line) === norm(line));
+    const tr = r && sec.querySelector(`.stmt tr[data-key="${CSS.escape(r.key)}"]`);
+    if (tr) tr.scrollIntoView({ block: 'center' });
+  }
+
+  function renderSummary(sec, E, st, rows, P) {
+    const prow = rows.filter((r) => r.project === st.proj);
+    const find = (l) => prow.find((r) => norm(r.line) === norm(l));
+    { const kb = sec.querySelector('.view-cf .irrk'); const b = kb.querySelector('b'); const ir = dash.data('project_irr');
+      b.classList.remove('dash-skeleton');
+      const row = ir.status === 'ok' ? ir.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
+      if (row) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = row.pretax_equity_irr == null ? 'n/a' : (row.pretax_equity_irr * 100).toFixed(2) + '%'; } else b.textContent = '—';
+      kb.onclick = null; kb.style.cursor = 'default'; }
+    { const sd = dash.data('project_summary');
+      const row = sd.status === 'ok' ? sd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
+      const F = { money: (v) => money(v), pct: (v) => (v * 100).toFixed(1) + '%', x: (v) => v.toFixed(2) + 'x' };
+      sec.querySelectorAll('.view-cf .sumk').forEach((kb) => {
+        const b = kb.querySelector('b'), f = kb.dataset.f; b.classList.remove('dash-skeleton'); kb.style.cursor = 'default';
+        const v = row ? row[f] : null;
+        if (row && v != null) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = F[kb.dataset.fmt](v); } else b.textContent = 'n/a';
+        const sb = kb.querySelector('.ksub');
+        if (sb) { const sv = row ? row[kb.dataset.sub] : null; if (row && sv != null) { sb.setAttribute('data-where', 'key=' + enc(row.key)); sb.textContent = (sv * 100).toFixed(1) + '% margin'; } else sb.textContent = ''; }
+      }); }
+    { const xd = dash.data('kpi_extra');
+      const row = xd.status === 'ok' ? xd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
+      sec.querySelectorAll('.view-cf .xk').forEach((kb) => {
+        const b = kb.querySelector('b'), f = kb.dataset.f; b.classList.remove('dash-skeleton'); kb.style.cursor = 'default';
+        const v = row ? row[f] : null;
+        if (row && v != null && !(f === 'peak_debt' && !v)) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = kb.dataset.fmt === 'sqft' ? f0(v) + ' sqft' : kb.dataset.fmt === 'date' ? mon(v) : money(v); }
+        else b.textContent = f === 'peak_debt' && row ? 'No debt' : 'n/a';
+        const sb = kb.querySelector('.ksub');
+        if (sb) { const pv = row ? row[kb.dataset.sub] : null; if (pv) { sb.setAttribute('data-where', 'key=' + enc(row.key)); sb.textContent = kb.dataset.sub === 'start' ? 'from ' + mon(pv) : 'peak in ' + pv.replace('FY20', 'FY'); } else sb.textContent = ''; }
+      }); }
+    { const xd = dash.data('kpi_extra'); const kb = sec.querySelector('.view-cf .pk'); const b = kb.querySelector('b'), sb = kb.querySelector('.ksub');
+      b.classList.remove('dash-skeleton'); kb.style.cursor = 'default';
+      const row = xd.status === 'ok' ? xd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
+      if (!row) { b.textContent = 'n/a'; sb.textContent = ''; }
+      else if (st.proj === 'All Projects') { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = String(row.n_projects);
+        sb.textContent = [row.n_confirmed + ' confirmed', row.n_consider ? row.n_consider + ' under consideration' : '', row.n_pipeline ? row.n_pipeline + ' pipeline' : ''].filter(Boolean).join(', '); }
+      else { b.setAttribute('data-where', 'key=' + enc(row.key)); b.setAttribute('data-field', 'status'); b.textContent = row.status || 'n/a'; sb.textContent = ''; } }
+    sec.querySelectorAll('.view-cf .kpi:not(.irrk):not(.sumk):not(.xk):not(.pk)').forEach((btn) => {
+      const line = btn.dataset.line, r = find(line), b = btn.querySelector('b');
+      b.classList.remove('dash-skeleton');
+      if (r) { b.setAttribute('data-where', 'key=' + enc(r.key)); b.textContent = money(r.Total, line); } else b.textContent = '–';
+      btn.onclick = () => openLine(line);
+    });
+  }
+
+
+  // ---------- project details panel ----------
+  const PD_SETS = ['kpi_extra', 'project_summary', 'actuals_plan', 'project_irr', 'project_profile', 'project_entity', 'project_sales', 'project_timeline', 'consol_project_pl', 'project_photos'];
+  const mon = (s) => { if (!s) return ''; const d = new Date(s + 'T00:00:00Z'); return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+  const pct = (v) => (v == null ? 'N/A' : (v * 100).toFixed(1) + '%');
+  const mn = (v, dp) => (v == null ? 'N/A' : (v < 0 ? '(' : '') + '$' + Math.abs(v).toFixed(dp == null ? 2 : dp) + ' Mn' + (v < 0 ? ')' : ''));
+  const num0 = (v, suf) => (v == null ? 'N/A' : f0(v) + (suf || ''));
+  const mk = (node, ds, field, col, val) => { node.setAttribute('data-source', ds); node.setAttribute('data-field', field); node.setAttribute('data-where', col + '=' + enc(val)); return node; };
+  function hasDetails(project) {
+    const d = dash.data('project_profile');
+    return d.status === 'ok' && d.data.some((r) => r.project === project);
+  }
+  function detailsBtn(td, project, rowKey, st) {
+    if (!hasDetails(project)) return;
+    const on = st.detail === rowKey;
+    const b = el('button', 'pdbtn' + (on ? ' on' : ''));
+    b.append(el('span', 'pd-long', on ? 'Hide details' : 'Project details'), el('span', 'pd-short', on ? 'Hide' : 'Details'));
+    td.classList.add('hasbtn');
+    b.type = 'button';
+    b.addEventListener('click', (e) => { e.stopPropagation(); st.detail = st.detail === rowKey ? null : rowKey; render(); });
+    b.addEventListener('keydown', (e) => e.stopPropagation());
+    td.appendChild(b);
+  }
+  function detailsRow(tb, project, width, ncols) {
+    const tr = el('tr', 'dr pdr'); const c = el('td'); c.colSpan = ncols;
+    const box = makeDetails(project); box.style.width = width + 'px'; box.classList.add('sticky');
+    c.appendChild(box); tr.appendChild(c); tb.appendChild(tr);
+  }
+  function tile(grid, label, text, ds, field, project) {
+    const t = el('div', 'tile');
+    t.appendChild(mk(el('b', null, text), ds, field, 'project', project));
+    t.appendChild(el('span', null, label));
+    grid.appendChild(t);
+  }
+  function makeDetails(project) {
+    const box = el('div', 'pdx');
+    const prof = dash.data('project_profile'), ent = dash.data('project_entity'), sal = dash.data('project_sales'), tl = dash.data('project_timeline'), pl = dash.data('consol_project_pl');
+    if (prof.status !== 'ok') { box.appendChild(el('p', 'note', prof.status === 'error' ? 'Failed to load' : '')); return box; }
+    const p = prof.data.find((r) => r.project === project);
+    if (!p) return box;
+    const head = el('div', 'pdh');
+    head.appendChild(mk(el('h3', null, p.report_name + ', ' + p.location), 'project_profile', 'report_name', 'project', project));
+    head.appendChild(mk(el('span', 'chip ' + norm(p.status).replace(/\s+/g, '-'), p.status), 'project_profile', 'status', 'project', project));
+    box.appendChild(head);
+    if (p.note) box.appendChild(mk(el('p', 'note', p.note), 'project_profile', 'note', 'project', project));
+
+    // metrics
+    const g = el('div', 'pdgrid');
+    const c1 = el('div', 'pdcard'); c1.appendChild(el('h4', null, 'Development metrics'));
+    const t1 = el('div', 'tiles');
+    tile(t1, 'Land area', p.acreage == null ? 'N/A' : p.acreage + ' acres', 'project_profile', 'acreage', project);
+    tile(t1, 'Net saleable area / BUA', num0(p.nsa_sqft, ' sqft'), 'project_profile', 'nsa_sqft', project);
+    tile(t1, 'Proposed plotted area', num0(p.plotted_sqft, ' sqft'), 'project_profile', 'plotted_sqft', project);
+    tile(t1, 'Number of lots', num0(p.units), 'project_profile', 'units', project);
+    tile(t1, 'Plotting efficiency', p.plotting_eff == null ? 'N/A' : (p.plotting_eff * 100).toFixed(2) + '%', 'project_profile', 'plotting_eff', project);
+    tile(t1, 'Average home size', num0(p.avg_home_sqft, ' sqft'), 'project_profile', 'avg_home_sqft', project);
+    c1.appendChild(t1);
+    const c2 = el('div', 'pdcard'); c2.appendChild(el('h4', null, 'Finance metrics'));
+    const t2 = el('div', 'tiles');
+    tile(t2, 'Gross revenue', mn(p.gross_revenue_m), 'project_profile', 'gross_revenue_m', project);
+    tile(t2, 'Net profit after tax', mn(p.npat_m), 'project_profile', 'npat_m', project);
+    tile(t2, 'Gross profit', mn(p.gross_profit_m), 'project_profile', 'gross_profit_m', project);
+    tile(t2, 'Equity required', mn(p.equity_required_m), 'project_profile', 'equity_required_m', project);
+    tile(t2, 'Average home price', mn(p.avg_home_price_m), 'project_profile', 'avg_home_price_m', project);
+    tile(t2, 'Pre-tax IRR', pct(p.pretax_irr), 'project_profile', 'pretax_irr', project);
+    tile(t2, 'Land cost', mn(p.land_cost_m), 'project_profile', 'land_cost_m', project);
+    tile(t2, 'Infrastructure cost', mn(p.infra_cost_m), 'project_profile', 'infra_cost_m', project);
+    tile(t2, 'Total direct cost', mn(p.total_direct_cost_m), 'project_profile', 'total_direct_cost_m', project);
+    c2.appendChild(t2);
+    g.append(c1, c2); box.appendChild(g);
+    let photoCard = null;
+    const ph = dash.data('project_photos');
+    const pics = ph.status === 'ok' ? ph.data.filter((r) => r.project === project).sort((a, b) => a.order - b.order) : [];
+    if (pics.length) {
+      const pcard = el('div', 'pdcard'); pcard.appendChild(el('h4', null, 'Photos'));
+      const gal = el('div', 'gal' + (pics.length === 1 ? ' one' : '')); gal.setAttribute('data-source', 'project_photos');
+      pics.forEach((r) => {
+        const fig = el('figure', 'ph ' + r.kind);
+        const img = el('img'); img.src = String(r.image).startsWith('data:image/') ? r.image : ''; img.alt = r.caption; img.loading = 'lazy';
+        img.addEventListener('click', () => fig.classList.toggle('big'));
+        const cap = el('figcaption', null, r.caption);
+        fig.append(img, cap); gal.appendChild(fig);
+      });
+      pcard.appendChild(gal);
+      photoCard = pcard;
+    }
+
+    // timeline (input sheet)
+    const tc = el('div', 'pdcard'); tc.appendChild(el('h4', null, 'Timeline'));
+    const rows = tl.status === 'ok' ? tl.data.filter((r) => r.project === project) : [];
+    const gantt = el('div', 'tw2'); gantt.setAttribute('data-source', 'project_timeline');
+    if (rows.length) {
+      const acts = [...new Set(rows.map((r) => r.activity))];
+      const phases = [...new Set(rows.map((r) => r.phase))];
+      const t = el('table', 'mini tl ctr'); const hr = el('tr'); hr.appendChild(el('th', 'l', phases.length > 1 ? 'Phase' : ''));
+      acts.forEach((a) => hr.appendChild(el('th', 'n', a)));
+      const th = el('thead'); th.appendChild(hr); t.appendChild(th); const tb = el('tbody');
+      phases.forEach((ph) => {
+        const tr = el('tr'); const pr = rows.find((r) => r.phase === ph);
+        td(tr, ph === 'Project' ? 'Dates' : ph + (pr && pr.units ? ' (' + f0(pr.units) + ' units)' : ''), 'l ent');
+        acts.forEach((a) => { const r = rows.find((x) => x.phase === ph && x.activity === a); td(tr, !r ? '–' : (a.startsWith('Close-out') ? mon(r.start) : mon(r.start) + ' – ' + mon(r.finish))); });
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb); gantt.appendChild(t);
+    } else gantt.appendChild(el('p', 'note', 'No dates in the input sheet for this project yet.'));
+    tc.appendChild(gantt);
+    // milestones (PDF)
+    const ents = ent.status === 'ok' ? ent.data.filter((r) => r.project === project) : [];
+    if (ents.length) {
+      tc.appendChild(el('h5', null, 'Key milestones'));
+      tc.appendChild(etable(ents, [['entity', 'Type'], ['timeline', 'Timeline'], ['land_parcel_receipt', 'Land parcel receipt'], ['sales_commencement', 'Sales commencement'], ['development_completion', 'Development completion'], ['hand_over', 'Hand over']], (r, f) => r[f] || '–', 'ctr'));
+    }
+    box.appendChild(tc);
+
+    // sales + equity
+    const sc = el('div', 'pdcard'); sc.appendChild(el('h4', null, 'Sales timeline'));
+    const srows = sal.status === 'ok' ? sal.data.filter((r) => r.project === project) : [];
+    const sw = el('div', 'tw2'); sw.setAttribute('data-source', 'project_sales');
+    if (srows.length) {
+      const yrs = [...new Set(srows.map((r) => r.year))].sort();
+      const t = el('table', 'mini'); const hr = el('tr'); ['', '', 'Total'].concat(yrs.map(String)).forEach((h, i) => hr.appendChild(el('th', i > 1 ? 'n' : 'l', h)));
+      const th = el('thead'); th.appendChild(hr); t.appendChild(th); const tb = el('tbody');
+      [...new Set(srows.map((r) => r.entity))].forEach((e) => {
+        const er = srows.filter((r) => r.entity === e);
+        const er0 = ents.find((x) => x.entity === e);
+        const tot = er0 && er0.net_revenue_m != null ? er0.net_revenue_m : d3.sum(er, (r) => r.sales_value_m);
+        const totu = p.units != null ? p.units : d3.sum(er, (r) => r.units);
+        [['Sales value ($Mn)', 'sales_value_m', (v) => v.toFixed(1), tot.toFixed(1)], ['No. of units', 'units', (v) => f0(v), f0(totu)], ['% of sales', null, null, '100%']].forEach(([lab, f, fm, tv], i) => {
+          const tr = el('tr', i === 0 ? 'first' : '');
+          td(tr, i === 0 ? e : '', 'l ent'); td(tr, lab, 'l'); td(tr, tv, 'tot');
+          yrs.forEach((y) => { const r = er.find((x) => x.year === y); td(tr, r ? (f ? fm(r[f]) : Math.round((r.sales_value_m / tot) * 100) + '%') : '–'); });
+          tb.appendChild(tr);
+        });
+      });
+      t.appendChild(tb); sw.appendChild(t);
+    } else sw.appendChild(el('p', 'note', 'Not in the Executive Report.'));
+    sc.appendChild(sw);
+    const rc = el('div', 'pdcard'); rc.appendChild(el('h4', null, 'Returns'));
+    const ec = el('div', 'pdcard'); ec.appendChild(el('h4', null, 'Equity schedule ($Mn)'));
+    if (ents.length) {
+      rc.appendChild(etable(ents, [['entity', 'Type'], ['pretax_irr', 'Pre-tax IRR'], ['net_revenue_m', 'Net revenue ($Mn)'], ['gp_margin', 'GP margin'], ['net_margin', 'Net margin'], ['equity_release', 'Equity release']],
+        (r, f) => { const v = r[f]; if (v == null) return '–'; if (/irr|margin/.test(f)) return pct(v); return typeof v === 'number' ? v.toFixed(1) : v; }));
+      const ys = ["Till Dec'26", 'FY2027', 'FY2028', 'FY2029', 'FY2030', 'FY2031'];
+      const m2 = (v) => (Math.abs(v) < 0.005 ? '–' : v < 0 ? '(' + Math.abs(v).toFixed(2) + ')' : v.toFixed(2));
+      const w = el('div', 'tw2'); w.setAttribute('data-source', 'project_entity');
+      const t = el('table', 'mini eqs'); const hr = el('tr');
+      ['', '', 'Total'].concat(ys.map((y) => y.replace('FY20', 'FY'))).forEach((h, i) => hr.appendChild(el('th', i > 1 ? 'n' : 'l', h)));
+      const th = el('thead'); th.appendChild(hr); t.appendChild(th); const tb = el('tbody');
+      ents.forEach((r) => {
+        const vals = ys.map((y) => +r['equity ' + y] || 0);
+        const inf = vals.map((v) => Math.max(v, 0)), rf = vals.map((v) => Math.min(v, 0));
+        const eqT = d3.sum(inf), rfT = d3.sum(rf);
+        const lines = [['Equity infusion', inf, ''], ['Revenue funding', rf, 'rf']];
+        if (rfT < -0.005) {
+          const share = rf.map((v) => (rfT ? v / rfT : 0));
+          lines.push(['Equity returned', share.map((w) => -eqT * w), 'sub'], ['Net profit after tax', share.map((w) => (rfT + eqT) * w), 'sub']);
+        }
+        lines.forEach(([lab, arr, cls], i) => {
+          const tr = el('tr', (i === 0 ? 'first ' : '') + cls);
+          td(tr, i === 0 ? r.entity : '', 'l ent'); td(tr, lab, 'l');
+          const tot = d3.sum(arr); const c = td(tr, m2(tot), 'tot'); if (tot < -0.005) c.classList.add('neg');
+          arr.forEach((v) => { const x = td(tr, m2(v)); if (v < -0.005) x.classList.add('neg'); });
+          tb.appendChild(tr);
+        });
+      });
+      t.appendChild(tb); w.appendChild(t); ec.appendChild(w);
+    }
+    box.append(sc, rc, ec);
+
+    // consolidated P&L (calculated)
+    const prow = pl.status === 'ok' ? pl.data.filter((r) => r.project === project) : [];
+    if (prow.length) {
+      const pc = el('div', 'pdcard'); pc.appendChild(el('h4', null, 'Projected P&L (consolidated), USD'));
+      const yrs = periodsOf(pl).filter((y) => /^FY/.test(y) && prow.some((r) => Math.abs(+r[y] || 0) > 0.5));
+      const yr0 = periodsOf(pl).filter((y) => /^FY/.test(y));
+      const first = yr0.indexOf(yrs[0]), last = yr0.indexOf(yrs[yrs.length - 1]);
+      const show = yr0.slice(Math.max(0, first - 1), last + 1);
+      const t = el('table', 'mini plmini'); t.setAttribute('data-source', 'consol_project_pl'); t.setAttribute('data-row-key', 'key');
+      const hr = el('tr'); const h0 = el('th', 'l', ''); h0.setAttribute('data-field', 'line'); hr.appendChild(h0);
+      const ht = el('th', 'n', 'Total'); ht.setAttribute('data-field', 'Total'); hr.appendChild(ht);
+      show.forEach((y) => { const h = el('th', 'n', y); h.setAttribute('data-field', y); hr.appendChild(h); });
+      const th = el('thead'); th.appendChild(hr); t.appendChild(th);
+      const tb = el('tbody');
+      prow.forEach((r) => {
+        const tr = el('tr', { header: 'g', total: 't' }[r.kind] || ''); tr.dataset.key = r.key;
+        td(tr, r.line, 'l');
+        const c = td(tr, r.kind === 'header' ? '' : fmt(r.Total, r.line), 'tot'); if (+r.Total < -0.5) c.classList.add('neg');
+        show.forEach((y) => { const x = td(tr, r.kind === 'header' ? '' : fmt(r[y], r.line)); if (+r[y] < -0.5) x.classList.add('neg'); });
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb); const w = el('div', 'tw2'); w.appendChild(t); pc.appendChild(w); box.appendChild(pc);
+    }
+    if (photoCard) box.appendChild(photoCard);
+    return box;
+  }
+  function etable(rows, cols, fmtc, cls) {
+    const w = el('div', 'tw2');
+    const t = el('table', 'mini' + (cls ? ' ' + cls : '')); t.setAttribute('data-source', 'project_entity'); t.setAttribute('data-row-key', 'key');
+    const hr = el('tr'); cols.forEach(([f, l], i) => { const h = el('th', i ? 'n' : 'l', l); h.setAttribute('data-field', f); hr.appendChild(h); });
+    const th = el('thead'); th.appendChild(hr); t.appendChild(th); const tb = el('tbody');
+    rows.forEach((r) => { const tr = el('tr'); tr.dataset.key = r.key; cols.forEach(([f], i) => td(tr, fmtc(r, f), i ? '' : 'l ent')); tb.appendChild(tr); });
+    t.appendChild(tb); w.appendChild(t); return w;
+  }
+
+  // ---------- P&L ----------
+  const CORP = 'Corporate level & differences', ELIM = 'Eliminations & consolidation adjustments';
+  function renderPL(sec, key, st) {
+    const ds = key + '_pl', d = dash.data(ds);
+    const tb = sec.querySelector('.plt tbody');
+    const plw = Math.max(260, sec.querySelector('.view-pl .tw').clientWidth - 2);
+    const projl = sec.querySelector('.projl');
+    projl.hidden = false;
+    if (d.status !== 'ok') { tb.replaceChildren(); return; }
+    const rows = d.data, P = periodsOf(d).filter((c) => !['parent', 'level'].includes(c));
+    const order = [...new Set(rows.map((r) => r.project))];
+    const rank = (p) => (p === CORP || p === ELIM ? 1e6 : order.indexOf(p));
+    const kids = (k) => rows.filter((r) => r.parent === k).sort((a, b) => rank(a.project) - rank(b.project));
+    const proj = st.proj;
+    const tops = rows.filter((r) => r.level === 0);
+    const find = (l) => {
+      const t = tops.find((r) => norm(r.line) === norm(l));
+      if (!t) return null;
+      return proj === 'All Projects' ? t : rows.find((r) => r.parent === t.key && r.project === proj) || null;
+    };
+    sec.querySelectorAll('.view-pl .kpi').forEach((btn) => {
+      const line = btn.dataset.line, r = find(line), b = btn.querySelector('b');
+      b.classList.remove('dash-skeleton');
+      if (r) { b.setAttribute('data-where', 'key=' + enc(r.key)); b.textContent = money(r.Total, line); } else b.textContent = '–';
+      btn.onclick = () => {
+        const t = tops.find((x) => norm(x.line) === norm(line));
+        if (t && proj === 'All Projects') { st.pl.add(t.key); render(); const tr = sec.querySelector(`.plt tr[data-key="${CSS.escape(t.key)}"]`); if (tr) tr.scrollIntoView({ block: 'center' }); }
+      };
+    });
+    tb.replaceChildren();
+    const cells = (tr, r) => {
+      const t = td(tr, r.kind === 'header' ? '' : fmt(r.Total, r.line), 'tot'); if (+r.Total < -0.5) t.classList.add('neg');
+      P.forEach((p) => { const c = td(tr, r.kind === 'header' ? '' : fmt(r[p], r.line)); if (+r[p] < -0.5) c.classList.add('neg'); });
+    };
+    const zero = (r) => P.every((p) => Math.abs(+r[p] || 0) < 0.5);
+    function add(r, depth) {
+      const ch = kids(r.key);
+      const cls = depth === 0 ? (({ header: 'g', total: 't' }[r.kind] || '') + ' l0') : (depth === 1 ? 'p' : 'p2');
+      const tr = el('tr', cls + (depth && zero(r) ? ' zero' : '') + (r.project === CORP || r.project === ELIM ? ' corp' : ''));
+      tr.dataset.key = r.key;
+      const label = depth === 0 ? r.line.replace(/:$/, '') : r.project;
+      const fc = firstCell(tr, label, ch.length > 0 && r.kind !== 'header');
+      if (depth > 0) detailsBtn(fc, r.project, r.key, st);
+      cells(tr, r);
+      const open = st.pl.has(r.key);
+      if (ch.length && r.kind !== 'header') clickable(tr, () => toggle(st.pl, r.key), open);
+      tb.appendChild(tr);
+      if (depth > 0 && st.detail === r.key) detailsRow(tb, r.project, plw, P.length + 2);
+      if (open) ch.forEach((c) => add(c, depth + 1));
+    }
+    if (proj === 'All Projects') tops.forEach((r) => add(r, 0));
+    else tops.forEach((t) => {
+      if (t.kind === 'header') { add(t, 0); return; }
+      const r = rows.find((x) => x.parent === t.key && x.project === proj);
+      if (!r) return;
+      const tr = el('tr', ({ total: 't' }[t.kind] || '') + ' l0'); tr.dataset.key = r.key;
+      firstCell(tr, t.line, false); cells(tr, r); tb.appendChild(tr);
+    });
+  }
+
+  function renderIRR(sec, key, st) {
+    const ir = dash.data('project_irr'); const tb = sec.querySelector('.irrt tbody'); tb.replaceChildren();
+    if (ir.status !== 'ok') return;
+    const rows = ir.data.filter((r) => r.entity === key);
+    const all = rows.find((r) => r.project === 'All Projects');
+    const list = rows.filter((r) => r.project !== 'All Projects');
+    const f$ = (v) => (v == null ? '–' : Math.abs(v) < 0.5 ? '–' : (v < 0 ? '(' + f0(-v) + ')' : f0(v)));
+    const add = (r, total) => {
+      const tr = el('tr', total ? 't' : 'p' + (st.proj === r.project ? ' open' : '')); tr.dataset.key = r.key;
+      const fc = firstCell(tr, total ? 'All projects (total)' : r.project, false);
+      if (!total) detailsBtn(fc, r.project, 'irr|' + r.key, st);
+      td(tr, r.pretax_equity_irr == null ? 'n/a' : (r.pretax_equity_irr * 100).toFixed(2) + '%', 'tot');
+      td(tr, f$(r.equity_infused)); td(tr, f$(r.equity_released)); const n = td(tr, f$(r.net_return)); if (r.net_return < 0) n.classList.add('neg');
+      td(tr, !r.multiple ? '–' : r.multiple.toFixed(2) + 'x');
+      tb.appendChild(tr);
+      if (!total && st.detail === 'irr|' + r.key) detailsRow(tb, r.project, Math.max(260, sec.querySelector('.view-irr .tw').clientWidth - 2), 6);
+    };
+    list.forEach((r) => add(r, false));
+    if (all) add(all, true);
+  }
+
+
+  // ---------- Actuals ----------
+  const AST = { vals: {}, mode: 'init', db: null, timers: {}, msg: '' };
+  const docId = (stmt, p) => (stmt + '~' + p).replace(/[^A-Za-z0-9_\-.~:@+]/g, '_');
+  const aget = (stmt, p, line, per) => { const v = ((AST.vals[stmt] || {})[p] || {})[line + '|' + per]; return typeof v === 'number' ? v : null; };
+  function aput(stmt, p, line, per, v) {
+    AST.vals[stmt] = AST.vals[stmt] || {}; AST.vals[stmt][p] = AST.vals[stmt][p] || {};
+    const k = line + '|' + per;
+    if (v == null) delete AST.vals[stmt][p][k]; else AST.vals[stmt][p][k] = v;
+    schedule(stmt, p);
+  }
+  function schedule(stmt, p) {
+    const id = docId(stmt, p);
+    clearTimeout(AST.timers[id]);
+    AST.timers[id] = setTimeout(() => saveDoc(stmt, p), 500);
+  }
+  async function saveDoc(stmt, p) {
+    const values = Object.assign({}, (AST.vals[stmt] || {})[p] || {});
+    if (AST.mode === 'db') {
+      try { await AST.db.collection('actuals').doc(docId(stmt, p)).set({ stmt, project: p, values, updated_at: new Date().toISOString() }); AST.msg = 'Saved'; }
+      catch (e) { AST.mode = 'ro'; AST.msg = (e && e.code === 'invalid_argument') ? 'View only: you can see actuals but not change them.' : 'Could not save: ' + ((e && e.message) || 'unavailable'); }
+    } else if (AST.mode === 'local') {
+      try { localStorage.setItem('sobha_actuals', JSON.stringify(AST.vals)); AST.msg = 'Saved in this browser'; } catch (e) { AST.msg = 'Not saved (storage blocked)'; }
+    }
+    render();
+  }
+  (async function initActuals() {
+    try {
+      const c = window.claude;
+      const db = c && c.use ? await c.use('db') : null;
+      if (db) {
+        AST.db = db; AST.mode = 'db';
+        db.collection('actuals').onSnapshot((snap) => {
+          const v = {};
+          snap.docs.forEach((d) => { const x = d.data(); if (x && x.stmt && x.project) { v[x.stmt] = v[x.stmt] || {}; v[x.stmt][x.project] = Object.assign({}, x.values || {}); } });
+          // keep local unsaved edits for docs with pending timers
+          Object.keys(AST.timers).forEach((id) => { /* pending saves will overwrite on write */ });
+          AST.vals = v; render();
+        }, () => { AST.mode = 'ro'; AST.msg = 'Actuals could not be loaded.'; render(); });
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    try { const s = localStorage.getItem('sobha_actuals'); AST.vals = s ? JSON.parse(s) : {}; AST.mode = 'local'; } catch (e) { AST.mode = 'memory'; }
+    render();
+  })();
+
+  const APER = { consol_cf: 10, landowner_cf: 7, homebuilder_cf: 10, consol_pl: 10, landowner_pl: 7, homebuilder_pl: 8 };
+  const allPer = ["Till Dec'26", 'FY2027', 'FY2028', 'FY2029', 'FY2030', 'FY2031', 'FY2032', 'FY2033', 'FY2034', 'FY2035'];
+  function evalActuals(stmt, rows, P) {
+    const byProj = {};
+    rows.forEach((r) => { (byProj[r.project] = byProj[r.project] || []).push(r); });
+    Object.values(byProj).forEach((a) => a.sort((x, y) => x.ord - y.ord));
+    const memo = new Map();
+    const lab = (p, l) => (byProj[p] || []).find((r) => r.role !== 'header' && norm(r.line) === l);
+    const add = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
+    function A(r, pi) {
+      const mk = r.key + '#' + pi; if (memo.has(mk)) return memo.get(mk);
+      memo.set(mk, null);
+      const per = P[pi], p = r.project, rr = byProj[p]; let v = null;
+      const isAll = p === 'All Projects';
+      const sumProj = () => { let s = null; Object.keys(byProj).forEach((q) => { if (q === 'All Projects') return; const x = lab(q, norm(r.line)); if (x) s = add(s, A(x, pi)); }); return s; };
+      switch (r.role) {
+        case 'input': v = aget(stmt, p, r.line, per); break;
+        case 'sumifs': v = sumProj(); break;
+        case 'expr': JSON.parse(r.rule).forEach(([s, l]) => { const x = lab(p, l); if (x) { const y = A(x, pi); if (y != null) v = (v || 0) + s * y; } }); break;
+        case 'sec': { const i0 = rr.findIndex((x) => norm(x.line) === r.rule); const i1 = rr.indexOf(r);
+          for (let i = i0 + 1; i < i1; i++) if (rr[i].role !== 'header') v = add(v, A(rr[i], pi)); break; }
+        case 'close': case 'eclose': {
+          if (r.role === 'close') { const o = lab(p, 'opening balance'), ti = lab(p, 'total inflows'), to = lab(p, 'total outflows');
+            const a = A(o, pi), b = A(ti, pi), c = A(to, pi); v = a == null && b == null && c == null ? null : (a || 0) + (b || 0) - (c || 0); }
+          else { ['opening escrow balance', 'collected in escrow', 'less: released from escrow'].forEach((l) => { const x = lab(p, l); if (x) v = add(v, A(x, pi)); }); }
+          break; }
+        case 'open': case 'eopen':
+          if (pi === 0) v = isAll ? sumProj() : aget(stmt, p, r.line, per);
+          else v = A(lab(p, r.role === 'open' ? 'closing balance' : 'closing escrow balance'), pi - 1);
+          break;
+      }
+      memo.set(mk, v); return v;
+    }
+    return A;
+  }
+  const isEditable = (r, pi) => r.role === 'input' || ((r.role === 'open' || r.role === 'eopen') && pi === 0 && r.project !== 'All Projects');
+  function parseNum(s) {
+    s = String(s || '').trim(); if (!s) return null;
+    const neg = /^\(.*\)$/.test(s) || s.startsWith('-');
+    const n = Number(s.replace(/[(),\s$]/g, '').replace(/^-/, ''));
+    return isFinite(n) ? (neg ? -n : n) : NaN;
+  }
+  function renderActuals(sec, key, st) {
+    st.act = st.act || 'cf';
+    sec.querySelectorAll('.actseg button').forEach((b) => { b.classList.toggle('on', b.dataset.a === st.act); b.onclick = () => { st.act = b.dataset.a; render(); }; });
+    const stmt = key + '_' + st.act, d = dash.data('actuals_plan');
+    const msg = sec.querySelector('.actmsg');
+    const modeTxt = { db: 'Actuals are saved for everyone with access.', local: 'Actuals are saved in this browser.', memory: 'Actuals are kept for this session only.', ro: '', init: 'Loading actuals…' }[AST.mode];
+    msg.textContent = AST.msg ? AST.msg : modeTxt;
+    const upl = sec.querySelector('.upl'); upl.hidden = AST.mode === 'ro';
+    const fi = sec.querySelector('.actfile');
+    fi.onchange = async () => { const f = fi.files[0]; fi.value = ''; if (f) { AST.msg = 'Reading ' + f.name + '…'; render(); try { const n = await importXlsx(f); AST.msg = 'Imported ' + n + ' actual values from ' + f.name + '.'; } catch (e) { AST.msg = 'Could not read ' + f.name + ': ' + e.message; } render(); } };
+    const thr = sec.querySelector('.actt thead tr'), tb = sec.querySelector('.actt tbody');
+    if (d.status !== 'ok') { tb.replaceChildren(); return; }
+    const P = allPer.slice(0, APER[stmt]);
+    const rows = d.data.filter((r) => r.stmt === stmt);
+    const A = evalActuals(stmt, rows, P);
+    // header
+    thr.replaceChildren();
+    const th = (t, f, c) => { const h = el('th', c || 'n', t); if (f) h.setAttribute('data-field', f); thr.appendChild(h); };
+    th('Particular', 'line', 'l'); th('Total BP', 'Total'); th('Total actual', null, 'n act');
+    P.forEach((y) => { th(y.replace('FY20', 'FY') + ' BP', y); th(y.replace('FY20', 'FY') + ' actual', null, 'n act'); });
+    const proj = st.proj;
+    const show = rows.filter((r) => r.project === proj).sort((a, b) => a.ord - b.ord);
+    const focusK = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+    tb.replaceChildren();
+    const ro = AST.mode === 'ro' || AST.mode === 'init';
+    show.forEach((r) => {
+      const tr = el('tr', ({ header: 'g', total: 't', balance: 'b' }[r.kind] || '')); tr.dataset.key = r.key;
+      firstCell(tr, r.kind === 'header' ? r.line.replace(/:$/, '') : r.line, false);
+      if (r.kind === 'header') { for (let i = 0; i < 2 + P.length * 2; i++) td(tr, ''); tb.appendChild(tr); return; }
+      const fm = (v) => (v == null ? '' : fmt(v, r.line));
+      const noT = r.kind === 'balance';
+      td(tr, noT ? '' : fm(r.Total), 'tot');
+      let tA = null; if (!noT) P.forEach((y, pi) => { const v = A(r, pi); if (v != null) tA = (tA || 0) + v; });
+      td(tr, noT ? '' : fm(tA), 'tot act');
+      P.forEach((y, pi) => {
+        td(tr, fm(r[y]));
+        const c = el('td', 'act');
+        if (isEditable(r, pi) && !ro) {
+          const inp = el('input', 'ai'); inp.type = 'text'; inp.inputMode = 'decimal';
+          const v = aget(stmt, r.project, r.line, y); inp.value = v == null ? '' : fmt(v, r.line).replace(/^–$/, '0');
+          inp.dataset.k = r.key + '#' + y; inp.setAttribute('aria-label', r.line + ' ' + y + ' actual');
+          inp.addEventListener('change', () => { const n = parseNum(inp.value); if (Number.isNaN(n)) { inp.classList.add('bad'); return; } aput(stmt, r.project, r.line, y, n); render(); });
+          c.appendChild(inp);
+        } else { const v = A(r, pi); c.textContent = fm(v); }
+        tr.appendChild(c);
+      });
+      tb.appendChild(tr);
+    });
+    if (focusK) { const f = tb.querySelector(`input[data-k="${CSS.escape(focusK)}"]`); if (f) f.focus(); }
+  }
+
+  // ---------- Excel import (reads the yellow Actual cells) ----------
+  const SHEETS = { 'Consol CF': 'consol_cf', 'Landowner CF': 'landowner_cf', 'Homebuilder CF': 'homebuilder_cf', 'Consol P&L': 'consol_pl', 'Landowner P&L': 'landowner_pl', 'Homebuilder P&L': 'homebuilder_pl' };
+  async function unzip(buf) {
+    const u8 = new Uint8Array(buf), dv = new DataView(buf); let e = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('not an .xlsx file');
+    const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const files = {};
+    for (let i = 0; i < n; i++) {
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+      files[name] = { method, csize, off }; p += 46 + nl + xl + cl;
+    }
+    const read = async (name) => {
+      const f = files[name]; if (!f) return null;
+      const lnl = dv.getUint16(f.off + 26, true), lxl = dv.getUint16(f.off + 28, true), s = f.off + 30 + lnl + lxl;
+      const data = u8.slice(s, s + f.csize);
+      if (f.method === 0) return new TextDecoder().decode(data);
+      const out = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+      return new TextDecoder().decode(out);
+    };
+    return read;
+  }
+  const colNum = (ref) => { const m = ref.match(/^[A-Z]+/)[0]; let n = 0; for (const ch of m) n = n * 26 + ch.charCodeAt(0) - 64; return n; };
+  async function importXlsx(file) {
+    const read = await unzip(await file.arrayBuffer()), P = new DOMParser();
+    const wbx = P.parseFromString(await read('xl/workbook.xml'), 'application/xml');
+    const rel = P.parseFromString(await read('xl/_rels/workbook.xml.rels'), 'application/xml');
+    const rmap = {}; Array.from(rel.getElementsByTagName('Relationship')).forEach((r) => (rmap[r.getAttribute('Id')] = r.getAttribute('Target')));
+    const ssx = await read('xl/sharedStrings.xml'); const ss = [];
+    if (ssx) Array.from(P.parseFromString(ssx, 'application/xml').getElementsByTagName('si')).forEach((si) => ss.push(Array.from(si.getElementsByTagName('t')).map((t) => t.textContent).join('')));
+    let count = 0; const touched = new Set();
+    for (const sh of Array.from(wbx.getElementsByTagName('sheet'))) {
+      const stmt = SHEETS[sh.getAttribute('name')]; if (!stmt) continue;
+      const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      let tgt = rmap[rid]; if (!tgt) continue; tgt = tgt.replace(/^\/?xl\//, ''); const xml = await read('xl/' + tgt); if (!xml) continue;
+      const doc = P.parseFromString(xml, 'application/xml'); const rows = {};
+      Array.from(doc.getElementsByTagName('row')).forEach((rw) => {
+        const rn = +rw.getAttribute('r'); const cells = {};
+        Array.from(rw.getElementsByTagName('c')).forEach((c) => {
+          const t = c.getAttribute('t'), f = c.getElementsByTagName('f')[0], vEl = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
+          let v = vEl ? vEl.textContent : (is ? is.textContent : null);
+          if (t === 's' && v != null) v = ss[+v];
+          else if (v != null && (t == null || t === 'n')) v = Number(v);
+          cells[colNum(c.getAttribute('r'))] = { v, f: !!f };
+        });
+        rows[rn] = cells;
+      });
+      const h4 = rows[4] || {}, h5 = rows[5] || {}; const per = {}; let cur = null;
+      const maxc = Math.max(...Object.keys(h5).map(Number));
+      for (let c = 3; c <= maxc; c++) { if (h4[c] && h4[c].v) cur = String(h4[c].v); if (h5[c] && h5[c].v === 'Actual' && cur && cur !== 'Total') per[c] = cur.replace('–', '-'); }
+      Object.keys(rows).map(Number).filter((r) => r > 5).forEach((r) => {
+        const cl = rows[r], p = cl[1] && cl[1].v, line = cl[2] && cl[2].v; if (!p || !line || p === line) return;
+        Object.keys(per).forEach((c) => { const x = cl[c]; if (x && !x.f && typeof x.v === 'number' && isFinite(x.v)) { AST.vals[stmt] = AST.vals[stmt] || {}; AST.vals[stmt][p] = AST.vals[stmt][p] || {}; AST.vals[stmt][p][String(line) + '|' + per[c]] = x.v; touched.add(stmt + '\u0000' + p); count++; } });
+      });
+    }
+    for (const k of touched) { const [s, p] = k.split('\u0000'); await saveDoc(s, p); }
+    return count;
+  }
+
+  function render() {
+    root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
+    root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
+    const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
+    const pl = st.stmt === 'pl', act = st.stmt === 'act';
+    sec.querySelector('.view-cf').hidden = pl || act; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act;
+    sec.querySelector('.hint-cf').hidden = pl || act; sec.querySelector('.hint-pl').hidden = !pl;
+    sec.querySelectorAll('.stmtseg button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.s === st.stmt);
+      b.onclick = () => { st.stmt = b.dataset.s; render(); };
+    });
+    const col = sec.querySelector('.collapse');
+    sec.querySelectorAll('.tw').forEach((x) => x.classList.toggle('free', !!st.detail));
+    const d = dash.data(E.ds);
+    PD_SETS.forEach((id) => dash.data(id));
+    if (E.comp) { dash.data(E.comp); dash.data('landowner_cf'); dash.data('homebuilder_cf'); }
+    const sel = sec.querySelector('.proj');
+    if (d.status === 'ok') {
+      const projects = [...new Set(d.data.map((r) => r.project))];
+      if (sel.options.length !== projects.length) {
+        sel.replaceChildren(...projects.map((p) => new Option(projLabel(p), p)));
+        sel.onchange = () => { st.proj = sel.value; st.projs.clear(); st.zero.clear(); st.comps.clear(); render(); };
+      }
+      if (!projects.includes(st.proj)) st.proj = 'All Projects';
+      sel.value = st.proj;
+    }
+    const pdb = sec.querySelector('.pdtop'), pdt = sec.querySelector('.pd-top');
+    const canTop = st.proj !== 'All Projects' && hasDetails(st.proj);
+    pdb.hidden = !canTop;
+    pdb.textContent = st.detailTop ? 'Hide project details' : 'Project details';
+    pdb.classList.toggle('on', !!st.detailTop);
+    pdb.onclick = () => { st.detailTop = !st.detailTop; render(); };
+    pdt.replaceChildren();
+    pdt.hidden = !(canTop && st.detailTop);
+    if (canTop && st.detailTop) pdt.appendChild(makeDetails(st.proj));
+    if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }
+    if (pl) {
+      renderPL(sec, S.tab, st);
+      col.hidden = !st.pl.size;
+      col.onclick = () => { st.pl.clear(); render(); };
+      return;
+    }
+    sec.querySelector('.projl').hidden = false;
+    if (d.status !== 'ok') { sec.querySelector('.stmt tbody').replaceChildren(); return; }
+    const rows = d.data, P = periodsOf(d);
+    renderTable(sec, E, st, rows, P);
+    renderSummary(sec, E, st, rows, P);
+  }
+
+  root.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; dash.setLink(S.tab); render(); }));
+  const h = location.hash.slice(1);
+  if (ENT[h]) S.tab = h;
+  dash.onData(render);
+})();
