@@ -26,12 +26,14 @@ const ICON = {
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>', logout: '<path d="M15 17l5-5-5-5M20 12H9"/><path d="M12 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>',
   locate: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/>', expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', back: '<path d="M15 18l-6-6 6-6"/>', shift: '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/>',
-  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
 };
 const ic = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k] || ''}</svg>`;
 const haptic = p => { try { navigator.vibrate?.(p); } catch (e) { } };
 const initials = n => esc(String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join(''));
-function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; const dark = th === 'dark' || (th === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0C1422' : '#12305E'); }
+function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#ECE9E3'); }
+function isDark() { const th = ls.get('ls.theme') || 'auto'; return th === 'dark' || (th === 'auto' && !matchMedia('(prefers-color-scheme: light)').matches); }
+const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 function toast(m, ms = 2800) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
 
 // API address: ?api=… (saved), else same-origin /api when served over http(s), else demo
@@ -75,16 +77,18 @@ function zoneInfo() {
 }
 function paintGps() {
   const el = $('#gps'); if (!el) return;
-  const g = W.gps, z = zoneInfo();
-  if (!g) el.innerHTML = W.gpsErr ? `<span class="pill neg"><span class="dot"></span>${esc(W.gpsErr)}</span>` : `<span class="pill"><span class="dot"></span>${t('locating')}</span>`;
-  else if (z?.inZone && g.acc > (W.prof?.settings?.maxAcc || 50)) el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m</span>`;
-  else if (z?.inZone) el.innerHTML = `<span class="pill pos"><span class="dot"></span>${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m</span>${z.own ? '' : ` <span class="pill warn">${t('reliever')} ${esc(z.site.name)}</span>`}`;
-  else el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m</span>`;
-  const cap = $('#cap'); if (cap) cap.textContent = !g ? (W.gpsErr || t('locating')) : z?.inZone && g.acc <= (W.prof?.settings?.maxAcc || 50) ? t('inZoneHint') : t('outZoneHint');
+  const g = W.gps, z = zoneInfo(), max = W.prof?.settings?.maxAcc || 50;
+  const conf = (cls, txt, tag) => `<div class="conf ${cls}"><span class="d"></span><span class="grow">${txt}</span>${tag ? `<span class="chip ${cls === 'ok' ? 'pos' : 'warn'} tag">${tag}</span>` : ''}</div>`;
+  if (!g) el.innerHTML = W.gpsErr ? conf('bad', esc(W.gpsErr)) : conf('wait', t('locating'));
+  else if (z?.inZone && g.acc > max) el.innerHTML = conf('warn', `${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m`, t('willReview'));
+  else if (z?.inZone) el.innerHTML = conf('ok', `${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m${z.own ? '' : ` · ${t('reliever')} ${esc(z.site.name)}`}`, t('auto'));
+  else el.innerHTML = conf('warn', `${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m`, t('willReview'));
+  const set = (id, v) => { const x = $('#' + id); if (x) x.innerHTML = v; };
+  set('r-d', g && z ? `${z.d}` : '—'); set('r-a', g ? `${g.acc}` : '—');
   if (W.map && W.layers && g) {
     const L = window.L; W.layers.me?.remove(); W.layers.acc?.remove();
-    W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: '#16202F', weight: 1, fillOpacity: .08, dashArray: '3 3' }).addTo(W.map);
-    W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: '#fff', weight: 2, fillColor: '#E0762F', fillOpacity: 1 }).addTo(W.map);
+    W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: cssv('--cyan'), weight: 1, fillOpacity: .08, dashArray: '3 4' }).addTo(W.map);
+    W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: cssv('--bg') || '#050606', weight: 2.5, fillColor: cssv('--cyan'), fillOpacity: 1 }).addTo(W.map);
     if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend([p.lat, p.lng])); W.map.fitBounds(b.pad(0.6), { maxZoom: 17 }); }
   }
 }
@@ -98,7 +102,7 @@ async function freshFix(maxWait = 15000) {
 function takePhoto(caption) {
   return new Promise(resolve => {
     const box = document.createElement('div'); box.className = 'cam';
-    box.innerHTML = `<div class="hint">${t('takePhoto')}<br><small style="opacity:.8">${t('faceHint')}</small></div><video playsinline autoplay muted></video><div class="oval"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
+    box.innerHTML = `<div class="hint">${t('takePhoto')}<small>${t('faceHint')}</small></div><video playsinline autoplay muted></video><div class="oval"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
     document.body.appendChild(box);
     const video = $('video', box); let stream = null;
     const close = v => { stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
@@ -128,13 +132,14 @@ function takePhoto(caption) {
 }
 
 /* ---------- screens ---------- */
-function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN } = {}) {
+function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', dock = '' } = {}) {
   try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
   clearInterval(W.tick); W.tick = null;
-  document.body.classList.toggle('notabs', !tabs);
-  $('#app').innerHTML = `<div class="bar"><span class="mark">LS</span><span class="t">${t('title')}<small>Latinem Securities</small></span><span class="sp"></span>
-    <button id="b-lang" aria-label="${t('lang')}">${ic('globe')}${esc(LANGS.find(l => l[0] === LANG)[1])}</button>${W.prof || W.sup ? `<button id="b-menu" aria-label="${t('more')}">${ic('more')}</button>` : ''}</div>
-    ${W.api.demo ? `<div class="demo">${t('demo')}</div>` : ''}<main>${body}</main>
+  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock);
+  $('#app').innerHTML = `<header class="top"><span class="mark">LS</span><p class="crumb"><span>Latinem</span><b>${esc(crumb || t('title'))}</b></p><span class="sp"></span>
+    <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
+    ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main>${body}</main>
+    ${dock ? `<div class="dock"><div class="in">${dock}</div></div>` : ''}
     ${tabs ? `<nav class="tabs-b"><div class="in">${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
   $('#b-lang').onclick = () => menu(LANGS.map(([k, n]) => [n, () => { setLang(k); render(); }, k === LANG]));
   if ($('#b-menu')) $('#b-menu').onclick = () => menu([
@@ -158,21 +163,22 @@ function render() {
 function renderLogin() {
   const known = W.code, hr = new Date().getHours(), greet = hr < 12 ? t('gm') : hr < 17 ? t('ga') : t('ge');
   if (!known || W.editCode) {
-    shell(`<div class="hero"><div class="logo">LS</div><h1>${greet}</h1><p>${t('signin')}</p></div>
+    shell(`<div class="hero"><p class="kick">LS · ${t('kicker')}</p><h1>Latinem <em>Securities</em></h1><p>${t('welcome')}</p></div>
       <div class="card"><label class="fl" for="code">${t('empId')}</label>
       <input class="f mono" id="code" placeholder="${t('empIdPh')}" value="${esc(known)}" autocapitalize="characters" autocomplete="username" inputmode="text">
-      <button class="btn pri wide" id="b-next" style="margin-top:14px">${t('next')}</button>
-      ${W.api.demo ? `<button class="btn ghost wide" id="b-demo" style="margin-top:8px">${t('loadDemo')}</button>` : ''}</div>`);
+      <button class="btn pri wide" id="b-next" style="margin-top:14px">${t('next')} ${ic('arrow')}</button>
+      ${W.api.demo ? `<button class="btn ghost wide" id="b-demo" style="margin-top:6px">${t('loadDemo')}</button>` : ''}</div>
+      <p class="note">${t('locNote')}</p>`, { crumb: t('signin') });
     $('#code').focus();
     const nx = () => { const c = $('#code').value.trim().toUpperCase(); if (!c) return; W.code = c; ls.set('ls.code', c); W.editCode = false; W.pin = ''; render(); };
     $('#b-next').onclick = nx; $('#code').onkeydown = e => e.key === 'Enter' && nx();
     if ($('#b-demo')) $('#b-demo').onclick = loadDemo;
     return;
   }
-  shell(`<div class="hero"><div class="logo">LS</div><h1>${greet}</h1><p style="margin:10px 0 0"><span class="idchip">${esc(known)}<button id="b-not">${t('notYou')}</button></span></p></div>
-    <p class="muted" style="text-align:center;margin:14px 0 0">${t('enterPin')}</p><div class="dots ${W.shake ? 'shake' : ''}">${[0, 1, 2, 3].map(i => `<i class="${i < W.pin.length ? 'on' : ''}"></i>`).join('')}</div>
+  shell(`<div class="hero" style="padding-bottom:6px"><p class="kick">LS · ${t('kicker')}</p><h1>${esc(greet)}</h1><p style="margin-top:14px"><span class="idchip">${esc(known)}<button id="b-not">${t('notYou')}</button></span></p></div>
+    <p class="k" style="text-align:center;margin:18px 0 0">${t('enterPin')}</p><div class="dots ${W.shake ? 'shake' : ''}">${[0, 1, 2, 3].map(i => `<i class="${i < W.pin.length ? 'on' : ''}"></i>`).join('')}</div>
     <div class="err" id="err">${esc(W.err || '')}</div>
-    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button class="fn" data-k="c" aria-label="clear">${ic('x')}</button><button data-k="0">0</button><button class="fn" data-k="b" aria-label="backspace">⌫</button></div>`);
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button class="fn" data-k="c" aria-label="clear">${ic('x')}</button><button data-k="0">0</button><button class="fn" data-k="b" aria-label="backspace">⌫</button></div>`, { crumb: t('signin') });
   W.shake = false;
   $('#b-not').onclick = () => { W.editCode = true; W.err = ''; ls.set('ls.code', null); W.code = ''; render(); };
   $$('.pad button').forEach(b => b.onclick = () => key(b.dataset.k));
@@ -202,45 +208,67 @@ async function refresh(redraw = true) {
 async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; }
 
 function renderHome() {
-  const P = W.prof, w = P.worker, open = P.open;
+  const P = W.prof, w = P.worker, open = P.open, S0 = P.settings || {};
   const today = P.punches.filter(p => p.workDate === P.today || (open && p.id === open.id) || (open && p.inId === open.id)).sort((a, b) => a.ts - b.ts);
   const done = !open && today.some(p => p.type === 'out');
-  const hr = new Date().getHours(), greet = hr < 12 ? t('gm') : hr < 17 ? t('ga') : t('ge');
-  const st = p => p.status === 'accepted' ? `<span class="pill pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="pill warn">${t('statusPending')}</span>` : `<span class="pill neg">${t('statusRejected')}</span>`;
-  const start = P.settings?.starts?.[w.shift];
-  const dur = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
-  shell(`<div class="card"><div class="who"><span class="av">${initials(w.name)}</span><div class="grow"><span class="hi">${greet}</span><b>${esc(w.name)}</b><span class="mono muted small">${esc(w.code)}</span></div></div>
-      <div class="meta"><span class="chip"><span class="state ${open ? 'on' : ''}">${open ? t('onShift') : done ? t('finished') : t('notStarted')}</span></span><span class="chip">${ic('pin')}<span class="muted small">${t('site')}</span><b>${esc(P.site?.name || '—')}</b></span><span class="chip">${ic('shift')}<span class="muted small">${t('shift')}</span><b>${esc(w.shift)}${start ? ' · ' + start : ''}</b></span></div></div>
-    <div class="punch"><button class="big ${open ? 'out' : 'in pulse'}" id="b-punch">${ic(open ? 'out' : 'in')}${open ? t('checkOut') : t('checkIn')}
-        ${open ? `<span class="tm" id="timer">${dur(Date.now() - open.ts)}</span><small>${t('since')} ${hhmm(open.ts)}</small>` : `<small>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</small>`}</button>
-      <div class="cap" id="cap"></div></div>
-    <div class="mapcard" id="mapcard"><div id="map"></div><button id="b-exp" class="exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" class="loc" aria-label="my location" hidden>${ic('locate')}</button><button class="btn x" id="b-mapx">${ic('back')} ${t('close')}</button></div>
+  const st = p => p.status === 'accepted' ? `<span class="chip pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="chip warn">${t('statusPending')}</span>` : `<span class="chip neg">${t('statusRejected')}</span>`;
+  const start = S0.starts?.[w.shift] || '', hrsLen = +S0.shiftHours || 12;
+  const [first, ...rest] = String(w.name).split(/\s+/);
+  const dur = ms => { const x = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(x / 3600))}:${pad(Math.floor(x / 60) % 60)}:${pad(x % 60)}`; };
+  // shift window for the progress rule (night shifts run past midnight)
+  const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
+  const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
+  const hoursToday = today.reduce((x, p) => x + (+p.hours || 0), 0) + (open ? (Date.now() - open.ts) / 3600e3 : 0);
+  const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
+  shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)}</div></section>
+    <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
+      <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
+      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
+    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
     <div id="qbar" class="q" hidden></div>
-    <div class="card"><div class="lbl">${t('timeline')}</div>
-      ${today.length ? `<ul class="list tl">${today.map(p => `<li class="${p.type}"><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
-        : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>`, { tab: 'home' });
+    <div class="mapcard" id="mapcard"><div id="map"></div>
+      <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
+      <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
+      <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
+      <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
+    <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
+      ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
+        : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
+    <p class="note">${t('locNote')}</p>`, {
+    tab: 'home', crumb: P.site?.name || t('today'),
+    dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
-  if (open) W.tick = setInterval(() => { const el = $('#timer'); if (!el) return clearInterval(W.tick); el.textContent = dur(Date.now() - open.ts); }, 1000);
+  const tick = () => {
+    const n = new Date(), h = n.getHours(), el = $('#k-time'); if (!el) return clearInterval(W.tick);
+    el.textContent = `${h % 12 || 12}:${pad(n.getMinutes())}`;
+    $('#k-day').textContent = n.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+    $('#k-am').className = h < 12 ? 'on' : ''; $('#k-pm').className = h >= 12 ? 'on' : '';
+    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); $('#r-h').textContent = (today.reduce((x, p) => x + (+p.hours || 0), 0) + (Date.now() - open.ts) / 3600e3).toFixed(1); }
+    const w2 = win(); if (w2 && $('#k-fill')) { $('#k-fill').style.transform = `scaleX(${w2.p.toFixed(3)})`; $('#k-now').style.left = `calc(${(w2.p * 100).toFixed(1)}% - 1px)`; }
+  };
+  tick(); W.tick = setInterval(tick, 1000);
   const card = $('#mapcard');
   $('#b-exp').onclick = () => { card.classList.add('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   $('#b-mapx').onclick = () => { card.classList.remove('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
+  $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); drawMap();
 }
 async function drawMap() {
   const el = $('#map'); if (!el) return;
   try {
-    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, collapsed: true });
+    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, control: false, dark: isDark() });
     if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
     W.map = map;
+    $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === LSMap.base(map)));
     if ($('#b-exp')) $('#b-exp').hidden = false;
     const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17)); else toast(W.gpsErr || t('locating')); }; }
     W.layers = {};
-    for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? '#1766CB' : '#93A0B5', label: s.name, fill: s.id === W.prof.site?.id ? .14 : .06 });
+    const own = cssv('--bronze') || '#B08D57', oth = cssv('--mute') || '#8C908A';
+    for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? own : oth, label: s.name, fill: s.id === W.prof.site?.id ? .14 : .05 });
     paintGps();
   } catch (e) { el.closest('.mapcard').hidden = true; }
 }
-
 async function punch(type, forWorker) {
   if (W.busy) return; W.busy = true;
   try {
@@ -261,10 +289,11 @@ async function punch(type, forWorker) {
   } finally { W.busy = false; }
 }
 function showResult(kind, msg, photo) {
-  const M = { send: ['q', '', t('sending'), ''], ok: ['ok', 'check', t('accepted'), ''], pend: ['pend', 'hour', t('pending'), t('pendingWhy')], queued: ['q', 'cloud', t('queued'), t('queuedWhy')], bad: ['bad', 'x', t('failed'), ''] }[kind];
+  const M = { send: ['send', t('stSend'), t('sending'), ''], ok: ['ok', t('stOk'), t('accepted'), ''], pend: ['pend', t('stPend'), t('pending'), t('pendingWhy')], queued: ['off', t('stQ'), t('queued'), t('queuedWhy')], bad: ['bad', t('stBad'), t('failed'), ''] }[kind];
   if (kind === 'ok') haptic([30, 50, 30]); else if (kind === 'bad') haptic([80, 50, 80]); else if (kind !== 'send') haptic(40);
-  shell(`<div class="card res"><div class="ic ${M[0]}">${kind === 'send' ? '<div class="spin"></div>' : ic(M[1])}</div><h2>${M[2]}</h2><div class="when">${hhmm(Date.now())}</div><p class="muted">${esc(msg || M[3])}</p>${photo ? `<img src="${photo}" alt="">` : ''}
-    ${kind === 'send' ? '' : `<button class="btn pri wide" id="b-done" style="margin-top:18px">${t('done')}</button>`}</div>`, { tabs: false });
+  shell(`<div class="res ${M[0]}">${kind === 'send' ? '<div class="spin"></div>' : `<span class="stamp">${esc(M[1])}</span>`}
+    <div class="when">${hhmm(Date.now())}</div><h2>${M[2]}</h2><p class="note">${esc(msg || M[3])}</p>${photo ? `<img src="${photo}" alt="">` : ''}
+    ${kind === 'send' ? '' : `<button class="btn pri wide" id="b-done" style="margin-top:22px">${t('done')}</button>`}</div>`, { tabs: false, crumb: M[1] });
   if ($('#b-done')) $('#b-done').onclick = () => W.sup ? renderSup() : go('home');
 }
 function renderMonth() {
@@ -275,28 +304,28 @@ function renderMonth() {
   const todayISO = `${cur}-${pad(now.getDate())}`;
   const live = new Map(P.punches.filter(p => p.type === 'in' && p.status !== 'rejected' && p.workDate.startsWith(ym)).map(p => [+p.workDate.slice(8), p.status === 'accepted' ? 'P' : '…']));
   const day = d => codes[d - 1] || live.get(d) || '';
-  const all = [...Array(N)].map((_, i) => day(i + 1));
-  const cnt = re => all.filter(c => re.test(c)).length;
+  const all = [...Array(N)].map((_, i) => day(i + 1)), cnt = re => all.filter(c => re.test(c)).length;
+  const mName = x => new Date(+x.slice(0, 4), +x.slice(5) - 1, 1).toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { month: 'short', year: 'numeric' });
   const cell = d => { const c = day(d); return `<div class="d ${esc(c)} ${`${ym}-${pad(d)}` === todayISO ? 'today' : ''}"><b>${d}</b>${esc(c)}</div>`; };
-  shell(`<div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${new Date(+x.slice(0, 4), +x.slice(5) - 1, 1).toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { month: 'short', year: 'numeric' })}</button>`).join('')}</div>
+  shell(`<section class="place"><div class="n">${esc(t('month'))}</div><div class="z"><b>${esc(mName(ym))}</b> · ${esc(P.worker.code)}</div></section>
+    <div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${esc(mName(x))}</button>`).join('')}</div>
     <div class="tiles"><div class="tile P"><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
     <div class="card"><div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}${[...Array(N)].map((_, i) => cell(i + 1)).join('')}</div>
-      <div class="legend"><span><i style="background:var(--pos-bg);border:1px solid var(--pos-line)"></i>${t('worked')}</span><span><i style="background:var(--surface3)"></i>${t('off')}</span><span><i style="background:var(--neg-bg);border:1px solid var(--neg-line)"></i>${t('absent')}</span><span><i style="background:var(--warn-bg);border:1px solid var(--warn-line)"></i>${t('leave')}</span></div></div>
-    <button class="btn wide" id="b-back">${ic('back')} ${t('back')}</button>`, { tab: 'month' });
+      <div class="legend"><span><i style="background:var(--sage)"></i>${t('worked')}</span><span><i style="background:var(--faint)"></i>${t('off')}</span><span><i style="background:var(--red)"></i>${t('absent')}</span><span><i style="background:var(--gold)"></i>${t('leave')}</span></div></div>`, { tab: 'month', crumb: t('month') });
   $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
-  $('#b-back').onclick = () => go('home');
 }
 function renderMore() {
-  const P = W.prof, th = ls.get('ls.theme') || 'auto';
-  shell(`<div class="card"><div class="who"><span class="av">${initials(P.worker.name)}</span><div class="grow"><b>${esc(P.worker.name)}</b><span class="mono muted small">${esc(P.worker.code)}</span></div></div></div>
-    <div class="card" style="padding:4px 14px"><ul class="menu-list">
+  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = String(P.worker.name).split(/\s+/);
+  const thL = th === 'dark' ? t('themeDarkS') : th === 'light' ? t('themeLightS') : t('themeAuto');
+  shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
+    <div class="card" style="padding:4px 16px"><ul class="menu-list">
       <li><button id="m-lang">${ic('globe')}<span>${t('lang')}</span><span class="val">${esc(LANGS.find(l => l[0] === LANG)[1])}</span></button></li>
-      <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${t(th === 'dark' ? 'themeDark' : th === 'light' ? 'themeLight' : 'themeAuto')}</span></button></li>
-      <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span></button></li>
+      <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${esc(thL)}</span></button></li>
+      <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span><span class="val">${ic('arrow')}</span></button></li>
       <li><button id="m-out" class="danger">${ic('logout')}<span>${t('signout')}</span></button></li></ul></div>
-    <p class="muted small" style="text-align:center">${t('appVer')} 2.0 · Latinem Securities</p>`, { tab: 'more' });
+    <p class="note">${t('locNote')}</p><p class="k" style="text-align:center;margin-top:18px">LS · ${t('appVer')} 3.0</p>`, { tab: 'more', crumb: t('more') });
   $('#m-lang').onclick = () => $('#b-lang').click();
-  $('#m-theme').onclick = () => menu([['auto', 'themeAuto'], ['light', 'themeLight'], ['dark', 'themeDark']].map(([k, l]) => [t(l), () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
+  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
 /* ---------- supervisor: site board + punch on behalf ---------- */
@@ -321,17 +350,17 @@ function renderSup() {
   const f = W.supF || 'all', q = (W.supQ || '').trim().toUpperCase();
   const rows = base.filter(w => (f === 'all' || state(w) === f || (f === 'none' && state(w) === 'marked')) && (!q || w.name.toUpperCase().includes(q) || w.code.toUpperCase().includes(q)));
   const ord = { none: 0, marked: 1, in: 2, done: 3 };
-  shell(`<div class="card"><div class="row" style="margin-bottom:2px">${ic('users')}<h2 style="margin:0">${t('supervisor')}</h2></div>
-    <div class="row"><div class="grow"><label class="fl" for="sp-site">${t('site')}</label><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+  shell(`<section class="place"><div class="n">${t('supervisor')}</div><div class="z"><b>${esc(B.sites.find(x => x.id === W.supSite)?.name || t('all'))}</b> · ${esc(B.date || '')}</div></section>
+    <div class="card"><div class="row"><div class="grow"><label class="fl" for="sp-site">${t('site')}</label><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
       <div><label class="fl" for="sp-date">${t('date')}</label><input class="f" type="date" id="sp-date" value="${esc(B.date)}" max="${esc(B.today)}"></div></div>
     <div class="chips">${[['all', t('all'), base.length], ['none', t('notIn'), n('none') + n('marked')], ['in', t('inNow'), n('in')], ['done', t('doneLbl'), n('done')]].map(([k, l, c]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${l} <b>${c}</b></button>`).join('')}</div>
-    <p class="muted small" style="margin:8px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
+    <p class="note" style="margin:10px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
     <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div></div>
     ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
-    <div class="card" style="padding:4px 14px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(w.name)}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
+    <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(w.name)}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
       ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
       ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}</li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
-    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false });
+    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
   $$('[data-f]').forEach(b => b.onclick = () => { W.supF = b.dataset.f; renderSup(); });

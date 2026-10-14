@@ -22,7 +22,11 @@ const LSMap = (() => {
     // detectRetina: on phones and scaled Windows screens Leaflet fetches tiles one zoom deeper and draws them at half size, so imagery stays sharp.
     // maxNativeZoom: past the deepest imagery the last level is upsampled instead of requesting tiles that do not exist.
     const T = { detectRetina: true, maxNativeZoom: 19, maxZoom: 20, keepBuffer: 4 };
-    const osm = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' });
+    // dark: Esri Dark Gray Canvas + its labels (the worker app's instrument theme); otherwise World Street Map
+    const osm = opts.dark ? L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16 })
+    ]) : L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' });
     const sat = L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', T)
@@ -30,13 +34,22 @@ const LSMap = (() => {
     const pref = (() => { try { return localStorage.getItem('ls.layer'); } catch (e) { return null; } })();
     const useSat = opts.satellite != null && pref == null ? opts.satellite : pref === 'sat';
     (useSat ? sat : osm).addTo(map);
-    L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: !!opts.collapsed }).addTo(map);
+    if (opts.control !== false) L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: !!opts.collapsed }).addTo(map);
+    map._ls = { osm, sat };
     map.on('baselayerchange', e => { try { localStorage.setItem('ls.layer', e.name === 'Satellite' ? 'sat' : 'map'); } catch (x) { } });
     // If the street tiles are refused (e.g. a blocked host), fall back to the satellite view instead of showing error tiles
-    let errs = 0; osm.on('tileerror', () => { if (++errs >= 4 && map.hasLayer(osm) && el.isConnected) { map.removeLayer(osm); sat.addTo(map); errs = -1e9; } });
+    let errs = 0; (osm.getLayers ? osm.getLayers()[0] : osm).on('tileerror', () => { if (++errs >= 4 && map.hasLayer(osm) && el.isConnected) { map.removeLayer(osm); sat.addTo(map); errs = -1e9; } });
     setTimeout(() => { try { if (el.isConnected) map.invalidateSize(); } catch (e) { } }, 60);   // map may be gone by then
     return map;
   }
+  /** Switch the base layer from your own control: 'map' | 'sat' (remembered like the built-in switch) */
+  function setBase(map, k) {
+    const { osm, sat } = map._ls || {}; if (!osm) return;
+    const on = k === 'sat' ? sat : osm, off = k === 'sat' ? osm : sat;
+    if (map.hasLayer(off)) map.removeLayer(off); if (!map.hasLayer(on)) on.addTo(map);
+    try { localStorage.setItem('ls.layer', k === 'sat' ? 'sat' : 'map'); } catch (e) { }
+  }
+  const base = map => map?._ls && map.hasLayer(map._ls.sat) ? 'sat' : 'map';
   /** Circle + pin for a zone */
   function zone(map, pin, o = {}) {
     const L = window.L;
@@ -110,5 +123,5 @@ const LSMap = (() => {
 .lsm-sug button:hover,.lsm-sug button.on{background:#EAF2FD}.lsm-sug .none{padding:8px 10px;color:#6B7A94;font-size:12px}
 .leaflet-control-layers{font:12px Inter,Segoe UI,sans-serif;border-radius:5px!important}.leaflet-container{font-family:Inter,Segoe UI,sans-serif}`;
   if (typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st); }
-  return { load, create, zone, parseCoords, search };
+  return { load, create, setBase, base, zone, parseCoords, search };
 })();

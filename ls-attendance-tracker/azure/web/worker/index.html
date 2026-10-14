@@ -3,272 +3,330 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#12305E">
+<meta name="theme-color" content="#050606">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="LS Attendance">
 <title>Worker Attendance</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,300..800;1,75..125,300..800&family=Martian+Mono:wdth,wght@75..112.5,400..600&display=swap">
 <style>
-/* Worker page – tracker tokens (navy, Inter, blue accent), laid out like the leading time-clock apps:
-   bottom tab bar, round punch button with a live timer, today timeline, oval selfie guide, dark theme for night shifts */
+/* Worker app – "field instrument" design language after Delta Climate's OBOS console:
+   near-black canvas, warm ink, one bronze accent, Mona Sans + condensed mono labels,
+   readouts (big value · small mono label), hairlines, segmented chips, honest notes. */
 :root{
-  color-scheme:light;
-  --canvas:#F2F4F8; --surface:#FFFFFF; --raised:#FBFCFE; --surface2:#F4F6FA; --surface3:#E9EDF4;
-  --line:#E4E9F1; --line2:#CDD5E2; --line3:#A9B6CC;
-  --ink:#16202F; --navy:#12305E; --heading:#12305E; --text:#16202F; --text2:#42506B; --mute:#68778F; --faint:#93A0B5;
-  --accent:#1766CB; --accent2:#1F7AE0; --accent-soft:#EAF2FD;
-  --pos:#1F7A52; --pos-bg:#E8F5EE; --pos-line:#BFE0CD; --neg:#A23B3B; --neg-bg:#FBECEC; --neg-line:#EBC5C5; --warn:#8A6417; --warn-bg:#FBF2DF; --warn-line:#EAD39E;
-  --sh1:0 1px 2px rgba(15,30,61,.06); --sh2:0 2px 6px rgba(15,30,61,.06),0 8px 24px rgba(15,30,61,.06);
-  --r:8px; --r2:14px; --tab:64px;
-  --font-body:"Inter","Aptos Narrow","Segoe UI Variable","Segoe UI",-apple-system,system-ui,"Noto Sans","Noto Sans Devanagari","Noto Nastaliq Urdu","Noto Sans Malayalam",sans-serif;
-  --font-mono:"JetBrains Mono","Aptos Mono","SF Mono","Consolas",ui-monospace,monospace;
+  color-scheme:dark;
+  --bg:#050606; --s1:#0A0C0C; --s2:#101313; --s3:#171B1B; --s4:#1E2323;
+  --line:rgba(236,232,224,.08); --line2:rgba(236,232,224,.14); --line3:rgba(236,232,224,.24);
+  --ink:#ECE8E0; --ink2:#C6C2B9; --mute:#8C908A; --faint:#5E635F;
+  --bronze:#B08D57; --bronze2:#C9A46A; --bronze-bg:rgba(176,141,87,.12);
+  --sage:#93B08F; --sage-bg:rgba(147,176,143,.12); --cyan:#7DB6B9; --red:#D3664F; --red-bg:rgba(211,102,79,.12); --orange:#DA8C50; --gold:#D8B45C; --gold-bg:rgba(216,180,92,.12);
+  --on-bronze:#0A0806;
+  --r:10px; --r2:16px; --tab:66px; --dock:84px;
+  --sans:"Mona Sans","Inter","Segoe UI Variable","Segoe UI",-apple-system,system-ui,"Noto Sans","Noto Sans Devanagari","Noto Nastaliq Urdu","Noto Sans Malayalam",sans-serif;
+  --mono:"Martian Mono","JetBrains Mono","SF Mono",ui-monospace,Consolas,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
-  --canvas:#0C1422; --surface:#142035; --raised:#18253C; --surface2:#1A2740; --surface3:#22314D;
-  --line:#24334F; --line2:#2E3F5E; --line3:#3E5174;
-  --ink:#E8EEF8; --heading:#EAF1FC; --text:#DCE4F1; --text2:#AEBBD1; --mute:#8D9BB4; --faint:#6E7D97;
-  --accent:#4C93F0; --accent2:#6AA8F5; --accent-soft:#1B2D4B;
-  --pos:#5CC796; --pos-bg:#14322A; --pos-line:#245640; --neg:#F08A8A; --neg-bg:#3A1E24; --neg-line:#5C2D35; --warn:#E8C26E; --warn-bg:#352B15; --warn-line:#5A4720;
-  --sh1:0 1px 2px rgba(0,0,0,.3); --sh2:0 2px 10px rgba(0,0,0,.35)}}
-:root[data-theme=dark]{color-scheme:dark;
-  --canvas:#0C1422; --surface:#142035; --raised:#18253C; --surface2:#1A2740; --surface3:#22314D;
-  --line:#24334F; --line2:#2E3F5E; --line3:#3E5174;
-  --ink:#E8EEF8; --heading:#EAF1FC; --text:#DCE4F1; --text2:#AEBBD1; --mute:#8D9BB4; --faint:#6E7D97;
-  --accent:#4C93F0; --accent2:#6AA8F5; --accent-soft:#1B2D4B;
-  --pos:#5CC796; --pos-bg:#14322A; --pos-line:#245640; --neg:#F08A8A; --neg-bg:#3A1E24; --neg-line:#5C2D35; --warn:#E8C26E; --warn-bg:#352B15; --warn-line:#5A4720;
-  --sh1:0 1px 2px rgba(0,0,0,.3); --sh2:0 2px 10px rgba(0,0,0,.35)}
+/* Studio (light) – the "clay" counterpart */
+:root[data-theme=light]{color-scheme:light;
+  --bg:#ECE9E3; --s1:#F4F2ED; --s2:#FBFAF7; --s3:#E3DFD7; --s4:#D8D3CA;
+  --line:rgba(20,22,22,.08); --line2:rgba(20,22,22,.14); --line3:rgba(20,22,22,.26);
+  --ink:#151717; --ink2:#363A3B; --mute:#6A6E6A; --faint:#9A9C97;
+  --bronze:#8E6B35; --bronze2:#A47D41; --bronze-bg:rgba(142,107,53,.10);
+  --sage:#4B7A50; --sage-bg:rgba(75,122,80,.10); --cyan:#2E7A80; --red:#B3452F; --red-bg:rgba(179,69,47,.09); --orange:#B5682D; --gold:#9C7A18; --gold-bg:rgba(156,122,24,.10);
+  --on-bronze:#FBFAF7}
+@media (prefers-color-scheme:light){:root:not([data-theme]){color-scheme:light;
+  --bg:#ECE9E3; --s1:#F4F2ED; --s2:#FBFAF7; --s3:#E3DFD7; --s4:#D8D3CA;
+  --line:rgba(20,22,22,.08); --line2:rgba(20,22,22,.14); --line3:rgba(20,22,22,.26);
+  --ink:#151717; --ink2:#363A3B; --mute:#6A6E6A; --faint:#9A9C97;
+  --bronze:#8E6B35; --bronze2:#A47D41; --bronze-bg:rgba(142,107,53,.10);
+  --sage:#4B7A50; --sage-bg:rgba(75,122,80,.10); --cyan:#2E7A80; --red:#B3452F; --red-bg:rgba(179,69,47,.09); --orange:#B5682D; --gold:#9C7A18; --gold-bg:rgba(156,122,24,.10);
+  --on-bronze:#FBFAF7}}
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 button,select,input,a{touch-action:manipulation}
 button{user-select:none;-webkit-user-select:none}
-html,body{margin:0;min-height:100%;background:var(--canvas)}
-body{color:var(--text);font:15px/1.45 var(--font-body);-webkit-font-smoothing:antialiased;overscroll-behavior-y:contain}
+html,body{margin:0;min-height:100%;background:var(--bg)}
+body{color:var(--ink);font:400 15px/1.5 var(--sans);font-stretch:100%;-webkit-font-smoothing:antialiased;overscroll-behavior-y:contain}
 button,input,select,textarea{font:inherit;color:inherit}
 [hidden]{display:none!important}
-svg.i{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+::selection{background:var(--bronze);color:var(--on-bronze)}
+:focus-visible{outline:1.5px solid var(--bronze);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-stretch:80%}
 .muted{color:var(--mute)}.small{font-size:12.5px}
 .grow{flex:1;min-width:0}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* the signature: small, condensed, tracked mono label */
+.k,.lbl{font:500 10px/1.3 var(--mono);font-stretch:75%;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.lbl{margin:0 0 10px;display:flex;justify-content:space-between;gap:8px}
+.note{font-size:12.5px;line-height:1.5;color:var(--mute);margin:8px 0 0}
+.note b{color:var(--ink2);font-weight:600}
 
-/* top bar */
-.bar{position:sticky;top:0;z-index:1500;display:flex;align-items:center;gap:10px;background:var(--navy);color:#fff;padding:0 12px;padding-top:env(safe-area-inset-top,0);min-height:56px}
-.bar .mark{width:30px;height:30px;border-radius:8px;background:#fff;color:#12305E;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
-.bar .t{font-weight:700;font-size:16px;letter-spacing:-.01em;line-height:1.15}
-.bar .t small{display:block;font-weight:500;font-size:11px;color:rgba(255,255,255,.7)}
-.bar .sp{flex:1}
-.bar button{display:inline-flex;align-items:center;gap:6px;border:0;background:rgba(255,255,255,.13);color:#fff;border-radius:999px;height:38px;min-width:40px;padding:0 12px;font-size:13px;font-weight:600;cursor:pointer}
-.bar button svg.i{width:18px;height:18px}
-.demo{background:var(--warn-bg);color:var(--warn);border-bottom:1px solid var(--warn-line);font-size:12px;padding:6px 12px;text-align:center}
+/* ---------- top: brand + crumb ---------- */
+.top{position:sticky;top:0;z-index:1500;display:flex;align-items:center;gap:10px;padding:0 14px;padding-top:env(safe-area-inset-top,0);min-height:58px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top .mark{width:30px;height:30px;border-radius:8px;border:1px solid var(--bronze);color:var(--bronze);display:grid;place-items:center;font:600 11px var(--mono);letter-spacing:.04em;flex:none}
+.crumb{margin:0;display:flex;align-items:center;gap:0;min-width:0;font:500 10.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);white-space:nowrap;overflow:hidden}
+.crumb span::after{content:"/";margin:0 .6em;color:var(--faint)}
+.crumb b{color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.top .sp{flex:1}
+.ib{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;min-width:40px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--r);background:transparent;color:var(--ink2);cursor:pointer;font:500 10.5px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase}
+.ib:active{background:var(--s3)}
+.synthetic{display:flex;align-items:center;gap:8px;padding:7px 16px;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border-bottom:1px solid var(--line)}
+.synthetic span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.synthetic .d{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px var(--gold-bg);flex:none}
 
-main{max-width:560px;margin:0 auto;padding:14px 14px calc(var(--tab) + 24px + env(safe-area-inset-bottom,0))}
+main{max-width:560px;margin:0 auto;padding:18px 16px calc(var(--tab) + var(--dock) + 22px + env(safe-area-inset-bottom,0))}
 body.notabs main{padding-bottom:calc(28px + env(safe-area-inset-bottom,0))}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh1);padding:14px;margin-bottom:12px}
-.card h2{margin:0 0 4px;font-size:18px;color:var(--heading);letter-spacing:-.01em}
-.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:700;margin:0 0 8px}
-.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;border:1px solid var(--line2);background:var(--surface2);color:var(--text2);white-space:nowrap}
-.pill.pos{color:var(--pos);background:var(--pos-bg);border-color:var(--pos-line)}.pill.neg{color:var(--neg);background:var(--neg-bg);border-color:var(--neg-line)}.pill.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
-.pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+body.nodock main{padding-bottom:calc(var(--tab) + 22px + env(safe-area-inset-bottom,0))}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r2);padding:16px;margin-bottom:12px}
+.card h2{margin:0 0 4px;font-size:19px;font-weight:600;letter-spacing:-.01em}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line2);background:var(--surface);border-radius:var(--r);padding:10px 16px;min-height:46px;font-weight:600;font-size:15px;cursor:pointer;color:var(--text);box-shadow:var(--sh1)}
-.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn.ghost{background:transparent;box-shadow:none;border-color:transparent;color:var(--accent)}
-.btn.wide{width:100%}
-.btn:disabled{opacity:.45}
-.btn:active{transform:translateY(1px)}
-input.f,select.f,textarea.f{width:100%;border:1px solid var(--line2);border-radius:var(--r);padding:12px 14px;min-height:50px;background:var(--surface);font-size:17px;color:var(--heading)}
-input.f:focus,select.f:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-label.fl{display:block;font-size:12.5px;color:var(--text2);font-weight:600;margin:12px 0 6px}
+/* ---------- place hero ---------- */
+.place{margin:2px 0 16px}
+.place .n{font-size:30px;line-height:1.08;font-weight:600;letter-spacing:-.025em;font-stretch:92%}
+.place .n em{font-style:italic;font-weight:300;color:var(--ink2)}
+.place .z{margin-top:8px;font:500 10.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.place .z b{color:var(--bronze);font-weight:600}
 
-/* sign in */
-.hero{text-align:center;padding:22px 8px 10px}
-.hero .logo{width:64px;height:64px;border-radius:18px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px;margin:0 auto 12px;box-shadow:var(--sh2)}
-.hero h1{margin:0;font-size:22px;color:var(--heading);letter-spacing:-.015em}
-.hero p{margin:4px 0 0;color:var(--mute)}
-.idchip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line2);background:var(--surface);border-radius:999px;padding:6px 6px 6px 14px;font:700 17px var(--font-mono);color:var(--heading)}
-.idchip button{border:0;background:var(--surface2);color:var(--accent);border-radius:999px;padding:6px 14px;min-height:38px;font:600 13px var(--font-body);cursor:pointer}
-.dots{display:flex;gap:16px;justify-content:center;margin:18px 0 10px}
-.dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--heading);transition:background .12s,transform .12s}
-.dots i.on{background:var(--heading);transform:scale(1.08)}
-.dots.shake{animation:shake .38s}
-@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
-.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:340px;margin:0 auto}
-.pad button{height:64px;border-radius:50%;width:64px;justify-self:center;border:1px solid var(--line);background:var(--surface);font-size:26px;font-weight:600;color:var(--heading);box-shadow:var(--sh1);cursor:pointer}
-.pad button:active{background:var(--accent-soft)}
-.pad button.fn{font-size:16px;color:var(--mute);background:transparent;box-shadow:none;border-color:transparent}
-.err{color:var(--neg);font-weight:600;text-align:center;min-height:22px;font-size:14px}
+/* ---------- clock (stacked day/meridiem · time · shift rule) ---------- */
+.clockw{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;background:var(--s1);border:1px solid var(--line);border-radius:var(--r2);padding:16px 16px 14px;margin-bottom:12px}
+.k-stack{display:flex;flex-direction:column;gap:3px;font:600 9.5px var(--mono);font-stretch:75%;letter-spacing:.14em}
+.k-stack span{color:var(--faint)}.k-stack .on{color:var(--ink)}.k-stack .k-day{color:var(--bronze)}
+.k-time{font-size:46px;line-height:1;font-weight:500;letter-spacing:-.03em;font-variant-numeric:tabular-nums;font-stretch:88%}
+.k-side{text-align:end}
+.k-side b{display:block;white-space:nowrap;font:500 22px var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin-top:4px}
+.k-side b.on{color:var(--sage)}
+.k-rule{grid-column:1/-1;margin-top:4px}
+.k-bar{position:relative;height:3px;border-radius:2px;background:var(--s4);overflow:visible}
+.k-bar i{position:absolute;inset:0;transform-origin:0 50%;background:var(--bronze);border-radius:2px}
+.k-bar u{position:absolute;top:-4px;width:2px;height:11px;background:var(--ink);border-radius:1px;text-decoration:none}
+.k-ends{display:flex;justify-content:space-between;margin-top:7px}
 
-/* today: header */
-.who{display:flex;gap:12px;align-items:center}
-.who .av{width:46px;height:46px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}
-.who b{display:block;color:var(--heading);font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.who .hi{font-size:12.5px;color:var(--mute)}
-.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface2);border-radius:999px;padding:6px 12px;font-size:13.5px;min-width:0;max-width:100%}
-.chip svg.i{width:16px;height:16px;color:var(--mute)}
-.chip b{color:var(--heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:650}
+/* ---------- readouts ---------- */
+.liverow{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--r2);background:var(--s1);margin-bottom:12px}
+.liverow>div{padding:12px 10px 11px;border-inline-start:1px solid var(--line);min-width:0}
+.liverow>div:first-child{border-inline-start:0}
+.liverow b{display:block;font-size:21px;font-weight:500;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.liverow b small{font-size:12px;color:var(--mute);font-weight:400;margin-inline-start:2px}
+.liverow span{display:block;margin-top:3px}
 
-/* map card */
-.mapcard{position:relative;border-radius:var(--r2);overflow:hidden;border:1px solid var(--line);box-shadow:var(--sh1);margin-bottom:12px;background:var(--surface3)}
-#map{height:clamp(200px,30vh,340px);background:var(--surface3);position:relative;z-index:0;isolation:isolate}
-.mapcard .loc,.mapcard .exp{position:absolute;z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid var(--line2);background:var(--surface);color:var(--accent);box-shadow:var(--sh2);cursor:pointer;display:grid;place-items:center}
-.mapcard .loc{right:10px;bottom:34px}.mapcard .exp{right:10px;bottom:84px}
-.mapcard.full{position:fixed;inset:0;z-index:1800;border-radius:0;margin:0}
-.mapcard.full #map{height:100%}
-.mapcard .x{position:absolute;z-index:6;top:calc(10px + env(safe-area-inset-top,0));left:10px;display:none}
-.mapcard.full .x{display:inline-flex}
-#gps{margin:0 0 4px}
-#gps .pill{width:100%;justify-content:center;padding:8px 12px;font-size:13px;text-align:center;white-space:normal}
-
-/* punch button */
-.punch{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 14px}
-.big{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:clamp(148px,40vw,172px);height:clamp(148px,40vw,172px);border-radius:50%;border:0;color:#fff;cursor:pointer;font-size:19px;font-weight:800;letter-spacing:.03em;box-shadow:0 10px 30px rgba(23,102,203,.35),inset 0 -6px 0 rgba(0,0,0,.08)}
-.big::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid currentColor;opacity:.18}
-.big.in{background:radial-gradient(circle at 35% 30%,var(--accent2),var(--accent));color:#fff}
-.big.in::before{border-color:var(--accent)}
-.big.out{background:radial-gradient(circle at 35% 30%,#2A4E86,#12305E);box-shadow:0 10px 30px rgba(18,48,94,.35),inset 0 -6px 0 rgba(0,0,0,.12)}
-.big.out::before{border-color:#12305E}
-.big svg.i{width:30px;height:30px;stroke-width:2.2;margin-bottom:4px}
-.big .tm{font:700 22px var(--font-mono);letter-spacing:0;margin-top:2px}
-.big small{font-size:12px;font-weight:500;opacity:.85;letter-spacing:0}
-.big:disabled{opacity:.5}
-.big:active{transform:scale(.98)}
-.big.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(23,102,203,.45);animation:pulse 2.2s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 18px rgba(23,102,203,0)}100%{box-shadow:0 0 0 0 rgba(23,102,203,0)}}
-.punch .cap{font-size:13px;color:var(--mute);text-align:center;max-width:300px}
-.state{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
-.state.on{color:var(--pos)}.state.on::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;animation:blink 1.6s infinite}
+/* confidence badge (GPS / zone verdict) */
+#gps{margin:0 0 12px}
+.conf{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--r);border:1px solid var(--line2);font-size:13.5px;line-height:1.35;color:var(--ink2)}
+.conf .d{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
+.conf.ok{border-color:color-mix(in srgb,var(--sage) 45%,transparent);background:var(--sage-bg);color:var(--ink)}.conf.ok .d{background:var(--sage);box-shadow:0 0 0 4px var(--sage-bg)}
+.conf.warn{border-color:color-mix(in srgb,var(--gold) 45%,transparent);background:var(--gold-bg);color:var(--ink)}.conf.warn .d{background:var(--gold)}
+.conf.bad{border-color:color-mix(in srgb,var(--red) 45%,transparent);background:var(--red-bg);color:var(--ink)}.conf.bad .d{background:var(--red)}
+.conf .tag{margin-inline-start:auto;flex:none}
+.conf.wait .d{animation:blink 1.4s infinite}
 @keyframes blink{50%{opacity:.25}}
 
-/* queue bar */
-.q{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--r);padding:9px 12px;margin-bottom:12px}
+/* ---------- map ---------- */
+.mapcard{position:relative;border-radius:var(--r2);overflow:hidden;border:1px solid var(--line);margin-bottom:12px;background:var(--s2)}
+#map{height:clamp(220px,34vh,360px);background:var(--s2);position:relative;z-index:0;isolation:isolate}
+.mapcard .modechip{position:absolute;z-index:5;top:10px;inset-inline-start:10px}
+.mapcard .tools{position:absolute;z-index:5;inset-inline-end:10px;bottom:30px;display:flex;flex-direction:column;gap:8px}
+.mapcard .tools button{width:42px;height:42px;border-radius:var(--r);border:1px solid var(--line2);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(8px);color:var(--ink);display:grid;place-items:center;cursor:pointer}
+.mapcard .cap{position:absolute;z-index:5;inset-inline-start:10px;bottom:8px;display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:6px;background:color-mix(in srgb,var(--bg) 80%,transparent);font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.mapcard .cap .d{width:6px;height:6px;border-radius:50%;background:var(--sage)}
+.mapcard.full{position:fixed;inset:0;z-index:1800;border-radius:0;margin:0;border:0}
+.mapcard.full #map{height:100%}
+.mapcard .x{position:absolute;z-index:6;top:calc(10px + env(safe-area-inset-top,0));inset-inline-end:10px;display:none}
+.mapcard.full .x{display:inline-flex}
+.mapcard.full .modechip{top:calc(10px + env(safe-area-inset-top,0))}
 
-/* timeline (kept as .list for tests) */
-.list{margin:0;padding:0;list-style:none;position:relative}
-.list li{display:flex;gap:12px;align-items:center;padding:10px 0;min-height:52px;font-size:14px;position:relative}
-.list.tl li{padding-inline-start:26px}
-.list.tl li::before{content:"";position:absolute;inset-inline-start:7px;top:0;bottom:0;width:2px;background:var(--line)}
-.list.tl li:first-child::before{top:50%}.list.tl li:last-child::before{bottom:50%}.list.tl li:only-child::before{display:none}
-.list.tl li::after{content:"";position:absolute;inset-inline-start:2px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:var(--surface);border:3px solid var(--accent)}
-.list.tl li.out::after{border-color:var(--navy)}
-:root[data-theme=dark] .list.tl li.out::after{border-color:var(--text2)}
-.list .tm{font-family:var(--font-mono);font-weight:700;color:var(--heading);min-width:52px}
-.list .what{display:block;font-weight:600;color:var(--text)}
+/* segmented chips (.modechip / .seg) */
+.modechip,.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--line2);border-radius:var(--r);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(8px)}
+.modechip button,.seg button{border:0;background:transparent;color:var(--mute);border-radius:7px;padding:0 12px;min-height:40px;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.modechip button.on,.seg button.on{background:var(--ink);color:var(--bg)}
+.seg{display:flex;width:100%;margin-bottom:12px;background:var(--s1)}
+.seg button{flex:1;min-height:40px}
+
+/* ---------- dock: the one primary action ---------- */
+.dock{position:fixed;left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom,0));z-index:1390;padding:10px 16px 12px;background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.dock .in{max-width:560px;margin:0 auto}
+.big{position:relative;display:flex;align-items:center;gap:14px;width:100%;min-height:62px;padding:0 18px;border-radius:14px;border:1px solid transparent;cursor:pointer;text-align:start;transition:transform .15s var(--ease)}
+.big .lab{display:block;font:600 12px var(--mono);font-stretch:80%;letter-spacing:.18em;text-transform:uppercase}
+.big small{display:block;font:400 12.5px var(--sans);letter-spacing:0;text-transform:none;opacity:.75;margin-top:3px}
+.big svg.i{width:22px;height:22px;margin-inline-start:auto;stroke-width:1.8}
+.big.in{background:var(--bronze);color:var(--on-bronze)}
+.big.out{background:transparent;border-color:var(--line3);color:var(--ink)}
+.big.out .lab::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--sage);margin-inline-end:9px;vertical-align:1px;animation:blink 1.6s infinite}
+.big:active{transform:scale(.985)}
+.big:disabled{opacity:.45}
+
+/* queue */
+.q{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--ink);background:var(--gold-bg);border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);border-radius:var(--r);padding:10px 14px;margin-bottom:12px}
+.q svg.i{color:var(--gold)}
+
+/* ---------- readings / timeline (kept as .list) ---------- */
+.list{margin:0;padding:0;list-style:none}
+.list li{display:flex;gap:12px;align-items:center;padding:12px 0;min-height:54px;border-top:1px solid var(--line);font-size:14px}
+.list li:first-child{border-top:0}
+.list .tm{font:500 13px var(--mono);font-stretch:80%;color:var(--ink);min-width:50px;font-variant-numeric:tabular-nums}
+.list .what{display:block;font-weight:500}
 .list .sub{display:block;font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list.plain li{border-bottom:1px solid var(--line)}.list.plain li:last-child{border-bottom:0}
-.empty{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--mute);padding:18px 8px;text-align:center}
-.empty svg.i{width:28px;height:28px;color:var(--faint)}
+.list .ev{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;border:1px solid var(--line2);color:var(--ink2);flex:none}
+.list .ev svg.i{width:15px;height:15px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+.chip.pos{color:var(--sage);border-color:color-mix(in srgb,var(--sage) 40%,transparent);background:var(--sage-bg)}
+.chip.warn{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 40%,transparent);background:var(--gold-bg)}
+.chip.neg{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent);background:var(--red-bg)}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:4px 9px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+.pill.pos{color:var(--sage);border-color:color-mix(in srgb,var(--sage) 40%,transparent);background:var(--sage-bg)}.pill.warn{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 40%,transparent);background:var(--gold-bg)}.pill.neg{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent);background:var(--red-bg)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--mute);padding:20px 8px 12px;text-align:center;font-size:13.5px}
+.empty svg.i{width:26px;height:26px;color:var(--faint)}
 
-/* bottom tab bar */
-.tabs-b{position:fixed;left:0;right:0;bottom:0;z-index:1400;display:flex;justify-content:center;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0);box-shadow:0 -2px 12px rgba(15,30,61,.06)}
+/* ---------- tab rail (bottom) ---------- */
+.tabs-b{position:fixed;left:0;right:0;bottom:0;z-index:1400;display:flex;justify-content:center;background:var(--bg);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0)}
 .tabs-b .in{display:flex;width:100%;max-width:560px}
-.tabs-b button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:var(--tab);border:0;background:none;color:var(--mute);font-size:11.5px;font-weight:600;cursor:pointer}
-.tabs-b button svg.i{width:22px;height:22px}
-.tabs-b button.on{color:var(--accent)}
-.tabs-b button.on svg.i{stroke-width:2.4}
+.tabs-b button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:var(--tab);border:0;background:none;color:var(--faint);cursor:pointer;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase}
+.tabs-b button svg.i{width:21px;height:21px}
+.tabs-b button.on{color:var(--ink)}
+.tabs-b button.on::before{content:"";position:absolute;top:-1px;left:28%;right:28%;height:2px;background:var(--bronze);border-radius:0 0 2px 2px}
 
-/* camera */
+/* ---------- buttons, fields ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:1px solid var(--line2);background:transparent;border-radius:var(--r);padding:0 18px;min-height:50px;font:600 11px var(--mono);font-stretch:80%;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
+.btn.pri{background:var(--bronze);border-color:var(--bronze);color:var(--on-bronze)}
+.btn.ghost{border-color:transparent;color:var(--bronze)}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.4}
+.btn:active{transform:translateY(1px)}
+.btn svg.i{width:16px;height:16px}
+input.f,select.f,textarea.f{width:100%;border:1px solid var(--line2);border-radius:var(--r);padding:12px 14px;min-height:52px;background:var(--s2);font:400 17px var(--sans);color:var(--ink)}
+input.f.mono{font:500 18px var(--mono);font-stretch:85%;letter-spacing:.08em}
+input.f:focus,select.f:focus{outline:none;border-color:var(--bronze);box-shadow:0 0 0 3px var(--bronze-bg)}
+input.f::placeholder{color:var(--faint)}
+select.f{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-inline-end:34px}
+label.fl{display:block;margin:14px 0 7px;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+
+/* ---------- sign in ---------- */
+.hero{padding:26px 2px 18px}
+.hero .kick{font:500 10px var(--mono);font-stretch:75%;letter-spacing:.18em;text-transform:uppercase;color:var(--bronze);margin:0 0 12px}
+.hero h1{margin:0;font-size:34px;line-height:1.05;font-weight:600;letter-spacing:-.03em;font-stretch:90%}
+.hero h1 em{font-style:italic;font-weight:300;color:var(--ink2)}
+.hero p{margin:10px 0 0;color:var(--mute);font-size:14.5px}
+.idchip{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line2);border-radius:var(--r);padding:5px 5px 5px 14px;font:500 15px var(--mono);font-stretch:85%;letter-spacing:.1em;color:var(--ink)}
+.idchip button{border:0;background:var(--s3);color:var(--ink2);border-radius:7px;padding:0 12px;min-height:38px;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.dots{display:flex;gap:18px;justify-content:center;margin:22px 0 12px}
+.dots i{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line3);transition:background .15s,border-color .15s,transform .15s var(--ease)}
+.dots i.on{background:var(--bronze);border-color:var(--bronze);transform:scale(1.15)}
+.dots.shake{animation:shake .38s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:360px;margin:6px auto 0}
+.pad button{height:64px;border-radius:14px;border:1px solid var(--line);background:var(--s1);font:400 26px var(--sans);font-variant-numeric:tabular-nums;color:var(--ink);cursor:pointer}
+.pad button:active{background:var(--s3);border-color:var(--line2)}
+.pad button.fn{background:transparent;border-color:transparent;color:var(--mute)}
+.pad button.fn svg.i{width:20px;height:20px}
+.err{color:var(--red);text-align:center;min-height:20px;font:500 10.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase}
+
+/* ---------- camera ---------- */
 .cam{position:fixed;inset:0;background:#000;z-index:2000;display:flex;flex-direction:column}
 .cam video,.cam img{flex:1;min-height:0;width:100%;object-fit:cover;background:#000}
 .cam img{object-fit:contain}
-.cam .oval{position:absolute;left:50%;top:44%;width:min(62vw,300px);aspect-ratio:3/4;transform:translate(-50%,-50%);border-radius:50%;box-shadow:0 0 0 200vmax rgba(0,0,0,.45);border:3px solid rgba(255,255,255,.85);pointer-events:none}
-.cam .ctl{display:flex;gap:10px;align-items:center;padding:16px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0));background:#0b1b36}
-.cam .ctl .btn{flex:1}
-.cam .shoot{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.25);margin:0 auto;cursor:pointer;flex:none}
-.cam .shoot:active{background:rgba(255,255,255,.6)}
-.cam .hint{color:#fff;text-align:center;font-size:14px;padding:10px;background:rgba(0,0,0,.45);position:absolute;z-index:2;top:calc(12px + env(safe-area-inset-top,0));left:12px;right:12px;border-radius:12px}
+.cam .oval{position:absolute;left:50%;top:44%;width:min(62vw,300px);aspect-ratio:3/4;transform:translate(-50%,-50%);border-radius:50%;box-shadow:0 0 0 200vmax rgba(5,6,6,.55);border:1.5px solid rgba(236,232,224,.9);pointer-events:none}
+.cam .ctl{display:flex;gap:10px;align-items:center;padding:16px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0));background:#050606;border-top:1px solid rgba(236,232,224,.08)}
+.cam .ctl .btn{flex:1;color:#ECE8E0;border-color:rgba(236,232,224,.2)}
+.cam .ctl .btn.pri{color:#0A0806;background:#B08D57;border-color:#B08D57}
+.cam .shoot{width:76px;height:76px;border-radius:50%;border:3px solid #ECE8E0;background:transparent;margin:0 auto;cursor:pointer;flex:none;position:relative}
+.cam .shoot::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#ECE8E0;transition:transform .12s}
+.cam .shoot:active::after{transform:scale(.88)}
+.cam .hint{position:absolute;z-index:2;top:calc(14px + env(safe-area-inset-top,0));left:14px;right:14px;padding:10px 12px;border-radius:10px;background:rgba(5,6,6,.6);border:1px solid rgba(236,232,224,.12);color:#ECE8E0;text-align:center;font-size:14px}
+.cam .hint small{display:block;margin-top:4px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:#B08D57}
 
-/* result */
-.res{text-align:center;padding:36px 16px 24px}
-.res .ic{width:96px;height:96px;border-radius:50%;margin:0 auto 14px;display:grid;place-items:center;color:#fff;animation:pop .35s cubic-bezier(.2,1.4,.4,1)}
-.res .ic svg.i{width:48px;height:48px;stroke-width:3}
-.res .ic.ok{background:var(--pos)}.res .ic.pend{background:#B7791F}.res .ic.q{background:#68778F}.res .ic.bad{background:var(--neg)}
-.res .ic.ok svg path{stroke-dasharray:40;stroke-dashoffset:40;animation:draw .45s .2s forwards}
-@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
-@keyframes draw{to{stroke-dashoffset:0}}
-.res h2{font-size:22px}
-.res .when{font:700 30px var(--font-mono);color:var(--heading);margin:4px 0}
-.res img{width:132px;height:132px;object-fit:cover;border-radius:50%;margin-top:12px;border:3px solid var(--surface);box-shadow:var(--sh2)}
-.spin{width:44px;height:44px;border-radius:50%;border:4px solid rgba(255,255,255,.35);border-top-color:#fff;animation:rot .8s linear infinite}
+/* ---------- result: the stamp ---------- */
+.res{text-align:center;padding:40px 18px 26px}
+.stamp{display:inline-block;padding:14px 22px;border:2px solid var(--c,var(--bronze));color:var(--c,var(--bronze));font:600 15px var(--mono);font-stretch:80%;letter-spacing:.28em;text-transform:uppercase;transform:rotate(-4deg);box-shadow:0 0 0 5px color-mix(in srgb,var(--c,var(--bronze)) 9%,transparent);animation:stamp .55s var(--ease) .1s backwards}
+@keyframes stamp{0%{opacity:0;transform:rotate(-9deg) scale(1.8)}}
+.res.ok{--c:var(--sage)}.res.pend{--c:var(--gold)}.res.off{--c:var(--cyan)}.res.bad{--c:var(--red)}.res.send{--c:var(--mute)}
+.res .when{font-size:52px;line-height:1;font-weight:500;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:26px 0 6px}
+.res h2{font-size:19px;font-weight:600;margin:0}
+.res img{width:120px;height:150px;object-fit:cover;border-radius:12px;margin-top:20px;border:1px solid var(--line2)}
+.spin{width:30px;height:30px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--bronze);animation:rot .8s linear infinite;margin:0 auto}
 @keyframes rot{to{transform:rotate(360deg)}}
 
-/* month */
-.seg{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
-.seg button{flex:1;white-space:nowrap;border:1px solid var(--line2);background:var(--surface);border-radius:999px;padding:9px 12px;min-height:42px;font-weight:600;color:var(--text2);cursor:pointer}
-.seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-:root[data-theme=dark] .seg button.on{background:var(--accent);border-color:var(--accent)}
-.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
-.tile b{display:block;font:700 22px var(--font-mono);color:var(--heading)}
-.tile span{font-size:11.5px;color:var(--mute);font-weight:600}
-.tile.P b{color:var(--pos)}.tile.A b{color:var(--neg)}.tile.L b{color:var(--warn)}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.cal .h{font-size:11px;color:var(--mute);text-align:center;font-weight:700;padding-bottom:2px}
-.cal .d{aspect-ratio:1;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mute)}
-.cal .d b{font-size:13px;color:var(--heading);font-family:var(--font-mono);font-weight:600}
-.cal .d.P,.cal .d.R{background:var(--pos-bg);border-color:var(--pos-line);color:var(--pos)}
-.cal .d.A{background:var(--neg-bg);border-color:var(--neg-line);color:var(--neg)}
-.cal .d.OFF,.cal .d.O{background:var(--surface3)}
-.cal .d.AL,.cal .d.SL,.cal .d.EL,.cal .d.UL{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
-.cal .d.today{outline:2px solid var(--accent);outline-offset:-1px}
-.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--mute)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
+/* ---------- month ---------- */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--r2);background:var(--s1);margin-bottom:12px}
+.tile{padding:12px 10px;border-inline-start:1px solid var(--line)}.tile:first-child{border-inline-start:0}
+.tile b{display:block;font-size:24px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile span{display:block;margin-top:3px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.tile.P b{color:var(--sage)}.tile.A b{color:var(--red)}.tile.L b{color:var(--gold)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .h{text-align:center;padding-bottom:4px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.14em;color:var(--faint)}
+.cal .d{position:relative;aspect-ratio:1;border-radius:9px;border:1px solid var(--line);background:var(--s2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:500 8.5px var(--mono);font-stretch:75%;letter-spacing:.08em;color:var(--mute)}
+.cal .d b{font:500 14px var(--sans);font-variant-numeric:tabular-nums;color:var(--ink2)}
+.cal .d.P,.cal .d.R{border-color:color-mix(in srgb,var(--sage) 45%,transparent);background:var(--sage-bg);color:var(--sage)}
+.cal .d.A{border-color:color-mix(in srgb,var(--red) 45%,transparent);background:var(--red-bg);color:var(--red)}
+.cal .d.OFF,.cal .d.O{background:var(--s3)}
+.cal .d.AL,.cal .d.SL,.cal .d.EL,.cal .d.UL{border-color:color-mix(in srgb,var(--gold) 45%,transparent);background:var(--gold-bg);color:var(--gold)}
+.cal .d.today{outline:1.5px solid var(--bronze);outline-offset:1px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+.legend span{display:inline-flex;align-items:center;gap:7px;font:500 9.5px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.legend i{width:8px;height:8px;border-radius:50%}
 
-/* more */
+/* ---------- more ---------- */
 .menu-list{margin:0;padding:0;list-style:none}
-.menu-list button,.menu-list .it{display:flex;width:100%;gap:14px;align-items:center;border:0;background:none;padding:14px 4px;min-height:56px;font-size:16px;border-bottom:1px solid var(--line);text-align:start;cursor:pointer;color:var(--ink)}
-.menu-list li:last-child button,.menu-list li:last-child .it{border-bottom:0}
+.menu-list button{display:flex;width:100%;gap:14px;align-items:center;border:0;border-top:1px solid var(--line);background:none;padding:0 2px;min-height:58px;font:400 15.5px var(--sans);text-align:start;cursor:pointer;color:var(--ink)}
+.menu-list li:first-child button{border-top:0}
 .menu-list svg.i{color:var(--mute)}
-.menu-list .val{margin-inline-start:auto;color:var(--mute);font-size:14px}
-.menu-list .danger{color:var(--neg)}.menu-list .danger svg.i{color:var(--neg)}
+.menu-list .val{margin-inline-start:auto;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.menu-list .danger{color:var(--red)}.menu-list .danger svg.i{color:var(--red)}
 
-/* supervisor */
-.chips{display:flex;gap:8px;overflow-x:auto;margin:12px -2px 0;padding:0 2px 2px}
-.chips button{flex:none;display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 12px;min-height:38px;font-weight:600;font-size:13px;color:var(--text2);cursor:pointer}
-.chips button b{font-family:var(--font-mono)}
-.chips button.on{background:var(--navy);border-color:var(--navy);color:#fff}
-:root[data-theme=dark] .chips button.on{background:var(--accent);border-color:var(--accent)}
-.srch{position:relative;margin-top:10px}.srch svg.i{position:absolute;inset-inline-start:12px;top:50%;margin-top:-10px;color:var(--mute)}
-.srch input{padding-inline-start:40px!important}
-.sup li{flex-wrap:wrap;border-bottom:1px solid var(--line)}.sup li:last-child{border-bottom:0}
-.sup .av{position:relative;width:40px;height:40px;border-radius:50%;background:var(--surface2);color:var(--text2);display:grid;place-items:center;font-weight:800;font-size:13px;flex:none}
-.sup .av i{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--surface);background:var(--faint)}
-.sup .av i.in{background:var(--pos)}.sup .av i.done{background:var(--accent)}.sup .av i.none{background:#D69E2E}.sup .av i.marked{background:var(--text2)}
-.sup .acts{display:flex;gap:8px;width:100%;padding-inline-start:52px}
-.sup .acts select{flex:1;min-height:42px;padding:6px 10px;font-size:14px}
-.sup .acts .btn{min-height:42px;padding:6px 12px;font-size:14px}
+/* ---------- supervisor ---------- */
+.chips{display:flex;gap:6px;overflow-x:auto;margin:14px -2px 0;padding:0 2px 2px;scrollbar-width:none}
+.chips button{flex:none;display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line2);background:transparent;border-radius:var(--r);padding:0 12px;min-height:38px;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);cursor:pointer}
+.chips button b{font-weight:600;color:var(--ink2)}
+.chips button.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}.chips button.on b{color:var(--bg)}
+.srch{position:relative;margin-top:10px}.srch svg.i{position:absolute;inset-inline-start:14px;top:50%;margin-top:-9px;color:var(--mute)}
+.srch input{padding-inline-start:42px!important}
+.sup li{flex-wrap:wrap}
+.sup .av{position:relative;width:38px;height:38px;border-radius:10px;border:1px solid var(--line2);color:var(--ink2);display:grid;place-items:center;font:600 11px var(--mono);letter-spacing:.06em;flex:none}
+.sup .av i{position:absolute;right:-3px;bottom:-3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--s1);background:var(--faint)}
+.sup .av i.in{background:var(--sage)}.sup .av i.done{background:var(--cyan)}.sup .av i.none{background:var(--gold)}.sup .av i.marked{background:var(--ink2)}
+.sup .acts{display:flex;gap:8px;width:100%;padding-inline-start:50px}
+.sup .acts select{flex:1;min-height:44px;padding-top:6px;padding-bottom:6px;font-size:14px}
+.sup .acts .btn{min-height:44px;padding:0 14px}
 
-/* bottom sheet */
-.sheet-menu{position:fixed;inset:0;background:rgba(10,18,32,.5);z-index:2100;display:flex;align-items:flex-end;animation:fade .15s}
-.sheet-menu .in{background:var(--surface);width:100%;border-radius:20px 20px 0 0;padding:8px 14px calc(16px + env(safe-area-inset-bottom,0));max-width:560px;margin:0 auto;animation:up .2s ease-out}
-.sheet-menu .in::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--line2);margin:4px auto 8px}
-.sheet-menu button{display:flex;width:100%;gap:14px;align-items:center;border:0;background:none;padding:14px 8px;min-height:54px;font-size:16px;border-bottom:1px solid var(--line);text-align:start;cursor:pointer;color:var(--ink)}
-.sheet-menu button:last-child{border-bottom:0}
-.sheet-menu button.on{color:var(--accent);font-weight:700}
+/* ---------- avatar / identity ---------- */
+.who{display:flex;gap:12px;align-items:center}
+.who .av{width:42px;height:42px;border-radius:12px;border:1px solid var(--bronze);color:var(--bronze);display:grid;place-items:center;font:600 12px var(--mono);letter-spacing:.06em;flex:none}
+.who b{display:block;font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+
+/* ---------- sheets, toast ---------- */
+.sheet-menu{position:fixed;inset:0;background:rgba(5,6,6,.6);z-index:2100;display:flex;align-items:flex-end;animation:fade .15s}
+.sheet-menu .in{background:var(--s1);border-top:1px solid var(--line2);width:100%;border-radius:20px 20px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom,0));max-width:560px;margin:0 auto;animation:up .25s var(--ease)}
+.sheet-menu .in::before{content:"";display:block;width:36px;height:4px;border-radius:2px;background:var(--line3);margin:4px auto 10px}
+.sheet-menu button{display:flex;width:100%;gap:14px;align-items:center;justify-content:space-between;border:0;border-top:1px solid var(--line);background:none;padding:0 4px;min-height:56px;font:400 16px var(--sans);text-align:start;cursor:pointer;color:var(--ink)}
+.sheet-menu button:first-child{border-top:0}
+.sheet-menu button.on{color:var(--bronze)}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 @keyframes fade{from{opacity:0}}
-.toast{position:fixed;left:50%;bottom:calc(var(--tab) + 16px + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:2200;max-width:92vw;text-align:center;box-shadow:var(--sh2)}
+.toast{position:fixed;left:50%;bottom:calc(var(--tab) + var(--dock) + 14px + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:2200;max-width:92vw;text-align:center}
 .toast.show{opacity:1}
-[dir=rtl] .meta,[dir=rtl] .who{direction:rtl}
+body.notabs .toast{bottom:calc(24px + env(safe-area-inset-bottom,0))}
+[dir=rtl] .k-side{text-align:start}
 
-/* Leaflet on a phone */
-.leaflet-container{user-select:none;-webkit-user-select:none;font-family:var(--font-body)}
-.leaflet-control-layers-toggle{width:40px!important;height:40px!important}
-.leaflet-control-layers label{font-size:14px;padding:4px 2px}
-.leaflet-control-attribution{font-size:9px}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-/* small phones (iPhone SE and similar): keep the punch button above the fold */
+/* Leaflet in the instrument */
+.leaflet-container{user-select:none;-webkit-user-select:none;font-family:var(--sans);background:var(--s2)!important}
+.leaflet-control-attribution{font-size:8.5px;background:color-mix(in srgb,var(--bg) 70%,transparent)!important;color:var(--mute)!important}
+.leaflet-control-attribution a{color:var(--ink2)!important}
+.leaflet-tooltip{background:var(--s1);color:var(--ink);border:1px solid var(--line2);box-shadow:none;font:500 10px var(--mono);font-stretch:75%;letter-spacing:.1em;text-transform:uppercase}
+.leaflet-tooltip-top::before{border-top-color:var(--line2)}
+
 @media (max-width:380px){
-  main{padding-top:10px}
-  .card{padding:12px}
-  .meta{gap:6px;margin-top:10px}
-  .chip{padding:5px 10px;font-size:13px}
-  .chip .muted.small{display:none}
-  .who .av{width:40px;height:40px}
-  .who .hi{display:none}
-  .punch{padding:6px 0 10px}
+  main{padding-left:12px;padding-right:12px;padding-top:14px}
+  .place .n{font-size:26px}
+  .k-time{font-size:38px}
+  .k-side b{font-size:16px}
+  .clockw{gap:10px;padding:14px 12px 12px}
+  .liverow b{font-size:18px}
+  .liverow>div{padding:10px 8px}
+  #map{height:clamp(180px,28vh,300px)}
 }
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 </style>
 </head>
@@ -610,7 +668,11 @@ const LSMap = (() => {
     // detectRetina: on phones and scaled Windows screens Leaflet fetches tiles one zoom deeper and draws them at half size, so imagery stays sharp.
     // maxNativeZoom: past the deepest imagery the last level is upsampled instead of requesting tiles that do not exist.
     const T = { detectRetina: true, maxNativeZoom: 19, maxZoom: 20, keepBuffer: 4 };
-    const osm = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' });
+    // dark: Esri Dark Gray Canvas + its labels (the worker app's instrument theme); otherwise World Street Map
+    const osm = opts.dark ? L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16 })
+    ]) : L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' });
     const sat = L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...T, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', T)
@@ -618,13 +680,22 @@ const LSMap = (() => {
     const pref = (() => { try { return localStorage.getItem('ls.layer'); } catch (e) { return null; } })();
     const useSat = opts.satellite != null && pref == null ? opts.satellite : pref === 'sat';
     (useSat ? sat : osm).addTo(map);
-    L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: !!opts.collapsed }).addTo(map);
+    if (opts.control !== false) L.control.layers({ Map: osm, Satellite: sat }, null, { position: 'topright', collapsed: !!opts.collapsed }).addTo(map);
+    map._ls = { osm, sat };
     map.on('baselayerchange', e => { try { localStorage.setItem('ls.layer', e.name === 'Satellite' ? 'sat' : 'map'); } catch (x) { } });
     // If the street tiles are refused (e.g. a blocked host), fall back to the satellite view instead of showing error tiles
-    let errs = 0; osm.on('tileerror', () => { if (++errs >= 4 && map.hasLayer(osm) && el.isConnected) { map.removeLayer(osm); sat.addTo(map); errs = -1e9; } });
+    let errs = 0; (osm.getLayers ? osm.getLayers()[0] : osm).on('tileerror', () => { if (++errs >= 4 && map.hasLayer(osm) && el.isConnected) { map.removeLayer(osm); sat.addTo(map); errs = -1e9; } });
     setTimeout(() => { try { if (el.isConnected) map.invalidateSize(); } catch (e) { } }, 60);   // map may be gone by then
     return map;
   }
+  /** Switch the base layer from your own control: 'map' | 'sat' (remembered like the built-in switch) */
+  function setBase(map, k) {
+    const { osm, sat } = map._ls || {}; if (!osm) return;
+    const on = k === 'sat' ? sat : osm, off = k === 'sat' ? osm : sat;
+    if (map.hasLayer(off)) map.removeLayer(off); if (!map.hasLayer(on)) on.addTo(map);
+    try { localStorage.setItem('ls.layer', k === 'sat' ? 'sat' : 'map'); } catch (e) { }
+  }
+  const base = map => map?._ls && map.hasLayer(map._ls.sat) ? 'sat' : 'map';
   /** Circle + pin for a zone */
   function zone(map, pin, o = {}) {
     const L = window.L;
@@ -698,16 +769,16 @@ const LSMap = (() => {
 .lsm-sug button:hover,.lsm-sug button.on{background:#EAF2FD}.lsm-sug .none{padding:8px 10px;color:#6B7A94;font-size:12px}
 .leaflet-control-layers{font:12px Inter,Segoe UI,sans-serif;border-radius:5px!important}.leaflet-container{font-family:Inter,Segoe UI,sans-serif}`;
   if (typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st); }
-  return { load, create, zone, parseCoords, search };
+  return { load, create, setBase, base, zone, parseCoords, search };
 })();
 
 /* Strings – English, Hindi, Urdu, Malayalam. Translations are a first draft: have a native speaker check them before go-live. */
 const LANGS = [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['ml', 'മലയാളം']];
 const STR = {
-  en: { title: 'Attendance', signin: 'Sign in', empId: 'Employee ID', empIdPh: 'e.g. C52392', next: 'Next', enterPin: 'Enter your 4-digit PIN', notYou: 'Not you?', wrongPin: 'Wrong PIN', checkIn: 'CHECK IN', checkOut: 'CHECK OUT', site: 'Site', shift: 'Shift', today: 'Today', noPunch: 'No punches yet today', since: 'since', hours: 'hours', locating: 'Finding your location…', inZone: 'In zone', outZone: 'Outside zone', from: 'from', noGps: 'Location is off – allow location for this page', takePhoto: 'Take a photo of yourself at the site', retake: 'Retake', use: 'Use photo', cancel: 'Cancel', sending: 'Sending…', accepted: 'Attendance marked', pending: 'Sent for review', pendingWhy: 'Your supervisor will check it', queued: 'Saved on phone', queuedWhy: 'No signal – it will be sent automatically', failed: 'Not marked', done: 'Done', waiting: 'waiting to send', month: 'My month', signout: 'Sign out', lang: 'Language', supervisor: 'Supervisor', days: 'days worked', back: 'Back', demo: 'Demo mode – data stays on this device. Set the Azure address to go live.', loadDemo: 'Load demo workers (PIN 1234)', camOff: 'Camera not available – tap to choose the camera app', statusAccepted: 'Accepted', statusPending: 'Pending review', statusRejected: 'Rejected', in: 'In', out: 'Out', reliever: 'Reliever at', date: 'Date', noCheckIn: 'no check-in', marked: 'marked', markAs: 'Mark as…', clear: 'Clear', markHint: 'Workers with no check-in: choose what the day is – absent, day off, sick leave… The admin tracker picks it up on sync.', poorGps: 'weak GPS signal – will be reviewed', gm: 'Good morning', ga: 'Good afternoon', ge: 'Good evening', more: 'More', theme: 'Theme', themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark', expand: 'Expand map', close: 'Close', inZoneHint: 'You are inside the site zone', outZoneHint: 'Outside the zone – the punch will be reviewed', worked: 'Worked', off: 'Off', absent: 'Absent', leave: 'Leave', all: 'All', notIn: 'Not in', inNow: 'In', doneLbl: 'Done', search: 'Search name or ID', faceHint: 'Keep your face inside the oval', tapToStart: 'Tap to', onShift: 'On shift', notStarted: 'Not checked in', finished: 'Shift done', timeline: 'Today', account: 'Account', appVer: 'Version' },
-  hi: { title: 'हाज़िरी', signin: 'साइन इन', empId: 'कर्मचारी आईडी', empIdPh: 'जैसे C52392', next: 'आगे', enterPin: 'अपना 4 अंकों का पिन डालें', notYou: 'आप नहीं हैं?', wrongPin: 'गलत पिन', checkIn: 'चेक इन', checkOut: 'चेक आउट', site: 'साइट', shift: 'शिफ्ट', today: 'आज', noPunch: 'आज अभी कोई पंच नहीं', since: 'से', hours: 'घंटे', locating: 'आपकी लोकेशन ढूंढ रहे हैं…', inZone: 'ज़ोन में', outZone: 'ज़ोन से बाहर', from: 'दूर', noGps: 'लोकेशन बंद है – इस पेज को लोकेशन की अनुमति दें', takePhoto: 'साइट पर अपनी फोटो लें', retake: 'दोबारा लें', use: 'फोटो भेजें', cancel: 'रद्द करें', sending: 'भेज रहे हैं…', accepted: 'हाज़िरी लग गई', pending: 'जांच के लिए भेजा गया', pendingWhy: 'आपके सुपरवाइज़र जांच करेंगे', queued: 'फोन में सेव हुआ', queuedWhy: 'नेटवर्क नहीं – अपने आप भेजा जाएगा', failed: 'हाज़िरी नहीं लगी', done: 'ठीक है', waiting: 'भेजना बाकी', month: 'मेरा महीना', signout: 'साइन आउट', lang: 'भाषा', supervisor: 'सुपरवाइज़र', days: 'दिन काम किया', back: 'वापस', demo: 'डेमो मोड – डेटा इसी फोन में रहता है।', loadDemo: 'डेमो कर्मचारी लोड करें (पिन 1234)', camOff: 'कैमरा उपलब्ध नहीं – कैमरा ऐप चुनें', statusAccepted: 'स्वीकृत', statusPending: 'जांच बाकी', statusRejected: 'अस्वीकृत', in: 'इन', out: 'आउट', reliever: 'रिलीवर', date: 'तारीख', noCheckIn: 'चेक-इन नहीं', marked: 'मार्क किए', markAs: 'मार्क करें…', clear: 'हटाएं', markHint: 'जिनका चेक-इन नहीं हुआ: दिन क्या है चुनें – अनुपस्थित, छुट्टी, बीमारी…', poorGps: 'GPS सिग्नल कमज़ोर – जांच होगी', gm: 'सुप्रभात', ga: 'नमस्कार', ge: 'शुभ संध्या', more: 'और', theme: 'थीम', themeAuto: 'ऑटो', themeLight: 'लाइट', themeDark: 'डार्क', expand: 'नक्शा बड़ा करें', close: 'बंद करें', inZoneHint: 'आप साइट ज़ोन के अंदर हैं', outZoneHint: 'ज़ोन से बाहर – पंच की जांच होगी', worked: 'काम', off: 'छुट्टी', absent: 'अनुपस्थित', leave: 'अवकाश', all: 'सभी', notIn: 'नहीं आए', inNow: 'अंदर', doneLbl: 'पूरा', search: 'नाम या आईडी खोजें', faceHint: 'चेहरा अंडाकार के अंदर रखें', tapToStart: 'दबाएं', onShift: 'ड्यूटी पर', notStarted: 'चेक इन नहीं', finished: 'शिफ्ट पूरी', timeline: 'आज', account: 'खाता', appVer: 'संस्करण' },
-  ur: { title: 'حاضری', signin: 'سائن ان', empId: 'ملازم آئی ڈی', empIdPh: 'مثلاً C52392', next: 'آگے', enterPin: 'اپنا 4 ہندسوں کا پن درج کریں', notYou: 'آپ نہیں ہیں؟', wrongPin: 'غلط پن', checkIn: 'چیک اِن', checkOut: 'چیک آؤٹ', site: 'سائٹ', shift: 'شفٹ', today: 'آج', noPunch: 'آج ابھی کوئی پنچ نہیں', since: 'سے', hours: 'گھنٹے', locating: 'آپ کا مقام تلاش ہو رہا ہے…', inZone: 'زون میں', outZone: 'زون سے باہر', from: 'دور', noGps: 'مقام بند ہے – اس صفحے کو اجازت دیں', takePhoto: 'سائٹ پر اپنی تصویر لیں', retake: 'دوبارہ لیں', use: 'تصویر بھیجیں', cancel: 'منسوخ', sending: 'بھیج رہے ہیں…', accepted: 'حاضری لگ گئی', pending: 'جانچ کے لیے بھیجا گیا', pendingWhy: 'آپ کا سپروائزر جانچ کرے گا', queued: 'فون میں محفوظ', queuedWhy: 'نیٹ ورک نہیں – خود بخود بھیجا جائے گا', failed: 'حاضری نہیں لگی', done: 'ٹھیک ہے', waiting: 'بھیجنا باقی', month: 'میرا مہینہ', signout: 'سائن آؤٹ', lang: 'زبان', supervisor: 'سپروائزر', days: 'دن کام کیا', back: 'واپس', demo: 'ڈیمو موڈ – ڈیٹا اسی فون پر رہتا ہے۔', loadDemo: 'ڈیمو ملازمین لوڈ کریں (پن 1234)', camOff: 'کیمرہ دستیاب نہیں – کیمرہ ایپ منتخب کریں', statusAccepted: 'منظور', statusPending: 'جانچ باقی', statusRejected: 'مسترد', in: 'اِن', out: 'آؤٹ', reliever: 'ریلیور', date: 'تاریخ', noCheckIn: 'چیک اِن نہیں', marked: 'نشان زد', markAs: 'نشان لگائیں…', clear: 'ہٹائیں', markHint: 'جن کا چیک اِن نہیں ہوا: دن کیا ہے منتخب کریں – غیر حاضر، چھٹی، بیماری…', poorGps: 'GPS سگنل کمزور – جانچ ہوگی', gm: 'صبح بخیر', ga: 'سلام', ge: 'شام بخیر', more: 'مزید', theme: 'تھیم', themeAuto: 'خودکار', themeLight: 'روشن', themeDark: 'تاریک', expand: 'نقشہ بڑا کریں', close: 'بند کریں', inZoneHint: 'آپ سائٹ زون کے اندر ہیں', outZoneHint: 'زون سے باہر – پنچ کی جانچ ہوگی', worked: 'کام', off: 'چھٹی', absent: 'غیر حاضر', leave: 'رخصت', all: 'سب', notIn: 'نہیں آئے', inNow: 'اندر', doneLbl: 'مکمل', search: 'نام یا آئی ڈی تلاش کریں', faceHint: 'چہرہ بیضوی دائرے میں رکھیں', tapToStart: 'دبائیں', onShift: 'ڈیوٹی پر', notStarted: 'چیک اِن نہیں', finished: 'شفٹ مکمل', timeline: 'آج', account: 'اکاؤنٹ', appVer: 'ورژن' },
-  ml: { title: 'ഹാജർ', signin: 'സൈൻ ഇൻ', empId: 'ജീവനക്കാരൻ ഐഡി', empIdPh: 'ഉദാ. C52392', next: 'അടുത്തത്', enterPin: 'നിങ്ങളുടെ 4 അക്ക പിൻ നൽകുക', notYou: 'നിങ്ങളല്ലേ?', wrongPin: 'തെറ്റായ പിൻ', checkIn: 'ചെക്ക് ഇൻ', checkOut: 'ചെക്ക് ഔട്ട്', site: 'സൈറ്റ്', shift: 'ഷിഫ്റ്റ്', today: 'ഇന്ന്', noPunch: 'ഇന്ന് ഇതുവരെ പഞ്ച് ഇല്ല', since: 'മുതൽ', hours: 'മണിക്കൂർ', locating: 'ലൊക്കേഷൻ കണ്ടെത്തുന്നു…', inZone: 'സോണിനുള്ളിൽ', outZone: 'സോണിന് പുറത്ത്', from: 'അകലെ', noGps: 'ലൊക്കേഷൻ ഓഫാണ് – അനുമതി നൽകുക', takePhoto: 'സൈറ്റിൽ നിന്ന് നിങ്ങളുടെ ഫോട്ടോ എടുക്കുക', retake: 'വീണ്ടും എടുക്കുക', use: 'ഫോട്ടോ അയയ്ക്കുക', cancel: 'റദ്ദാക്കുക', sending: 'അയയ്ക്കുന്നു…', accepted: 'ഹാജർ രേഖപ്പെടുത്തി', pending: 'പരിശോധനയ്ക്ക് അയച്ചു', pendingWhy: 'സൂപ്പർവൈസർ പരിശോധിക്കും', queued: 'ഫോണിൽ സേവ് ചെയ്തു', queuedWhy: 'നെറ്റ്‌വർക്ക് ഇല്ല – സ്വയം അയയ്ക്കും', failed: 'ഹാജർ രേഖപ്പെടുത്തിയില്ല', done: 'ശരി', waiting: 'അയയ്ക്കാനുണ്ട്', month: 'എന്റെ മാസം', signout: 'സൈൻ ഔട്ട്', lang: 'ഭാഷ', supervisor: 'സൂപ്പർവൈസർ', days: 'ജോലി ദിവസങ്ങൾ', back: 'തിരികെ', demo: 'ഡെമോ മോഡ് – ഡാറ്റ ഈ ഫോണിൽ മാത്രം.', loadDemo: 'ഡെമോ ജീവനക്കാരെ ലോഡ് ചെയ്യുക (പിൻ 1234)', camOff: 'ക്യാമറ ലഭ്യമല്ല – ക്യാമറ ആപ്പ് തിരഞ്ഞെടുക്കുക', statusAccepted: 'സ്വീകരിച്ചു', statusPending: 'പരിശോധന ബാക്കി', statusRejected: 'നിരസിച്ചു', in: 'ഇൻ', out: 'ഔട്ട്', reliever: 'റിലീവർ', date: 'തീയതി', noCheckIn: 'ചെക്ക്-ഇൻ ഇല്ല', marked: 'അടയാളപ്പെടുത്തി', markAs: 'അടയാളപ്പെടുത്തുക…', clear: 'മായ്ക്കുക', markHint: 'ചെക്ക്-ഇൻ ചെയ്യാത്തവർ: ദിവസം എന്താണെന്ന് തിരഞ്ഞെടുക്കുക – ഹാജരില്ല, അവധി, രോഗം…', poorGps: 'GPS സിഗ്നൽ ദുർബലം – പരിശോധിക്കും', gm: 'സുപ്രഭാതം', ga: 'നമസ്കാരം', ge: 'ശുഭ സന്ധ്യ', more: 'കൂടുതൽ', theme: 'തീം', themeAuto: 'ഓട്ടോ', themeLight: 'ലൈറ്റ്', themeDark: 'ഡാർക്ക്', expand: 'മാപ്പ് വലുതാക്കുക', close: 'അടയ്ക്കുക', inZoneHint: 'നിങ്ങൾ സൈറ്റ് സോണിനുള്ളിലാണ്', outZoneHint: 'സോണിന് പുറത്ത് – പഞ്ച് പരിശോധിക്കും', worked: 'ജോലി', off: 'അവധി', absent: 'ഹാജരില്ല', leave: 'ലീവ്', all: 'എല്ലാം', notIn: 'വന്നില്ല', inNow: 'ഉള്ളിൽ', doneLbl: 'പൂർത്തി', search: 'പേര് അല്ലെങ്കിൽ ഐഡി തിരയുക', faceHint: 'മുഖം ഓവലിനുള്ളിൽ വയ്ക്കുക', tapToStart: 'അമർത്തുക', onShift: 'ഡ്യൂട്ടിയിൽ', notStarted: 'ചെക്ക് ഇൻ ചെയ്തിട്ടില്ല', finished: 'ഷിഫ്റ്റ് പൂർത്തി', timeline: 'ഇന്ന്', account: 'അക്കൗണ്ട്', appVer: 'പതിപ്പ്' }
+  en: { title: 'Attendance', signin: 'Sign in', empId: 'Employee ID', empIdPh: 'e.g. C52392', next: 'Next', enterPin: 'Enter your 4-digit PIN', notYou: 'Not you?', wrongPin: 'Wrong PIN', checkIn: 'CHECK IN', checkOut: 'CHECK OUT', site: 'Site', shift: 'Shift', today: 'Today', noPunch: 'No punches yet today', since: 'since', hours: 'hours', locating: 'Finding your location…', inZone: 'In zone', outZone: 'Outside zone', from: 'from', noGps: 'Location is off – allow location for this page', takePhoto: 'Take a photo of yourself at the site', retake: 'Retake', use: 'Use photo', cancel: 'Cancel', sending: 'Sending…', accepted: 'Attendance marked', pending: 'Sent for review', pendingWhy: 'Your supervisor will check it', queued: 'Saved on phone', queuedWhy: 'No signal – it will be sent automatically', failed: 'Not marked', done: 'Done', waiting: 'waiting to send', month: 'My month', signout: 'Sign out', lang: 'Language', supervisor: 'Supervisor', days: 'days worked', back: 'Back', demo: 'Demo mode – data stays on this device. Set the Azure address to go live.', loadDemo: 'Load demo workers (PIN 1234)', camOff: 'Camera not available – tap to choose the camera app', statusAccepted: 'Accepted', statusPending: 'Pending review', statusRejected: 'Rejected', in: 'In', out: 'Out', reliever: 'Reliever at', date: 'Date', noCheckIn: 'no check-in', marked: 'marked', markAs: 'Mark as…', clear: 'Clear', markHint: 'Workers with no check-in: choose what the day is – absent, day off, sick leave… The admin tracker picks it up on sync.', poorGps: 'weak GPS signal – will be reviewed', gm: 'Good morning', ga: 'Good afternoon', ge: 'Good evening', more: 'More', theme: 'Theme', themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark', expand: 'Expand map', close: 'Close', inZoneHint: 'You are inside the site zone', outZoneHint: 'Outside the zone – the punch will be reviewed', worked: 'Worked', off: 'Off', absent: 'Absent', leave: 'Leave', all: 'All', notIn: 'Not in', inNow: 'In', doneLbl: 'Done', search: 'Search name or ID', faceHint: 'Keep your face inside the oval', tapToStart: 'Tap to', onShift: 'On shift', notStarted: 'Not checked in', finished: 'Shift done', timeline: 'Today', account: 'Account', appVer: 'Version', elapsed: 'Elapsed', status: 'Status', toPin: 'm to pin', gpsAcc: '± m GPS', zoneR: 'm zone', hToday: 'h today', auto: 'Auto-accept', willReview: 'Review', mapL: 'Map', satL: 'Satellite', stOk: 'Marked', stPend: 'In review', stQ: 'Saved offline', stBad: 'Not marked', stSend: 'Sending', recNote: 'Photo and location are recorded', locNote: 'Location is read only at the moment you check in or out. Nothing is tracked in between.', kicker: 'Field attendance', welcome: 'Sign in with your employee ID and PIN to mark attendance.', live: 'Live position', ends: 'ends', themeLightS: 'Studio', themeDarkS: 'Instrument' },
+  hi: { title: 'हाज़िरी', signin: 'साइन इन', empId: 'कर्मचारी आईडी', empIdPh: 'जैसे C52392', next: 'आगे', enterPin: 'अपना 4 अंकों का पिन डालें', notYou: 'आप नहीं हैं?', wrongPin: 'गलत पिन', checkIn: 'चेक इन', checkOut: 'चेक आउट', site: 'साइट', shift: 'शिफ्ट', today: 'आज', noPunch: 'आज अभी कोई पंच नहीं', since: 'से', hours: 'घंटे', locating: 'आपकी लोकेशन ढूंढ रहे हैं…', inZone: 'ज़ोन में', outZone: 'ज़ोन से बाहर', from: 'दूर', noGps: 'लोकेशन बंद है – इस पेज को लोकेशन की अनुमति दें', takePhoto: 'साइट पर अपनी फोटो लें', retake: 'दोबारा लें', use: 'फोटो भेजें', cancel: 'रद्द करें', sending: 'भेज रहे हैं…', accepted: 'हाज़िरी लग गई', pending: 'जांच के लिए भेजा गया', pendingWhy: 'आपके सुपरवाइज़र जांच करेंगे', queued: 'फोन में सेव हुआ', queuedWhy: 'नेटवर्क नहीं – अपने आप भेजा जाएगा', failed: 'हाज़िरी नहीं लगी', done: 'ठीक है', waiting: 'भेजना बाकी', month: 'मेरा महीना', signout: 'साइन आउट', lang: 'भाषा', supervisor: 'सुपरवाइज़र', days: 'दिन काम किया', back: 'वापस', demo: 'डेमो मोड – डेटा इसी फोन में रहता है।', loadDemo: 'डेमो कर्मचारी लोड करें (पिन 1234)', camOff: 'कैमरा उपलब्ध नहीं – कैमरा ऐप चुनें', statusAccepted: 'स्वीकृत', statusPending: 'जांच बाकी', statusRejected: 'अस्वीकृत', in: 'इन', out: 'आउट', reliever: 'रिलीवर', date: 'तारीख', noCheckIn: 'चेक-इन नहीं', marked: 'मार्क किए', markAs: 'मार्क करें…', clear: 'हटाएं', markHint: 'जिनका चेक-इन नहीं हुआ: दिन क्या है चुनें – अनुपस्थित, छुट्टी, बीमारी…', poorGps: 'GPS सिग्नल कमज़ोर – जांच होगी', gm: 'सुप्रभात', ga: 'नमस्कार', ge: 'शुभ संध्या', more: 'और', theme: 'थीम', themeAuto: 'ऑटो', themeLight: 'लाइट', themeDark: 'डार्क', expand: 'नक्शा बड़ा करें', close: 'बंद करें', inZoneHint: 'आप साइट ज़ोन के अंदर हैं', outZoneHint: 'ज़ोन से बाहर – पंच की जांच होगी', worked: 'काम', off: 'छुट्टी', absent: 'अनुपस्थित', leave: 'अवकाश', all: 'सभी', notIn: 'नहीं आए', inNow: 'अंदर', doneLbl: 'पूरा', search: 'नाम या आईडी खोजें', faceHint: 'चेहरा अंडाकार के अंदर रखें', tapToStart: 'दबाएं', onShift: 'ड्यूटी पर', notStarted: 'चेक इन नहीं', finished: 'शिफ्ट पूरी', timeline: 'आज', account: 'खाता', appVer: 'संस्करण', elapsed: 'बीता समय', status: 'स्थिति', toPin: 'मी पिन तक', gpsAcc: '± मी GPS', zoneR: 'मी ज़ोन', hToday: 'घं आज', auto: 'स्वतः स्वीकृत', willReview: 'जांच', mapL: 'नक्शा', satL: 'सैटेलाइट', stOk: 'दर्ज', stPend: 'जांच में', stQ: 'फोन में सेव', stBad: 'दर्ज नहीं', stSend: 'भेज रहे', recNote: 'फोटो और लोकेशन दर्ज होंगे', locNote: 'लोकेशन केवल चेक इन या आउट के समय ली जाती है। बीच में कुछ ट्रैक नहीं होता।', kicker: 'फील्ड हाज़िरी', welcome: 'हाज़िरी के लिए अपनी कर्मचारी आईडी और पिन से साइन इन करें।', live: 'लाइव स्थिति', ends: 'समाप्त', themeLightS: 'स्टूडियो', themeDarkS: 'इंस्ट्रूमेंट' },
+  ur: { title: 'حاضری', signin: 'سائن ان', empId: 'ملازم آئی ڈی', empIdPh: 'مثلاً C52392', next: 'آگے', enterPin: 'اپنا 4 ہندسوں کا پن درج کریں', notYou: 'آپ نہیں ہیں؟', wrongPin: 'غلط پن', checkIn: 'چیک اِن', checkOut: 'چیک آؤٹ', site: 'سائٹ', shift: 'شفٹ', today: 'آج', noPunch: 'آج ابھی کوئی پنچ نہیں', since: 'سے', hours: 'گھنٹے', locating: 'آپ کا مقام تلاش ہو رہا ہے…', inZone: 'زون میں', outZone: 'زون سے باہر', from: 'دور', noGps: 'مقام بند ہے – اس صفحے کو اجازت دیں', takePhoto: 'سائٹ پر اپنی تصویر لیں', retake: 'دوبارہ لیں', use: 'تصویر بھیجیں', cancel: 'منسوخ', sending: 'بھیج رہے ہیں…', accepted: 'حاضری لگ گئی', pending: 'جانچ کے لیے بھیجا گیا', pendingWhy: 'آپ کا سپروائزر جانچ کرے گا', queued: 'فون میں محفوظ', queuedWhy: 'نیٹ ورک نہیں – خود بخود بھیجا جائے گا', failed: 'حاضری نہیں لگی', done: 'ٹھیک ہے', waiting: 'بھیجنا باقی', month: 'میرا مہینہ', signout: 'سائن آؤٹ', lang: 'زبان', supervisor: 'سپروائزر', days: 'دن کام کیا', back: 'واپس', demo: 'ڈیمو موڈ – ڈیٹا اسی فون پر رہتا ہے۔', loadDemo: 'ڈیمو ملازمین لوڈ کریں (پن 1234)', camOff: 'کیمرہ دستیاب نہیں – کیمرہ ایپ منتخب کریں', statusAccepted: 'منظور', statusPending: 'جانچ باقی', statusRejected: 'مسترد', in: 'اِن', out: 'آؤٹ', reliever: 'ریلیور', date: 'تاریخ', noCheckIn: 'چیک اِن نہیں', marked: 'نشان زد', markAs: 'نشان لگائیں…', clear: 'ہٹائیں', markHint: 'جن کا چیک اِن نہیں ہوا: دن کیا ہے منتخب کریں – غیر حاضر، چھٹی، بیماری…', poorGps: 'GPS سگنل کمزور – جانچ ہوگی', gm: 'صبح بخیر', ga: 'سلام', ge: 'شام بخیر', more: 'مزید', theme: 'تھیم', themeAuto: 'خودکار', themeLight: 'روشن', themeDark: 'تاریک', expand: 'نقشہ بڑا کریں', close: 'بند کریں', inZoneHint: 'آپ سائٹ زون کے اندر ہیں', outZoneHint: 'زون سے باہر – پنچ کی جانچ ہوگی', worked: 'کام', off: 'چھٹی', absent: 'غیر حاضر', leave: 'رخصت', all: 'سب', notIn: 'نہیں آئے', inNow: 'اندر', doneLbl: 'مکمل', search: 'نام یا آئی ڈی تلاش کریں', faceHint: 'چہرہ بیضوی دائرے میں رکھیں', tapToStart: 'دبائیں', onShift: 'ڈیوٹی پر', notStarted: 'چیک اِن نہیں', finished: 'شفٹ مکمل', timeline: 'آج', account: 'اکاؤنٹ', appVer: 'ورژن', elapsed: 'گزرا وقت', status: 'حالت', toPin: 'میٹر پن تک', gpsAcc: '± میٹر GPS', zoneR: 'میٹر زون', hToday: 'گھنٹے آج', auto: 'خودکار منظور', willReview: 'جانچ', mapL: 'نقشہ', satL: 'سیٹلائٹ', stOk: 'درج', stPend: 'جانچ میں', stQ: 'فون میں محفوظ', stBad: 'درج نہیں', stSend: 'بھیج رہے', recNote: 'تصویر اور مقام درج ہوں گے', locNote: 'مقام صرف چیک اِن یا آؤٹ کے وقت لیا جاتا ہے۔ درمیان میں کچھ ٹریک نہیں ہوتا۔', kicker: 'فیلڈ حاضری', welcome: 'حاضری کے لیے اپنی ملازم آئی ڈی اور پن سے سائن ان کریں۔', live: 'موجودہ مقام', ends: 'ختم', themeLightS: 'اسٹوڈیو', themeDarkS: 'انسٹرومنٹ' },
+  ml: { title: 'ഹാജർ', signin: 'സൈൻ ഇൻ', empId: 'ജീവനക്കാരൻ ഐഡി', empIdPh: 'ഉദാ. C52392', next: 'അടുത്തത്', enterPin: 'നിങ്ങളുടെ 4 അക്ക പിൻ നൽകുക', notYou: 'നിങ്ങളല്ലേ?', wrongPin: 'തെറ്റായ പിൻ', checkIn: 'ചെക്ക് ഇൻ', checkOut: 'ചെക്ക് ഔട്ട്', site: 'സൈറ്റ്', shift: 'ഷിഫ്റ്റ്', today: 'ഇന്ന്', noPunch: 'ഇന്ന് ഇതുവരെ പഞ്ച് ഇല്ല', since: 'മുതൽ', hours: 'മണിക്കൂർ', locating: 'ലൊക്കേഷൻ കണ്ടെത്തുന്നു…', inZone: 'സോണിനുള്ളിൽ', outZone: 'സോണിന് പുറത്ത്', from: 'അകലെ', noGps: 'ലൊക്കേഷൻ ഓഫാണ് – അനുമതി നൽകുക', takePhoto: 'സൈറ്റിൽ നിന്ന് നിങ്ങളുടെ ഫോട്ടോ എടുക്കുക', retake: 'വീണ്ടും എടുക്കുക', use: 'ഫോട്ടോ അയയ്ക്കുക', cancel: 'റദ്ദാക്കുക', sending: 'അയയ്ക്കുന്നു…', accepted: 'ഹാജർ രേഖപ്പെടുത്തി', pending: 'പരിശോധനയ്ക്ക് അയച്ചു', pendingWhy: 'സൂപ്പർവൈസർ പരിശോധിക്കും', queued: 'ഫോണിൽ സേവ് ചെയ്തു', queuedWhy: 'നെറ്റ്‌വർക്ക് ഇല്ല – സ്വയം അയയ്ക്കും', failed: 'ഹാജർ രേഖപ്പെടുത്തിയില്ല', done: 'ശരി', waiting: 'അയയ്ക്കാനുണ്ട്', month: 'എന്റെ മാസം', signout: 'സൈൻ ഔട്ട്', lang: 'ഭാഷ', supervisor: 'സൂപ്പർവൈസർ', days: 'ജോലി ദിവസങ്ങൾ', back: 'തിരികെ', demo: 'ഡെമോ മോഡ് – ഡാറ്റ ഈ ഫോണിൽ മാത്രം.', loadDemo: 'ഡെമോ ജീവനക്കാരെ ലോഡ് ചെയ്യുക (പിൻ 1234)', camOff: 'ക്യാമറ ലഭ്യമല്ല – ക്യാമറ ആപ്പ് തിരഞ്ഞെടുക്കുക', statusAccepted: 'സ്വീകരിച്ചു', statusPending: 'പരിശോധന ബാക്കി', statusRejected: 'നിരസിച്ചു', in: 'ഇൻ', out: 'ഔട്ട്', reliever: 'റിലീവർ', date: 'തീയതി', noCheckIn: 'ചെക്ക്-ഇൻ ഇല്ല', marked: 'അടയാളപ്പെടുത്തി', markAs: 'അടയാളപ്പെടുത്തുക…', clear: 'മായ്ക്കുക', markHint: 'ചെക്ക്-ഇൻ ചെയ്യാത്തവർ: ദിവസം എന്താണെന്ന് തിരഞ്ഞെടുക്കുക – ഹാജരില്ല, അവധി, രോഗം…', poorGps: 'GPS സിഗ്നൽ ദുർബലം – പരിശോധിക്കും', gm: 'സുപ്രഭാതം', ga: 'നമസ്കാരം', ge: 'ശുഭ സന്ധ്യ', more: 'കൂടുതൽ', theme: 'തീം', themeAuto: 'ഓട്ടോ', themeLight: 'ലൈറ്റ്', themeDark: 'ഡാർക്ക്', expand: 'മാപ്പ് വലുതാക്കുക', close: 'അടയ്ക്കുക', inZoneHint: 'നിങ്ങൾ സൈറ്റ് സോണിനുള്ളിലാണ്', outZoneHint: 'സോണിന് പുറത്ത് – പഞ്ച് പരിശോധിക്കും', worked: 'ജോലി', off: 'അവധി', absent: 'ഹാജരില്ല', leave: 'ലീവ്', all: 'എല്ലാം', notIn: 'വന്നില്ല', inNow: 'ഉള്ളിൽ', doneLbl: 'പൂർത്തി', search: 'പേര് അല്ലെങ്കിൽ ഐഡി തിരയുക', faceHint: 'മുഖം ഓവലിനുള്ളിൽ വയ്ക്കുക', tapToStart: 'അമർത്തുക', onShift: 'ഡ്യൂട്ടിയിൽ', notStarted: 'ചെക്ക് ഇൻ ചെയ്തിട്ടില്ല', finished: 'ഷിഫ്റ്റ് പൂർത്തി', timeline: 'ഇന്ന്', account: 'അക്കൗണ്ട്', appVer: 'പതിപ്പ്', elapsed: 'കഴിഞ്ഞ സമയം', status: 'നില', toPin: 'മീ പിന്നിലേക്ക്', gpsAcc: '± മീ GPS', zoneR: 'മീ സോൺ', hToday: 'മ. ഇന്ന്', auto: 'സ്വയം സ്വീകരിക്കും', willReview: 'പരിശോധന', mapL: 'മാപ്പ്', satL: 'സാറ്റലൈറ്റ്', stOk: 'രേഖപ്പെടുത്തി', stPend: 'പരിശോധനയിൽ', stQ: 'ഫോണിൽ സേവ്', stBad: 'രേഖപ്പെടുത്തിയില്ല', stSend: 'അയയ്ക്കുന്നു', recNote: 'ഫോട്ടോയും ലൊക്കേഷനും രേഖപ്പെടുത്തും', locNote: 'ചെക്ക് ഇൻ / ഔട്ട് ചെയ്യുന്ന സമയത്ത് മാത്രമാണ് ലൊക്കേഷൻ എടുക്കുന്നത്. ഇടയിൽ ട്രാക്ക് ചെയ്യുന്നില്ല.', kicker: 'ഫീൽഡ് ഹാജർ', welcome: 'ഹാജർ രേഖപ്പെടുത്താൻ നിങ്ങളുടെ ഐഡിയും പിന്നും ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്യുക.', live: 'തത്സമയ സ്ഥാനം', ends: 'അവസാനം', themeLightS: 'സ്റ്റുഡിയോ', themeDarkS: 'ഇൻസ്ട്രുമെന്റ്' }
 };
 let LANG = (() => { try { return localStorage.getItem('ls.lang') || 'en'; } catch (e) { return 'en'; } })();
 const t = k => (STR[LANG] || STR.en)[k] ?? STR.en[k] ?? k;
@@ -741,12 +812,14 @@ const ICON = {
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>', logout: '<path d="M15 17l5-5-5-5M20 12H9"/><path d="M12 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>',
   locate: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/>', expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', back: '<path d="M15 18l-6-6 6-6"/>', shift: '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/>',
-  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
 };
 const ic = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k] || ''}</svg>`;
 const haptic = p => { try { navigator.vibrate?.(p); } catch (e) { } };
 const initials = n => esc(String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join(''));
-function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; const dark = th === 'dark' || (th === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0C1422' : '#12305E'); }
+function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#ECE9E3'); }
+function isDark() { const th = ls.get('ls.theme') || 'auto'; return th === 'dark' || (th === 'auto' && !matchMedia('(prefers-color-scheme: light)').matches); }
+const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 function toast(m, ms = 2800) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
 
 // API address: ?api=… (saved), else same-origin /api when served over http(s), else demo
@@ -790,16 +863,18 @@ function zoneInfo() {
 }
 function paintGps() {
   const el = $('#gps'); if (!el) return;
-  const g = W.gps, z = zoneInfo();
-  if (!g) el.innerHTML = W.gpsErr ? `<span class="pill neg"><span class="dot"></span>${esc(W.gpsErr)}</span>` : `<span class="pill"><span class="dot"></span>${t('locating')}</span>`;
-  else if (z?.inZone && g.acc > (W.prof?.settings?.maxAcc || 50)) el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m</span>`;
-  else if (z?.inZone) el.innerHTML = `<span class="pill pos"><span class="dot"></span>${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m</span>${z.own ? '' : ` <span class="pill warn">${t('reliever')} ${esc(z.site.name)}</span>`}`;
-  else el.innerHTML = `<span class="pill warn"><span class="dot"></span>${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m</span>`;
-  const cap = $('#cap'); if (cap) cap.textContent = !g ? (W.gpsErr || t('locating')) : z?.inZone && g.acc <= (W.prof?.settings?.maxAcc || 50) ? t('inZoneHint') : t('outZoneHint');
+  const g = W.gps, z = zoneInfo(), max = W.prof?.settings?.maxAcc || 50;
+  const conf = (cls, txt, tag) => `<div class="conf ${cls}"><span class="d"></span><span class="grow">${txt}</span>${tag ? `<span class="chip ${cls === 'ok' ? 'pos' : 'warn'} tag">${tag}</span>` : ''}</div>`;
+  if (!g) el.innerHTML = W.gpsErr ? conf('bad', esc(W.gpsErr)) : conf('wait', t('locating'));
+  else if (z?.inZone && g.acc > max) el.innerHTML = conf('warn', `${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m`, t('willReview'));
+  else if (z?.inZone) el.innerHTML = conf('ok', `${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m${z.own ? '' : ` · ${t('reliever')} ${esc(z.site.name)}`}`, t('auto'));
+  else el.innerHTML = conf('warn', `${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m`, t('willReview'));
+  const set = (id, v) => { const x = $('#' + id); if (x) x.innerHTML = v; };
+  set('r-d', g && z ? `${z.d}` : '—'); set('r-a', g ? `${g.acc}` : '—');
   if (W.map && W.layers && g) {
     const L = window.L; W.layers.me?.remove(); W.layers.acc?.remove();
-    W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: '#16202F', weight: 1, fillOpacity: .08, dashArray: '3 3' }).addTo(W.map);
-    W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: '#fff', weight: 2, fillColor: '#E0762F', fillOpacity: 1 }).addTo(W.map);
+    W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: cssv('--cyan'), weight: 1, fillOpacity: .08, dashArray: '3 4' }).addTo(W.map);
+    W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: cssv('--bg') || '#050606', weight: 2.5, fillColor: cssv('--cyan'), fillOpacity: 1 }).addTo(W.map);
     if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend([p.lat, p.lng])); W.map.fitBounds(b.pad(0.6), { maxZoom: 17 }); }
   }
 }
@@ -813,7 +888,7 @@ async function freshFix(maxWait = 15000) {
 function takePhoto(caption) {
   return new Promise(resolve => {
     const box = document.createElement('div'); box.className = 'cam';
-    box.innerHTML = `<div class="hint">${t('takePhoto')}<br><small style="opacity:.8">${t('faceHint')}</small></div><video playsinline autoplay muted></video><div class="oval"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
+    box.innerHTML = `<div class="hint">${t('takePhoto')}<small>${t('faceHint')}</small></div><video playsinline autoplay muted></video><div class="oval"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
     document.body.appendChild(box);
     const video = $('video', box); let stream = null;
     const close = v => { stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
@@ -843,13 +918,14 @@ function takePhoto(caption) {
 }
 
 /* ---------- screens ---------- */
-function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN } = {}) {
+function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', dock = '' } = {}) {
   try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
   clearInterval(W.tick); W.tick = null;
-  document.body.classList.toggle('notabs', !tabs);
-  $('#app').innerHTML = `<div class="bar"><span class="mark">LS</span><span class="t">${t('title')}<small>Latinem Securities</small></span><span class="sp"></span>
-    <button id="b-lang" aria-label="${t('lang')}">${ic('globe')}${esc(LANGS.find(l => l[0] === LANG)[1])}</button>${W.prof || W.sup ? `<button id="b-menu" aria-label="${t('more')}">${ic('more')}</button>` : ''}</div>
-    ${W.api.demo ? `<div class="demo">${t('demo')}</div>` : ''}<main>${body}</main>
+  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock);
+  $('#app').innerHTML = `<header class="top"><span class="mark">LS</span><p class="crumb"><span>Latinem</span><b>${esc(crumb || t('title'))}</b></p><span class="sp"></span>
+    <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
+    ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main>${body}</main>
+    ${dock ? `<div class="dock"><div class="in">${dock}</div></div>` : ''}
     ${tabs ? `<nav class="tabs-b"><div class="in">${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
   $('#b-lang').onclick = () => menu(LANGS.map(([k, n]) => [n, () => { setLang(k); render(); }, k === LANG]));
   if ($('#b-menu')) $('#b-menu').onclick = () => menu([
@@ -873,21 +949,22 @@ function render() {
 function renderLogin() {
   const known = W.code, hr = new Date().getHours(), greet = hr < 12 ? t('gm') : hr < 17 ? t('ga') : t('ge');
   if (!known || W.editCode) {
-    shell(`<div class="hero"><div class="logo">LS</div><h1>${greet}</h1><p>${t('signin')}</p></div>
+    shell(`<div class="hero"><p class="kick">LS · ${t('kicker')}</p><h1>Latinem <em>Securities</em></h1><p>${t('welcome')}</p></div>
       <div class="card"><label class="fl" for="code">${t('empId')}</label>
       <input class="f mono" id="code" placeholder="${t('empIdPh')}" value="${esc(known)}" autocapitalize="characters" autocomplete="username" inputmode="text">
-      <button class="btn pri wide" id="b-next" style="margin-top:14px">${t('next')}</button>
-      ${W.api.demo ? `<button class="btn ghost wide" id="b-demo" style="margin-top:8px">${t('loadDemo')}</button>` : ''}</div>`);
+      <button class="btn pri wide" id="b-next" style="margin-top:14px">${t('next')} ${ic('arrow')}</button>
+      ${W.api.demo ? `<button class="btn ghost wide" id="b-demo" style="margin-top:6px">${t('loadDemo')}</button>` : ''}</div>
+      <p class="note">${t('locNote')}</p>`, { crumb: t('signin') });
     $('#code').focus();
     const nx = () => { const c = $('#code').value.trim().toUpperCase(); if (!c) return; W.code = c; ls.set('ls.code', c); W.editCode = false; W.pin = ''; render(); };
     $('#b-next').onclick = nx; $('#code').onkeydown = e => e.key === 'Enter' && nx();
     if ($('#b-demo')) $('#b-demo').onclick = loadDemo;
     return;
   }
-  shell(`<div class="hero"><div class="logo">LS</div><h1>${greet}</h1><p style="margin:10px 0 0"><span class="idchip">${esc(known)}<button id="b-not">${t('notYou')}</button></span></p></div>
-    <p class="muted" style="text-align:center;margin:14px 0 0">${t('enterPin')}</p><div class="dots ${W.shake ? 'shake' : ''}">${[0, 1, 2, 3].map(i => `<i class="${i < W.pin.length ? 'on' : ''}"></i>`).join('')}</div>
+  shell(`<div class="hero" style="padding-bottom:6px"><p class="kick">LS · ${t('kicker')}</p><h1>${esc(greet)}</h1><p style="margin-top:14px"><span class="idchip">${esc(known)}<button id="b-not">${t('notYou')}</button></span></p></div>
+    <p class="k" style="text-align:center;margin:18px 0 0">${t('enterPin')}</p><div class="dots ${W.shake ? 'shake' : ''}">${[0, 1, 2, 3].map(i => `<i class="${i < W.pin.length ? 'on' : ''}"></i>`).join('')}</div>
     <div class="err" id="err">${esc(W.err || '')}</div>
-    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button class="fn" data-k="c" aria-label="clear">${ic('x')}</button><button data-k="0">0</button><button class="fn" data-k="b" aria-label="backspace">⌫</button></div>`);
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button class="fn" data-k="c" aria-label="clear">${ic('x')}</button><button data-k="0">0</button><button class="fn" data-k="b" aria-label="backspace">⌫</button></div>`, { crumb: t('signin') });
   W.shake = false;
   $('#b-not').onclick = () => { W.editCode = true; W.err = ''; ls.set('ls.code', null); W.code = ''; render(); };
   $$('.pad button').forEach(b => b.onclick = () => key(b.dataset.k));
@@ -917,45 +994,67 @@ async function refresh(redraw = true) {
 async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; }
 
 function renderHome() {
-  const P = W.prof, w = P.worker, open = P.open;
+  const P = W.prof, w = P.worker, open = P.open, S0 = P.settings || {};
   const today = P.punches.filter(p => p.workDate === P.today || (open && p.id === open.id) || (open && p.inId === open.id)).sort((a, b) => a.ts - b.ts);
   const done = !open && today.some(p => p.type === 'out');
-  const hr = new Date().getHours(), greet = hr < 12 ? t('gm') : hr < 17 ? t('ga') : t('ge');
-  const st = p => p.status === 'accepted' ? `<span class="pill pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="pill warn">${t('statusPending')}</span>` : `<span class="pill neg">${t('statusRejected')}</span>`;
-  const start = P.settings?.starts?.[w.shift];
-  const dur = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
-  shell(`<div class="card"><div class="who"><span class="av">${initials(w.name)}</span><div class="grow"><span class="hi">${greet}</span><b>${esc(w.name)}</b><span class="mono muted small">${esc(w.code)}</span></div></div>
-      <div class="meta"><span class="chip"><span class="state ${open ? 'on' : ''}">${open ? t('onShift') : done ? t('finished') : t('notStarted')}</span></span><span class="chip">${ic('pin')}<span class="muted small">${t('site')}</span><b>${esc(P.site?.name || '—')}</b></span><span class="chip">${ic('shift')}<span class="muted small">${t('shift')}</span><b>${esc(w.shift)}${start ? ' · ' + start : ''}</b></span></div></div>
-    <div class="punch"><button class="big ${open ? 'out' : 'in pulse'}" id="b-punch">${ic(open ? 'out' : 'in')}${open ? t('checkOut') : t('checkIn')}
-        ${open ? `<span class="tm" id="timer">${dur(Date.now() - open.ts)}</span><small>${t('since')} ${hhmm(open.ts)}</small>` : `<small>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</small>`}</button>
-      <div class="cap" id="cap"></div></div>
-    <div class="mapcard" id="mapcard"><div id="map"></div><button id="b-exp" class="exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" class="loc" aria-label="my location" hidden>${ic('locate')}</button><button class="btn x" id="b-mapx">${ic('back')} ${t('close')}</button></div>
+  const st = p => p.status === 'accepted' ? `<span class="chip pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="chip warn">${t('statusPending')}</span>` : `<span class="chip neg">${t('statusRejected')}</span>`;
+  const start = S0.starts?.[w.shift] || '', hrsLen = +S0.shiftHours || 12;
+  const [first, ...rest] = String(w.name).split(/\s+/);
+  const dur = ms => { const x = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(x / 3600))}:${pad(Math.floor(x / 60) % 60)}:${pad(x % 60)}`; };
+  // shift window for the progress rule (night shifts run past midnight)
+  const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
+  const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
+  const hoursToday = today.reduce((x, p) => x + (+p.hours || 0), 0) + (open ? (Date.now() - open.ts) / 3600e3 : 0);
+  const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
+  shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)}</div></section>
+    <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
+      <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
+      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
+    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
     <div id="qbar" class="q" hidden></div>
-    <div class="card"><div class="lbl">${t('timeline')}</div>
-      ${today.length ? `<ul class="list tl">${today.map(p => `<li class="${p.type}"><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
-        : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>`, { tab: 'home' });
+    <div class="mapcard" id="mapcard"><div id="map"></div>
+      <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
+      <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
+      <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
+      <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
+    <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
+      ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
+        : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
+    <p class="note">${t('locNote')}</p>`, {
+    tab: 'home', crumb: P.site?.name || t('today'),
+    dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
-  if (open) W.tick = setInterval(() => { const el = $('#timer'); if (!el) return clearInterval(W.tick); el.textContent = dur(Date.now() - open.ts); }, 1000);
+  const tick = () => {
+    const n = new Date(), h = n.getHours(), el = $('#k-time'); if (!el) return clearInterval(W.tick);
+    el.textContent = `${h % 12 || 12}:${pad(n.getMinutes())}`;
+    $('#k-day').textContent = n.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+    $('#k-am').className = h < 12 ? 'on' : ''; $('#k-pm').className = h >= 12 ? 'on' : '';
+    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); $('#r-h').textContent = (today.reduce((x, p) => x + (+p.hours || 0), 0) + (Date.now() - open.ts) / 3600e3).toFixed(1); }
+    const w2 = win(); if (w2 && $('#k-fill')) { $('#k-fill').style.transform = `scaleX(${w2.p.toFixed(3)})`; $('#k-now').style.left = `calc(${(w2.p * 100).toFixed(1)}% - 1px)`; }
+  };
+  tick(); W.tick = setInterval(tick, 1000);
   const card = $('#mapcard');
   $('#b-exp').onclick = () => { card.classList.add('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   $('#b-mapx').onclick = () => { card.classList.remove('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
+  $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); drawMap();
 }
 async function drawMap() {
   const el = $('#map'); if (!el) return;
   try {
-    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, collapsed: true });
+    const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, control: false, dark: isDark() });
     if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
     W.map = map;
+    $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === LSMap.base(map)));
     if ($('#b-exp')) $('#b-exp').hidden = false;
     const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17)); else toast(W.gpsErr || t('locating')); }; }
     W.layers = {};
-    for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? '#1766CB' : '#93A0B5', label: s.name, fill: s.id === W.prof.site?.id ? .14 : .06 });
+    const own = cssv('--bronze') || '#B08D57', oth = cssv('--mute') || '#8C908A';
+    for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? own : oth, label: s.name, fill: s.id === W.prof.site?.id ? .14 : .05 });
     paintGps();
   } catch (e) { el.closest('.mapcard').hidden = true; }
 }
-
 async function punch(type, forWorker) {
   if (W.busy) return; W.busy = true;
   try {
@@ -976,10 +1075,11 @@ async function punch(type, forWorker) {
   } finally { W.busy = false; }
 }
 function showResult(kind, msg, photo) {
-  const M = { send: ['q', '', t('sending'), ''], ok: ['ok', 'check', t('accepted'), ''], pend: ['pend', 'hour', t('pending'), t('pendingWhy')], queued: ['q', 'cloud', t('queued'), t('queuedWhy')], bad: ['bad', 'x', t('failed'), ''] }[kind];
+  const M = { send: ['send', t('stSend'), t('sending'), ''], ok: ['ok', t('stOk'), t('accepted'), ''], pend: ['pend', t('stPend'), t('pending'), t('pendingWhy')], queued: ['off', t('stQ'), t('queued'), t('queuedWhy')], bad: ['bad', t('stBad'), t('failed'), ''] }[kind];
   if (kind === 'ok') haptic([30, 50, 30]); else if (kind === 'bad') haptic([80, 50, 80]); else if (kind !== 'send') haptic(40);
-  shell(`<div class="card res"><div class="ic ${M[0]}">${kind === 'send' ? '<div class="spin"></div>' : ic(M[1])}</div><h2>${M[2]}</h2><div class="when">${hhmm(Date.now())}</div><p class="muted">${esc(msg || M[3])}</p>${photo ? `<img src="${photo}" alt="">` : ''}
-    ${kind === 'send' ? '' : `<button class="btn pri wide" id="b-done" style="margin-top:18px">${t('done')}</button>`}</div>`, { tabs: false });
+  shell(`<div class="res ${M[0]}">${kind === 'send' ? '<div class="spin"></div>' : `<span class="stamp">${esc(M[1])}</span>`}
+    <div class="when">${hhmm(Date.now())}</div><h2>${M[2]}</h2><p class="note">${esc(msg || M[3])}</p>${photo ? `<img src="${photo}" alt="">` : ''}
+    ${kind === 'send' ? '' : `<button class="btn pri wide" id="b-done" style="margin-top:22px">${t('done')}</button>`}</div>`, { tabs: false, crumb: M[1] });
   if ($('#b-done')) $('#b-done').onclick = () => W.sup ? renderSup() : go('home');
 }
 function renderMonth() {
@@ -990,28 +1090,28 @@ function renderMonth() {
   const todayISO = `${cur}-${pad(now.getDate())}`;
   const live = new Map(P.punches.filter(p => p.type === 'in' && p.status !== 'rejected' && p.workDate.startsWith(ym)).map(p => [+p.workDate.slice(8), p.status === 'accepted' ? 'P' : '…']));
   const day = d => codes[d - 1] || live.get(d) || '';
-  const all = [...Array(N)].map((_, i) => day(i + 1));
-  const cnt = re => all.filter(c => re.test(c)).length;
+  const all = [...Array(N)].map((_, i) => day(i + 1)), cnt = re => all.filter(c => re.test(c)).length;
+  const mName = x => new Date(+x.slice(0, 4), +x.slice(5) - 1, 1).toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { month: 'short', year: 'numeric' });
   const cell = d => { const c = day(d); return `<div class="d ${esc(c)} ${`${ym}-${pad(d)}` === todayISO ? 'today' : ''}"><b>${d}</b>${esc(c)}</div>`; };
-  shell(`<div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${new Date(+x.slice(0, 4), +x.slice(5) - 1, 1).toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { month: 'short', year: 'numeric' })}</button>`).join('')}</div>
+  shell(`<section class="place"><div class="n">${esc(t('month'))}</div><div class="z"><b>${esc(mName(ym))}</b> · ${esc(P.worker.code)}</div></section>
+    <div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${esc(mName(x))}</button>`).join('')}</div>
     <div class="tiles"><div class="tile P"><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
     <div class="card"><div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}${[...Array(N)].map((_, i) => cell(i + 1)).join('')}</div>
-      <div class="legend"><span><i style="background:var(--pos-bg);border:1px solid var(--pos-line)"></i>${t('worked')}</span><span><i style="background:var(--surface3)"></i>${t('off')}</span><span><i style="background:var(--neg-bg);border:1px solid var(--neg-line)"></i>${t('absent')}</span><span><i style="background:var(--warn-bg);border:1px solid var(--warn-line)"></i>${t('leave')}</span></div></div>
-    <button class="btn wide" id="b-back">${ic('back')} ${t('back')}</button>`, { tab: 'month' });
+      <div class="legend"><span><i style="background:var(--sage)"></i>${t('worked')}</span><span><i style="background:var(--faint)"></i>${t('off')}</span><span><i style="background:var(--red)"></i>${t('absent')}</span><span><i style="background:var(--gold)"></i>${t('leave')}</span></div></div>`, { tab: 'month', crumb: t('month') });
   $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
-  $('#b-back').onclick = () => go('home');
 }
 function renderMore() {
-  const P = W.prof, th = ls.get('ls.theme') || 'auto';
-  shell(`<div class="card"><div class="who"><span class="av">${initials(P.worker.name)}</span><div class="grow"><b>${esc(P.worker.name)}</b><span class="mono muted small">${esc(P.worker.code)}</span></div></div></div>
-    <div class="card" style="padding:4px 14px"><ul class="menu-list">
+  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = String(P.worker.name).split(/\s+/);
+  const thL = th === 'dark' ? t('themeDarkS') : th === 'light' ? t('themeLightS') : t('themeAuto');
+  shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
+    <div class="card" style="padding:4px 16px"><ul class="menu-list">
       <li><button id="m-lang">${ic('globe')}<span>${t('lang')}</span><span class="val">${esc(LANGS.find(l => l[0] === LANG)[1])}</span></button></li>
-      <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${t(th === 'dark' ? 'themeDark' : th === 'light' ? 'themeLight' : 'themeAuto')}</span></button></li>
-      <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span></button></li>
+      <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${esc(thL)}</span></button></li>
+      <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span><span class="val">${ic('arrow')}</span></button></li>
       <li><button id="m-out" class="danger">${ic('logout')}<span>${t('signout')}</span></button></li></ul></div>
-    <p class="muted small" style="text-align:center">${t('appVer')} 2.0 · Latinem Securities</p>`, { tab: 'more' });
+    <p class="note">${t('locNote')}</p><p class="k" style="text-align:center;margin-top:18px">LS · ${t('appVer')} 3.0</p>`, { tab: 'more', crumb: t('more') });
   $('#m-lang').onclick = () => $('#b-lang').click();
-  $('#m-theme').onclick = () => menu([['auto', 'themeAuto'], ['light', 'themeLight'], ['dark', 'themeDark']].map(([k, l]) => [t(l), () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
+  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
 /* ---------- supervisor: site board + punch on behalf ---------- */
@@ -1036,17 +1136,17 @@ function renderSup() {
   const f = W.supF || 'all', q = (W.supQ || '').trim().toUpperCase();
   const rows = base.filter(w => (f === 'all' || state(w) === f || (f === 'none' && state(w) === 'marked')) && (!q || w.name.toUpperCase().includes(q) || w.code.toUpperCase().includes(q)));
   const ord = { none: 0, marked: 1, in: 2, done: 3 };
-  shell(`<div class="card"><div class="row" style="margin-bottom:2px">${ic('users')}<h2 style="margin:0">${t('supervisor')}</h2></div>
-    <div class="row"><div class="grow"><label class="fl" for="sp-site">${t('site')}</label><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+  shell(`<section class="place"><div class="n">${t('supervisor')}</div><div class="z"><b>${esc(B.sites.find(x => x.id === W.supSite)?.name || t('all'))}</b> · ${esc(B.date || '')}</div></section>
+    <div class="card"><div class="row"><div class="grow"><label class="fl" for="sp-site">${t('site')}</label><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
       <div><label class="fl" for="sp-date">${t('date')}</label><input class="f" type="date" id="sp-date" value="${esc(B.date)}" max="${esc(B.today)}"></div></div>
     <div class="chips">${[['all', t('all'), base.length], ['none', t('notIn'), n('none') + n('marked')], ['in', t('inNow'), n('in')], ['done', t('doneLbl'), n('done')]].map(([k, l, c]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${l} <b>${c}</b></button>`).join('')}</div>
-    <p class="muted small" style="margin:8px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
+    <p class="note" style="margin:10px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
     <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div></div>
     ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
-    <div class="card" style="padding:4px 14px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(w.name)}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
+    <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(w.name)}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
       ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
       ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}</li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
-    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false });
+    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
   $$('[data-f]').forEach(b => b.onclick = () => { W.supF = b.dataset.f; renderSup(); });
