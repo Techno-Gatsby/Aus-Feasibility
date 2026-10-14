@@ -1366,6 +1366,7 @@ function rowHTML(i) {
 
 /** Column widths (px): identity block stays pinned while the days scroll */
 const GW = [34, 190, 76, 26, 150], GD = [112, 78];
+const GRID_FIRST = 60, GRID_BATCH = 100;
 function gridCols() { const left = []; GW.reduce((a, w, i) => (left[i] = a, a + w), 0); return { left, width: GW.reduce((a, b) => a + b, 0) + (AV.details ? GD[0] + GD[1] : 0) + AV.dates.length * 28 + 34 + 38 + 110 }; }
 function renderGrid() {
   computeAttRows();
@@ -1383,11 +1384,27 @@ function renderGrid() {
   wrap.innerHTML = `<table class="ag" style="width:${width}px">${col}<thead>
     <tr><th class="fix" rowspan="2" style="left:${L[0]}px">#</th><th class="fix" rowspan="2" style="left:${L[1]}px;text-align:left">Name</th><th class="fix" rowspan="2" style="left:${L[2]}px">Emp ID</th><th class="fix" rowspan="2" style="left:${L[3]}px" title="Shift D/N">S</th><th class="fix edge" rowspan="2" style="left:${L[4]}px;text-align:left">Site</th>${det ? '<th rowspan="2">Trade</th><th rowspan="2">D.O.J</th>' : ''}${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
     <tr>${dh2}</tr></thead>
-    <tbody>${AV.rows.map((_, i) => rowHTML(i)).join('')}</tbody>
+    <tbody>${AV.rows.slice(0, GRID_FIRST).map((_, i) => rowHTML(i)).join('')}</tbody>
     <tfoot><tr><td class="fix edge" colspan="5" style="left:0;text-align:right;padding-right:8px">Billable per day</td>${det ? '<td colspan="2"></td>' : ''}${AV.dates.map((_, j) => `<td data-f="${j}"></td>`).join('')}<td colspan="3" id="av-ftot"></td></tr></tfoot></table>`;
   renderFooter();
   paintSel();
   const tb = wrap.querySelector('tbody');
+  // the first screenful is drawn at once; the remaining rows follow in small batches so the page never freezes
+  // (a full month for ~1,000 workers is ~35,000 cells). Each batch is drawn from the data as it is at that moment.
+  const gen = AV.gridGen = (AV.gridGen || 0) + 1;
+  AV.gridReady = new Promise(done => {
+    let next = GRID_FIRST;
+    const more = () => {
+      if (gen !== AV.gridGen || !tb.isConnected) return done();
+      if (next >= AV.rows.length) return done();
+      const end = Math.min(AV.rows.length, next + GRID_BATCH); let h = '';
+      for (let i = next; i < end; i++) h += rowHTML(i);
+      tb.insertAdjacentHTML('beforeend', h); next = end;
+      const s = AV.sel; if (s && s.r1 >= next - GRID_BATCH) paintSel();
+      setTimeout(more, 0);
+    };
+    setTimeout(more, 0);
+  });
   tb.onmousedown = e => {
     const nm = e.target.closest('td.nm'); if (nm) { editEmployee(nm.dataset.emp); return; }
     const td = e.target.closest('td.d'); if (!td) return;

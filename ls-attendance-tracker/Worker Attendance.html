@@ -11,7 +11,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,300..800;1,75..125,300..800&family=Martian+Mono:wdth,wght@75..112.5,400..600&display=swap">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><link rel="preconnect" href="https://server.arcgisonline.com">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js">
+<!-- fonts load without holding up the first paint; text shows in the system font until they arrive -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,300..800;1,75..125,300..800&family=Martian+Mono:wdth,wght@75..112.5,400..600&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Worker app – "field instrument" design language after Delta Climate's OBOS console:
    near-black canvas, warm ink, one bronze accent, Mona Sans + condensed mono labels,
@@ -487,6 +490,10 @@ label.fl{margin:12px 0 6px;font:500 12px var(--sans);letter-spacing:0;text-trans
 .cam .ctl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
 .cam .ctl .shoot{margin:0}
 .cam .ctl:has([data-u]){display:flex}
+
+/* camera: show the whole frame (no crop = no "zoom"), mirrored like a normal selfie camera; the saved photo is not mirrored */
+.cam video{object-fit:contain;transform:scaleX(-1)}
+.cam .shoot:disabled{opacity:.35}
 
 </style>
 </head>
@@ -1009,9 +1016,10 @@ window.addEventListener('online', flushQueue);
 setInterval(flushQueue, 60000);
 
 /* ---------- GPS ---------- */
+function setGps(p) { W.gps = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy), at: Date.now() }; W.gpsErr = ''; paintGps(); }
 function startGps() {
   if (W.watch != null || !navigator.geolocation) { if (!navigator.geolocation) W.gpsErr = t('noGps'); return; }
-  W.watch = navigator.geolocation.watchPosition(p => { W.gps = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy), at: Date.now() }; W.gpsErr = ''; paintGps(); },
+  W.watch = navigator.geolocation.watchPosition(setGps,
     e => { W.gpsErr = t('noGps'); paintGps(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
 function zoneInfo() {
@@ -1039,41 +1047,62 @@ function paintGps() {
     if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend([p.lat, p.lng])); W.map.fitBounds(b.pad(0.6), { maxZoom: 17 }); }
   }
 }
-async function freshFix(maxWait = 15000) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < maxWait) { if (W.gps && Date.now() - W.gps.at < 30000) return W.gps; await new Promise(r => setTimeout(r, 400)); }
-  return W.gps;
+// The position watch only reports when the phone moves, so a phone standing still keeps an older reading: one under
+// 2 minutes is used at once. Otherwise ask for a reading now and take whichever comes first (at most maxWait).
+async function freshFix(maxWait = 10000) {
+  const recent = () => W.gps && Date.now() - W.gps.at < 120000 ? W.gps : null;
+  if (recent()) return W.gps;
+  const now = new Promise(res => { if (!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p => { setGps(p); res(W.gps); }, () => res(null), { enableHighAccuracy: true, maximumAge: 10000, timeout: maxWait }); });
+  const watched = (async () => { const t0 = Date.now(); while (Date.now() - t0 < maxWait) { if (recent()) return W.gps; await new Promise(r => setTimeout(r, 300)); } return null; })();
+  return (await Promise.race([now, watched])) || (await watched) || W.gps;
 }
 
 /* ---------- camera + watermark ---------- */
-function takePhoto(caption) {
+// Start the front camera. Called first thing in the tap handler so the camera warms up while the screen is built
+// (and stays inside the user gesture on iOS). No width/height: the phone uses its normal, uncropped selfie mode.
+function openCam() {
+  if (!navigator.mediaDevices?.getUserMedia) return Promise.reject(new Error('no camera'));
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+}
+/** caption(): lines for the watermark, read when the shutter is pressed; may be async and return null to cancel */
+function takePhoto(caption, cam = openCam()) {
   return new Promise(resolve => {
     const box = document.createElement('div'); box.className = 'cam';
-    box.innerHTML = `<div class="hint">${t('takePhoto')}</div><video playsinline autoplay muted></video><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
+    box.innerHTML = `<div class="hint">${t('takePhoto')}</div><video playsinline autoplay muted></video><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot" disabled></button><span style="flex:1"></span></div>`;
     document.body.appendChild(box);
-    const video = $('video', box); let stream = null;
-    const close = v => { stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
+    const video = $('video', box), shoot = $('[data-s]', box); let stream = null, done = false;
+    const stop = () => stream?.getTracks().forEach(x => x.stop());
+    const close = v => { done = true; stop(); box.remove(); resolve(v); };
     $('[data-x]', box).onclick = () => close(null);
     const fromFile = () => {        // fallback: the phone's camera app (capture=user)
+      if (done) return;
       const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'user';
       inp.onchange = async () => { const f = inp.files[0]; if (!f) return close(null); const img = new Image(); img.onload = () => review(img, img.naturalWidth, img.naturalHeight); img.src = URL.createObjectURL(f); };
-      $('.hint', box).textContent = t('camOff'); $('[data-s]', box).onclick = () => inp.click(); inp.click();
+      $('.hint', box).textContent = t('camOff'); shoot.disabled = false; shoot.onclick = () => inp.click(); inp.click();
     };
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 1280 } }, audio: false })
-      .then(s => { stream = s; video.srcObject = s; $('[data-s]', box).onclick = () => review(video, video.videoWidth, video.videoHeight); })
-      .catch(fromFile) ?? fromFile();
-    function review(src, w, h) {
+    cam.then(s => {
+      if (done) return s.getTracks().forEach(x => x.stop());
+      stream = s; video.srcObject = s;
+      const ready = () => { shoot.disabled = false; };
+      if (video.readyState >= 2) ready(); else video.addEventListener('loadeddata', ready, { once: true });
+      shoot.onclick = () => review(video, video.videoWidth, video.videoHeight);
+    }).catch(fromFile);
+    async function review(src, w, h) {
+      if (!w || !h) return;
       const k = Math.min(1, 720 / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
-      const g = c.getContext('2d'); g.drawImage(src, 0, 0, c.width, c.height);
+      const g = c.getContext('2d'); g.drawImage(src, 0, 0, c.width, c.height);      // saved unmirrored, so the stamped text reads correctly
+      stop(); shoot.disabled = true;
+      $('.hint', box).textContent = t('locating');
+      const lines = await caption(); if (!lines) return close(null);
+      if (done) return;
       // watermark: name · ID, date-time, coordinates, site
-      const lines = caption(); const fs = Math.max(13, Math.round(c.width / 34)); g.font = `600 ${fs}px Inter, Arial, sans-serif`;
+      const fs = Math.max(13, Math.round(c.width / 34)); g.font = `600 ${fs}px Inter, Arial, sans-serif`;
       const bh = lines.length * (fs + 6) + 12; g.fillStyle = 'rgba(11,27,54,.72)'; g.fillRect(0, c.height - bh, c.width, bh);
       g.fillStyle = '#fff'; lines.forEach((l, i) => g.fillText(l, 10, c.height - bh + 8 + (i + 1) * (fs + 6) - 6));
       let q = .72, url = c.toDataURL('image/jpeg', q); while (url.length > 260000 && q > .35) { q -= .08; url = c.toDataURL('image/jpeg', q); }
-      stream?.getTracks().forEach(x => x.stop());
       haptic(15); box.innerHTML = `<img src="${url}" alt=""><div class="ctl"><button class="btn" data-r>${t('retake')}</button><button class="btn pri" data-u>${ic('check')} ${t('use')}</button></div>`;
-      $('[data-r]', box).onclick = () => { box.remove(); takePhoto(caption).then(resolve); };
-      $('[data-u]', box).onclick = () => { box.remove(); resolve(url); };
+      $('[data-r]', box).onclick = () => { done = true; box.remove(); takePhoto(caption).then(resolve); };
+      $('[data-u]', box).onclick = () => { done = true; box.remove(); resolve(url); };
     }
   });
 }
@@ -1150,7 +1179,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 async function refresh(redraw = true) {
   if (!W.token) return;
-  try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; if (redraw && !W.sup) render(); } } catch (e) { }
+  try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; ss.set('ls.prof', JSON.stringify(r.body)); if (redraw && !W.sup && !$('.cam') && !W.busy) render(); } } catch (e) { }
 }
 async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; }
 
@@ -1219,16 +1248,29 @@ async function drawMap() {
 async function punch(type, forWorker) {
   if (W.busy) return; W.busy = true;
   try {
-    const g = await freshFix();
-    if (!g) { toast(W.gpsErr || t('noGps'), 4000); return; }
-    const P = W.prof, who = forWorker || P.worker, z = zoneInfo();
-    const photo = await takePhoto(() => [`${who.name} · ${who.code}`, `${new Date().toLocaleString('en-GB')} · ${type === 'in' ? 'CHECK IN' : 'CHECK OUT'}`, `${g.lat.toFixed(6)}, ${g.lng.toFixed(6)} ±${g.acc} m`, z ? `${z.site.name} · ${z.d} m` : (P?.site?.name || '')]);
-    if (!photo) return;
+    // the camera opens at once; GPS keeps updating meanwhile and is read when the photo is taken
+    const cam = openCam(); cam.catch(() => { });
+    const P = W.prof, who = forWorker || P.worker; let g = null;
+    const photo = await takePhoto(async () => {
+      g = await freshFix();
+      if (!g) { toast(W.gpsErr || t('noGps'), 4000); return null; }
+      const z = zoneInfo();
+      return [`${who.name} · ${who.code}`, `${new Date().toLocaleString('en-GB')} · ${type === 'in' ? 'CHECK IN' : 'CHECK OUT'}`, `${g.lat.toFixed(6)}, ${g.lng.toFixed(6)} ±${g.acc} m`, z ? `${z.site.name} · ${z.d} m` : (P?.site?.name || '')];
+    }, cam);
+    if (!photo || !g) return;
     const body = { type, ts: Date.now(), lat: g.lat, lng: g.lng, acc: g.acc, photo, clientId: uuid(), deviceId: W.dev, ...(forWorker ? { code: forWorker.code } : {}) };
     showResult('send', null, photo);
     let r;
-    try { r = forWorker ? await W.api.call('POST', 'supervisor/punch', body) : await W.api.call('POST', 'worker/punch', body, { token: W.token }); }
+    const send = forWorker ? W.api.call('POST', 'supervisor/punch', body) : W.api.call('POST', 'worker/punch', body, { token: W.token });
+    try { r = await Promise.race([send, new Promise(res => setTimeout(() => res('slow'), 6000))]); }
     catch (e) { await qPut({ clientId: body.clientId, body, sup: !!forWorker }); return showResult('queued', null, photo); }
+    if (r === 'slow') {
+      // weak signal or a server waking up: keep the punch on the phone and let the worker go; the request carries on,
+      // and the same clientId means a resend from the queue is never counted twice
+      await qPut({ clientId: body.clientId, body, sup: !!forWorker });
+      send.then(async x => { if (x.status !== 401) await qDel(body.clientId); updateQueueBar(); if (!forWorker) refresh(false); }).catch(() => { });
+      return showResult('queued', null, photo);
+    }
     if (r.status === 401) { await qPut({ clientId: body.clientId, body }); return signOut(true); }
     if (r.status !== 200) return showResult('bad', r.body?.error, photo);
     showResult(r.body.punch.status === 'accepted' ? 'ok' : 'pend', r.body.punch.status === 'pending' ? r.body.punch.reasons.join(' · ') : (r.body.punch.reliever ? `${t('reliever')} ${r.body.punch.siteName}` : ''), photo);
@@ -1320,7 +1362,7 @@ function renderSup() {
   $('#b-exit').onclick = () => { W.sup = false; W.api = LSClient.make({ base: API_BASE }); render(); };
   paintGps();
 }
-function signOut(expired) { W.token = null; W.prof = null; ss.set('ls.tok', null); W.sup = false; SCREEN = 'login'; if (expired === true) W.err = ''; render(); }
+function signOut(expired) { W.token = null; W.prof = null; ss.set('ls.tok', null); ss.set('ls.prof', null); W.sup = false; SCREEN = 'login'; if (expired === true) W.err = ''; render(); }
 
 /* ---------- demo roster (demo mode only): three workers, zones around where you are ---------- */
 async function loadDemo() {
@@ -1337,7 +1379,11 @@ async function loadDemo() {
 if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 setLang(LANG); applyTheme();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { }
+LSMap.load().catch(() => { });                 // fetch the map library while the profile loads
 (async () => {
+  // signed in before: draw Today from the last profile at once, then bring it up to date in the background
+  const cached = W.token && (() => { try { return JSON.parse(ss.get('ls.prof')); } catch (e) { return null; } })();
+  if (cached && location.hash !== '#sup') { W.prof = cached; SCREEN = 'home'; startGps(); render(); document.body.dataset.ready = '1'; refresh(); flushQueue(); return; }
   if (W.token) { await refresh(); if (W.prof) { SCREEN = 'home'; startGps(); flushQueue(); } else { W.token = null; } }
   if (location.hash === '#sup') { history.replaceState(null, '', location.pathname + location.search); await openSupervisor(); return; }
   render(); document.body.dataset.ready = '1';

@@ -472,3 +472,7 @@ label.fl{margin:12px 0 6px;font:500 12px var(--sans);letter-spacing:0;text-trans
 .cam .ctl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
 .cam .ctl .shoot{margin:0}
 .cam .ctl:has([data-u]){display:flex}
+
+/* camera: show the whole frame (no crop = no "zoom"), mirrored like a normal selfie camera; the saved photo is not mirrored */
+.cam video{object-fit:contain;transform:scaleX(-1)}
+.cam .shoot:disabled{opacity:.35}
