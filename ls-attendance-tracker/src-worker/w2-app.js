@@ -30,6 +30,7 @@ const ICON = {
 };
 const ic = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k] || ''}</svg>`;
 const haptic = p => { try { navigator.vibrate?.(p); } catch (e) { } };
+const tc = n => String(n || '').toLowerCase().replace(/(^|[\s'.-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
 const initials = n => esc(String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join(''));
 function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#ECE9E3'); }
 function isDark() { const th = ls.get('ls.theme') || 'auto'; return th === 'dark' || (th === 'auto' && !matchMedia('(prefers-color-scheme: light)').matches); }
@@ -213,7 +214,7 @@ function renderHome() {
   const done = !open && today.some(p => p.type === 'out');
   const st = p => p.status === 'accepted' ? `<span class="chip pos">${t('statusAccepted')}</span>` : p.status === 'pending' ? `<span class="chip warn">${t('statusPending')}</span>` : `<span class="chip neg">${t('statusRejected')}</span>`;
   const start = S0.starts?.[w.shift] || '', hrsLen = +S0.shiftHours || 12;
-  const [first, ...rest] = String(w.name).split(/\s+/);
+  const [first, ...rest] = tc(w.name).split(/\s+/);
   const dur = ms => { const x = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(x / 3600))}:${pad(Math.floor(x / 60) % 60)}:${pad(x % 60)}`; };
   // shift window for the progress rule (night shifts run past midnight)
   const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
@@ -224,7 +225,7 @@ function renderHome() {
     <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
       <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
       ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
-    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
+    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div class="opt"><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
     <div id="qbar" class="q" hidden></div>
     <div class="mapcard" id="mapcard"><div id="map"></div>
@@ -315,7 +316,7 @@ function renderMonth() {
   $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
 }
 function renderMore() {
-  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = String(P.worker.name).split(/\s+/);
+  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = tc(P.worker.name).split(/\s+/);
   const thL = th === 'dark' ? t('themeDarkS') : th === 'light' ? t('themeLightS') : t('themeAuto');
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
     <div class="card" style="padding:4px 16px"><ul class="menu-list">
@@ -357,7 +358,7 @@ function renderSup() {
     <p class="note" style="margin:10px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
     <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div></div>
     ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
-    <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(w.name)}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
+    <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(tc(w.name))}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
       ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
       ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}</li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
     <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
