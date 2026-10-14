@@ -103,7 +103,7 @@ async function freshFix(maxWait = 15000) {
 function takePhoto(caption) {
   return new Promise(resolve => {
     const box = document.createElement('div'); box.className = 'cam';
-    box.innerHTML = `<div class="hint">${t('takePhoto')}<small>${t('faceHint')}</small></div><video playsinline autoplay muted></video><div class="oval"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
+    box.innerHTML = `<div class="hint">${t('takePhoto')}</div><video playsinline autoplay muted></video><div class="ctl"><button class="btn" data-x>${t('cancel')}</button><button class="shoot" data-s aria-label="shoot"></button><span style="flex:1"></span></div>`;
     document.body.appendChild(box);
     const video = $('video', box); let stream = null;
     const close = v => { stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
@@ -238,7 +238,7 @@ function renderHome() {
         : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
     <p class="note">${t('locNote')}</p>`, {
     tab: 'home', crumb: P.site?.name || t('today'),
-    dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
+    dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span class="bi">${ic(open ? 'out' : 'in')}</span><span class="grow"><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('onShift')} · ${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
   const tick = () => {
     const n = new Date(), h = n.getHours(), el = $('#k-time'); if (!el) return clearInterval(W.tick);
