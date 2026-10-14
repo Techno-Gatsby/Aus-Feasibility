@@ -92,5 +92,5 @@ const aDays = await A.evaluate(() => ['C52392', 'C80453', 'C66585'].map(c => get
 ok(missN === 3 && aDays.every(x => x === 'A') && (await A.evaluate(() => noCheckIn('2026-09-28').length)) === 0, 'admin marked 3 no-check-in days A ' + aDays);
 // 7. worker month view shows published codes after re-publish
 await A.evaluate(() => publishRoster(true)); await Wp.bringToFront(); await Wp.evaluate(() => { W.sup = false; W.api = LSClient.make({ base: API_BASE }); return refresh(false).then(() => go('month')); }); await Wp.waitForTimeout(300); 
-ok(/1\s*days worked|days worked/.test(await Wp.textContent('main')), 'month view renders');
+ok(/Worked/.test(await Wp.textContent('main')) && (await Wp.locator('.cal .d').count()) >= 28, 'month view renders');
 console.log(errs.length ? errs : 'no page errors'); console.log(`\n${pass} passed, ${fail} failed`); await b.close();
