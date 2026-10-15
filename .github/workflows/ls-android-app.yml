@@ -1,4 +1,5 @@
-# Builds the LS Attendance Android app (ls-attendance-tracker/mobile) → artifact "ls-attendance-apk"
+# Builds the LS Attendance Android app (ls-attendance-tracker/mobile) → artifact "ls-attendance-apk" (ls-attendance.apk).
+# Copy ls-attendance.apk to ls-attendance-tracker/azure/web/worker/ before deploying; the phone page links to it.
 name: Android app
 on:
   workflow_dispatch:
@@ -14,6 +15,9 @@ jobs:
     defaults: { run: { working-directory: ls-attendance-tracker/mobile } }
     env:
       LS_WORKER_URL: ${{ inputs.worker_url || vars.LS_WORKER_URL || 'https://example.azurestaticapps.net/worker/' }}
+      KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      LS_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      LS_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,10 +26,18 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - run: npm install --no-audit --no-fund
       - run: npx cap add android
+      - name: Signing key (from secrets, if set)
+        run: |
+          if [ -n "$KEY_B64" ]; then echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/ls.keystore"; echo "LS_KEYSTORE=$RUNNER_TEMP/ls.keystore" >> "$GITHUB_ENV";
+          else echo "::warning::No ANDROID_KEYSTORE_B64 secret – building a debug APK (each new build must be uninstalled before installing)"; fi
       - run: node scripts/prepare.mjs
       - run: npx cap sync android
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon -q
+      - name: Build
+        run: |
+          cd android && chmod +x gradlew
+          if [ -n "$LS_KEYSTORE" ]; then ./gradlew assembleRelease --no-daemon -q && cp app/build/outputs/apk/release/app-release.apk ../ls-attendance.apk;
+          else ./gradlew assembleDebug --no-daemon -q && cp app/build/outputs/apk/debug/app-debug.apk ../ls-attendance.apk; fi
       - uses: actions/upload-artifact@v4
         with:
           name: ls-attendance-apk
-          path: ls-attendance-tracker/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ls-attendance-tracker/mobile/ls-attendance.apk

@@ -1,12 +1,7 @@
 {
   "name": "ls-attendance-android",
   "private": true,
-  "description": "Android app for Security Personnel Attendance: the same phone page, plus location recording with the screen off.",
-  "scripts": { "prepare-android": "node scripts/prepare.mjs" },
-  "dependencies": {
-    "@capacitor-community/background-geolocation": "1.2.26",
-    "@capacitor/android": "6.2.2",
-    "@capacitor/core": "6.2.2"
-  },
+  "description": "Android app for Security Personnel Attendance: the phone page plus a built-in recorder that keeps the shift location going with the screen off, the app closed and after a restart.",
+  "dependencies": { "@capacitor/android": "6.2.2", "@capacitor/core": "6.2.2" },
   "devDependencies": { "@capacitor/cli": "6.2.2" }
 }
