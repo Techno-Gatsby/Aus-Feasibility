@@ -285,6 +285,10 @@
       b.classList.remove('dash-skeleton');
       const row = ir.status === 'ok' ? ir.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
       if (row) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = row.pretax_equity_irr == null ? 'n/a' : (row.pretax_equity_irr * 100).toFixed(2) + '%'; } else b.textContent = '—';
+      // All Projects: the same after overheads, where the summary gives it.
+      let oh = kb.querySelector('.ksub2'); const ov = row ? row.pretax_equity_irr_inc_oh : null;
+      kb.classList.toggle('hasoh', ov != null);
+      if (ov != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'After overheads ' + (ov * 100).toFixed(2) + '%'; } else if (oh) oh.remove();
       kb.onclick = null; kb.style.cursor = 'default'; }
     { const sd = dash.data('project_summary');
       const row = sd.status === 'ok' ? sd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;

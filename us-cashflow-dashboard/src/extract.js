@@ -323,10 +323,25 @@
     });
   }
 
-  // Equity IRR: the IRR row under each project block of the three cashflow sheets.
+  // Equity IRR (pre-tax): 'Summary val' › IRR (Pre tax) of the entity's block (Landowner
+  // model), else the IRR row under the project's block of the cashflow sheet. A 0 in the
+  // summary (no equity, or its IRR formula erring) counts as not given.
   step('project_irr', async (ctx) => {
     const out = [];
-    let any = false;
+    let any = false, sum = null;
+    try { sum = await readSummary(ctx); } catch (e) { /* no Landowner model: cashflow IRRs only */ }
+    // Without the Landowner model in this upload: the summary figures already in the dashboard.
+    const prevSum = sum ? [] : ctx.get('project_summary');
+    const fromSum = (ent, p, c) => {
+      if (!sum) {
+        const r = prevSum.find((y) => y.entity === ent && y.project === p), v = r && (c === 'oh' ? r.irr_pre_inc_oh : r.irr_pre);
+        return isNum(v) && v !== 0 ? { value: v, row: null, col: null, prev: true } : null;
+      }
+      const b = sum && sum.blocks[ent], x = b && b.rows.irr_pre;
+      const col = c != null ? c : sum && (sum.cols.find((y) => y.project === p) || {}).c;
+      const v = x && col != null ? x.row[col] : null;
+      return isNum(v) && v !== 0 ? { value: v, row: x.r, col } : null;
+    };
     for (const ent of ['consol', 'landowner', 'homebuilder']) {
       const s = await ctx.sheet(ent + '_cf');
       if (!s) { out.push(...(ctx.prev.project_irr || []).filter((r) => r.entity === ent)); continue; }
@@ -337,14 +352,16 @@
         const line = (re) => cf.rows.find((r) => r.project === p && re.test(r.line));
         const inf = line(/^equity infusion$/i), rel = line(/^equity release$/i);
         const ei = inf ? inf.Total : null, er = rel ? rel.Total : null;
-        const irr = cf.irr[p];
+        const irr = cf.irr[p], si = fromSum(ent, p);
+        const oh = p === 'All Projects' ? (sum ? (sum.incOh != null ? fromSum(ent, p, sum.incOh) : null) : fromSum(ent, p, 'oh')) : null;
         out.push({
           key: ent + '|' + p, entity: ent, project: p,
           equity_infused: ei, equity_released: er,
           net_return: ei != null && er != null ? r2(er - ei) : null,
           multiple: ei ? Math.round((er / ei) * 10000) / 10000 : null,
-          pretax_equity_irr: irr ? irr.value : null,
-          source: irr ? `${s.name}, row ${irr.row} (XIRR)` : s.name,
+          pretax_equity_irr: si ? si.value : irr ? irr.value : null,
+          ...(oh ? { pretax_equity_irr_inc_oh: oh.value } : {}),
+          source: si ? (si.prev ? 'Summary val (IRR (Pre tax)), as last uploaded' : `${sum.s.name}, row ${si.row}, column ${XLSXLite.colName(si.col)} (IRR (Pre tax))`) : irr ? `${s.name}, row ${irr.row} (XIRR)` : s.name,
         });
       }
     }

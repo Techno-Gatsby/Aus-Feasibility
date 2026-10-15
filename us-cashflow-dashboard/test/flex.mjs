@@ -661,7 +661,8 @@ check('project › consol_components', prj.data.consol_components.some(isNew), `
   checkIRR(g, prj, isNew);
   for (const ent of ['consol', 'landowner', 'homebuilder']) {
     const f = prj.data.project_irr.find((r) => r.key === ent + '|' + NEW), b = prj.data.project_irr.find((r) => r.key === ent + '|' + FROM);
-    if (check(g, f, `${ent}|${NEW}: missing`)) check(g, near(f.pretax_equity_irr, b.pretax_equity_irr, 1e-9), `${f.key} IRR ${f.pretax_equity_irr}`);
+    // The IRR comes from its Summary val column: FROM's × SCALE (the copied column is scaled).
+    if (check(g, f, `${ent}|${NEW}: missing`)) check(g, near(f.pretax_equity_irr, b.pretax_equity_irr * SCALE, 1e-9), `${f.key} IRR ${f.pretax_equity_irr}, expected ${b.pretax_equity_irr * SCALE}`);
   }
 }
 for (const ds of ['project_summary', 'project_roe']) {
