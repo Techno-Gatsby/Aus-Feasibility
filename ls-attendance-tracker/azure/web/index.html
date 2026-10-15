@@ -398,6 +398,11 @@ table.kvt{width:auto;font-size:12px}table.kvt td{padding:2px 8px 2px 0;border:0;
 .pth select{width:100%;font-size:11.5px;padding:2px 4px;min-height:24px}
 .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:650;margin:0 0 6px}
 
+/* timesheet name column: left aligned, at most two lines; long names a size smaller */
+table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;display:table-cell}
+table.ts td.nm.s1{font-size:7.5px}
+table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
+
 </style>
 </head>
 <body>
@@ -2148,6 +2153,8 @@ function buildTimesheet(projectId, ym) {
 
 /** Signature label: the Elwood sheets leave the second box (acknowledge) unlabelled */
 const sigLabel = (p, s, i) => i === 1 && p?.tsNoAck ? '' : s.label;
+/** Name cell: long names get a smaller size so they fit on one or two lines */
+function tsNameTd(name) { const n = String(name || '').length; return `<td class="nm${n > 38 ? ' s2' : n > 26 ? ' s1' : ''}">${esc(name)}</td>`; }
 /** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets */
 function tsSheetHTML(ts) {
   const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days;
@@ -2156,7 +2163,7 @@ function tsSheetHTML(ts) {
   for (const sec of ts.sections) {
     sec.rows.forEach((r, i) => {
       body += `<tr>${i === 0 ? `<td class="site" rowspan="${sec.rows.length}">${esc(sec.name)}</td>` : ''}
-        <td>${esc(r.shift)}</td><td>${esc(r.name || r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
+        <td>${esc(r.shift)}</td>${tsNameTd(r.name || r.emp.name)}<td>${esc(empCodeLabel(r.emp))}</td>
         ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return c && codeDef(c).client ? `<td>${esc(c === 'OFF' ? (p?.tsOff || 'O') : c)}</td>` : '<td class="x"></td>'; }).join('')}
         <td class="tot">${r.total}</td></tr>`;
     });
@@ -2173,7 +2180,7 @@ function tsSheetHTML(ts) {
       <table class="ts-mb"><tr><td class="k">MONTH</td><td class="v">${fmtMonYY(ts.ym)}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
       <table class="ts-legend">${tsLegend(p).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
     </div>
-    <table class="ts"><thead><tr><th style="width:10%">SITE NAME</th><th style="width:4%">SHIFT<br>D/N</th><th style="width:15%">NAME</th><th style="width:7%">EMP. CODE</th>${dayTh}<th class="tt" style="width:6%">TOTAL DAYS</th></tr></thead>
+    <table class="ts"><thead><tr><th style="width:8%">SITE NAME</th><th style="width:4%">SHIFT<br>D/N</th><th style="width:17%">NAME</th><th style="width:7%">EMP. CODE</th>${dayTh}<th class="tt" style="width:6%">TOTAL DAYS</th></tr></thead>
     <tbody>${body}<tr class="gtr"><td colspan="${N - 6 + 4}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
     <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
   </div>`;
@@ -2189,6 +2196,9 @@ function renderTimesheets() {
   const pv = all.find(x => x.p.id === TV.preview) || chosen[0] || null;
   TV.chosen = chosen;
   const D = dim(TV.ym), sumDays = all.reduce((a, x) => a + x.ts.total, 0);
+  // keep the project list where it was (unless the month or client changed)
+  const key = TV.ym + '|' + (TV.client || ''), keep = TV._key === key; TV._key = key;
+  const sTop = keep ? $('#v-timesheets .tw')?.scrollTop || 0 : 0, sLeft = keep ? $('#tv-sheets')?.scrollLeft || 0 : 0;
   v.innerHTML = docHead('Client timesheets', `one LS/DO/F-026 sheet per project · ${chosen.length} ticked for print / export`, `
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
       <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`)
@@ -2199,13 +2209,20 @@ function renderTimesheets() {
     </tbody><tfoot><tr class="total"><td></td><td>${all.length} projects</td><td></td><td class="num">${sumDays}</td><td class="num">${qtyFmt(sumDays / D)}</td></tr></tfoot></table></div>
     <div id="tv-sheets" style="min-width:0;overflow:auto">${pv ? tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>
   </div></div>`;
+  const tw = $('.tw', v); if (tw) tw.scrollTop = sTop; if ($('#tv-sheets')) $('#tv-sheets').scrollLeft = sLeft;
   const rer = () => { renderTimesheets(); renderStatus(); };
   $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; rer(); } };
   $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; rer(); };
   $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; rer(); };
   $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; rer(); };
   $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); rer(); };
-  v.querySelectorAll('[data-pv]').forEach(tr => tr.onclick = e => { if (e.target.matches('input')) return; TV.preview = tr.dataset.pv; renderTimesheets(); });
+  // clicking a project only swaps the preview, so the list stays where it is
+  v.querySelectorAll('[data-pv]').forEach(tr => tr.onclick = e => {
+    if (e.target.matches('input')) return;
+    const x = all.find(a => a.p.id === tr.dataset.pv); if (!x) return;
+    TV.preview = x.p.id; v.querySelectorAll('[data-pv].on').forEach(r => r.classList.remove('on')); tr.classList.add('on');
+    const box = $('#tv-sheets'); box.innerHTML = tsSheetHTML(x.ts); box.scrollLeft = 0;
+  });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
 }
 /** Toolbar / menu commands for the ticked projects */

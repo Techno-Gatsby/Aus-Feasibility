@@ -390,3 +390,8 @@ table.kvt{width:auto;font-size:12px}table.kvt td{padding:2px 8px 2px 0;border:0;
 .pth .no{font:650 11px var(--font-mono);color:var(--text2);margin:5px 0 3px}
 .pth select{width:100%;font-size:11.5px;padding:2px 4px;min-height:24px}
 .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:650;margin:0 0 6px}
+
+/* timesheet name column: left aligned, at most two lines; long names a size smaller */
+table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;display:table-cell}
+table.ts td.nm.s1{font-size:7.5px}
+table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
