@@ -4,7 +4,11 @@
   'use strict';
   const X = window.SobhaExtract, ST = window.SobhaStore;
   const panel = document.getElementById('upd-panel'), openBtn = document.getElementById('upd-open'), bar = document.getElementById('src-bar');
-  const U = { open: false, busy: '', result: null, error: '', msg: '', applying: false, confirmRevert: false, names: {} };
+  const U = { open: false, busy: '', result: null, error: '', msg: '', applying: false, confirmRevert: false, names: {}, books: [] };
+  // The three V5 models go together: the Consol model reads the other two, and the equity IRR,
+  // profit, equity and ROE come from the Landowner model's Summary val.
+  const V5 = [['consol', 'Consol model'], ['landowner', 'Landowner model'], ['homebuilder', 'Homebuilder model']];
+  const missingV5 = (report) => { const m = new Set(report.files.map((f) => f.model)); return V5.some(([k]) => m.has(k)) ? V5.filter(([k]) => !m.has(k)).map(([, l]) => l) : []; };
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -28,15 +32,20 @@
     if (!files.length) { U.error = 'Choose .xlsx files: the Consol, Landowner and Homebuilder models and the BP Input Sheets.'; render(); return; }
     U.error = ''; U.result = null; U.busy = 'Reading ' + files.length + (files.length === 1 ? ' file…' : ' files…'); render();
     try {
-      const books = [];
+      // Files add to those already chosen; a file of the same name or model replaces the earlier one.
       for (const f of files) {
-        try { books.push({ name: f.name, wb: await XLSXLite.open(await f.arrayBuffer()) }); }
+        let wb;
+        try { wb = await XLSXLite.open(await f.arrayBuffer()); }
         catch (e) { throw new Error(f.name + ': ' + e.message); }
+        const model = X.detect(wb);
+        U.books = U.books.filter((b) => b.name !== f.name && !(model && X.detect(b.wb) === model));
+        U.books.push({ name: f.name, wb });
       }
+      const books = U.books.slice();
       U.busy = 'Building the figures…'; render();
       const before = ST.modelData();
       const { data, report } = await X.build(books, before);
-      U.result = { data, report, before, checks: checks(data, report), deltas: deltas(before, data) };
+      U.result = { data, report, before, checks: checks(data, report), deltas: deltas(before, data), missing: missingV5(report) };
     } catch (e) { U.error = 'Could not read the files. ' + (e.message || e); }
     U.busy = ''; render();
   }
@@ -174,7 +183,7 @@
     if (panel.hidden) return;
     panel.replaceChildren();
     panel.appendChild(el('h2', null, 'Update from models'));
-    panel.appendChild(el('p', 'lead', 'Add the latest model workbooks. You can add all five or just the ones that changed: anything you leave out keeps its current figures. The workbooks are read in this browser and nothing changes until you apply.'));
+    panel.appendChild(el('p', 'lead', 'Add the latest model workbooks. The three V5 models (Consol, Landowner, Homebuilder) go together; the BP Input Sheets and the G&A budget can be added on their own. Anything you leave out keeps its current figures. The workbooks are read in this browser and nothing changes until you apply.'));
     const drop = el('div', 'drop');
     const t = el('p', null, 'Drop the .xlsx files here');
     t.appendChild(el('small', null, 'Consol, Landowner and Homebuilder V5 models, the BP Input Sheets (timeline) and the G&A budget.'));
@@ -196,14 +205,15 @@
     if (U.result) panel.appendChild(review(U.result));
     const acts = el('div', 'rvacts');
     if (U.result) {
-      const nothing = !U.result.report.refreshed.length;
+      const nothing = !U.result.report.refreshed.length, missing = U.result.missing || [];
       const apply = el('button', 'btn primary', U.applying ? 'Applying…' : ST.mode === 'shared' ? 'Apply for everyone' : 'Apply to dashboard');
-      apply.type = 'button'; apply.disabled = U.applying || nothing;
+      apply.type = 'button'; apply.disabled = U.applying || nothing || !!missing.length;
+      if (missing.length) { U.msg = 'Add the ' + missing.join(' and ') + ' to apply.'; } else if (/^Add the /.test(U.msg)) U.msg = '';
       apply.addEventListener('click', applyResult);
       acts.appendChild(apply);
     }
     const cancel = el('button', 'btn quiet', U.result ? 'Discard' : 'Close'); cancel.type = 'button';
-    cancel.addEventListener('click', () => { U.open = false; U.result = null; U.error = ''; render(); });
+    cancel.addEventListener('click', () => { U.open = false; U.result = null; U.error = ''; U.books = []; U.msg = ''; render(); });
     acts.appendChild(cancel);
     acts.appendChild(el('span', 'msg', U.msg || (U.result && ST.mode === 'shared' ? 'Applying updates the dashboard for everyone with the link.' : '')));
     panel.appendChild(acts);
@@ -224,6 +234,10 @@
     left.appendChild(c1);
     // checks
     const c2 = el('div', 'rvcard');
+    if ((res.missing || []).length) {
+      const m = res.missing.join(' and ');
+      res = Object.assign({}, res, { checks: [{ ok: false, label: `Add the ${m}`, detail: `The three V5 models go together: the equity IRR, net profit, equity and ROE come from the Landowner model's Summary val, and the Consol model reads the other two. Without the ${m} the dashboard would mix these figures with the earlier models'.` }].concat(res.checks) });
+    }
     const nbad = res.checks.filter((c) => !c.ok).length;
     c2.appendChild(el('h3', null, nbad ? `Checks: ${nbad} of ${res.checks.length} need a look` : `Checks: all ${res.checks.length} pass`));
     const ul = el('ul', 'checks');
@@ -267,7 +281,7 @@
     U.applying = true; U.msg = ST.mode === 'shared' ? 'Saving the figures for everyone…' : ''; render();
     try {
       await ST.savePlan(res.data, { files: res.report.files.filter((f) => f.model).map((f) => ({ name: f.name, model: f.model })), refreshed: res.report.refreshed, kept: res.report.kept });
-      U.open = false; U.result = null; U.msg = '';
+      U.open = false; U.result = null; U.msg = ''; U.books = [];
     } catch (e) { U.msg = ST.message || 'Could not save the figures.'; }
     U.applying = false; render();
   }

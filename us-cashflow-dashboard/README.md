@@ -11,15 +11,19 @@ them in the browser, shows what would change, and applies them for everyone who 
 ## Updating the figures
 
 1. Open the dashboard and click **Update from models** (top right).
-2. Drop in any of these, all five or just the ones that changed:
+2. Drop in these, all five or the ones that changed:
    - `V5_Consol_Cashflow_Sobha_USA.xlsx` (Consol model)
    - `V5_US_Landowner_Sobha_US_2026.xlsx` (Landowner model)
    - `V5_US_Homebuilder_Sobha_US_2026.xlsx` (Homebuilder model)
    - `Sobha_USA - BP Input Sheets ….xlsx` (the timeline)
    - `Sobha_USA - GA ….xlsx` (the G&A budget)
 
-   Files are recognised by their sheets, not their names. Anything you leave out keeps its
-   current figures.
+   Files are recognised by their sheets, not their names, and add up across several drops (a
+   file of the same model replaces the earlier one). The three V5 models go together: with
+   any of them, Apply waits for all three (the equity IRR, net profit, equity and ROE come
+   from the Landowner model's Summary val, and the Consol model reads the other two). The BP
+   Input Sheets and the G&A budget can be added on their own; anything you leave out keeps
+   its current figures.
 3. Review the panel: headline figures before and after, integrity checks (cash rolls forward,
    totals add up, P&L ties out, Consol = Homebuilder sales), which datasets are updated and
    which are kept, and any warnings.
