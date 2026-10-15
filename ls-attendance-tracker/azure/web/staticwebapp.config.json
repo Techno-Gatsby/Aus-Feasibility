@@ -19,5 +19,5 @@
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin"
   },
-  "mimeTypes": { ".webmanifest": "application/manifest+json" }
+  "mimeTypes": { ".webmanifest": "application/manifest+json", ".apk": "application/vnd.android.package-archive" }
 }

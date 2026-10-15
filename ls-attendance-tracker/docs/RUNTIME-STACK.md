@@ -22,4 +22,4 @@ As built and tested on 30 September 2026.
 Outbound hosts the browser calls: `cdn.jsdelivr.net`, `server.arcgisonline.com`, `photon.komoot.io`, `nominatim.openstreetmap.org`, `geocode-api.arcgis.com` (key only).
 
 - **Face check** (Insights / App & review): @vladmandic/face-api 1.7.15 from jsDelivr (MIT; SSD MobileNet v1 detector, 68-point landmarks, ResNet-34 128-number descriptor). Runs in the admin browser; match ≤ 0.52, unsure ≤ 0.58.
-- **Shift positions**: the phone app posts its position every 10 minutes while a shift is open and the app is on screen (`POST worker/ping`); the tracker pulls them with `GET admin/pings` for routes and hotspots and keeps 62 days.
+- **Shift positions** (`POST worker/ping`, pulled by the tracker with `GET admin/pings`, kept 62 days): Android app (`mobile/`, Capacitor 6 + built-in foreground service with Google Play location) records every ~5 min / 30 m with the screen off, app closed and after a restart; the web / home-screen app (iPhone) every 10 min or ~50 m while open.

@@ -90,3 +90,9 @@ The dev server acts like Static Web Apps with every admin call treated as `DEV_R
 The admin data (attendance, projects, rates, invoices) still lives in the admin's browser, with Backup/Restore. The worker app, punches, photos and supervisor day marks are shared through Azure.
 
 Moving the admin data to the API as well would let several admins work at once. The same store and role checks can be reused.
+
+
+## Give it to security personnel
+- **Android (recommended):** build the app (see `mobile/README.md`), copy `ls-attendance.apk` to `azure/web/worker/`, deploy. Personnel open `https://<your-app>.azurestaticapps.net/worker/` in Chrome, tap **Get the LS Attendance app**, install, sign in. Location is recorded for the whole shift, also with the screen off or the app closed, until check-out.
+- **iPhone:** open the same link in Safari → Share → **Add to Home Screen**. It opens like an app; location is recorded while it is open (the screen stays on during the shift by default).
+- Both: allow location and camera when asked. Any phone without the app can still use the link in the browser.

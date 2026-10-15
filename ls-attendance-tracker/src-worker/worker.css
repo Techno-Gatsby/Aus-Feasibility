@@ -476,3 +476,7 @@ label.fl{margin:12px 0 6px;font:500 12px var(--sans);letter-spacing:0;text-trans
 /* camera: show the whole frame (no crop = no "zoom"), mirrored like a normal selfie camera; the saved photo is not mirrored */
 .cam video{object-fit:contain;transform:scaleX(-1)}
 .cam .shoot:disabled{opacity:.35}
+/* get the app: Android APK link / iPhone Add to Home Screen */
+.getapp{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);background:var(--s1);color:var(--ink);font:500 14px/1.35 var(--sans);text-decoration:none;min-height:44px}
+.getapp svg.i{flex:none;width:20px;height:20px;color:var(--bronze)}
+a.getapp{border-color:var(--bronze)}

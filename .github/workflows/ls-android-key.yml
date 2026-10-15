@@ -1,0 +1,23 @@
+# One-time: creates the signing key for the LS Attendance Android app and offers it as a private download
+# (artifact "ls-android-key", kept 1 day). Add its three values as repository secrets, then delete the download.
+name: Android signing key (one-time)
+on:
+  workflow_dispatch:
+    inputs:
+      password:
+        description: 'Password for the key (keep it safe; at least 8 characters)'
+        required: true
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: |
+          echo "::add-mask::${{ inputs.password }}"
+          keytool -genkeypair -v -keystore ls.keystore -alias ls-attendance -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "${{ inputs.password }}" -keypass "${{ inputs.password }}" -dname "CN=LS Attendance, O=Latinem Securities, C=AE"
+          mkdir out && cp ls.keystore out/ && base64 -w0 ls.keystore > out/ANDROID_KEYSTORE_B64.txt
+          printf 'Repository secrets to add (Settings → Secrets and variables → Actions):\n  ANDROID_KEYSTORE_B64      = contents of ANDROID_KEYSTORE_B64.txt\n  ANDROID_KEYSTORE_PASSWORD = the password you typed\n  ANDROID_KEY_ALIAS         = ls-attendance\nKeep ls.keystore somewhere safe: without it, future versions cannot update the installed app.\n' > out/README.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: ls-android-key, path: out, retention-days: 1 }

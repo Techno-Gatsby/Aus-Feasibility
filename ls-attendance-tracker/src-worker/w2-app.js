@@ -70,11 +70,13 @@ function startGps() {
     e => { W.gpsErr = t('noGps'); paintGps(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
 /* ---------- positions during a shift (routes and hotspots in the tracker) ----------
-   Web page: every 10 minutes, or after moving ~50 m, while the page is open (optionally keeping the screen awake).
-   Android app (Capacitor): the BackgroundGeolocation plugin keeps recording with the screen off or the app in the
-   background, shown by a notification. Points are kept on the phone until they are sent – nothing is lost offline. */
-const PING_MS = 10 * 60000, BG = () => window.Capacitor?.Plugins?.BackgroundGeolocation;
-let bgId = null, wake = null, sending = false;
+   Android app: a built-in recorder (LsTracker) keeps going with the screen off, the app closed and after a restart,
+   until check-out; it stores points on the phone and sends them itself.
+   Web page / home-screen app (iPhone): every 10 minutes or after ~50 m while the page is open; the screen can be
+   kept awake during the shift. Points are kept on the phone until they are sent. */
+const PING_MS = 10 * 60000, NT = () => window.Capacitor?.Plugins?.LsTracker;
+const STANDALONE = (() => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })();
+let wake = null, sending = false;
 const pingBuf = () => { try { return JSON.parse(ls.get('ls.pings') || '[]'); } catch (e) { return []; } };
 function queuePoint(pt) {
   const buf = pingBuf(), last = buf[buf.length - 1] || JSON.parse(ls.get('ls.pingLast') || 'null');
@@ -88,27 +90,50 @@ async function sendPoints() {
 }
 async function pingTick() {
   const on = !!(W.token && W.prof?.open && !W.sup);
-  syncBackground(on);
-  if (on && !document.hidden && W.gps && Date.now() - W.gps.at < 5 * 60000) queuePoint({ ts: Date.now(), lat: W.gps.lat, lng: W.gps.lng, acc: W.gps.acc });
+  await syncBackground(on);
+  if (on && !NT() && !document.hidden && W.gps && Date.now() - W.gps.at < 5 * 60000) queuePoint({ ts: Date.now(), lat: W.gps.lat, lng: W.gps.lng, acc: W.gps.acc });
   sendPoints();
 }
-/** Start / stop background recording to match the shift */
+const apiAbs = () => new URL(API_BASE || '/api', location.href).href.replace(/\/+$/, '');
+/** Start / stop recording to match the shift */
 async function syncBackground(on) {
-  const bg = BG();
-  if (bg) {
-    if (on && bgId == null) {
-      bgId = 'starting';
-      try { bgId = await bg.addWatcher({ backgroundTitle: 'LS Attendance', backgroundMessage: t('bgMsg'), requestPermissions: true, stale: false, distanceFilter: 30 },
-        (loc, err) => { if (err) { if (err.code === 'NOT_AUTHORIZED') toast(t('bgPerm'), 6000); return; } queuePoint({ ts: loc.time || Date.now(), lat: loc.latitude, lng: loc.longitude, acc: Math.round(loc.accuracy || 0) }); sendPoints(); }); }
-      catch (e) { bgId = null; }
-    } else if (!on && bgId && bgId !== 'starting') { bg.removeWatcher({ id: bgId }).catch(() => { }); bgId = null; }
+  const nt = NT();
+  if (nt) {
+    try {
+      let st = await nt.status();
+      if (on && !st.running) {
+        await nt.requestPermissions({ permissions: ['location', 'notifications'] }).catch(() => { });
+        st = await nt.start({ api: apiAbs(), token: W.token, until: (W.prof.open?.ts || Date.now()) + 16 * 3600000, msg: t('bgMsg') });
+        if (!st.background && !ls.get('ls.bgAsked')) { ls.set('ls.bgAsked', '1'); toast(t('bgPerm'), 8000); await nt.requestBackground().catch(() => { }); }
+      } else if (on) st = await nt.setToken({ token: W.token, api: apiAbs() });
+      else if (st.running && W.token) st = await nt.stop();
+      else if (W.token && st.tokenExpired) st = await nt.setToken({ token: W.token, api: apiAbs() });        // send what waited for a sign-in
+      W.nt = st; const el = $('#recst'); if (el) el.textContent = recLine();
+    } catch (e) { }
+    return;
   }
-  // web page: optional screen wake lock while on shift, so recording continues
-  const want = on && !bg && ls.get('ls.awake') === '1' && !document.hidden;
+  // web page: keep the screen awake during the shift (default on when opened from the home screen)
+  const pref = ls.get('ls.awake'), want = on && (pref === '1' || (pref == null && STANDALONE)) && !document.hidden;
   if (want && !wake && navigator.wakeLock) { try { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } catch (e) { } }
   if (!want && wake) { wake.release().catch(() => { }); wake = null; }
 }
+const recLine = () => W.nt?.running ? `● ${t('recOn')}${W.nt.queued ? ` · ${W.nt.queued} ${t('waiting')}` : ''}` : '';
+/* ---------- getting the app: Android → APK from this site; iPhone → Add to Home Screen; others → install prompt ---------- */
+const UA = navigator.userAgent, IOS = /iPhone|iPad|iPod/i.test(UA), ANDROID = /Android/i.test(UA);
+let apkOk = null, installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+async function apkAvailable() {
+  if (apkOk != null || !ANDROID || NT() || !location.protocol.startsWith('http')) return apkOk = apkOk || false;
+  try { apkOk = (await fetch('ls-attendance.apk', { method: 'HEAD' })).ok; } catch (e) { apkOk = false; } return apkOk;
+}
+function installCard() {
+  if (NT()) return '';
+  if (ANDROID && apkOk) return `<a class="getapp" href="ls-attendance.apk" download>${ic('arrow')}<span>${t('getApp')}</span></a>`;
+  if (IOS && !STANDALONE) return `<div class="getapp ios">${ic('more')}<span>${t('iosAdd')}</span></div>`;
+  return '';
+}
 setInterval(pingTick, 60000); document.addEventListener('visibilitychange', pingTick); window.addEventListener('online', sendPoints);
+apkAvailable().then(ok => { if (ok && !W.token) render(); });
 function zoneInfo() {
   const g = W.gps, P = W.prof; if (!g || !P) return null;
   const own = P.site ? LSAPI.nearestPin(P.site, g, g.acc) : null;
@@ -231,7 +256,7 @@ function renderLogin() {
       <input class="f mono" id="code" placeholder="${t('empIdPh')}" value="${esc(known)}" autocapitalize="characters" autocomplete="username" inputmode="text">
       <button class="btn pri wide" id="b-next" style="margin-top:14px">${t('next')} ${ic('arrow')}</button>
       ${W.api.demo ? `<button class="btn ghost wide" id="b-demo" style="margin-top:6px">${t('loadDemo')}</button>` : ''}</div>
-      <p class="note">${t('locNote')}</p>`, { crumb: t('signin') });
+      ${installCard()}<p class="note">${t(NT() ? 'locNoteApp' : 'locNote')}</p>`, { crumb: t('signin') });
     $('#code').focus();
     const nx = () => { const c = $('#code').value.trim().toUpperCase(); if (!c) return; W.code = c; ls.set('ls.code', c); W.editCode = false; W.pin = ''; render(); };
     $('#b-next').onclick = nx; $('#code').onkeydown = e => e.key === 'Enter' && nx();
@@ -298,7 +323,7 @@ function renderHome() {
     <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
       ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
         : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
-    <p class="note">${t('locNote')}</p>`, {
+    <p class="note"><b id="recst" style="color:var(--sage)">${recLine()}</b> ${t(NT() ? 'locNoteApp' : 'locNote')}</p>${installCard()}`, {
     tab: 'home', crumb: P.site?.name || t('today'),
     dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span class="bi">${ic(open ? 'out' : 'in')}</span><span class="grow"><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('onShift')} · ${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
@@ -396,13 +421,15 @@ function renderMore() {
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
     <div class="card" style="padding:4px 16px"><ul class="menu-list">
       <li><button id="m-lang">${ic('globe')}<span>${t('lang')}</span><span class="val">${esc(LANGS.find(l => l[0] === LANG)[1])}</span></button></li>
-      ${BG() ? '' : `<li><button id="m-awake">${ic('locate')}<span>${t('awake')}</span><span class="val">${ls.get('ls.awake') === '1' ? '✓' : '—'}</span></button></li>`}
+      ${installEvt && !STANDALONE ? `<li><button id="m-inst">${ic('arrow')}<span>${t('install')}</span></button></li>` : ''}
+      ${NT() ? '' : `<li><button id="m-awake">${ic('locate')}<span>${t('awake')}</span><span class="val">${(ls.get('ls.awake') ?? (STANDALONE ? '1' : '0')) === '1' ? '✓' : '—'}</span></button></li>`}
       <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${esc(thL)}</span></button></li>
       <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span><span class="val">${ic('arrow')}</span></button></li>
       <li><button id="m-out" class="danger">${ic('logout')}<span>${t('signout')}</span></button></li></ul></div>
-    <p class="note">${t('locNote')}</p><p class="k" style="text-align:center;margin-top:18px">LS · ${t('appVer')} 3.0</p>`, { tab: 'more', crumb: t('more') });
+ ${installCard()}<p class="note">${t(NT() ? 'locNoteApp' : 'locNote')}</p><p class="k" style="text-align:center;margin-top:18px">LS · ${t('appVer')} 3.0</p>`, { tab: 'more', crumb: t('more') });
   $('#m-lang').onclick = () => $('#b-lang').click();
-  if ($('#m-awake')) $('#m-awake').onclick = () => { ls.set('ls.awake', ls.get('ls.awake') === '1' ? null : '1'); toast(t('awakeS'), 5000); pingTick(); renderMore(); };
+  if ($('#m-inst')) $('#m-inst').onclick = async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => { }); installEvt = null; renderMore(); };
+  if ($('#m-awake')) $('#m-awake').onclick = () => { ls.set('ls.awake', (ls.get('ls.awake') ?? (STANDALONE ? '1' : '0')) === '1' ? '0' : '1'); toast(t('awakeS'), 5000); pingTick(); renderMore(); };
   $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
@@ -465,7 +492,7 @@ async function loadDemo() {
 }
 
 /* ---------- start ---------- */
-if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+if (window.isSecureContext && location.protocol.startsWith('http') && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 setLang(LANG); applyTheme();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { }
 LSMap.load().catch(() => { });                 // fetch the map library while the profile loads
