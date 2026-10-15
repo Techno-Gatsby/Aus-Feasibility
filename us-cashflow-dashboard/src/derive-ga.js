@@ -325,7 +325,8 @@
   // The three presentation sheets: OHcost-H+V (Consol), OHcost-H (Landowner), OHcost-V
   // (Homebuilder). The table as laid out there, each head linked to its G&A row, then the
   // rows below it (Landowner / Homebuilder split, cost categories, G&A provision per project).
-  const fyOf = (v) => { if (isYear(v)) return v; const m = clean(v).match(/^FY\s*'?(\d{2}|\d{4})$/i); return m ? (m[1].length === 2 ? 2000 + +m[1] : +m[1]) : null; };
+  // 'FY 26', 'FY 2026', or a combined first column 'FY 24&25' (read as its last year).
+  const fyOf = (v) => { if (isYear(v)) return v; const m = clean(v).match(/^FY\s*'?(?:\d{2,4}\s*[&\-\/+]\s*)?(\d{2}|\d{4})$/i); return m ? (m[1].length === 2 ? 2000 + +m[1] : +m[1]) : null; };
   function ohRows(s, ent, link) {
     const h = find(s, /^expense head$/);
     if (!h) throw new Error(`'${s.name}' has no 'Expense Head' column`);
@@ -345,7 +346,7 @@
       const any = v.some(isNum);
       if (part === 'below' && !line) {
         // An unlabelled row of ratios belongs to the row above it; other unlabelled rows are checks.
-        if (last && any && v.every((x) => !isNum(x) || Math.abs(x) <= 1.5)) Y.forEach((y, j) => { if (isNum(v[j])) last['p ' + y] = v[j]; });
+        if (last && last.part === 'below' && any && v.every((x) => !isNum(x) || Math.abs(x) <= 1.5)) Y.forEach((y, j) => { if (isNum(v[j])) last['p ' + y] = v[j]; });
         return;
       }
       if (!line) return;
@@ -355,7 +356,8 @@
       if (part === 'main') {
         row.kind = /^sub[\s-]*total/i.test(line) ? 'subtotal' : !isNum(code) && !any ? 'header' : 'head';
         row.level = isNum(code) ? 1 : 0;
-        const f = s.formula(r, cols[Y[0]]), gr = f ? refsTo(f, 'G&A')[0] : null;
+        // The first year whose formula reads the G&A sheet (an opening year may add up OHcost-H + V).
+        const f = Y.map((y) => s.formula(r, cols[y])).find((x) => x && /G&A'?!/.test(x)) || s.formula(r, cols[Y[0]]), gr = f ? refsTo(f, 'G&A')[0] : null;
         row.ga = (gr && link.byRow[gr.row]) || link.byLabel[lower(line)] || null;
         // The G&A row it reads, in this workbook or another ('[3]G&A'!AP19): pairs the tables.
         const m = f && f.match(/G&A'?!\$?[A-Z]{1,3}\$?(\d+)/);

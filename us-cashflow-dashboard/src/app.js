@@ -293,8 +293,12 @@
         const b = kb.querySelector('b'), f = kb.dataset.f; b.classList.remove('dash-skeleton'); kb.style.cursor = 'default';
         const v = row ? row[f] : null;
         if (row && v != null) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = F[kb.dataset.fmt](v); } else b.textContent = 'n/a';
-        const sb = kb.querySelector('.ksub');
+        const sb = kb.querySelector('.ksub:not(.ksub2)');
         if (sb) { const sv = row ? row[kb.dataset.sub] : null; if (row && sv != null) { sb.setAttribute('data-where', 'key=' + enc(row.key)); sb.textContent = (sv * 100).toFixed(1) + '% margin'; } else sb.textContent = ''; }
+        // All Projects: the same after overheads, where the summary gives it.
+        let oh = kb.querySelector('.ksub2'); const ov = row ? row[f + '_inc_oh'] : null;
+        kb.classList.toggle('hasoh', ov != null);
+        if (ov != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'After overheads ' + F[kb.dataset.fmt](ov); } else if (oh) oh.remove();
       }); }
     { const xd = dash.data('kpi_extra');
       const row = xd.status === 'ok' ? xd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;

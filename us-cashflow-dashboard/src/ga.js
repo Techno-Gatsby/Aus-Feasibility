@@ -69,12 +69,12 @@
     t.appendChild(head([['Expense Head', 'l'], ...Y.map((y) => [fy(y)]), ['Total']]));
     const tb = el('tbody');
     // The yearly split of shared overhead between Landowner and Homebuilder, above the heads.
-    // From the G&A sheet's share, else the Consol table's Land Development / Developer (Homes) split.
+    // From the G&A sheet's share, else the Landowner and Homebuilder tables' totals over Consol's.
     const shared = L.find((r) => r.kind === 'head' && !r.plug && Y.some((y) => r['lo_pct ' + y] > 0));
-    const split2 = (re) => O.find((r) => r.entity === 'consol' && r.part === 'below' && re.test(r.line) && Y.some((y) => isNum(r['p ' + y])));
-    const sLo = split2(/^land development/i), sHb = split2(/^developer/i);
+    const tot = (e) => O.find((r) => r.entity === e && r.part === 'main' && r.kind === 'total');
+    const tC = tot('consol'), of = (x) => (y) => (x && tC && tC['v ' + y] ? (x['v ' + y] || 0) / tC['v ' + y] : null);
     const shares = shared ? [['LO share', (y) => shared['lo_pct ' + y]], ['HB share', (y) => (isNum(shared['lo_pct ' + y]) ? 1 - shared['lo_pct ' + y] : null)]]
-      : sLo && sHb ? [['LO share', (y) => sLo['p ' + y]], ['HB share', (y) => sHb['p ' + y]]] : [];
+      : tC && (tot('lo') || tot('hb')) ? [['LO share', of(tot('lo'))], ['HB share', of(tot('hb'))]] : [];
     shares.forEach(([label, f]) => {
       const tr = el('tr', 'gashare');
       tr.appendChild(el('td', 'l', label));

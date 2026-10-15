@@ -103,7 +103,7 @@ Actuals tab.
 | Consol P&L | `Cons P&L` for the totals; per project calculated from revenue in the Consol cashflow, costs from `Cons Budgetd Costs new` spread by revenue, property tax from `Real property tax V2 - updated`, tax rates from `Cons Assumption` |
 | Consol line breakdown | which Landowner/Homebuilder lines each `Consol Projectwise cash` cell sums (cells calculated in the Consol sheet itself show as *Consol-sheet override*) |
 | Equity IRR | the XIRR row under each block of the three cashflow sheets (n/a where the sheet gives none) |
-| Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model) |
+| Revenue, profit, equity, ROE tiles | `Summary val` (Landowner model): one column per project, `Total` = All Projects; a `Total (inc Overheads)` column is not a project: it gives All Projects' overheads and net profit, margin, IRR and ROE after overheads (shown under the Net profit and ROE tiles) |
 | Units, cost, peak debt, dates | cashflow lines, `Cons Budgetd Costs new` / `HS Budget costs1` and the timeline |
 | Project details, milestones | `Summary val`, `landowner Projectwise cashflow`, `Homebuilde Projectwise cashflow`, the timeline |
 | Timeline | BP Input Sheets › `Timeline Assumptions` |

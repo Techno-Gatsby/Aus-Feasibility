@@ -358,6 +358,7 @@
     [/^net profit %/, 'np_pct'], [/^net profit/, 'net_profit'], [/^total equity infused/, 'equity_infused'],
     [/^debt raised/, 'debt_raised'], [/^irr \(pre/, 'irr_pre'], [/^irr \(post/, 'irr_post'],
     [/^ret(u|ur)n on equity/, 'roe'], [/^margin to equity/, 'margin_to_equity'], [/^debt to equity/, 'debt_to_equity'],
+    [/^overheads/, 'overheads'],
   ];
   async function readSummary(ctx) {
     return ctx.memo('summary', async () => {
@@ -372,12 +373,14 @@
         for (const [re, f] of SUMMARY_FIELDS) if (re.test(b)) { if (!cur.rows[f]) cur.rows[f] = { row, r }; break; }
       }
       if (!hdr) throw new Error(`no 'Particulars' header in '${s.name}'`);
-      const cols = Object.keys(hdr).map(Number).filter((c) => c > 2 && clean(hdr[c])).map((c) => ({ c, project: /^total$/i.test(clean(hdr[c])) ? 'All Projects' : clean(hdr[c]) }));
-      return { s, cols, blocks };
+      // 'Total' is All Projects; 'Total (inc Overheads)' is the same less the overheads, not a project.
+      const incOh = Object.keys(hdr).map(Number).find((c) => c > 2 && /^total\s*\(\s*inc/i.test(clean(hdr[c])));
+      const cols = Object.keys(hdr).map(Number).filter((c) => c > 2 && c !== incOh && clean(hdr[c])).map((c) => ({ c, project: /^total$/i.test(clean(hdr[c])) ? 'All Projects' : clean(hdr[c]) }));
+      return { s, cols, blocks, incOh };
     });
   }
   step('project_summary', async (ctx) => {
-    const { s, cols, blocks } = await readSummary(ctx);
+    const { s, cols, blocks, incOh } = await readSummary(ctx);
     const out = [];
     for (const ent of ['landowner', 'homebuilder', 'consol']) {
       const b = blocks[ent]; if (!b) continue;
@@ -389,6 +392,13 @@
         if (!o.equity_infused) o.irr_post = o.roe = o.margin_to_equity = o.debt_to_equity = null;
         o.source = 'Executive Summary (Summary val sheet, Landowner model)';
         o.roe_multiple = o.margin_to_equity != null ? Math.round((1 + o.margin_to_equity) * 10000) / 10000 : null;
+        // All Projects after overheads, from 'Total (inc Overheads)'.
+        if (project === 'All Projects' && incOh) {
+          const at = (f) => { const x = b.rows[f]; const v = x ? x.row[incOh] : null; return isNum(v) ? v : null; };
+          o.overheads = at('overheads');
+          for (const f of ['net_profit', 'np_pct', 'irr_pre', 'irr_post', 'margin_to_equity']) o[f + '_inc_oh'] = at(f);
+          o.roe_multiple_inc_oh = o.margin_to_equity_inc_oh != null ? Math.round((1 + o.margin_to_equity_inc_oh) * 10000) / 10000 : null;
+        }
         out.push(o);
       }
     }
