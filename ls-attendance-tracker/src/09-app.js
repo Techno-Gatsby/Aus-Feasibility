@@ -79,11 +79,13 @@ async function syncApp(quiet) {
     const r = await cl.call('GET', 'admin/punches', null, { query: { since: c.lastSync || 0 } });
     if (r.status !== 200) { if (!quiet) toast('Sync failed: ' + (r.body?.error || r.status), 6000); return; }
     S.punches ||= {};
-    for (const p of r.body.punches) { const old = S.punches[p.id]; if (!old) stats.new++; S.punches[p.id] = { ...p, applied: old?.applied || false }; applyPunch(S.punches[p.id], stats); }
+    for (const p of r.body.punches) { const old = S.punches[p.id]; if (!old) stats.new++; S.punches[p.id] = { ...p, applied: old?.applied || false, ...(old?.face ? { face: old.face } : {}) }; applyPunch(S.punches[p.id], stats); }
     c.lastSync = r.body.now;
     const mk = await cl.call('GET', 'admin/marks', null, { query: { since: c.lastMarkSync || 0 } });
     if (mk.status === 200) { S.marks ||= {}; for (const x of mk.body.marks) { S.marks[x.id] = x; applyMark(x, stats); } c.lastMarkSync = mk.body.now; }
-    reindex(); markDirty();
+    const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
+    if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
+    reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
     if (!quiet || stats.new) { renderAll(); if (!quiet) toast(`Synced · ${stats.new} new punch(es) · ${stats.applied} day(s) marked${stats.marks ? ` · ${stats.marks} supervisor mark(s)` : ''}${stats.conflicts.length ? ` · ${stats.conflicts.length} kept (leave/other code)` : ''}${stats.locked ? ` · ${stats.locked} in locked month` : ''}`, 5000); }
     S.issues ||= {}; if (stats.conflicts.length) S.issues.app = stats.conflicts.slice(0, 500);
   } catch (e) { if (!quiet) toast('Sync failed – ' + e.message, 6000); }
@@ -132,13 +134,13 @@ async function givePins(emps) {
 async function printSlips(slips) {
   const url = appCfg().workerUrl || (location.protocol.startsWith('http') ? location.origin + '/worker' : '');
   let qr = null; if (url) { try { await loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'); const q = qrcode(0, 'M'); q.addData(url); q.make(); qr = q.createDataURL(3, 2); } catch (e) { } }
-  printHTML(`<div class="sheet port slips">${slips.map(({ e, pin }) => `<div class="slip"><div class="sh"><img src="${LOGO}" alt=""><b>Worker Attendance</b></div>
-    <table><tr><td>Name</td><td><b>${esc(e.name)}</b></td></tr><tr><td>Employee ID</td><td class="mono"><b>${esc(appCode(e))}</b></td></tr><tr><td>PIN</td><td class="mono pin">${pin}</td></tr><tr><td>Site</td><td>${esc(siteName(assignOn(e, todayISO())?.site))}</td></tr></table>
+  printHTML(`<div class="sheet port slips">${slips.map(({ e, pin }) => `<div class="slip"><div class="sh"><img src="${LOGO}" alt=""><b>Personnel Attendance</b></div>
+    <table><tr><td>Name</td><td><b>${esc(e.name)}</b></td></tr><tr><td>Personnel ID</td><td class="mono"><b>${esc(appCode(e))}</b></td></tr><tr><td>PIN</td><td class="mono pin">${pin}</td></tr><tr><td>Site</td><td>${esc(siteName(assignOn(e, todayISO())?.site))}</td></tr></table>
     ${url ? `<div class="u">${qr ? `<img src="${qr}" alt="">` : ''}<span>${esc(url)}</span></div>` : ''}<p>Keep your PIN private. Mark check-in and check-out at your site with a photo.</p></div>`).join('')}</div>`);
 }
 async function appAccessBulk(emps) {
-  if (!emps.length) return toast('Tick workers first');
-  openModal(`App access for ${emps.length} worker(s)`, `<p style="margin-top:0">Enable the worker app, generate a new 4-digit PIN for each and print PIN slips. Old PINs stop working after <b>Publish roster</b>.</p>
+  if (!emps.length) return toast('Tick security personnel first');
+  openModal(`App access for ${emps.length} worker(s)`, `<p style="margin-top:0">Enable the personnel app, generate a new 4-digit PIN for each and print PIN slips. Old PINs stop working after <b>Publish roster</b>.</p>
     <label class="chk"><input type="checkbox" id="aa-dev"> Also reset the registered phone</label>`,
     [{ label: 'Disable app', cls: 'bad', onClick: () => { emps.forEach(e => { e.app = { ...(e.app || {}), on: false }; }); markDirty(); renderAll(); toast('App disabled – publish roster to apply'); } },
     { label: 'Cancel' }, { label: 'Enable + PINs + print', cls: 'pri', onClick: async m => { const dev = $('#aa-dev', m).checked; const s = await givePins(emps); if (dev) emps.forEach(e => e.app.resetDevice = true); renderAll(); await printSlips(s); } }]);
@@ -160,6 +162,7 @@ async function punchDetails(emp, d) {
             <tr><td>Accuracy</td><td>±${p.acc} m</td></tr>
             <tr><td>Site</td><td>${esc(p.siteName || '—')}${p.reliever ? ' <span class="pill warn">reliever</span>' : ''}</td></tr>
             <tr><td>Distance</td><td>${p.dist != null ? `${p.dist} m from pin · zone ${p.radius} m · ${p.inZone ? '<b style="color:var(--pos)">inside</b>' : '<b style="color:var(--neg)">outside</b>'}` : '—'}</td></tr>
+            ${p.face ? `<tr><td>Face</td><td>${FACE.badge(p.face)} <span class="muted small">compared with the photo in Security Personnel</span></td></tr>` : ''}
             ${p.reasons?.length ? `<tr><td>Review</td><td style="color:var(--warn)">${esc(p.reasons.join(' · '))}</td></tr>` : ''}
             ${p.flags?.length ? `<tr><td>Flags</td><td>${esc(p.flags.join(' · '))}</td></tr>` : ''}
             <tr><td>By</td><td>${esc(p.by)}${p.reviewBy ? ` · reviewed by ${esc(p.reviewBy)}${p.reviewNote ? ': ' + esc(p.reviewNote) : ''}` : ''}</td></tr>
@@ -194,23 +197,23 @@ function renderApp() {
   const today = todayISO(), todays = Object.values(S.punches || {}).filter(p => p.workDate === today);
   const t = ts => ts ? new Date(ts).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never';
   const bySite = new Map(); for (const p of todays) { const k = p.siteName || '—'; const x = bySite.get(k) || bySite.set(k, { in: new Set(), out: new Set() }).get(k); (p.type === 'in' ? x.in : x.out).add(p.wid); }
-  v.innerHTML = docHead('Worker app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Worker Attendance.html'}" target="_blank">Open worker page ↗</a>`) + `<div class="dc">
-    <div class="kpis">${[['Workers on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
-    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
-    ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Worker</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th></th></tr></thead><tbody>
-      ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td>
+  v.innerHTML = docHead('Personnel app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Personnel Attendance.html'}" target="_blank">Open personnel page ↗</a>`) + `<div class="dc">
+    <div class="kpis">${[['Security personnel on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
+    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Security Personnel tick security personnel → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Security personnel then check in on the personnel page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
+    ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Personnel</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th>Face</th><th></th></tr></thead><tbody>
+      ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td><td>${FACE.badge(p.face) || (p.hasPhoto && !IX.emp.get(p.wid)?.face ? '<span class="muted small">no reference photo</span>' : '')}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}
     ${sec('ap-today', `Today on site <span class="cnt">${fmtDMY(today)}</span>`, bySite.size ? `<div class="tw"><table><thead><tr><th>Site</th><th class="num">Checked in</th><th class="num">Checked out</th><th class="num">On site now</th></tr></thead><tbody>${[...bySite].map(([k, x]) => `<tr><td>${esc(k)}</td><td class="num">${x.in.size}</td><td class="num">${x.out.size}</td><td class="num"><b>${[...x.in].filter(w => !x.out.has(w)).length}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No punches synced for today yet.</p>')}
     ${sec('ap-miss', `No check-in <span class="pill ${miss.length ? 'warn' : ''}">${miss.length}</span>`, `
       <div class="row" style="margin-bottom:8px"><label class="f" style="flex-direction:row;align-items:center;gap:6px">Date <input type="date" id="ap-date" value="${AP.date}" max="${todayISO()}"></label>
-        <span class="muted small">App workers allocated to a site who did not check in and have no code yet. Decide what the day is; supervisors can do the same on their phone.</span></div>
+        <span class="muted small">App security personnel allocated to a site who did not check in and have no code yet. Decide what the day is; supervisors can do the same on their phone.</span></div>
       ${miss.length ? `<div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="ap-all"> all</label><span class="muted small">Mark ticked as</span><select id="ap-bulk"><option value="">— choose —</option>${S.codes.filter(x => !['R'].includes(x.code)).map(x => `<option value="${esc(x.code)}">${esc(x.code)} – ${esc(x.label)}</option>`).join('')}</select><button class="btn sm pri" id="ap-apply">Apply</button></div>
-      <div class="tw" style="max-height:360px"><table><thead><tr><th></th><th>Worker</th><th>Emp ID</th><th>Site</th><th>Shift</th><th>Mark as</th></tr></thead><tbody>
+      <div class="tw" style="max-height:360px"><table><thead><tr><th></th><th>Personnel</th><th>Emp ID</th><th>Site</th><th>Shift</th><th>Mark as</th></tr></thead><tbody>
       ${miss.map(e => { const a = assignOn(e, AP.date); return `<tr><td><input type="checkbox" data-mc="${e.id}"></td><td>${esc(e.name)}</td><td class="mono">${esc(appCode(e))}</td><td>${esc(siteName(a?.site))}</td><td>${esc(a?.shift || e.shift || '')}</td>
         <td><select data-m1="${e.id}"><option value="">—</option>${S.codes.filter(x => !['R'].includes(x.code)).map(x => `<option value="${esc(x.code)}">${esc(x.code)} – ${esc(x.label)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Everyone on the app checked in or already has a code for this date.</p>'}`)}
     ${sec('ap-set', 'Settings', `<div class="form">
       <label class="f wide">Azure API address <span class="muted">(blank = demo in this browser; on Azure use /api)</span><input type="text" data-ap="api" value="${esc(c.api)}" placeholder="https://ls-attendance.azurestaticapps.net/api"></label>
-      <label class="f wide">Worker page link (for PIN slips / QR)<input type="text" data-ap="workerUrl" value="${esc(c.workerUrl)}" placeholder="https://ls-attendance.azurestaticapps.net/worker"></label>
+      <label class="f wide">Personnel page link (for PIN slips / QR)<input type="text" data-ap="workerUrl" value="${esc(c.workerUrl)}" placeholder="https://ls-attendance.azurestaticapps.net/worker"></label>
       <label class="f">Default zone radius (m)<input type="number" min="10" data-ap="radius" value="${c.radius}"></label>
       <label class="f">Max GPS accuracy (m)<input type="number" min="5" data-ap="maxAcc" value="${c.maxAcc}"></label>
       <label class="f">Check-in opens (min before start)<input type="number" min="0" data-ap="windowMin" value="${c.windowMin}"></label>
@@ -218,7 +221,9 @@ function renderApp() {
       <label class="f">Day shift starts<input type="text" data-st="DAY" value="${esc(c.starts.DAY)}"></label>
       <label class="f">Night shift starts<input type="text" data-st="NIGHT" value="${esc(c.starts.NIGHT)}"></label>
       <label class="f">Photo required<select data-ap="photo">${opts([['1', 'Yes'], ['0', 'No']], c.photo ? '1' : '0')}</select></label>
-      <label class="f">One phone per worker<select data-ap="bindDevice">${opts([['1', 'Yes'], ['0', 'No']], c.bindDevice ? '1' : '0')}</select></label>
+      <label class="f">One phone per personnel<select data-ap="bindDevice">${opts([['1', 'Yes'], ['0', 'No']], c.bindDevice ? '1' : '0')}</select></label>
+      <label class="f">Face check on check-in photos<select data-ap="faceCheck">${opts([['1', 'Yes'], ['0', 'No']], c.faceCheck !== false ? '1' : '0')}</select></label>
+      <label class="f">Auto-approve: face matches + inside zone<select data-ap="faceAuto">${opts([['1', 'Yes'], ['0', 'No – face shown only']], c.faceAuto !== false ? '1' : '0')}</select></label>
       <label class="f wide">ArcGIS API key <span class="muted">(optional – ArcGIS search; blank = free OpenStreetMap search)</span><input type="text" data-ap="arcgisKey" value="${esc(c.arcgisKey)}"></label>
     </div><p class="muted small" style="margin:8px 0 0">Zone rule: a punch is accepted when (distance to the pin − GPS accuracy) ≤ radius and accuracy ≤ the limit; otherwise it waits here for review. Changes apply to phones after <b>Publish roster</b>.</p>`)}
   </div>`;
@@ -228,7 +233,7 @@ function renderApp() {
   v.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { const n = prompt('Reason for rejecting:'); if (n === null) return; await reviewPunch(b.dataset.no, 'rejected', n); renderAll(); });
   if ($('#ap-date')) $('#ap-date').onchange = e => { AP.date = e.target.value || AP.date; renderApp(); };
   if ($('#ap-all')) $('#ap-all').onchange = e => v.querySelectorAll('[data-mc]').forEach(c => c.checked = e.target.checked);
-  if ($('#ap-apply')) $('#ap-apply').onclick = () => { const code = $('#ap-bulk').value, ids = [...v.querySelectorAll('[data-mc]:checked')].map(c => c.dataset.mc); if (!code || !ids.length) return toast('Tick workers and choose a code'); decideDay(ids.map(id => IX.emp.get(id)), AP.date, code); renderAll(); };
+  if ($('#ap-apply')) $('#ap-apply').onclick = () => { const code = $('#ap-bulk').value, ids = [...v.querySelectorAll('[data-mc]:checked')].map(c => c.dataset.mc); if (!code || !ids.length) return toast('Tick security personnel and choose a code'); decideDay(ids.map(id => IX.emp.get(id)), AP.date, code); renderAll(); };
   v.querySelectorAll('[data-m1]').forEach(sel => sel.onchange = () => { if (sel.value) { decideDay([IX.emp.get(sel.dataset.m1)], AP.date, sel.value); renderAll(); } });
   v.querySelectorAll('[data-ap]').forEach(i => i.onchange = () => { const k = i.dataset.ap; c[k] = i.tagName === 'SELECT' ? i.value === '1' : i.type === 'number' ? +i.value : i.value.trim(); markDirty(); if (k === 'api') renderApp(); });
   v.querySelectorAll('[data-st]').forEach(i => i.onchange = () => { if (/^\d{1,2}:\d{2}$/.test(i.value)) { c.starts = { ...c.starts, [i.dataset.st]: i.value.padStart(5, '0') }; markDirty(); } else toast('Use HH:MM'); });

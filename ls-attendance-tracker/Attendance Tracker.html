@@ -403,6 +403,28 @@ table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;
 table.ts td.nm.s1{font-size:7.5px}
 table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
 
+/* tab groups: documents · field operations · masters */
+.doctabs .gsep{width:18px;flex:none;align-self:stretch;border-right:1px solid var(--line2);margin-right:16px}
+.doctab.fo .n{color:var(--accent)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface3);color:var(--text2);display:inline-grid;place-items:center;font:600 11px var(--font-body);overflow:hidden;flex:none}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.avatar.lg{width:76px;height:76px;font-size:22px}
+/* live / insights */
+.ins-f{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px}
+.ins-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:12px}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle}
+.bar.w{background:var(--warn)}.bar.n{background:var(--neg)}.bar.p{background:var(--pos)}
+.spark{display:flex;align-items:flex-end;gap:3px;height:60px}
+.spark i{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px;position:relative}
+.spark i b{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font:500 9px var(--font-mono);color:var(--faint);white-space:nowrap}
+.live{display:grid;grid-template-columns:1fr 360px;gap:12px}
+.live .mapbox{height:calc(100vh - 260px);min-height:420px}
+.ppl{max-height:calc(100vh - 260px);overflow:auto}
+.ppl .pr{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.ppl .pr:hover{background:var(--surface2)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}
+.dot.on{background:var(--pos)}.dot.pe{background:var(--warn)}.dot.no{background:var(--neg)}
+
 </style>
 </head>
 <body>
@@ -428,15 +450,20 @@ table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
         <button class="doctab on" data-view="attendance"><span class="n">1</span>Attendance</button>
         <button class="doctab" data-view="timesheets"><span class="n">2</span>Client timesheets</button>
         <button class="doctab" data-view="invoices"><span class="n">3</span>Invoice</button>
+        <span class="gsep"></span>
+        <button class="doctab fo" data-view="live">Live</button>
+        <button class="doctab fo" data-view="insights">Insights</button>
+        <button class="doctab fo" data-view="app">App &amp; review <span class="n" id="app-badge"></span></button>
         <span class="gap"></span>
-        <button class="doctab" data-view="employees">Employees</button>
+        <button class="doctab" data-view="employees">Security Personnel</button>
         <button class="doctab" data-view="projects">Projects &amp; sites</button>
-        <button class="doctab" data-view="app">Worker app <span class="n" id="app-badge"></span></button>
         <button class="doctab" data-view="data">Settings</button>
       </div>
       <div class="docarea">
         <section id="v-attendance" class="doc view on"></section>
         <section id="v-timesheets" class="doc view"></section>
+        <section id="v-live" class="doc view"></section>
+        <section id="v-insights" class="doc view"></section>
         <section id="v-invoices" class="doc view"></section>
         <section id="v-employees" class="doc view"></section>
         <section id="v-projects" class="doc view"></section>
@@ -518,7 +545,7 @@ const LSAPI = (() => {
   const DEFAULTS = { radius: 100, maxAcc: 50, windowMin: 60, lateMin: 15, photo: true, bindDevice: true, dupMin: 30, shiftHours: 12, starts: { DAY: '07:00', NIGHT: '19:00' }, lockTries: 5, lockMin: 15, tokenHours: 20 };
 
   /**
-   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
+   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
    * opts: { store, secret, now: () => ms }
    */
   function create({ store, secret, now = () => Date.now() }) {
@@ -628,6 +655,18 @@ const LSAPI = (() => {
       },
       'GET worker/me': async req => { const w = await worker(req); return w ? J(200, await profile(w)) : err(401, 'Please sign in again', 'AUTH'); },
       'POST worker/punch': async req => { const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH'); return doPunch(w, req.body || {}, 'worker'); },
+      // positions while a shift is open (phone app on screen): routes and hotspots in the tracker's Insights
+      'POST worker/ping': async req => {
+        const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH');
+        const t = now(), pts = (Array.isArray(req.body?.pts) ? req.body.pts : []).slice(0, 100);
+        let n = 0;
+        for (const x of pts) {
+          const lat = +x.lat, lng = +x.lng, ts = +x.ts;
+          if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || !(ts > t - 72 * 3600000 && ts < t + 300000)) continue;
+          await store.put('pings', { id: w.id + '-' + ts, wid: w.id, code: w.code, ts, lat, lng, acc: Math.round(+x.acc || 0), serverTs: t }); n++;
+        }
+        return J(200, { saved: n });
+      },
       /* ---------- supervisor ---------- */
       'GET supervisor/board': async req => {
         if (!isSup(req)) return err(403, 'Supervisor role required');
@@ -689,6 +728,7 @@ const LSAPI = (() => {
         const b = await store.getBlob(p.photo); if (!b) return err(404, 'No photo');
         return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
       },
+      'GET admin/pings': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), pings: (await store.list('pings', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
       'GET admin/marks': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), marks: await store.list('marks', m => m.serverTs > since, { since }) }); },
       'GET health': async () => J(200, { ok: true, time: now() })
     };
@@ -1378,8 +1418,8 @@ function renderGrid() {
   const wrap = $('#grid-wrap'); if (!wrap) return;
   if (!S.employees.length) {
     $('#av-kpis').innerHTML = '';
-    wrap.outerHTML = `<div id="grid-wrap" class="empty"><b>No workers yet</b>Import the master attendance workbook, or add workers one by one.
-      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button><button class="btn" onclick="editEmployee(null)">Add worker</button></div></div>`;
+    wrap.outerHTML = `<div id="grid-wrap" class="empty"><b>No security personnel yet</b>Import the master attendance workbook, or add security personnel one by one.
+      <div class="row"><button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button><button class="btn" onclick="editEmployee(null)">Add personnel</button></div></div>`;
     return;
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
@@ -1430,7 +1470,7 @@ function renderGrid() {
     const dd = $('#dropdown');
     const items = [[`📍 Punch details${ps.length ? ` (${ps.length})` : ''}…`, () => punchDetails(emp, d), !ps.length], null,
       ...S.codes.filter(x => x.key).slice(0, 8).map(x => [`Mark ${x.code} – ${x.label}`, () => applyToSel({ c: x.code }), false, x.key.toUpperCase()]),
-      ['Clear', () => applyToSel(null, false), false, 'Del'], null, ['Set site / shift…', () => openCellEditor(), false, 'Enter'], ['Edit worker…', () => editEmployee(emp.id)]];
+      ['Clear', () => applyToSel(null, false), false, 'Del'], null, ['Set site / shift…', () => openCellEditor(), false, 'Enter'], ['Edit personnel…', () => editEmployee(emp.id)]];
     dd.innerHTML = items.map((x, i) => x ? `<button data-mi="${i}" ${x[2] ? 'disabled' : ''}>${esc(x[0])}${x[3] ? `<span class="kbd">${esc(x[3])}</span>` : ''}</button>` : '<hr>').join('');
     dd.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { closeMenu(); items[+b.dataset.mi][1](); });
     dd.hidden = false; const w = dd.offsetWidth, h = dd.offsetHeight;
@@ -1570,12 +1610,12 @@ function dataChecks() {
   const noRate = [...used.keys()].filter(t => !S.settings.rateCard.find(r => r.trade === t)?.rate && !S.projects.some(p => p.billing?.rates?.[t]));
   add(`Trades working in ${fmtMonYY(ym)} with no rate – invoice lines would be 0`, noRate.map(t => `${t} (${used.get(t)} worker-rows)`), 'Add to rate card & enter rates', 'data', 'trades without rate', () => { noRate.forEach(t => { if (!S.settings.rateCard.some(r => r.trade === t)) S.settings.rateCard.push({ trade: t, unit: unitFor(t), rate: 0, src: 'enter rate' }); }); markDirty(); });
   add('Double entries in the last client-timesheet import (same person, same day, two rows)', S.issues?.double || [], 'Correct the source sheet, then re-import', null, 'double entries');
-  add('App punches waiting for review (outside zone, poor GPS, clock)', pendingPunches().map(p => `${p.name} ${fmtDMY(p.workDate)} ${p.type}: ${p.reasons.join(' · ')}`), 'Review in Worker app', 'app', 'punches to review');
-  { const y = addDays(today, -1); add(`App workers with no check-in on ${fmtDMY(y)} – decide what the day is`, noCheckIn(y).map(e => `${e.name} ${appCode(e)}`), 'Decide in Worker app', 'app', 'no check-in'); }
+  add('App punches waiting for review (outside zone, poor GPS, clock)', pendingPunches().map(p => `${p.name} ${fmtDMY(p.workDate)} ${p.type}: ${p.reasons.join(' · ')}`), 'Review in Personnel app', 'app', 'punches to review');
+  { const y = addDays(today, -1); add(`App security personnel with no check-in on ${fmtDMY(y)} – decide what the day is`, noCheckIn(y).map(e => `${e.name} ${appCode(e)}`), 'Decide in Personnel app', 'app', 'no check-in'); }
   { const used = new Set(S.employees.filter(e => e.app?.on).map(e => assignOn(e, today)?.site).filter(Boolean));
-    add('Sites of app workers without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !sitePins(x).length).map(x => x.name), 'Set a project or site location in Projects & sites', 'projects', 'sites without location'); }
+    add('Sites of app security personnel without a location pin – their punches all go to review', S.sites.filter(x => used.has(x.id) && !sitePins(x).length).map(x => x.name), 'Set a project or site location in Projects & sites', 'projects', 'sites without location'); }
   add('App days kept as another code (already entered in the tracker)', S.issues?.app || [], 'Check in Attendance', null, 'app conflicts');
-  add('Current workers with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Employees', 'employees', 'workers without site');
+  add('Current security personnel with no site', S.employees.filter(e => employedOn(e, today) && !assignOn(e, today)?.site).map(e => `${e.name} ${empCodeLabel(e)}`), 'Assign in Security Personnel', 'employees', 'security personnel without site');
   return out;
 }
 function setupSteps() {
@@ -1611,7 +1651,7 @@ function renderEmployees() {
     return true;
   });
   const scope = EV.site ? siteName(EV.site) : EV.project ? IX.proj.get(EV.project)?.name : '';
-  v.innerHTML = docHead('Employees', `${list.length} shown · ${S.employees.length} total`, `
+  v.innerHTML = docHead('Security Personnel', `${list.length} shown · ${S.employees.length} total`, `
       ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="ev-unscope" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
       <input type="search" id="ev-q" placeholder="Name / ID / agency" value="${esc(EV.q)}" style="width:200px">
       <select id="ev-status">${opts([['active', 'Current'], ['left', 'Left'], ['all', 'Everyone']], EV.status)}</select>
@@ -1626,7 +1666,7 @@ function renderEmployees() {
         <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="muted">${esc(p?.name || '')}</td>
         <td class="mono">${fmtDMY(e.doj)}</td><td>${e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : ''}</td>
         <td><button class="btn sm" data-edit="${e.id}">Edit</button></td></tr>`;
-    }).join('') || '<tr><td colspan="11" class="muted">No workers match.</td></tr>'}</tbody></table></div></div>`;
+    }).join('') || '<tr><td colspan="11" class="muted">No security personnel match.</td></tr>'}</tbody></table></div></div>`;
   if ($('#ev-unscope')) $('#ev-unscope').onclick = clearSel;
   $('#ev-q').oninput = e => { EV.q = e.target.value; clearTimeout(EV._t); EV._t = setTimeout(() => { renderEmployees(); const i = $('#ev-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   for (const k of ['status', 'type']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
@@ -1635,7 +1675,7 @@ function renderEmployees() {
   $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); renderToolbar(); };
 }
 
-function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more workers first'); return l; }
+function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more security personnel first'); return l; }
 function bulkAssign(kind) {
   const l = selectedEmps(); if (!l.length) return;
   openModal(kind === 'site' ? `Assign ${l.length} employee(s) to a site` : `Change shift for ${l.length} employee(s)`, `
@@ -1683,7 +1723,10 @@ function editEmployee(id) {
       <td><select data-a="${i}" data-k="site">${siteOptions(a.site)}</select></td>
       <td><select data-a="${i}" data-k="shift">${opts(S.settings.shifts, a.shift)}</select></td>
       <td><button class="btn sm bad" data-adel="${i}">✕</button></td></tr>`).join('');
-  const m = openModal(isNew ? 'Add worker' : 'Edit worker', `
+  const m = openModal(isNew ? 'Add personnel' : 'Edit personnel', `
+    <div class="row" style="gap:12px;margin-bottom:10px;align-items:center"><div class="avatar lg" id="ee-ph">${esc(initials(e.name))}</div>
+      <div><label class="btn sm">Upload photo…<input type="file" id="ee-phf" accept="image/*" hidden></label>
+      <div class="muted small" id="ee-phs" style="margin-top:4px">${e.photo ? (e.face ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one') : 'A clear, front-facing photo lets the app check that the right person checks in.'}</div></div></div>
     <div class="form">
       <label class="f">Name *<input type="text" id="ee-name" value="${esc(e.name)}"></label>
       <label class="f">Emp ID (LS code, e.g. C14761)<input type="text" id="ee-code" value="${esc(e.empCode)}"></label>
@@ -1702,10 +1745,10 @@ function editEmployee(id) {
     <button class="btn sm" id="ee-addasg" style="margin-top:6px">Add allocation</button>
     ${!isNew ? `<p class="muted small">${nAtt} attendance day(s) on file.</p>` : ''}
     ${!isNew ? (() => { const a = e.app || {}, last = Object.values(S.punches || {}).filter(p => p.wid === e.id).sort((x, y) => y.ts - x.ts)[0];
-      return `<h3 style="margin:14px 0 6px">Worker app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
+      return `<h3 style="margin:14px 0 6px">Personnel app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
         <button class="btn sm" id="ee-pin">${a.on ? 'New PIN + slip' : 'Enable + PIN + slip'}</button>${a.on ? '<button class="btn sm" id="ee-dev">Reset phone</button><button class="btn sm bad" id="ee-off">Disable</button>' : ''}</div>`; })() : ''}`,
     [
-      ...(!isNew ? [{ label: 'Delete worker', cls: 'bad', onClick: async () => {
+      ...(!isNew ? [{ label: 'Delete personnel', cls: 'bad', onClick: async () => {
         if (!await confirmBox(`Delete ${e.name} and ${nAtt} attendance record(s)?\n\nTo keep history, set an end date instead.`, 'Delete', 'bad')) return;
         S.employees = S.employees.filter(x => x.id !== e.id); delete S.att[e.id]; reindex(); markDirty(); renderAll();
       } }] : []),
@@ -1741,6 +1784,13 @@ function editEmployee(id) {
   appBtn('#ee-pin', async real => printSlips(await givePins([real])));
   appBtn('#ee-dev', async real => { real.app.resetDevice = true; markDirty(); toast('Phone reset – Publish roster to apply'); });
   appBtn('#ee-off', async real => { real.app.on = false; markDirty(); toast('App disabled – Publish roster to apply'); });
+  photoURL(e).then(u => { if (u) $('#ee-ph', m).innerHTML = `<img src="${u}" alt="">`; });
+  $('#ee-phf', m).onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return; $('#ee-phs', m).textContent = 'Reading the face…';
+    const r = await setPersonPhoto(e, f);
+    $('#ee-ph', m).innerHTML = `<img src="${await photoURL(e)}" alt="">`;
+    $('#ee-phs', m).textContent = r === 'face' ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one';
+  };
   $('#ee-addasg', m).onclick = () => {
     readAsg(m);
     const last = e.assign[e.assign.length - 1];
@@ -1790,7 +1840,7 @@ function renderProjects() {
       <td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td>
       <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div>`) : ''}
-  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the worker app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
+  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the personnel app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
     <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><label class="btn sm" style="display:inline-flex;align-items:center">Upload documents in bulk…<input type="file" id="pv-bulkdocs" accept="application/pdf" multiple hidden></label><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
     ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
     ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
@@ -1891,11 +1941,11 @@ function editProject(id, presetName, onCreated) {
     <table><thead><tr><th>Trade</th><th class="num">Rate card</th><th class="num">This project (AED / month)</th></tr></thead><tbody>
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
-    <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
+    <p class="muted small">Lines group security personnel by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
     <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
     <div id="ep-docs"></div>
     <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. Many WOIs at once: Projects &amp; sites → <b>Upload documents in bulk…</b>. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
-    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
+    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
     ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
@@ -1917,7 +1967,7 @@ function editProject(id, presetName, onCreated) {
         PE.finish();
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
-        if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Worker app to send it to phones', 5000);
+        if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
   p.docs ||= [];
@@ -2010,7 +2060,7 @@ function editSite(id, projectId) {
     <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
     </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
-    <h3 style="margin:14px 0 6px">Location for the worker app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
+    <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
     ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
@@ -2024,7 +2074,7 @@ function editSite(id, projectId) {
         PE.finish();
         if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
         reindex(); markDirty(); renderAll();
-        if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Worker app to send it to phones', 5000);
+        if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
@@ -2076,7 +2126,7 @@ async function bulkDocs(files) {
 }
 /** All zones on one map */
 async function zonesMap() {
-  const m = openModal('Zones for the worker app', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
+  const m = openModal('Zones for the personnel app', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
   try {
     const map = await LSMap.create($('#zm', m), {}), L = window.L, b = L.latLngBounds([]);
     for (const pr of S.projects) for (const p of pr.pins || []) { const z = LSMap.zone(map, p, { color: '#5B4AB8', fill: .05, label: `${pr.name} – project zone · ${p.radius} m` }); z.c.setStyle({ dashArray: '6 6' }); z.c.on('click', () => { closeModal(); editProject(pr.id); }); b.extend([p.lat, p.lng]); }
@@ -2949,7 +2999,7 @@ function detectSheets(wb) {
   wb.SheetNames.forEach((n, i) => {
     const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
     const m = parseMasterSheet(rows);
-    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
+    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} security personnel · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
     const c = parseClientSheet(rows);
     if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.multi ? c.projects.length + ' projects' : c.project} · ${c.ym ? fmtMonYY(c.ym) : 'month not in sheet'} · ${c.rows.length} rows` });
   });
@@ -2988,7 +3038,7 @@ async function importExcel(file) {
       label: 'Import', cls: 'pri', onClick: m => {
         const picks = [...m.querySelectorAll('[data-sh]:checked')].map(c => ({ k: +c.dataset.sh, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value }));
         const r = runImport(found, picks, $('#im-ow', m).checked); renderAll();
-        openModal('Import complete', `<div class="kpis">${[['Workers added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+        openModal('Import complete', `<div class="kpis">${[['Security personnel added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
           ${r.dbl.length ? `<div class="alert"><div><b>${r.dbl.length} person-day(s) appear on two rows for the same day</b> – the later row was kept. Check in the source sheet:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
           ${r.t.conflicts ? `<div class="note">${r.t.conflicts} day(s) differed between payroll and client sheet – the client sheet was used.</div>` : ''}
           ${r.autoMapped ? `<p>${r.autoMapped} payroll site label(s) linked automatically to their project.</p>` : ''}
@@ -3107,7 +3157,7 @@ function renderData() {
   const nAtt = Object.values(S.att).reduce((a, x) => a + Object.keys(x).length, 0);
   v.innerHTML = docHead('Settings', 'Data, rates, codes, company details') + `<div class="dc">
   ${sec('data', 'Data', `
-    <div class="kpis">${[['Workers', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+    <div class="kpis">${[['Security personnel', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
     <div class="row">
       <button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button>
       <button class="btn" id="dv-dl">Download backup</button>
@@ -3115,7 +3165,7 @@ function renderData() {
       <span class="muted small">Saved in this browser${S.savedAt ? ' · last ' + new Date(S.savedAt).toLocaleString() : ''}. Keep a backup in LS_Documents.</span>
     </div>`)}
   ${sec('rates', 'Rate card <span class="cnt">AED per person per month · pro-rata on calendar days</span>', `
-    <div class="tw"><table><thead><tr><th>Trade (as on worker)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
+    <div class="tw"><table><thead><tr><th>Trade (as on personnel)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
     ${st.rateCard.map((r, i) => `<tr><td><input type="text" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
       <td class="num"><input type="number" step="0.01" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
       <td><button class="btn sm bad" data-rcdel="${i}">✕</button></td></tr>`).join('')}
@@ -3158,7 +3208,7 @@ function renderData() {
     const f = e.target.files[0]; if (!f) return;
     try {
       const st = JSON.parse(await f.text()); if (!st.employees || !st.settings) throw new Error('Not a tracker backup file');
-      if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} workers)?`, 'Restore', 'bad')) return;
+      if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} security personnel)?`, 'Restore', 'bad')) return;
       await restoreFiles(st); S = migrate(decodeState(st)); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Restored'); Files.sweep();
     } catch (err) { toast(err.message); }
   };
@@ -3187,7 +3237,7 @@ function renderData() {
     S = migrate(shippedState()); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Shipped data loaded');
   };
   $('#dv-reset').onclick = async () => {
-    if (!await confirmBox('Delete ALL workers, attendance, projects and invoices?', 'Delete everything', 'bad')) return;
+    if (!await confirmBox('Delete ALL security personnel, attendance, projects and invoices?', 'Delete everything', 'bad')) return;
     S = defaultState(); reindex(); markDirty(); renderAll(); toast('All data deleted');
   };
 }
@@ -3195,13 +3245,13 @@ async function restorePrev() {
   let j = null; try { j = await IDB.get('state-prev'); } catch (e) { }
   if (!j) return toast('No earlier data saved');
   const st = JSON.parse(j);
-  if (!await confirmBox(`Replace current data with the data from before the update (${st.employees?.length || 0} workers, ${st.projects?.length || 0} projects)?`, 'Restore', 'bad')) return;
+  if (!await confirmBox(`Replace current data with the data from before the update (${st.employees?.length || 0} security personnel, ${st.projects?.length || 0} projects)?`, 'Restore', 'bad')) return;
   st.seedVer = 'restored'; S = migrate(st); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Earlier data restored');
 }
 function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
 
 /* ---------- shell: views, toolbar, menus, tree, status ---------- */
-const VIEWS = { app: renderApp, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
+const VIEWS = { app: renderApp, live: renderLive, insights: renderInsights, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
 let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
@@ -3213,15 +3263,17 @@ function showView(v) {
 function renderAll() { VIEWS[curView](); renderToolbar(); renderTree(); renderStatus(); }
 
 const TOOLBAR = {
-  attendance: () => [{ l: 'Add worker', f: () => editEmployee(null) }, { l: 'Set site / shift…', f: () => openCellEditor(), t: 'Reliever at another site, or a shift change, for the selected days' }, { l: 'Undo', f: undoAtt, t: 'Ctrl+Z' }, 'sep',
+  attendance: () => [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Set site / shift…', f: () => openCellEditor(), t: 'Reliever at another site, or a shift change, for the selected days' }, { l: 'Undo', f: undoAtt, t: 'Ctrl+Z' }, 'sep',
     { l: S.locks[AV.ym] ? 'Unlock month' : 'Lock month', f: () => { if (S.locks[AV.ym]) delete S.locks[AV.ym]; else S.locks[AV.ym] = true; markDirty(); renderAttendance(); renderToolbar(); }, t: 'Locked months cannot be edited' }, 'sep',
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
-  employees: () => { const n = EV.checked.size; return [{ l: 'Add worker', f: () => editEmployee(null) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the worker app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick workers for bulk actions', dis: true }]; },
+  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the personnel app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick security personnel for bulk actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
+  live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
+  insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
-  app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send workers, PINs, site locations and settings to the worker app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick workers, then App access…'); } }]
+  app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send security personnel, PINs, site locations and settings to the personnel app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick security personnel, then App access…'); } }]
 };
 function renderToolbar() {
   const tb = $('#toolbar'); const items = TOOLBAR[curView]?.() || [];
@@ -3235,17 +3287,17 @@ function renderStatus() {
   const unl = S.sites.filter(s => !s.projectId).length;
   const per = curView === 'attendance' && AV.ym ? (() => { const { start, end } = attPeriod(); return `${AV.mode === 'payroll' ? 'Payroll' : 'Calendar'} month ${fmtMonYY(AV.ym)} · ${fmtDMY(start)} – ${fmtDMY(end)}`; })() : curView === 'timesheets' && TV.ym ? `Calendar month ${fmtMonYY(TV.ym)}` : 'Ready';
   $('#status').textContent = per;
-  $('#status2').textContent = `${S.employees.length} workers · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
+  $('#status2').textContent = `${S.employees.length} security personnel · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
 }
 
 /* menus */
 const MENUS = {
-  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to worker app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
+  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
   edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
-    ['Add worker…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
-  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Employees', app: 'Worker app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
+    ['Add personnel…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
+  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Security Personnel', app: 'Personnel app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
   help: () => [['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
@@ -3258,14 +3310,14 @@ function openMenu(btn) {
 function closeMenu() { $('#dropdown').hidden = true; $$('.menu.open').forEach(m => m.classList.remove('open')); }
 function helpKeys() {
   openModal('Keys & codes', `<div class="form two"><div><h3>Attendance grid</h3><table><tbody>
-    ${[['Click / drag', 'select days'], ['Shift + click', 'extend selection'], ['Arrows', 'move'], ['Code key', 'mark selected days'], ['Del', 'clear'], ['Enter', 'reliever site / shift'], ['Ctrl+Z', 'undo'], ['Click a name', 'edit worker']].map(([a, b]) => `<tr><td class="lab">${a}</td><td>${b}</td></tr>`).join('')}</tbody></table></div>
+    ${[['Click / drag', 'select days'], ['Shift + click', 'extend selection'], ['Arrows', 'move'], ['Code key', 'mark selected days'], ['Del', 'clear'], ['Enter', 'reliever site / shift'], ['Ctrl+Z', 'undo'], ['Click a name', 'edit personnel']].map(([a, b]) => `<tr><td class="lab">${a}</td><td>${b}</td></tr>`).join('')}</tbody></table></div>
     <div><h3>Codes</h3><table><tbody>${S.codes.map(c => `<tr><td><span class="codes"><button style="background:${c.color}">${esc(c.code)}${c.key ? `<span class="kbd">${c.key.toUpperCase()}</span>` : ''}</button></span></td><td>${esc(c.label)}${c.billable ? ' · billable' : ''}</td></tr>`).join('')}</tbody></table></div></div>`, [{ label: 'Close', cls: 'pri' }]);
 }
 function helpCalc() {
   openModal('How the numbers are made', `<table><tbody>
     <tr><td class="lab">Payroll month</td><td>${S.settings.cycleStartDay}th of previous month to ${S.settings.cycleStartDay - 1}th, as the LS-PAYROLL sheet.</td></tr>
     <tr><td class="lab">Client timesheet</td><td>Calendar month, one sheet per project, rows grouped by site, relievers in a RELIEVER section. TOTAL DAYS = COUNTIF P (or R). Same cells as LS/DO/F-026.</td></tr>
-    <tr><td class="lab">Invoice line</td><td>Workers grouped by trade and days: "4 Security @ 31 Days" at 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</td></tr>
+    <tr><td class="lab">Invoice line</td><td>Security personnel grouped by trade and days: "4 Security @ 31 Days" at 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</td></tr>
     <tr><td class="lab">Fixed amount</td><td>Projects on a fixed monthly amount (Sobha Waves 32,795) bill that amount regardless of attendance.</td></tr>
     <tr><td class="lab">Rates</td><td>Project rate table → rate card → project unit rate. Verified: guard 4,100 · female guard 3,990 · supervisor 8,000.</td></tr>
   </tbody></table>`, [{ label: 'Close', cls: 'pri' }]);
@@ -3443,11 +3495,13 @@ async function syncApp(quiet) {
     const r = await cl.call('GET', 'admin/punches', null, { query: { since: c.lastSync || 0 } });
     if (r.status !== 200) { if (!quiet) toast('Sync failed: ' + (r.body?.error || r.status), 6000); return; }
     S.punches ||= {};
-    for (const p of r.body.punches) { const old = S.punches[p.id]; if (!old) stats.new++; S.punches[p.id] = { ...p, applied: old?.applied || false }; applyPunch(S.punches[p.id], stats); }
+    for (const p of r.body.punches) { const old = S.punches[p.id]; if (!old) stats.new++; S.punches[p.id] = { ...p, applied: old?.applied || false, ...(old?.face ? { face: old.face } : {}) }; applyPunch(S.punches[p.id], stats); }
     c.lastSync = r.body.now;
     const mk = await cl.call('GET', 'admin/marks', null, { query: { since: c.lastMarkSync || 0 } });
     if (mk.status === 200) { S.marks ||= {}; for (const x of mk.body.marks) { S.marks[x.id] = x; applyMark(x, stats); } c.lastMarkSync = mk.body.now; }
-    reindex(); markDirty();
+    const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
+    if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
+    reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
     if (!quiet || stats.new) { renderAll(); if (!quiet) toast(`Synced · ${stats.new} new punch(es) · ${stats.applied} day(s) marked${stats.marks ? ` · ${stats.marks} supervisor mark(s)` : ''}${stats.conflicts.length ? ` · ${stats.conflicts.length} kept (leave/other code)` : ''}${stats.locked ? ` · ${stats.locked} in locked month` : ''}`, 5000); }
     S.issues ||= {}; if (stats.conflicts.length) S.issues.app = stats.conflicts.slice(0, 500);
   } catch (e) { if (!quiet) toast('Sync failed – ' + e.message, 6000); }
@@ -3496,13 +3550,13 @@ async function givePins(emps) {
 async function printSlips(slips) {
   const url = appCfg().workerUrl || (location.protocol.startsWith('http') ? location.origin + '/worker' : '');
   let qr = null; if (url) { try { await loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'); const q = qrcode(0, 'M'); q.addData(url); q.make(); qr = q.createDataURL(3, 2); } catch (e) { } }
-  printHTML(`<div class="sheet port slips">${slips.map(({ e, pin }) => `<div class="slip"><div class="sh"><img src="${LOGO}" alt=""><b>Worker Attendance</b></div>
-    <table><tr><td>Name</td><td><b>${esc(e.name)}</b></td></tr><tr><td>Employee ID</td><td class="mono"><b>${esc(appCode(e))}</b></td></tr><tr><td>PIN</td><td class="mono pin">${pin}</td></tr><tr><td>Site</td><td>${esc(siteName(assignOn(e, todayISO())?.site))}</td></tr></table>
+  printHTML(`<div class="sheet port slips">${slips.map(({ e, pin }) => `<div class="slip"><div class="sh"><img src="${LOGO}" alt=""><b>Personnel Attendance</b></div>
+    <table><tr><td>Name</td><td><b>${esc(e.name)}</b></td></tr><tr><td>Personnel ID</td><td class="mono"><b>${esc(appCode(e))}</b></td></tr><tr><td>PIN</td><td class="mono pin">${pin}</td></tr><tr><td>Site</td><td>${esc(siteName(assignOn(e, todayISO())?.site))}</td></tr></table>
     ${url ? `<div class="u">${qr ? `<img src="${qr}" alt="">` : ''}<span>${esc(url)}</span></div>` : ''}<p>Keep your PIN private. Mark check-in and check-out at your site with a photo.</p></div>`).join('')}</div>`);
 }
 async function appAccessBulk(emps) {
-  if (!emps.length) return toast('Tick workers first');
-  openModal(`App access for ${emps.length} worker(s)`, `<p style="margin-top:0">Enable the worker app, generate a new 4-digit PIN for each and print PIN slips. Old PINs stop working after <b>Publish roster</b>.</p>
+  if (!emps.length) return toast('Tick security personnel first');
+  openModal(`App access for ${emps.length} worker(s)`, `<p style="margin-top:0">Enable the personnel app, generate a new 4-digit PIN for each and print PIN slips. Old PINs stop working after <b>Publish roster</b>.</p>
     <label class="chk"><input type="checkbox" id="aa-dev"> Also reset the registered phone</label>`,
     [{ label: 'Disable app', cls: 'bad', onClick: () => { emps.forEach(e => { e.app = { ...(e.app || {}), on: false }; }); markDirty(); renderAll(); toast('App disabled – publish roster to apply'); } },
     { label: 'Cancel' }, { label: 'Enable + PINs + print', cls: 'pri', onClick: async m => { const dev = $('#aa-dev', m).checked; const s = await givePins(emps); if (dev) emps.forEach(e => e.app.resetDevice = true); renderAll(); await printSlips(s); } }]);
@@ -3524,6 +3578,7 @@ async function punchDetails(emp, d) {
             <tr><td>Accuracy</td><td>±${p.acc} m</td></tr>
             <tr><td>Site</td><td>${esc(p.siteName || '—')}${p.reliever ? ' <span class="pill warn">reliever</span>' : ''}</td></tr>
             <tr><td>Distance</td><td>${p.dist != null ? `${p.dist} m from pin · zone ${p.radius} m · ${p.inZone ? '<b style="color:var(--pos)">inside</b>' : '<b style="color:var(--neg)">outside</b>'}` : '—'}</td></tr>
+            ${p.face ? `<tr><td>Face</td><td>${FACE.badge(p.face)} <span class="muted small">compared with the photo in Security Personnel</span></td></tr>` : ''}
             ${p.reasons?.length ? `<tr><td>Review</td><td style="color:var(--warn)">${esc(p.reasons.join(' · '))}</td></tr>` : ''}
             ${p.flags?.length ? `<tr><td>Flags</td><td>${esc(p.flags.join(' · '))}</td></tr>` : ''}
             <tr><td>By</td><td>${esc(p.by)}${p.reviewBy ? ` · reviewed by ${esc(p.reviewBy)}${p.reviewNote ? ': ' + esc(p.reviewNote) : ''}` : ''}</td></tr>
@@ -3558,23 +3613,23 @@ function renderApp() {
   const today = todayISO(), todays = Object.values(S.punches || {}).filter(p => p.workDate === today);
   const t = ts => ts ? new Date(ts).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never';
   const bySite = new Map(); for (const p of todays) { const k = p.siteName || '—'; const x = bySite.get(k) || bySite.set(k, { in: new Set(), out: new Set() }).get(k); (p.type === 'in' ? x.in : x.out).add(p.wid); }
-  v.innerHTML = docHead('Worker app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Worker Attendance.html'}" target="_blank">Open worker page ↗</a>`) + `<div class="dc">
-    <div class="kpis">${[['Workers on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
-    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Employees tick workers → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Workers then check in on the worker page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
-    ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Worker</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th></th></tr></thead><tbody>
-      ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td>
+  v.innerHTML = docHead('Personnel app', cl.demo ? '<span class="pill warn">demo – data in this browser only</span>' : `connected to <span class="mono">${esc(apiBase())}</span>`, `<a class="btn sm" href="${location.protocol.startsWith('http') ? '/worker/' : 'Personnel Attendance.html'}" target="_blank">Open personnel page ↗</a>`) + `<div class="dc">
+    <div class="kpis">${[['Security personnel on the app', on.length], ['Sites with a location', `${pins.length}<small>/ ${S.sites.length}</small>`], ['Punches to review', pend.length, pend.length ? 'var(--warn)' : ''], ['No check-in ' + fmtDMY(AP.date).slice(0, 5), miss.length, miss.length ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${t(c.lastSync)}</span>`], ['Roster published', `<span style="font-size:13px">${t(c.lastPublish)}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
+    ${!on.length ? `<div class="note">Start here: <b>1</b> set locations in Projects &amp; sites: a pin and coverage on the project (covers all its sites) or on single sites. <b>2</b> In Security Personnel tick security personnel → toolbar <b>App access…</b> to give PINs and print slips. <b>3</b> <b>Publish roster</b>. Security personnel then check in on the personnel page; <b>Sync</b> marks P in Attendance. Days without a check-in are decided here or by supervisors on their phone.</div>` : ''}
+    ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Personnel</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th>Face</th><th></th></tr></thead><tbody>
+      ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td><td>${FACE.badge(p.face) || (p.hasPhoto && !IX.emp.get(p.wid)?.face ? '<span class="muted small">no reference photo</span>' : '')}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}
     ${sec('ap-today', `Today on site <span class="cnt">${fmtDMY(today)}</span>`, bySite.size ? `<div class="tw"><table><thead><tr><th>Site</th><th class="num">Checked in</th><th class="num">Checked out</th><th class="num">On site now</th></tr></thead><tbody>${[...bySite].map(([k, x]) => `<tr><td>${esc(k)}</td><td class="num">${x.in.size}</td><td class="num">${x.out.size}</td><td class="num"><b>${[...x.in].filter(w => !x.out.has(w)).length}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No punches synced for today yet.</p>')}
     ${sec('ap-miss', `No check-in <span class="pill ${miss.length ? 'warn' : ''}">${miss.length}</span>`, `
       <div class="row" style="margin-bottom:8px"><label class="f" style="flex-direction:row;align-items:center;gap:6px">Date <input type="date" id="ap-date" value="${AP.date}" max="${todayISO()}"></label>
-        <span class="muted small">App workers allocated to a site who did not check in and have no code yet. Decide what the day is; supervisors can do the same on their phone.</span></div>
+        <span class="muted small">App security personnel allocated to a site who did not check in and have no code yet. Decide what the day is; supervisors can do the same on their phone.</span></div>
       ${miss.length ? `<div class="row" style="margin-bottom:8px"><label class="chk"><input type="checkbox" id="ap-all"> all</label><span class="muted small">Mark ticked as</span><select id="ap-bulk"><option value="">— choose —</option>${S.codes.filter(x => !['R'].includes(x.code)).map(x => `<option value="${esc(x.code)}">${esc(x.code)} – ${esc(x.label)}</option>`).join('')}</select><button class="btn sm pri" id="ap-apply">Apply</button></div>
-      <div class="tw" style="max-height:360px"><table><thead><tr><th></th><th>Worker</th><th>Emp ID</th><th>Site</th><th>Shift</th><th>Mark as</th></tr></thead><tbody>
+      <div class="tw" style="max-height:360px"><table><thead><tr><th></th><th>Personnel</th><th>Emp ID</th><th>Site</th><th>Shift</th><th>Mark as</th></tr></thead><tbody>
       ${miss.map(e => { const a = assignOn(e, AP.date); return `<tr><td><input type="checkbox" data-mc="${e.id}"></td><td>${esc(e.name)}</td><td class="mono">${esc(appCode(e))}</td><td>${esc(siteName(a?.site))}</td><td>${esc(a?.shift || e.shift || '')}</td>
         <td><select data-m1="${e.id}"><option value="">—</option>${S.codes.filter(x => !['R'].includes(x.code)).map(x => `<option value="${esc(x.code)}">${esc(x.code)} – ${esc(x.label)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Everyone on the app checked in or already has a code for this date.</p>'}`)}
     ${sec('ap-set', 'Settings', `<div class="form">
       <label class="f wide">Azure API address <span class="muted">(blank = demo in this browser; on Azure use /api)</span><input type="text" data-ap="api" value="${esc(c.api)}" placeholder="https://ls-attendance.azurestaticapps.net/api"></label>
-      <label class="f wide">Worker page link (for PIN slips / QR)<input type="text" data-ap="workerUrl" value="${esc(c.workerUrl)}" placeholder="https://ls-attendance.azurestaticapps.net/worker"></label>
+      <label class="f wide">Personnel page link (for PIN slips / QR)<input type="text" data-ap="workerUrl" value="${esc(c.workerUrl)}" placeholder="https://ls-attendance.azurestaticapps.net/worker"></label>
       <label class="f">Default zone radius (m)<input type="number" min="10" data-ap="radius" value="${c.radius}"></label>
       <label class="f">Max GPS accuracy (m)<input type="number" min="5" data-ap="maxAcc" value="${c.maxAcc}"></label>
       <label class="f">Check-in opens (min before start)<input type="number" min="0" data-ap="windowMin" value="${c.windowMin}"></label>
@@ -3582,7 +3637,9 @@ function renderApp() {
       <label class="f">Day shift starts<input type="text" data-st="DAY" value="${esc(c.starts.DAY)}"></label>
       <label class="f">Night shift starts<input type="text" data-st="NIGHT" value="${esc(c.starts.NIGHT)}"></label>
       <label class="f">Photo required<select data-ap="photo">${opts([['1', 'Yes'], ['0', 'No']], c.photo ? '1' : '0')}</select></label>
-      <label class="f">One phone per worker<select data-ap="bindDevice">${opts([['1', 'Yes'], ['0', 'No']], c.bindDevice ? '1' : '0')}</select></label>
+      <label class="f">One phone per personnel<select data-ap="bindDevice">${opts([['1', 'Yes'], ['0', 'No']], c.bindDevice ? '1' : '0')}</select></label>
+      <label class="f">Face check on check-in photos<select data-ap="faceCheck">${opts([['1', 'Yes'], ['0', 'No']], c.faceCheck !== false ? '1' : '0')}</select></label>
+      <label class="f">Auto-approve: face matches + inside zone<select data-ap="faceAuto">${opts([['1', 'Yes'], ['0', 'No – face shown only']], c.faceAuto !== false ? '1' : '0')}</select></label>
       <label class="f wide">ArcGIS API key <span class="muted">(optional – ArcGIS search; blank = free OpenStreetMap search)</span><input type="text" data-ap="arcgisKey" value="${esc(c.arcgisKey)}"></label>
     </div><p class="muted small" style="margin:8px 0 0">Zone rule: a punch is accepted when (distance to the pin − GPS accuracy) ≤ radius and accuracy ≤ the limit; otherwise it waits here for review. Changes apply to phones after <b>Publish roster</b>.</p>`)}
   </div>`;
@@ -3592,7 +3649,7 @@ function renderApp() {
   v.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { const n = prompt('Reason for rejecting:'); if (n === null) return; await reviewPunch(b.dataset.no, 'rejected', n); renderAll(); });
   if ($('#ap-date')) $('#ap-date').onchange = e => { AP.date = e.target.value || AP.date; renderApp(); };
   if ($('#ap-all')) $('#ap-all').onchange = e => v.querySelectorAll('[data-mc]').forEach(c => c.checked = e.target.checked);
-  if ($('#ap-apply')) $('#ap-apply').onclick = () => { const code = $('#ap-bulk').value, ids = [...v.querySelectorAll('[data-mc]:checked')].map(c => c.dataset.mc); if (!code || !ids.length) return toast('Tick workers and choose a code'); decideDay(ids.map(id => IX.emp.get(id)), AP.date, code); renderAll(); };
+  if ($('#ap-apply')) $('#ap-apply').onclick = () => { const code = $('#ap-bulk').value, ids = [...v.querySelectorAll('[data-mc]:checked')].map(c => c.dataset.mc); if (!code || !ids.length) return toast('Tick security personnel and choose a code'); decideDay(ids.map(id => IX.emp.get(id)), AP.date, code); renderAll(); };
   v.querySelectorAll('[data-m1]').forEach(sel => sel.onchange = () => { if (sel.value) { decideDay([IX.emp.get(sel.dataset.m1)], AP.date, sel.value); renderAll(); } });
   v.querySelectorAll('[data-ap]').forEach(i => i.onchange = () => { const k = i.dataset.ap; c[k] = i.tagName === 'SELECT' ? i.value === '1' : i.type === 'number' ? +i.value : i.value.trim(); markDirty(); if (k === 'api') renderApp(); });
   v.querySelectorAll('[data-st]').forEach(i => i.onchange = () => { if (/^\d{1,2}:\d{2}$/.test(i.value)) { c.starts = { ...c.starts, [i.dataset.st]: i.value.padStart(5, '0') }; markDirty(); } else toast('Use HH:MM'); });
@@ -3698,6 +3755,342 @@ const PDFX = (() => {
   const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   return { pages, classify, fields, build, subset, store, open, htmlToPng, KINDS, KIND_COLORS, fmtSize };
 })();
+
+/* =====================================================================
+   Field operations: Live (today on a map) and Insights (trends over a
+   date range): coverage, punctuality, zone compliance, pin check, routes,
+   hotspots (where personnel spend most time), face check, unusual activity.
+   Positions come from check-in / check-out punches plus the positions the
+   phone records every 10 minutes while a shift is open.
+   ===================================================================== */
+/* ---------- shift positions, kept apart from the main data (can be large) ---------- */
+const PINGS = {
+  data: null,                                                // { wid: [[ts, lat, lng, acc], …] }
+  async load() { if (this.data) return this.data; try { this.data = JSON.parse(await IDB.get('pings') || '{}'); } catch (e) { this.data = {}; } return this.data; },
+  async add(list) {
+    if (!list?.length) return; const d = await this.load(), keep = Date.now() - 62 * 86400000;
+    for (const x of list) { const a = d[x.wid] ||= []; if (!a.some(y => y[0] === x.ts)) a.push([x.ts, x.lat, x.lng, x.acc]); }
+    for (const k in d) { d[k] = d[k].filter(y => y[0] >= keep).sort((a, b) => a[0] - b[0]); if (!d[k].length) delete d[k]; }
+    await IDB.set('pings', JSON.stringify(d));
+  }
+};
+const geo = (a, b) => LSAPI.distance(a, b);
+const hm = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} m` : `${m} m`; };
+const tm = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const pct = (a, b) => b ? Math.round(100 * a / b) : null;
+const pbar = (v, cls = '') => v == null ? '—' : `<span class="bar ${cls}" style="width:${Math.max(2, v * .6)}px"></span> ${v}%`;
+function pickFiles(accept, multiple, fn) { const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple; i.onchange = () => i.files.length && fn([...i.files]); i.click(); }
+
+/** Points of one person in time order: punches + shift positions, each { ts, lat, lng, kind: 'in' | 'out' | 'ping' } */
+function trackOf(wid, from, to, pings) {
+  const t0 = new Date(from + 'T00:00:00+04:00').getTime(), t1 = new Date(to + 'T23:59:59+04:00').getTime() + 12 * 3600000;
+  const pts = Object.values(S.punches || {}).filter(p => p.wid === wid && p.status !== 'rejected' && p.ts >= t0 && p.ts <= t1).map(p => ({ ts: p.ts, lat: p.lat, lng: p.lng, kind: p.type, p }));
+  for (const x of pings?.[wid] || []) if (x[0] >= t0 && x[0] <= t1) pts.push({ ts: x[0], lat: x[1], lng: x[2], acc: x[3], kind: 'ping' });
+  return pts.sort((a, b) => a.ts - b.ts);
+}
+/** Time spent per ~35 m square while on shift → hotspots [{ lat, lng, ms, who:Set, n }] */
+function hotspots(tracks) {
+  const G = 0.0003, cells = new Map();
+  for (const [wid, pts] of tracks) {
+    let on = false;
+    pts.forEach((x, i) => {
+      if (x.kind === 'in') on = true;
+      if (!on && x.kind === 'ping') on = true;                    // positions are only sent during a shift
+      const nx = pts[i + 1]; let ms = 0;
+      if (on && x.kind !== 'out') ms = nx ? Math.min(nx.ts - x.ts, 30 * 60000) : 10 * 60000;
+      if (x.kind === 'out') on = false;
+      const k = Math.round(x.lat / G) + ':' + Math.round(x.lng / G);
+      const c = cells.get(k) || cells.set(k, { la: 0, lo: 0, n: 0, ms: 0, who: new Set() }).get(k);
+      c.la += x.lat; c.lo += x.lng; c.n++; c.ms += ms; c.who.add(wid);
+    });
+  }
+  return [...cells.values()].map(c => ({ lat: c.la / c.n, lng: c.lo / c.n, ms: c.ms, n: c.n, who: c.who })).filter(c => c.ms > 0).sort((a, b) => b.ms - a.ms);
+}
+const nearSite = pt => { let best = null; for (const s of S.sites) for (const p of sitePins(s)) { const d = geo(pt, p); if (!best || d < best.d) best = { s, d, inZone: d <= (+p.radius || 100) }; } return best; };
+
+/* ====================== Live ====================== */
+const LV = { site: '' };
+async function renderLive() {
+  const v = $('#v-live'), today = todayISO(), pings = await PINGS.load();
+  const ps = Object.values(S.punches || {}).filter(p => p.status !== 'rejected' && (p.workDate === today || (p.type === 'in' && Date.now() - p.ts < 16 * 3600000)));
+  const people = new Map();
+  for (const e of S.employees) { if (!employedOn(e, today)) continue; const site = siteOn(e, today); const c = getCell(e.id, today); if (appOn(e) && site && c?.c !== 'OFF') people.set(e.id, { e, site, code: c?.c || '' }); }
+  for (const p of ps) { const e = IX.emp.get(p.wid); if (e && !people.has(e.id)) people.set(e.id, { e, site: p.siteId, code: '' }); }
+  const rows = [...people.values()].map(x => {
+    const mine = ps.filter(p => p.wid === x.e.id).sort((a, b) => a.ts - b.ts), last = mine[mine.length - 1];
+    const ping = (pings[x.e.id] || []).filter(y => last && y[0] > last.ts).pop();
+    const st = !last ? (x.code && x.code !== 'P' ? 'code' : 'no') : last.type === 'out' ? 'done' : last.status === 'pending' ? 'pe' : 'on';
+    const pos = ping ? { lat: ping[1], lng: ping[2], ts: ping[0], ping: true } : last ? { lat: last.lat, lng: last.lng, ts: last.ts } : null;
+    return { ...x, last, pos, st, site: last?.siteId || x.site };
+  }).filter(r => !LV.site || r.site === LV.site).sort((a, b) => 'onpedonecodeno'.indexOf(a.st) - 'onpedonecodeno'.indexOf(b.st) || a.e.name.localeCompare(b.e.name));
+  const n = k => rows.filter(r => r.st === k).length, out = rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone).length;
+  const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
+  const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
+  v.innerHTML = docHead('Live', `today ${fmtDMY(today)} · from synced punches and shift positions`, `<select id="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`) + `<div class="dc">
+    <div class="kpis">${[['On duty now', n('on') + n('pe'), 'var(--pos)'], ['Checked out', n('done')], ['Not checked in', n('no'), n('no') ? 'var(--neg)' : ''], ['Outside zone', out, out ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
+    <div class="live"><div class="mapbox" id="lv-map"></div>
+    <div class="ppl">${rows.map((r, i) => `<div class="pr" data-lv="${i}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
+      <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${lbl[r.st]}${r.st === 'code' ? ' ' + esc(r.code) : ''}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}</div></div>${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`).join('') || '<p class="muted">Nobody on the app is rostered today.</p>'}</div></div></div>`;
+  bindSecs(v); $('#lv-site').onchange = e => { LV.site = e.target.value; renderLive(); };
+  for (const el of v.querySelectorAll('[data-av]')) { const e = IX.emp.get(el.dataset.av); if (e?.photo) photoURL(e).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; }); }
+  v.querySelectorAll('[data-lv]').forEach(el => el.ondblclick = () => { const r = rows[+el.dataset.lv]; INS.person = r.e.id; showView('insights'); });
+  let map; try { map = await LSMap.create($('#lv-map'), { zoom: 12 }); } catch (e) { $('#lv-map').innerHTML = `<p class="muted" style="padding:12px">${esc(e.message)}</p>`; return; }
+  const L = window.L, b = [], mk = [];
+  for (const s of S.sites) for (const p of sitePins(s)) if (!LV.site || s.id === LV.site) { LSMap.zone(map, p, { label: s.name, fill: .06, marker: false }); b.push([p.lat, p.lng]); }
+  const col = { on: '#1F8A5B', pe: '#B7791F', done: '#8A94A6' };
+  rows.forEach((r, i) => {
+    if (!r.pos || !col[r.st]) return;
+    mk[i] = L.circleMarker([r.pos.lat, r.pos.lng], { radius: 7, color: '#fff', weight: 2, fillColor: col[r.st], fillOpacity: 1 }).addTo(map)
+      .bindPopup(`<b>${esc(r.e.name)}</b> <span class="mono">${esc(empCodeLabel(r.e))}</span><br>${lbl[r.st]} · ${r.pos.ping ? 'last seen' : r.last.type === 'in' ? 'checked in' : 'checked out'} ${tm(r.pos.ts)}<br>${esc(r.last.siteName || '')}${r.last.dist != null ? ` · ${r.last.dist} m from pin` : ''}`);
+    b.push([r.pos.lat, r.pos.lng]);
+  });
+  if (b.length) map.fitBounds(b, { padding: [30, 30], maxZoom: 17 });
+  v.querySelectorAll('[data-lv]').forEach(el => el.onclick = () => { const m = mk[+el.dataset.lv]; if (m) { map.setView(m.getLatLng(), 17); m.openPopup(); } });
+}
+
+/* ====================== Insights ====================== */
+const INS = { from: '', to: '', project: '', site: '', person: '', shift: '', day: '' };
+async function renderInsights() {
+  const v = $('#v-insights'), today = todayISO();
+  INS.to ||= today; INS.from ||= addDays(today, -29);
+  const pings = await PINGS.load();
+  const inRange = d => d >= INS.from && d <= INS.to;
+  const siteOk = id => (!INS.site || id === INS.site) && (!INS.project || IX.site.get(id)?.projectId === INS.project);
+  const empOk = e => e && (!INS.person || e.id === INS.person) && (!INS.shift || (e.shift || 'DAY') === INS.shift);
+  const P = Object.values(S.punches || {}).filter(p => inRange(p.workDate) && p.status !== 'rejected' && siteOk(p.siteId) && empOk(IX.emp.get(p.wid)));
+  const ins = P.filter(p => p.type === 'in');
+  const lateMin = p => +((p.flags || []).find(f => /^late \d+/.test(f)) || '').replace(/\D+/g, '') || 0;
+  const late = ins.filter(p => lateMin(p) > 0), faced = P.filter(p => p.face && !p.face.none), fOk = faced.filter(p => FACE.verdict(p.face.d) === 'match');
+  // coverage from the attendance grid: planned = allocated and not OFF; present = billable code
+  const days = []; for (let d = INS.from; d <= INS.to; d = addDays(d, 1)) days.push(d);
+  const cov = new Map();
+  for (const e of S.employees) {
+    if (!empOk(e)) continue;
+    for (const d of days) {
+      if (!employedOn(e, d)) continue; const s = siteOn(e, d); if (!s || !siteOk(s)) continue; const c = getCell(e.id, d);
+      if (c?.c === 'OFF') continue;
+      const x = cov.get(s) || cov.set(s, { plan: 0, pres: 0, byDay: {} }).get(s); x.plan++; const bd = x.byDay[d] ||= [0, 0]; bd[0]++;
+      if (c && codeDef(c.c).billable) { x.pres++; bd[1]++; }
+    }
+  }
+  const covRows = [...cov].map(([s, x]) => ({ s, ...x, pc: pct(x.pres, x.plan), short: Object.values(x.byDay).filter(([a, b]) => b < a).length })).sort((a, b) => a.pc - b.pc);
+  // punctuality and zone per site
+  const bySite = new Map(); for (const p of ins) { const x = bySite.get(p.siteId) || bySite.set(p.siteId, { n: 0, late: 0, lm: 0, inZ: 0, dist: [], acc: [], pend: 0 }).get(p.siteId); x.n++; const l = lateMin(p); if (l) { x.late++; x.lm += l; } if (p.inZone) x.inZ++; if (p.dist != null) x.dist.push(p.dist); x.acc.push(p.acc); if (p.status === 'pending') x.pend++; }
+  const med = a => a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : null;
+  const byPerson = new Map(); for (const p of ins) { const x = byPerson.get(p.wid) || byPerson.set(p.wid, { n: 0, late: 0, lm: 0, out: 0 }).get(p.wid); x.n++; const l = lateMin(p); if (l) { x.late++; x.lm += l; } if (!p.inZone) x.out++; }
+  // weekly on-time trend
+  const wk = new Map(); for (const p of ins) { const k = addDays(p.workDate, -((new Date(p.workDate + 'T12:00:00Z').getUTCDay() + 6) % 7)); const x = wk.get(k) || wk.set(k, [0, 0]).get(k); x[0]++; if (!lateMin(p)) x[1]++; }
+  const weeks = [...wk].sort((a, b) => a[0] < b[0] ? -1 : 1).slice(-12);
+  // pin check: where check-ins actually happen vs the pin
+  const pinFix = [];
+  for (const s of S.sites) {
+    if (!siteOk(s.id)) continue; const pins = sitePins(s); if (!pins.length) continue;
+    const pts = ins.filter(p => p.siteId === s.id && p.acc <= 30); if (pts.length < 5) continue;
+    const c = { lat: pts.reduce((a, p) => a + p.lat, 0) / pts.length, lng: pts.reduce((a, p) => a + p.lng, 0) / pts.length };
+    const pin = pins.reduce((a, p) => geo(c, p) < geo(c, a) ? p : a), d = Math.round(geo(c, pin));
+    if (d > Math.max(25, (+pin.radius || 100) * .4)) pinFix.push({ s, pin, c, d, n: pts.length });
+  }
+  // routes and hotspots
+  const wids = [...new Set([...P.map(p => p.wid), ...Object.keys(pings).filter(w => empOk(IX.emp.get(w)) && (!INS.site && !INS.project || P.some(p => p.wid === w)))])];
+  const tracks = new Map(wids.map(w => [w, trackOf(w, INS.from, INS.to, pings)]).filter(([, t]) => t.length));
+  const hs = hotspots(tracks).slice(0, 15);
+  const nPings = [...tracks.values()].reduce((a, t) => a + t.filter(x => x.kind === 'ping').length, 0);
+  // unusual activity
+  const odd = [];
+  const dev = new Map(); for (const p of P) if (p.deviceId) (dev.get(p.deviceId) || dev.set(p.deviceId, new Set()).get(p.deviceId)).add(p.wid);
+  for (const [, w] of dev) if (w.size > 1) odd.push(['One phone, several people', [...w].map(id => IX.emp.get(id)?.name || id).join(', '), '']);
+  for (const p of faced) if (FACE.verdict(p.face.d) === 'different') odd.push(['Different face', `${p.name} · ${fmtDMY(p.workDate)} ${tm(p.ts)} ${p.type}`, p.id]);
+  for (const [w, t] of tracks) for (let i = 1; i < t.length; i++) { const a = t[i - 1], b = t[i], km = geo(a, b) / 1000, h = (b.ts - a.ts) / 3600000; if (km > 2 && h > 0 && km / h > 120) { odd.push(['Impossible travel', `${IX.emp.get(w)?.name || w} · ${km.toFixed(1)} km in ${hm(b.ts - a.ts)} · ${fmtDMY(new Date(b.ts).toISOString().slice(0, 10))}`, b.p?.id || '']); break; } }
+  for (const p of P) { if ((p.flags || []).includes('clock')) odd.push(['Phone clock wrong', `${p.name} · ${fmtDMY(p.workDate)}`, p.id]); }
+  const offl = P.filter(p => (p.flags || []).includes('offline')).length;
+  // person profile
+  const pe = INS.person ? IX.emp.get(INS.person) : null, track = pe ? tracks.get(pe.id) || [] : [];
+  const pDays = [...new Set(track.map(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10)))].sort();
+  if (pe && !pDays.includes(INS.day)) INS.day = pDays[pDays.length - 1] || '';
+  INS.last = { covRows, bySite, byPerson, hs, odd, pinFix };
+
+  const projs = S.projects.filter(p => p.active !== false).map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1]));
+  const sites = S.sites.filter(s => !INS.project || s.projectId === INS.project).map(s => [s.id, s.name]).sort((a, b) => a[1].localeCompare(b[1]));
+  const ppl = S.employees.filter(e => appOn(e) || Object.values(S.punches || {}).some(p => p.wid === e.id)).map(e => [e.id, `${e.name} ${empCodeLabel(e)}`]).sort((a, b) => a[1].localeCompare(b[1]));
+  const kpi = (k, x, col) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`;
+  const covAll = covRows.reduce((a, r) => [a[0] + r.pres, a[1] + r.plan], [0, 0]);
+  v.innerHTML = docHead('Insights', `${fmtDMY(INS.from)} – ${fmtDMY(INS.to)} · ${P.length} punches · ${nPings} shift positions`) + `<div class="dc">
+    <div class="ins-f">
+      <label class="f">From<input type="date" data-i="from" value="${INS.from}"></label><label class="f">To<input type="date" data-i="to" value="${INS.to}" max="${today}"></label>
+      <label class="f">Project<select data-i="project">${opts(projs, INS.project, 'All projects')}</select></label>
+      <label class="f">Site<select data-i="site">${opts(sites, INS.site, 'All sites')}</select></label>
+      <label class="f">Shift<select data-i="shift">${opts(S.settings.shifts, INS.shift, 'All')}</select></label>
+      <label class="f">Security personnel<select data-i="person">${opts(ppl, INS.person, 'Everyone')}</select></label>
+      <button class="btn sm" data-q="7">7 days</button><button class="btn sm" data-q="30">30 days</button><button class="btn sm" data-q="90">90 days</button></div>
+    <div class="kpis">${kpi('Coverage', covAll[1] ? pct(...covAll) + '%' : '—', 'var(--pos)')}${kpi('On time', ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—')}${kpi('Avg late', late.length ? Math.round(late.reduce((a, p) => a + lateMin(p), 0) / late.length) + ' min' : '—', late.length ? 'var(--warn)' : '')}${kpi('Inside zone', ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—')}${kpi('Face verified', faced.length ? `${pct(fOk.length, faced.length)}%<small> of ${faced.length}</small>` : '—')}${kpi('Relievers', P.filter(p => p.reliever && p.type === 'in').length)}${kpi('Sent late (offline)', offl)}${kpi('Unusual', odd.length, odd.length ? 'var(--neg)' : '')}</div>
+    ${pe ? `<div class="sec"><div class="sh"><b>${esc(pe.name)}</b> <span class="mono muted">${esc(empCodeLabel(pe))}</span></div><div class="sb"><div class="row" style="gap:14px;align-items:flex-start">
+      <span class="avatar lg" data-av="${pe.id}">${esc(initials(pe.name))}</span>
+      <table class="kvt"><tbody><tr><td>Check-ins</td><td>${ins.length}</td></tr><tr><td>On time</td><td>${ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—'}</td></tr><tr><td>Inside zone</td><td>${ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—'}</td></tr>
+      <tr><td>Sites</td><td>${[...new Set(ins.map(p => p.siteName))].map(esc).join(', ') || '—'}</td></tr><tr><td>Relieved</td><td>${ins.filter(p => p.reliever).length} day(s)</td></tr><tr><td>Face</td><td>${pe.face ? (faced.length ? `${fOk.length}/${faced.length} matched` : 'reference photo set') : 'no reference photo – add one in Security Personnel'}</td></tr></tbody></table>
+      <div style="flex:1"><label class="f" style="max-width:220px">Route on<select id="in-day">${opts(pDays.map(d => [d, fmtDMY(d)]), INS.day)}</select></label><div class="muted small" id="in-routeinfo"></div></div></div></div></div>` : ''}
+    <div class="ins-g">
+      ${sec('in-map', pe ? 'Route and hotspots' : 'Hotspots – where personnel spend most time', `<div class="mapbox" id="in-map" style="height:420px"></div><p class="muted small" style="margin:6px 0 0">${pe ? 'Line = route that day (check-in → positions every 10 min → check-out). ' : ''}Circles = time spent on shift in each ~35 m square${pe ? '' : '; pick a person to see their route'}. Positions are recorded only while the app is open on shift.</p>`)}
+      ${sec('in-hs', `Top hotspots <span class="cnt">${hs.length}</span>`, hs.length ? `<div class="tw" style="max-height:440px"><table><thead><tr><th>#</th><th>Nearest site</th><th>Zone</th><th class="num">Time</th><th class="num">People</th><th>Location</th></tr></thead><tbody>${hs.map((h, i) => { const ns = nearSite(h); return `<tr data-hs="${i}" style="cursor:pointer"><td>${i + 1}</td><td>${esc(ns?.s.name || '—')}${ns ? ` <span class="muted small">${Math.round(ns.d)} m</span>` : ''}</td><td>${ns?.inZone ? '<span class="pill pos">inside</span>' : '<span class="pill warn">outside</span>'}</td><td class="num">${hm(h.ms)}</td><td class="num">${h.who.size}</td><td class="mono small">${h.lat.toFixed(5)}, ${h.lng.toFixed(5)}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No positions in this range yet.</p>')}
+      ${sec('in-cov', 'Coverage by site <span class="cnt">present ÷ planned (allocated, not OFF)</span>', covRows.length ? `<div class="tw" style="max-height:360px"><table><thead><tr><th>Site</th><th class="num">Planned</th><th class="num">Present</th><th>Coverage</th><th class="num" title="days with fewer present than planned">Short days</th></tr></thead><tbody>${covRows.map(r => `<tr><td>${esc(siteName(r.s))}</td><td class="num">${r.plan}</td><td class="num">${r.pres}</td><td>${pbar(r.pc, r.pc < 85 ? 'n' : r.pc < 95 ? 'w' : 'p')}</td><td class="num">${r.short || ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No allocations in this range.</p>')}
+      ${sec('in-pun', 'Punctuality', `${weeks.length ? `<div class="muted small">On-time check-ins per week</div><div class="spark" style="margin:6px 0 22px">${weeks.map(([k, [a, b]]) => `<i style="height:${Math.max(3, pct(b, a))}%" title="Week of ${fmtDMY(k)}: ${pct(b, a)}% on time (${a})"><b>${k.slice(8)}/${k.slice(5, 7)}</b></i>`).join('')}</div>` : ''}
+        <div class="tw" style="max-height:250px"><table><thead><tr><th>Most often late</th><th class="num">Check-ins</th><th class="num">Late</th><th class="num">Avg min</th></tr></thead><tbody>${[...byPerson].filter(([, x]) => x.late).sort((a, b) => b[1].late - a[1].late).slice(0, 12).map(([w, x]) => `<tr data-pp="${w}" style="cursor:pointer"><td>${esc(IX.emp.get(w)?.name || w)}</td><td class="num">${x.n}</td><td class="num">${x.late}</td><td class="num">${Math.round(x.lm / x.late)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nobody late.</td></tr>'}</tbody></table></div>`)}
+      ${sec('in-zone', 'Zone compliance by site', bySite.size ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th>Inside zone</th><th class="num">Median distance</th><th class="num">Median GPS ±</th><th class="num">To review</th></tr></thead><tbody>${[...bySite].map(([s, x]) => `<tr><td>${esc(siteName(s) || '—')}</td><td class="num">${x.n}</td><td>${pbar(pct(x.inZ, x.n), pct(x.inZ, x.n) < 80 ? 'w' : 'p')}</td><td class="num">${med(x.dist) ?? '—'} m</td><td class="num">${med(x.acc)} m</td><td class="num">${x.pend || ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No check-ins in this range.</p>')}
+      ${sec('in-pin', `Pin check <span class="cnt">${pinFix.length}</span>`, pinFix.length ? `<p class="muted small" style="margin-top:0">At these sites accurate check-ins (GPS ±30 m or better) cluster away from the pin – the pin is probably misplaced.</p><div class="tw"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th class="num">Off by</th><th></th></tr></thead><tbody>${pinFix.map((f, i) => `<tr><td>${esc(f.s.name)}</td><td class="num">${f.n}</td><td class="num">${f.d} m</td><td><button class="btn sm" data-pin="${i}">Move pin there</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">All pins match where people check in (needs 5+ accurate check-ins per site).</p>')}
+      ${sec('in-odd', `Unusual activity <span class="pill ${odd.length ? 'neg' : ''}">${odd.length}</span>`, odd.length ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>What</th><th>Details</th><th></th></tr></thead><tbody>${odd.map(([a, b, id]) => `<tr><td><b>${esc(a)}</b></td><td style="white-space:normal">${esc(b)}</td><td>${id ? `<button class="btn sm" data-pd="${id}">Details</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing unusual: no shared phones, face mismatches, impossible travel or wrong phone clocks.</p>')}
+    </div></div>`;
+  // events
+  bindSecs(v);
+  v.querySelectorAll('[data-i]').forEach(i => i.onchange = () => { INS[i.dataset.i] = i.value; if (i.dataset.i === 'project') INS.site = ''; renderInsights(); });
+  v.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { INS.to = today; INS.from = addDays(today, 1 - +b.dataset.q); renderInsights(); });
+  v.querySelectorAll('[data-pp]').forEach(r => r.onclick = () => { INS.person = r.dataset.pp; renderInsights(); });
+  v.querySelectorAll('[data-pd]').forEach(b => b.onclick = () => { const p = S.punches[b.dataset.pd]; const e = p && IX.emp.get(p.wid); if (e) punchDetails(e, p.workDate); });
+  v.querySelectorAll('[data-pin]').forEach(b => b.onclick = async () => {
+    const f = pinFix[+b.dataset.pin];
+    if (!await confirmBox(`Move the pin of ${f.s.name} ${f.d} m to where ${f.n} check-ins happened?\n\nThen Publish roster (App & review) so phones get the new pin.`, 'Move pin')) return;
+    f.pin.lat = +f.c.lat.toFixed(6); f.pin.lng = +f.c.lng.toFixed(6); markDirty(); toast('Pin moved – publish the roster to send it to phones'); renderInsights();
+  });
+  if ($('#in-day')) $('#in-day').onchange = e => { INS.day = e.target.value; renderInsights(); };
+  for (const el of v.querySelectorAll('[data-av]')) photoURL(IX.emp.get(el.dataset.av)).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; });
+  // map: zones, hotspot circles, route
+  let map; try { map = await LSMap.create($('#in-map'), { zoom: 12 }); } catch (e) { $('#in-map').innerHTML = `<p class="muted" style="padding:12px">${esc(e.message)}</p>`; return; }
+  const L = window.L, b = [];
+  for (const s of S.sites) if (siteOk(s.id)) for (const p of sitePins(s)) { LSMap.zone(map, p, { label: s.name, fill: .05, marker: false }); b.push([p.lat, p.lng]); }
+  const top = hs[0]?.ms || 1, hm2 = [];
+  hs.forEach((h, i) => { hm2[i] = L.circle([h.lat, h.lng], { radius: 12 + 40 * Math.sqrt(h.ms / top), color: '#D0473A', weight: 1, fillColor: '#D0473A', fillOpacity: .15 + .45 * (h.ms / top) }).addTo(map).bindTooltip(`#${i + 1} · ${hm(h.ms)} · ${h.who.size} person(s)`); b.push([h.lat, h.lng]); });
+  if (pe && INS.day) {
+    const day = track.filter(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10) === INS.day);
+    if (day.length) {
+      const line = day.map(x => [x.lat, x.lng]); L.polyline(line, { color: '#1766CB', weight: 3, opacity: .85 }).addTo(map);
+      day.forEach((x, i) => L.circleMarker([x.lat, x.lng], { radius: x.kind === 'ping' ? 4 : 7, color: '#fff', weight: 1.5, fillColor: x.kind === 'in' ? '#1F8A5B' : x.kind === 'out' ? '#D0473A' : '#1766CB', fillOpacity: 1 }).addTo(map).bindTooltip(`${x.kind === 'ping' ? 'position' : x.kind === 'in' ? 'check-in' : 'check-out'} ${tm(x.ts)}`));
+      let km = 0; for (let i = 1; i < day.length; i++) km += geo(day[i - 1], day[i]) / 1000;
+      $('#in-routeinfo').textContent = `${fmtDMY(INS.day)}: ${tm(day[0].ts)} – ${tm(day[day.length - 1].ts)} · ${day.filter(x => x.kind === 'ping').length} positions · ${km.toFixed(2)} km moved`;
+      b.length = 0; b.push(...line);
+    }
+  }
+  if (b.length) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
+  v.querySelectorAll('[data-hs]').forEach(r => r.onclick = () => { const c = hm2[+r.dataset.hs]; map.setView(c.getLatLng(), 18); c.openTooltip(); });
+}
+
+async function exportInsights() {
+  const X = INS.last; if (!X) return toast('Open Insights first');
+  await loadScript(LIB.xlsx);
+  const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n);
+  add('Coverage', [['Site', 'Planned', 'Present', 'Coverage %', 'Short days'], ...X.covRows.map(r => [siteName(r.s), r.plan, r.pres, r.pc, r.short])]);
+  add('Punctuality', [['Security personnel', 'Emp ID', 'Check-ins', 'Late', 'Avg late min', 'Outside zone'], ...[...X.byPerson].map(([w, x]) => [IX.emp.get(w)?.name || w, empCodeLabel(IX.emp.get(w) || {}), x.n, x.late, x.late ? Math.round(x.lm / x.late) : 0, x.out])]);
+  add('Zone', [['Site', 'Check-ins', 'Inside zone', 'To review'], ...[...X.bySite].map(([s, x]) => [siteName(s), x.n, x.inZ, x.pend])]);
+  add('Hotspots', [['#', 'Latitude', 'Longitude', 'Hours', 'People', 'Nearest site', 'Distance m'], ...X.hs.map((h, i) => { const ns = nearSite(h); return [i + 1, +h.lat.toFixed(6), +h.lng.toFixed(6), +(h.ms / 3600000).toFixed(2), h.who.size, ns?.s.name || '', ns ? Math.round(ns.d) : '']; })]);
+  add('Unusual', [['What', 'Details'], ...X.odd.map(([a, b]) => [a, b])]);
+  XLSX.writeFile(wb, `LS Insights ${INS.from} to ${INS.to}.xlsx`);
+}
+
+/* =====================================================================
+   Face check: personnel reference photos and matching of check-in photos.
+   Open-source model: @vladmandic/face-api (maintained face-api.js, MIT) –
+   SSD MobileNet v1 face detector, 68-point landmarks, ResNet-34 face
+   descriptor (128 numbers, 99.38% on the LFW benchmark). Runs in this
+   browser; photos are not sent anywhere.
+   ===================================================================== */
+const FACE = (() => {
+  const CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/';
+  let ready = null;
+  function load() {
+    return ready ||= (async () => {
+      const f = await import(CDN + 'dist/face-api.esm.js');
+      await f.tf.ready();
+      const M = CDN + 'model/';
+      await Promise.all([f.nets.ssdMobilenetv1.loadFromUri(M), f.nets.faceLandmark68Net.loadFromUri(M), f.nets.faceRecognitionNet.loadFromUri(M)]);
+      return f;
+    })().catch(e => { ready = null; throw new Error('Face check could not load (internet connection needed): ' + e.message); });
+  }
+  const image = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Image could not be read')); im.src = src; });
+  /** Descriptor of the clearest face in a Blob / URL, or null when no face is found */
+  async function describe(src) {
+    const f = await load(), url = typeof src === 'string' ? src : URL.createObjectURL(src);
+    try {
+      const im = await image(url), opt = new f.SsdMobilenetv1Options({ minConfidence: 0.4 });
+      let d = await f.detectSingleFace(im, opt).withFaceLandmarks().withFaceDescriptor();
+      if (!d) {                    // a close selfie (face fills the frame) is missed by the detector: retry with a margin around it
+        const w = im.naturalWidth, h = im.naturalHeight, c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+        const g = c.getContext('2d'); g.fillStyle = '#808080'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, w / 2, h / 2);
+        d = await f.detectSingleFace(c, opt).withFaceLandmarks().withFaceDescriptor();
+      }
+      return d ? Array.from(d.descriptor, x => Math.round(x * 1e4) / 1e4) : null;
+    } finally { if (typeof src !== 'string') URL.revokeObjectURL(url); }
+  }
+  const dist = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0));
+  /** distance → 0-100 score (about 73 at the match threshold) */
+  const score = d => Math.max(0, Math.round(100 * (1 - d * d)));
+  // distances measured on sample photos: same person 0.47–0.50, different people 0.59 and above
+  const MATCH = 0.52, UNSURE = 0.58;
+  const verdict = d => d == null ? null : d <= MATCH ? 'match' : d <= UNSURE ? 'unsure' : 'different';
+  const badge = f => {
+    if (!f) return ''; if (f.none) return '<span class="pill" title="No face found in the check-in photo">no face</span>';
+    const v = verdict(f.d); return `<span class="pill ${v === 'match' ? 'pos' : v === 'unsure' ? 'warn' : 'neg'}" title="Face distance ${f.d} (match ≤ ${MATCH})">${v === 'match' ? '✓ face' : v === 'unsure' ? '? face' : '✕ face'} ${score(f.d)}%</span>`;
+  };
+  return { load, describe, dist, score, verdict, badge, MATCH, UNSURE };
+})();
+
+const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+/** Downscale a photo to max 480 px JPEG (keeps the backup small) */
+async function shrinkPhoto(file) {
+  const u = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = u; });
+    const k = Math.min(1, 480 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', .85));
+  } finally { URL.revokeObjectURL(u); }
+}
+/** Store a reference photo for a person (e = the record being edited); returns 'face' | 'noface' */
+async function setPersonPhoto(e, file) {
+  const b = await shrinkPhoto(file), id = 'ph-' + e.id;
+  await Files.put(id, b);
+  e.photo = { id, at: new Date().toISOString() };
+  let v = null; try { v = await FACE.describe(b); } catch (x) { toast(x.message, 6000); }
+  e.face = v; return v ? 'face' : 'noface';
+}
+async function photoURL(e) { if (!e?.photo) return ''; const b = await Files.get(e.photo.id); return b ? URL.createObjectURL(b) : ''; }
+
+/** Bulk: image files named by Emp ID (C52392.jpg, C52392 - Name.png …) */
+async function bulkPhotos(files) {
+  const byCode = new Map(S.employees.map(e => [String(e.empCode || '').toUpperCase(), e]));
+  const res = { ok: 0, noface: [], unknown: [] };
+  toast(`Reading ${files.length} photo(s)…`, 3000);
+  for (const f of files) {
+    const code = (f.name.toUpperCase().match(/[A-Z]{0,3}\d{4,}/) || [''])[0], e = byCode.get(code);
+    if (!e) { res.unknown.push(f.name); continue; }
+    (await setPersonPhoto(e, f)) === 'face' ? res.ok++ : res.noface.push(`${e.name} (${f.name})`);
+  }
+  reindex(); markDirty(); renderAll();
+  openModal('Photos uploaded', `<p><b>${res.ok}</b> photo(s) saved with a recognisable face.</p>
+    ${res.noface.length ? `<p class="warn">No face found – use a clear, front-facing photo:<br>${res.noface.map(esc).join('<br>')}</p>` : ''}
+    ${res.unknown.length ? `<p class="muted">No Emp ID matched these file names:<br>${res.unknown.map(esc).join('<br>')}</p>` : ''}`, [{ label: 'Close', cls: 'pri' }]);
+}
+
+/** Compare check-in photos with the person's reference face; approve pending punches that match and are inside the zone */
+let FACE_RUN = false;
+async function faceCheckPunches(quiet = true) {
+  const c = appCfg(); if (FACE_RUN || c.faceCheck === false) return; FACE_RUN = true;
+  let checked = 0, approved = 0, mismatch = 0;
+  try {
+    const from = addDays(todayISO(), -14);
+    const todo = Object.values(S.punches || {}).filter(p => p.hasPhoto && !p.face && p.workDate >= from && p.status !== 'rejected' && IX.emp.get(p.wid)?.face).sort((a, b) => b.ts - a.ts).slice(0, 60);
+    if (!todo.length) return;
+    const cl = appClient();
+    for (const p of todo) {
+      const r = await cl.call('GET', 'admin/photo', null, { query: { id: p.id } }); if (!r.blob) continue;
+      const v = await FACE.describe(r.blob); checked++;
+      if (!v) { p.face = { none: true, at: Date.now() }; continue; }
+      const d = Math.round(FACE.dist(v, IX.emp.get(p.wid).face) * 1000) / 1000; p.face = { d, at: Date.now() };
+      const vd = FACE.verdict(d); if (vd === 'different') mismatch++;
+      if (vd === 'match' && p.status === 'pending' && p.inZone && c.faceAuto !== false) { await reviewPunch(p.id, 'accepted', `Auto-approved: face matches (${FACE.score(d)}%) and inside the zone`); approved++; }
+    }
+  } catch (e) { if (!quiet) toast(e.message, 6000); }
+  finally {
+    FACE_RUN = false;
+    if (checked) { markDirty(); renderAll(); if (!quiet || approved || mismatch) toast(`Face check · ${checked} photo(s) · ${approved} auto-approved${mismatch ? ` · ${mismatch} different face – see Insights` : ''}`, 6000); }
+  }
+}
 
 </script>
 </body>

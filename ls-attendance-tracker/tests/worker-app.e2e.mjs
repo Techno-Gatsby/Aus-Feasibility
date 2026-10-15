@@ -1,6 +1,6 @@
 import { chromium, devices } from 'playwright';
 const N = new URL('./node_modules/', import.meta.url).pathname;
-const D = new URL('..', import.meta.url).pathname; const BASE = process.env.BASE || ''; const AURL = BASE ? BASE + '/' : 'file://' + D + 'Attendance%20Tracker.html', WURL = BASE ? BASE + '/worker/' : 'file://' + D + 'Worker%20Attendance.html';
+const D = new URL('..', import.meta.url).pathname; const BASE = process.env.BASE || ''; const AURL = BASE ? BASE + '/' : 'file://' + D + 'Attendance%20Tracker.html', WURL = BASE ? BASE + '/worker/' : 'file://' + D + 'Security%20Personnel%20Attendance.html';
 const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
 const ctx = await b.newContext({ viewport: { width: 1500, height: 900 }, geolocation: { latitude: 25.03, longitude: 55.44, accuracy: 10 }, permissions: ['geolocation', 'camera'] });
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');

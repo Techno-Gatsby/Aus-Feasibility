@@ -6,7 +6,7 @@ function renderData() {
   const nAtt = Object.values(S.att).reduce((a, x) => a + Object.keys(x).length, 0);
   v.innerHTML = docHead('Settings', 'Data, rates, codes, company details') + `<div class="dc">
   ${sec('data', 'Data', `
-    <div class="kpis">${[['Workers', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+    <div class="kpis">${[['Security personnel', S.employees.length], ['Projects', S.projects.length], ['Sites', S.sites.length], ['Attendance days', nAtt.toLocaleString()], ['Invoices', S.invoices.length]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
     <div class="row">
       <button class="btn pri" onclick="$('#hdr-import').click()">Import Excel…</button>
       <button class="btn" id="dv-dl">Download backup</button>
@@ -14,7 +14,7 @@ function renderData() {
       <span class="muted small">Saved in this browser${S.savedAt ? ' · last ' + new Date(S.savedAt).toLocaleString() : ''}. Keep a backup in LS_Documents.</span>
     </div>`)}
   ${sec('rates', 'Rate card <span class="cnt">AED per person per month · pro-rata on calendar days</span>', `
-    <div class="tw"><table><thead><tr><th>Trade (as on worker)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
+    <div class="tw"><table><thead><tr><th>Trade (as on personnel)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
     ${st.rateCard.map((r, i) => `<tr><td><input type="text" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
       <td class="num"><input type="number" step="0.01" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
       <td><button class="btn sm bad" data-rcdel="${i}">✕</button></td></tr>`).join('')}
@@ -57,7 +57,7 @@ function renderData() {
     const f = e.target.files[0]; if (!f) return;
     try {
       const st = JSON.parse(await f.text()); if (!st.employees || !st.settings) throw new Error('Not a tracker backup file');
-      if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} workers)?`, 'Restore', 'bad')) return;
+      if (!await confirmBox(`Replace all current data with "${f.name}" (${st.employees.length} security personnel)?`, 'Restore', 'bad')) return;
       await restoreFiles(st); S = migrate(decodeState(st)); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Restored'); Files.sweep();
     } catch (err) { toast(err.message); }
   };
@@ -86,7 +86,7 @@ function renderData() {
     S = migrate(shippedState()); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Shipped data loaded');
   };
   $('#dv-reset').onclick = async () => {
-    if (!await confirmBox('Delete ALL workers, attendance, projects and invoices?', 'Delete everything', 'bad')) return;
+    if (!await confirmBox('Delete ALL security personnel, attendance, projects and invoices?', 'Delete everything', 'bad')) return;
     S = defaultState(); reindex(); markDirty(); renderAll(); toast('All data deleted');
   };
 }
@@ -94,13 +94,13 @@ async function restorePrev() {
   let j = null; try { j = await IDB.get('state-prev'); } catch (e) { }
   if (!j) return toast('No earlier data saved');
   const st = JSON.parse(j);
-  if (!await confirmBox(`Replace current data with the data from before the update (${st.employees?.length || 0} workers, ${st.projects?.length || 0} projects)?`, 'Restore', 'bad')) return;
+  if (!await confirmBox(`Replace current data with the data from before the update (${st.employees?.length || 0} security personnel, ${st.projects?.length || 0} projects)?`, 'Restore', 'bad')) return;
   st.seedVer = 'restored'; S = migrate(st); reindex(); defaultPeriods(); markDirty(); renderAll(); toast('Earlier data restored');
 }
 function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
 
 /* ---------- shell: views, toolbar, menus, tree, status ---------- */
-const VIEWS = { app: renderApp, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
+const VIEWS = { app: renderApp, live: renderLive, insights: renderInsights, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, employees: renderEmployees, projects: renderProjects, data: renderData };
 let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
@@ -112,15 +112,17 @@ function showView(v) {
 function renderAll() { VIEWS[curView](); renderToolbar(); renderTree(); renderStatus(); }
 
 const TOOLBAR = {
-  attendance: () => [{ l: 'Add worker', f: () => editEmployee(null) }, { l: 'Set site / shift…', f: () => openCellEditor(), t: 'Reliever at another site, or a shift change, for the selected days' }, { l: 'Undo', f: undoAtt, t: 'Ctrl+Z' }, 'sep',
+  attendance: () => [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Set site / shift…', f: () => openCellEditor(), t: 'Reliever at another site, or a shift change, for the selected days' }, { l: 'Undo', f: undoAtt, t: 'Ctrl+Z' }, 'sep',
     { l: S.locks[AV.ym] ? 'Unlock month' : 'Lock month', f: () => { if (S.locks[AV.ym]) delete S.locks[AV.ym]; else S.locks[AV.ym] = true; markDirty(); renderAttendance(); renderToolbar(); }, t: 'Locked months cannot be edited' }, 'sep',
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
-  employees: () => { const n = EV.checked.size; return [{ l: 'Add worker', f: () => editEmployee(null) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the worker app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick workers for bulk actions', dis: true }]; },
+  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the personnel app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick security personnel for bulk actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
+  live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
+  insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
-  app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send workers, PINs, site locations and settings to the worker app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick workers, then App access…'); } }]
+  app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send security personnel, PINs, site locations and settings to the personnel app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick security personnel, then App access…'); } }]
 };
 function renderToolbar() {
   const tb = $('#toolbar'); const items = TOOLBAR[curView]?.() || [];
@@ -134,17 +136,17 @@ function renderStatus() {
   const unl = S.sites.filter(s => !s.projectId).length;
   const per = curView === 'attendance' && AV.ym ? (() => { const { start, end } = attPeriod(); return `${AV.mode === 'payroll' ? 'Payroll' : 'Calendar'} month ${fmtMonYY(AV.ym)} · ${fmtDMY(start)} – ${fmtDMY(end)}`; })() : curView === 'timesheets' && TV.ym ? `Calendar month ${fmtMonYY(TV.ym)}` : 'Ready';
   $('#status').textContent = per;
-  $('#status2').textContent = `${S.employees.length} workers · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
+  $('#status2').textContent = `${S.employees.length} security personnel · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
 }
 
 /* menus */
 const MENUS = {
-  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to worker app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
+  file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
   edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
-    ['Add worker…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
-  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Employees', app: 'Worker app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
+    ['Add personnel…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
+  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Security Personnel', app: 'Personnel app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
   help: () => [['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
@@ -157,14 +159,14 @@ function openMenu(btn) {
 function closeMenu() { $('#dropdown').hidden = true; $$('.menu.open').forEach(m => m.classList.remove('open')); }
 function helpKeys() {
   openModal('Keys & codes', `<div class="form two"><div><h3>Attendance grid</h3><table><tbody>
-    ${[['Click / drag', 'select days'], ['Shift + click', 'extend selection'], ['Arrows', 'move'], ['Code key', 'mark selected days'], ['Del', 'clear'], ['Enter', 'reliever site / shift'], ['Ctrl+Z', 'undo'], ['Click a name', 'edit worker']].map(([a, b]) => `<tr><td class="lab">${a}</td><td>${b}</td></tr>`).join('')}</tbody></table></div>
+    ${[['Click / drag', 'select days'], ['Shift + click', 'extend selection'], ['Arrows', 'move'], ['Code key', 'mark selected days'], ['Del', 'clear'], ['Enter', 'reliever site / shift'], ['Ctrl+Z', 'undo'], ['Click a name', 'edit personnel']].map(([a, b]) => `<tr><td class="lab">${a}</td><td>${b}</td></tr>`).join('')}</tbody></table></div>
     <div><h3>Codes</h3><table><tbody>${S.codes.map(c => `<tr><td><span class="codes"><button style="background:${c.color}">${esc(c.code)}${c.key ? `<span class="kbd">${c.key.toUpperCase()}</span>` : ''}</button></span></td><td>${esc(c.label)}${c.billable ? ' · billable' : ''}</td></tr>`).join('')}</tbody></table></div></div>`, [{ label: 'Close', cls: 'pri' }]);
 }
 function helpCalc() {
   openModal('How the numbers are made', `<table><tbody>
     <tr><td class="lab">Payroll month</td><td>${S.settings.cycleStartDay}th of previous month to ${S.settings.cycleStartDay - 1}th, as the LS-PAYROLL sheet.</td></tr>
     <tr><td class="lab">Client timesheet</td><td>Calendar month, one sheet per project, rows grouped by site, relievers in a RELIEVER section. TOTAL DAYS = COUNTIF P (or R). Same cells as LS/DO/F-026.</td></tr>
-    <tr><td class="lab">Invoice line</td><td>Workers grouped by trade and days: "4 Security @ 31 Days" at 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</td></tr>
+    <tr><td class="lab">Invoice line</td><td>Security personnel grouped by trade and days: "4 Security @ 31 Days" at 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</td></tr>
     <tr><td class="lab">Fixed amount</td><td>Projects on a fixed monthly amount (Sobha Waves 32,795) bill that amount regardless of attendance.</td></tr>
     <tr><td class="lab">Rates</td><td>Project rate table → rate card → project unit rate. Verified: guard 4,100 · female guard 3,990 · supervisor 8,000.</td></tr>
   </tbody></table>`, [{ label: 'Close', cls: 'pri' }]);

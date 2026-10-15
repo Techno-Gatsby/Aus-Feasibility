@@ -62,7 +62,7 @@ const LSAPI = (() => {
   const DEFAULTS = { radius: 100, maxAcc: 50, windowMin: 60, lateMin: 15, photo: true, bindDevice: true, dupMin: 30, shiftHours: 12, starts: { DAY: '07:00', NIGHT: '19:00' }, lockTries: 5, lockMin: 15, tokenHours: 20 };
 
   /**
-   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
+   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
    * opts: { store, secret, now: () => ms }
    */
   function create({ store, secret, now = () => Date.now() }) {
@@ -172,6 +172,18 @@ const LSAPI = (() => {
       },
       'GET worker/me': async req => { const w = await worker(req); return w ? J(200, await profile(w)) : err(401, 'Please sign in again', 'AUTH'); },
       'POST worker/punch': async req => { const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH'); return doPunch(w, req.body || {}, 'worker'); },
+      // positions while a shift is open (phone app on screen): routes and hotspots in the tracker's Insights
+      'POST worker/ping': async req => {
+        const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH');
+        const t = now(), pts = (Array.isArray(req.body?.pts) ? req.body.pts : []).slice(0, 100);
+        let n = 0;
+        for (const x of pts) {
+          const lat = +x.lat, lng = +x.lng, ts = +x.ts;
+          if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || !(ts > t - 72 * 3600000 && ts < t + 300000)) continue;
+          await store.put('pings', { id: w.id + '-' + ts, wid: w.id, code: w.code, ts, lat, lng, acc: Math.round(+x.acc || 0), serverTs: t }); n++;
+        }
+        return J(200, { saved: n });
+      },
       /* ---------- supervisor ---------- */
       'GET supervisor/board': async req => {
         if (!isSup(req)) return err(403, 'Supervisor role required');
@@ -233,6 +245,7 @@ const LSAPI = (() => {
         const b = await store.getBlob(p.photo); if (!b) return err(404, 'No photo');
         return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
       },
+      'GET admin/pings': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), pings: (await store.list('pings', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
       'GET admin/marks': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), marks: await store.list('marks', m => m.serverTs > since, { since }) }); },
       'GET health': async () => J(200, { ok: true, time: now() })
     };

@@ -18,7 +18,7 @@ function renderEmployees() {
     return true;
   });
   const scope = EV.site ? siteName(EV.site) : EV.project ? IX.proj.get(EV.project)?.name : '';
-  v.innerHTML = docHead('Employees', `${list.length} shown · ${S.employees.length} total`, `
+  v.innerHTML = docHead('Security Personnel', `${list.length} shown · ${S.employees.length} total`, `
       ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="ev-unscope" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
       <input type="search" id="ev-q" placeholder="Name / ID / agency" value="${esc(EV.q)}" style="width:200px">
       <select id="ev-status">${opts([['active', 'Current'], ['left', 'Left'], ['all', 'Everyone']], EV.status)}</select>
@@ -33,7 +33,7 @@ function renderEmployees() {
         <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="muted">${esc(p?.name || '')}</td>
         <td class="mono">${fmtDMY(e.doj)}</td><td>${e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : ''}</td>
         <td><button class="btn sm" data-edit="${e.id}">Edit</button></td></tr>`;
-    }).join('') || '<tr><td colspan="11" class="muted">No workers match.</td></tr>'}</tbody></table></div></div>`;
+    }).join('') || '<tr><td colspan="11" class="muted">No security personnel match.</td></tr>'}</tbody></table></div></div>`;
   if ($('#ev-unscope')) $('#ev-unscope').onclick = clearSel;
   $('#ev-q').oninput = e => { EV.q = e.target.value; clearTimeout(EV._t); EV._t = setTimeout(() => { renderEmployees(); const i = $('#ev-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   for (const k of ['status', 'type']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
@@ -42,7 +42,7 @@ function renderEmployees() {
   $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); renderToolbar(); };
 }
 
-function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more workers first'); return l; }
+function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more security personnel first'); return l; }
 function bulkAssign(kind) {
   const l = selectedEmps(); if (!l.length) return;
   openModal(kind === 'site' ? `Assign ${l.length} employee(s) to a site` : `Change shift for ${l.length} employee(s)`, `
@@ -90,7 +90,10 @@ function editEmployee(id) {
       <td><select data-a="${i}" data-k="site">${siteOptions(a.site)}</select></td>
       <td><select data-a="${i}" data-k="shift">${opts(S.settings.shifts, a.shift)}</select></td>
       <td><button class="btn sm bad" data-adel="${i}">✕</button></td></tr>`).join('');
-  const m = openModal(isNew ? 'Add worker' : 'Edit worker', `
+  const m = openModal(isNew ? 'Add personnel' : 'Edit personnel', `
+    <div class="row" style="gap:12px;margin-bottom:10px;align-items:center"><div class="avatar lg" id="ee-ph">${esc(initials(e.name))}</div>
+      <div><label class="btn sm">Upload photo…<input type="file" id="ee-phf" accept="image/*" hidden></label>
+      <div class="muted small" id="ee-phs" style="margin-top:4px">${e.photo ? (e.face ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one') : 'A clear, front-facing photo lets the app check that the right person checks in.'}</div></div></div>
     <div class="form">
       <label class="f">Name *<input type="text" id="ee-name" value="${esc(e.name)}"></label>
       <label class="f">Emp ID (LS code, e.g. C14761)<input type="text" id="ee-code" value="${esc(e.empCode)}"></label>
@@ -109,10 +112,10 @@ function editEmployee(id) {
     <button class="btn sm" id="ee-addasg" style="margin-top:6px">Add allocation</button>
     ${!isNew ? `<p class="muted small">${nAtt} attendance day(s) on file.</p>` : ''}
     ${!isNew ? (() => { const a = e.app || {}, last = Object.values(S.punches || {}).filter(p => p.wid === e.id).sort((x, y) => y.ts - x.ts)[0];
-      return `<h3 style="margin:14px 0 6px">Worker app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
+      return `<h3 style="margin:14px 0 6px">Personnel app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
         <button class="btn sm" id="ee-pin">${a.on ? 'New PIN + slip' : 'Enable + PIN + slip'}</button>${a.on ? '<button class="btn sm" id="ee-dev">Reset phone</button><button class="btn sm bad" id="ee-off">Disable</button>' : ''}</div>`; })() : ''}`,
     [
-      ...(!isNew ? [{ label: 'Delete worker', cls: 'bad', onClick: async () => {
+      ...(!isNew ? [{ label: 'Delete personnel', cls: 'bad', onClick: async () => {
         if (!await confirmBox(`Delete ${e.name} and ${nAtt} attendance record(s)?\n\nTo keep history, set an end date instead.`, 'Delete', 'bad')) return;
         S.employees = S.employees.filter(x => x.id !== e.id); delete S.att[e.id]; reindex(); markDirty(); renderAll();
       } }] : []),
@@ -148,6 +151,13 @@ function editEmployee(id) {
   appBtn('#ee-pin', async real => printSlips(await givePins([real])));
   appBtn('#ee-dev', async real => { real.app.resetDevice = true; markDirty(); toast('Phone reset – Publish roster to apply'); });
   appBtn('#ee-off', async real => { real.app.on = false; markDirty(); toast('App disabled – Publish roster to apply'); });
+  photoURL(e).then(u => { if (u) $('#ee-ph', m).innerHTML = `<img src="${u}" alt="">`; });
+  $('#ee-phf', m).onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return; $('#ee-phs', m).textContent = 'Reading the face…';
+    const r = await setPersonPhoto(e, f);
+    $('#ee-ph', m).innerHTML = `<img src="${await photoURL(e)}" alt="">`;
+    $('#ee-phs', m).textContent = r === 'face' ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one';
+  };
   $('#ee-addasg', m).onclick = () => {
     readAsg(m);
     const last = e.assign[e.assign.length - 1];

@@ -1,5 +1,5 @@
 /* =====================================================================
-   Worker Attendance – sign in (remembered Emp ID + PIN), check in / out
+   Security Personnel Attendance – sign in (remembered Emp ID + PIN), check in / out
    with GPS and an on-site photo, offline queue, my month, supervisor
    board (marks days for workers who did not check in). Talks to the Azure API, or to the demo store.
    ===================================================================== */
@@ -69,6 +69,17 @@ function startGps() {
   W.watch = navigator.geolocation.watchPosition(setGps,
     e => { W.gpsErr = t('noGps'); paintGps(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
+/* ---------- position every 10 minutes while a shift is open and the app is on screen (routes and hotspots in the tracker) ---------- */
+const PING_MS = 10 * 60000;
+async function pingTick() {
+  if (!W.token || !W.prof?.open || W.sup || document.hidden || !W.gps || Date.now() - W.gps.at > 5 * 60000) return;
+  if (Date.now() - (+ls.get('ls.pingAt') || 0) < PING_MS - 15000) return;
+  let buf = []; try { buf = JSON.parse(ls.get('ls.pings') || '[]'); } catch (e) { }
+  buf.push({ ts: Date.now(), lat: W.gps.lat, lng: W.gps.lng, acc: W.gps.acc }); ls.set('ls.pingAt', String(Date.now()));
+  try { const r = await W.api.call('POST', 'worker/ping', { pts: buf.slice(-100) }, { token: W.token }); if (r.status === 200) buf = []; } catch (e) { }    // offline: kept and sent with the next one
+  ls.set('ls.pings', buf.length ? JSON.stringify(buf.slice(-200)) : null);
+}
+setInterval(pingTick, 60000); document.addEventListener('visibilitychange', pingTick);
 function zoneInfo() {
   const g = W.gps, P = W.prof; if (!g || !P) return null;
   const own = P.site ? LSAPI.nearestPin(P.site, g, g.acc) : null;

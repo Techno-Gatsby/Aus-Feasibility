@@ -39,7 +39,7 @@ function renderProjects() {
       <td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td>
       <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div>`) : ''}
-  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the worker app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
+  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the personnel app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
     <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><label class="btn sm" style="display:inline-flex;align-items:center">Upload documents in bulk…<input type="file" id="pv-bulkdocs" accept="application/pdf" multiple hidden></label><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
     ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
     ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
@@ -140,11 +140,11 @@ function editProject(id, presetName, onCreated) {
     <table><thead><tr><th>Trade</th><th class="num">Rate card</th><th class="num">This project (AED / month)</th></tr></thead><tbody>
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
-    <p class="muted small">Lines group workers by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
+    <p class="muted small">Lines group security personnel by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
     <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
     <div id="ep-docs"></div>
     <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. Many WOIs at once: Projects &amp; sites → <b>Upload documents in bulk…</b>. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
-    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the worker app: every site of this project without a pin of its own uses this zone</span></h3>
+    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
     ${pinEditorHTML('ep')}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
@@ -166,7 +166,7 @@ function editProject(id, presetName, onCreated) {
         PE.finish();
         if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
-        if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Worker app to send it to phones', 5000);
+        if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
   p.docs ||= [];
@@ -259,7 +259,7 @@ function editSite(id, projectId) {
     <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
     </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
-    <h3 style="margin:14px 0 6px">Location for the worker app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
+    <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
     ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
@@ -273,7 +273,7 @@ function editSite(id, projectId) {
         PE.finish();
         if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
         reindex(); markDirty(); renderAll();
-        if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Worker app to send it to phones', 5000);
+        if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
     }], { width: 'min(1500px,94vw)' });
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
@@ -325,7 +325,7 @@ async function bulkDocs(files) {
 }
 /** All zones on one map */
 async function zonesMap() {
-  const m = openModal('Zones for the worker app', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
+  const m = openModal('Zones for the personnel app', `<div id="zm" class="mapbox tall"></div>`, [{ label: 'Close', cls: 'pri' }], { width: 'min(1500px,94vw)' });
   try {
     const map = await LSMap.create($('#zm', m), {}), L = window.L, b = L.latLngBounds([]);
     for (const pr of S.projects) for (const p of pr.pins || []) { const z = LSMap.zone(map, p, { color: '#5B4AB8', fill: .05, label: `${pr.name} – project zone · ${p.radius} m` }); z.c.setStyle({ dashArray: '6 6' }); z.c.on('click', () => { closeModal(); editProject(pr.id); }); b.extend([p.lat, p.lng]); }

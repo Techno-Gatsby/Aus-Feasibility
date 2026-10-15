@@ -28,7 +28,7 @@ Import Excel (File menu) accepts the master payroll workbook and client timeshee
 - Excel/PDF features load SheetJS, ExcelJS, pdf-lib, pdf.js and html2canvas from cdn.jsdelivr.net.
 - `node tests/pack.e2e.mjs` with `PACK_PDF=<pack PDF>` checks page identification and the pack build (the PDF is not in the repo).
 
-## Worker app (phone) – `Worker Attendance.html`
+## Worker app (phone) – `Security Personnel Attendance.html`
 - **Workers** sign in with Emp ID (remembered) + 4-digit PIN, then **CHECK IN / CHECK OUT**. Each punch stores GPS (lat, lng, ±accuracy) and a watermarked front-camera photo. With no signal the punch waits on the phone and is sent later.
 - **Zones:** a punch is accepted when (distance to the site pin − GPS accuracy) ≤ zone radius and accuracy ≤ 50 m. Otherwise it waits in **Worker app → Punches to review**.
 - **No check-in:** there are no leave requests in the app. The supervisor (phone menu → Supervisor) or the admin (**Worker app → No check-in**) decides what the day is: A, OFF, SL, AL, EL, UL, SIRA or P.

@@ -288,7 +288,7 @@ function detectSheets(wb) {
   wb.SheetNames.forEach((n, i) => {
     const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
     const m = parseMasterSheet(rows);
-    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} workers · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
+    if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} security personnel · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
     const c = parseClientSheet(rows);
     if (c && c.rows.length) found.push({ n, hidden, type: 'client', p: c, info: `${c.multi ? c.projects.length + ' projects' : c.project} · ${c.ym ? fmtMonYY(c.ym) : 'month not in sheet'} · ${c.rows.length} rows` });
   });
@@ -327,7 +327,7 @@ async function importExcel(file) {
       label: 'Import', cls: 'pri', onClick: m => {
         const picks = [...m.querySelectorAll('[data-sh]:checked')].map(c => ({ k: +c.dataset.sh, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value }));
         const r = runImport(found, picks, $('#im-ow', m).checked); renderAll();
-        openModal('Import complete', `<div class="kpis">${[['Workers added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+        openModal('Import complete', `<div class="kpis">${[['Security personnel added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
           ${r.dbl.length ? `<div class="alert"><div><b>${r.dbl.length} person-day(s) appear on two rows for the same day</b> – the later row was kept. Check in the source sheet:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
           ${r.t.conflicts ? `<div class="note">${r.t.conflicts} day(s) differed between payroll and client sheet – the client sheet was used.</div>` : ''}
           ${r.autoMapped ? `<p>${r.autoMapped} payroll site label(s) linked automatically to their project.</p>` : ''}

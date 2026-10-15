@@ -5,7 +5,7 @@ One **Azure Static Web App** (Standard plan) hosts both pages and the API, and o
 | Path | What | Who |
 |---|---|---|
 | `/` | Attendance Tracker (admin) | Entra ID users with the role **admin**, **supervisor** or **viewer** |
-| `/worker/` | Worker Attendance (phone) | Anyone. Workers sign in with Emp ID and PIN |
+| `/worker/` | Security Personnel Attendance (phone) | Anyone. Workers sign in with Emp ID and PIN |
 | `/api/worker/*` | Worker login, punch, own month | Anonymous, but every call needs the signed PIN token |
 | `/api/supervisor/*` | Site board, punch on behalf, mark no-check-in days | supervisor, admin |
 | `/api/admin/*` | Roster, punches, review, photos, day marks | GET: admin, supervisor, viewer · changes: admin |
@@ -17,7 +17,7 @@ One **Azure Static Web App** (Standard plan) hosts both pages and the API, and o
 azure/
   web/                      ← app_location (built by `node build.mjs`)
     index.html              ← Attendance Tracker
-    worker/index.html       ← Worker Attendance (+ manifest, icon, service worker)
+    worker/index.html       ← Security Personnel Attendance (+ manifest, icon, service worker)
     staticwebapp.config.json
   api/                      ← api_location (Azure Functions, Node 20)
     src/functions/api.js    ← one HTTP function: /api/{*path}
