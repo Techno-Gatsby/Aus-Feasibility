@@ -66,7 +66,7 @@ function applyPunch(p, stats) {
     const a = assignOn(e, d);
     putCell(e.id, d, { c: code, s: p.siteId && p.siteId !== a?.site && IX.site.has(p.siteId) ? p.siteId : cur?.s, sh: cur?.sh || (p.shift && p.shift !== (a?.shift || e.shift) ? p.shift : undefined), n: cur?.n });
     p.applied = true; stats.applied++;
-  } else if (p.status === 'rejected' && p.applied) {
+  } else if (p.status !== 'accepted' && p.applied) {        // rejected, or sent back to review (e.g. face did not match): the day goes blank, not A
     if (cur && ['P', 'R'].includes(cur.c)) putCell(e.id, d, null);
     p.applied = false; stats.removed++;
   }
@@ -93,8 +93,8 @@ async function syncApp(quiet) {
 }
 setInterval(() => { if (S && Object.values(S.employees || []).some(appOn)) syncApp(true); }, 5 * 60000);
 
-async function reviewPunch(id, status, note) {
-  const r = await appClient().call('POST', 'admin/review', { id, status, note: note || '' });
+async function reviewPunch(id, status, note, reason) {
+  const r = await appClient().call('POST', 'admin/review', { id, status, note: note || '', reason });
   if (r.status !== 200) return toast('Review failed: ' + (r.body?.error || r.status), 5000);
   const p = S.punches[id]; Object.assign(p, r.body.punch, { applied: p.applied });
   const st = { applied: 0, removed: 0, locked: 0, unknown: 0, conflicts: [] }; applyPunch(p, st);
@@ -223,6 +223,7 @@ function renderApp() {
       <label class="f">Photo required<select data-ap="photo">${opts([['1', 'Yes'], ['0', 'No']], c.photo ? '1' : '0')}</select></label>
       <label class="f">One phone per personnel<select data-ap="bindDevice">${opts([['1', 'Yes'], ['0', 'No']], c.bindDevice ? '1' : '0')}</select></label>
       <label class="f">Face check on check-in photos<select data-ap="faceCheck">${opts([['1', 'Yes'], ['0', 'No']], c.faceCheck !== false ? '1' : '0')}</select></label>
+      <label class="f">Failed face check → Punches to review<select data-ap="faceReview">${opts([['1', 'Yes'], ['0', 'No – show only']], c.faceReview !== false ? '1' : '0')}</select></label>
       <label class="f">Auto-approve: face matches + inside zone<select data-ap="faceAuto">${opts([['1', 'Yes'], ['0', 'No – face shown only']], c.faceAuto !== false ? '1' : '0')}</select></label>
       <label class="f wide">ArcGIS API key <span class="muted">(optional – ArcGIS search; blank = free OpenStreetMap search)</span><input type="text" data-ap="arcgisKey" value="${esc(c.arcgisKey)}"></label>
     </div><p class="muted small" style="margin:8px 0 0">Zone rule: a punch is accepted when (distance to the pin − GPS accuracy) ≤ radius and accuracy ≤ the limit; otherwise it waits here for review. Changes apply to phones after <b>Publish roster</b>.</p>`)}

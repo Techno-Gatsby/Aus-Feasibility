@@ -69,17 +69,46 @@ function startGps() {
   W.watch = navigator.geolocation.watchPosition(setGps,
     e => { W.gpsErr = t('noGps'); paintGps(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
-/* ---------- position every 10 minutes while a shift is open and the app is on screen (routes and hotspots in the tracker) ---------- */
-const PING_MS = 10 * 60000;
-async function pingTick() {
-  if (!W.token || !W.prof?.open || W.sup || document.hidden || !W.gps || Date.now() - W.gps.at > 5 * 60000) return;
-  if (Date.now() - (+ls.get('ls.pingAt') || 0) < PING_MS - 15000) return;
-  let buf = []; try { buf = JSON.parse(ls.get('ls.pings') || '[]'); } catch (e) { }
-  buf.push({ ts: Date.now(), lat: W.gps.lat, lng: W.gps.lng, acc: W.gps.acc }); ls.set('ls.pingAt', String(Date.now()));
-  try { const r = await W.api.call('POST', 'worker/ping', { pts: buf.slice(-100) }, { token: W.token }); if (r.status === 200) buf = []; } catch (e) { }    // offline: kept and sent with the next one
-  ls.set('ls.pings', buf.length ? JSON.stringify(buf.slice(-200)) : null);
+/* ---------- positions during a shift (routes and hotspots in the tracker) ----------
+   Web page: every 10 minutes, or after moving ~50 m, while the page is open (optionally keeping the screen awake).
+   Android app (Capacitor): the BackgroundGeolocation plugin keeps recording with the screen off or the app in the
+   background, shown by a notification. Points are kept on the phone until they are sent – nothing is lost offline. */
+const PING_MS = 10 * 60000, BG = () => window.Capacitor?.Plugins?.BackgroundGeolocation;
+let bgId = null, wake = null, sending = false;
+const pingBuf = () => { try { return JSON.parse(ls.get('ls.pings') || '[]'); } catch (e) { return []; } };
+function queuePoint(pt) {
+  const buf = pingBuf(), last = buf[buf.length - 1] || JSON.parse(ls.get('ls.pingLast') || 'null');
+  if (last && pt.ts - last.ts < PING_MS - 15000 && LSAPI.distance(last, pt) < 50) return;
+  buf.push(pt); ls.set('ls.pings', JSON.stringify(buf.slice(-2000))); ls.set('ls.pingLast', JSON.stringify(pt));
 }
-setInterval(pingTick, 60000); document.addEventListener('visibilitychange', pingTick);
+async function sendPoints() {
+  if (sending || !W.token) return; const buf = pingBuf(); if (!buf.length) return; sending = true;
+  try { const part = buf.slice(0, 100), r = await W.api.call('POST', 'worker/ping', { pts: part }, { token: W.token }); if (r.status === 200) ls.set('ls.pings', buf.length > part.length ? JSON.stringify(buf.slice(part.length)) : null); }
+  catch (e) { } finally { sending = false; }                                       // offline: kept, sent later
+}
+async function pingTick() {
+  const on = !!(W.token && W.prof?.open && !W.sup);
+  syncBackground(on);
+  if (on && !document.hidden && W.gps && Date.now() - W.gps.at < 5 * 60000) queuePoint({ ts: Date.now(), lat: W.gps.lat, lng: W.gps.lng, acc: W.gps.acc });
+  sendPoints();
+}
+/** Start / stop background recording to match the shift */
+async function syncBackground(on) {
+  const bg = BG();
+  if (bg) {
+    if (on && bgId == null) {
+      bgId = 'starting';
+      try { bgId = await bg.addWatcher({ backgroundTitle: 'LS Attendance', backgroundMessage: t('bgMsg'), requestPermissions: true, stale: false, distanceFilter: 30 },
+        (loc, err) => { if (err) { if (err.code === 'NOT_AUTHORIZED') toast(t('bgPerm'), 6000); return; } queuePoint({ ts: loc.time || Date.now(), lat: loc.latitude, lng: loc.longitude, acc: Math.round(loc.accuracy || 0) }); sendPoints(); }); }
+      catch (e) { bgId = null; }
+    } else if (!on && bgId && bgId !== 'starting') { bg.removeWatcher({ id: bgId }).catch(() => { }); bgId = null; }
+  }
+  // web page: optional screen wake lock while on shift, so recording continues
+  const want = on && !bg && ls.get('ls.awake') === '1' && !document.hidden;
+  if (want && !wake && navigator.wakeLock) { try { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } catch (e) { } }
+  if (!want && wake) { wake.release().catch(() => { }); wake = null; }
+}
+setInterval(pingTick, 60000); document.addEventListener('visibilitychange', pingTick); window.addEventListener('online', sendPoints);
 function zoneInfo() {
   const g = W.gps, P = W.prof; if (!g || !P) return null;
   const own = P.site ? LSAPI.nearestPin(P.site, g, g.acc) : null;
@@ -237,7 +266,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 async function refresh(redraw = true) {
   if (!W.token) return;
-  try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; ss.set('ls.prof', JSON.stringify(r.body)); if (redraw && !W.sup && !$('.cam') && !W.busy) render(); } } catch (e) { }
+  try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; ss.set('ls.prof', JSON.stringify(r.body)); setTimeout(pingTick, 0); if (redraw && !W.sup && !$('.cam') && !W.busy) render(); } } catch (e) { }
 }
 async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; }
 
@@ -367,11 +396,13 @@ function renderMore() {
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
     <div class="card" style="padding:4px 16px"><ul class="menu-list">
       <li><button id="m-lang">${ic('globe')}<span>${t('lang')}</span><span class="val">${esc(LANGS.find(l => l[0] === LANG)[1])}</span></button></li>
+      ${BG() ? '' : `<li><button id="m-awake">${ic('locate')}<span>${t('awake')}</span><span class="val">${ls.get('ls.awake') === '1' ? '✓' : '—'}</span></button></li>`}
       <li><button id="m-theme">${ic('moon')}<span>${t('theme')}</span><span class="val">${esc(thL)}</span></button></li>
       <li><button id="m-sup">${ic('users')}<span>${t('supervisor')}</span><span class="val">${ic('arrow')}</span></button></li>
       <li><button id="m-out" class="danger">${ic('logout')}<span>${t('signout')}</span></button></li></ul></div>
     <p class="note">${t('locNote')}</p><p class="k" style="text-align:center;margin-top:18px">LS · ${t('appVer')} 3.0</p>`, { tab: 'more', crumb: t('more') });
   $('#m-lang').onclick = () => $('#b-lang').click();
+  if ($('#m-awake')) $('#m-awake').onclick = () => { ls.set('ls.awake', ls.get('ls.awake') === '1' ? null : '1'); toast(t('awakeS'), 5000); pingTick(); renderMore(); };
   $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
@@ -420,7 +451,7 @@ function renderSup() {
   $('#b-exit').onclick = () => { W.sup = false; W.api = LSClient.make({ base: API_BASE }); render(); };
   paintGps();
 }
-function signOut(expired) { W.token = null; W.prof = null; ss.set('ls.tok', null); ss.set('ls.prof', null); W.sup = false; SCREEN = 'login'; if (expired === true) W.err = ''; render(); }
+function signOut(expired) { syncBackground(false); W.token = null; W.prof = null; ss.set('ls.tok', null); ss.set('ls.prof', null); W.sup = false; SCREEN = 'login'; if (expired === true) W.err = ''; render(); }
 
 /* ---------- demo roster (demo mode only): three workers, zones around where you are ---------- */
 async function loadDemo() {

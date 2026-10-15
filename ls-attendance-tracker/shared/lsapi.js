@@ -236,7 +236,10 @@ const LSAPI = (() => {
       'POST admin/review': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const p = await store.get('punches', req.body?.id); if (!p) return err(404, 'Punch not found');
-        p.status = req.body.status === 'rejected' ? 'rejected' : 'accepted'; p.reviewNote = String(req.body.note || '').slice(0, 300); p.reviewBy = req.principal?.userDetails || 'admin'; p.serverTs = now();
+        // 'pending' sends an accepted punch back to review (face check), with the reason shown to the reviewer
+        p.status = ['rejected', 'pending'].includes(req.body.status) ? req.body.status : 'accepted';
+        if (p.status === 'pending' && req.body.reason) p.reasons = [...new Set([...(p.reasons || []), String(req.body.reason).slice(0, 120)])];
+        p.reviewNote = String(req.body.note || '').slice(0, 300); p.reviewBy = req.principal?.userDetails || 'admin'; p.serverTs = now();
         await store.put('punches', p); return J(200, { punch: strip(p) });
       },
       'GET admin/photo': async req => {

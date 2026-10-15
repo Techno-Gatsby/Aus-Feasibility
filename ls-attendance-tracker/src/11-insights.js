@@ -39,7 +39,7 @@ function hotspots(tracks) {
       if (x.kind === 'in') on = true;
       if (!on && x.kind === 'ping') on = true;                    // positions are only sent during a shift
       const nx = pts[i + 1]; let ms = 0;
-      if (on && x.kind !== 'out') ms = nx ? Math.min(nx.ts - x.ts, 30 * 60000) : 10 * 60000;
+      if (on && x.kind !== 'out') ms = nx ? Math.min(nx.ts - x.ts, 2 * 3600000) : 10 * 60000;   // the Android app records on movement: a long gap = stayed put
       if (x.kind === 'out') on = false;
       const k = Math.round(x.lat / G) + ':' + Math.round(x.lng / G);
       const c = cells.get(k) || cells.set(k, { la: 0, lo: 0, n: 0, ms: 0, who: new Set() }).get(k);
@@ -102,7 +102,7 @@ async function renderInsights() {
   const P = Object.values(S.punches || {}).filter(p => inRange(p.workDate) && p.status !== 'rejected' && siteOk(p.siteId) && empOk(IX.emp.get(p.wid)));
   const ins = P.filter(p => p.type === 'in');
   const lateMin = p => +((p.flags || []).find(f => /^late \d+/.test(f)) || '').replace(/\D+/g, '') || 0;
-  const late = ins.filter(p => lateMin(p) > 0), faced = P.filter(p => p.face && !p.face.none), fOk = faced.filter(p => FACE.verdict(p.face.d) === 'match');
+  const late = ins.filter(p => lateMin(p) > 0), faced = P.filter(p => p.face?.d != null), fOk = faced.filter(p => FACE.verdict(p.face.d) === 'match');
   // coverage from the attendance grid: planned = allocated and not OFF; present = billable code
   const days = []; for (let d = INS.from; d <= INS.to; d = addDays(d, 1)) days.push(d);
   const cov = new Map();
@@ -168,7 +168,7 @@ async function renderInsights() {
     ${pe ? `<div class="sec"><div class="sh"><b>${esc(pe.name)}</b> <span class="mono muted">${esc(empCodeLabel(pe))}</span></div><div class="sb"><div class="row" style="gap:14px;align-items:flex-start">
       <span class="avatar lg" data-av="${pe.id}">${esc(initials(pe.name))}</span>
       <table class="kvt"><tbody><tr><td>Check-ins</td><td>${ins.length}</td></tr><tr><td>On time</td><td>${ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—'}</td></tr><tr><td>Inside zone</td><td>${ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—'}</td></tr>
-      <tr><td>Sites</td><td>${[...new Set(ins.map(p => p.siteName))].map(esc).join(', ') || '—'}</td></tr><tr><td>Relieved</td><td>${ins.filter(p => p.reliever).length} day(s)</td></tr><tr><td>Face</td><td>${pe.face ? (faced.length ? `${fOk.length}/${faced.length} matched` : 'reference photo set') : 'no reference photo – add one in Security Personnel'}</td></tr></tbody></table>
+      <tr><td>Sites</td><td>${[...new Set(ins.map(p => p.siteName))].map(esc).join(', ') || '—'}</td></tr><tr><td>Relieved</td><td>${ins.filter(p => p.reliever).length} day(s)</td></tr><tr><td>Face</td><td>${faceRefs(pe).length ? (faced.length ? `${fOk.length}/${faced.length} matched` : 'reference photo set') : 'no reference photo – add one in Security Personnel'}</td></tr></tbody></table>
       <div style="flex:1"><label class="f" style="max-width:220px">Route on<select id="in-day">${opts(pDays.map(d => [d, fmtDMY(d)]), INS.day)}</select></label><div class="muted small" id="in-routeinfo"></div></div></div></div></div>` : ''}
     <div class="ins-g">
       ${sec('in-map', pe ? 'Route and hotspots' : 'Hotspots – where personnel spend most time', `<div class="mapbox" id="in-map" style="height:420px"></div><p class="muted small" style="margin:6px 0 0">${pe ? 'Line = route that day (check-in → positions every 10 min → check-out). ' : ''}Circles = time spent on shift in each ~35 m square${pe ? '' : '; pick a person to see their route'}. Positions are recorded only while the app is open on shift.</p>`)}

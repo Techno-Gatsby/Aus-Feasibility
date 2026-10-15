@@ -1,0 +1,31 @@
+# Builds the LS Attendance Android app (ls-attendance-tracker/mobile) → artifact "ls-attendance-apk"
+name: Android app
+on:
+  workflow_dispatch:
+    inputs:
+      worker_url:
+        description: 'Phone page address, e.g. https://<your-app>.azurestaticapps.net/worker/'
+        required: false
+  push:
+    paths: ['ls-attendance-tracker/mobile/**', '.github/workflows/ls-android-app.yml']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ls-attendance-tracker/mobile } }
+    env:
+      LS_WORKER_URL: ${{ inputs.worker_url || vars.LS_WORKER_URL || 'https://example.azurestaticapps.net/worker/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm install --no-audit --no-fund
+      - run: npx cap add android
+      - run: node scripts/prepare.mjs
+      - run: npx cap sync android
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ls-attendance-apk
+          path: ls-attendance-tracker/mobile/android/app/build/outputs/apk/debug/app-debug.apk

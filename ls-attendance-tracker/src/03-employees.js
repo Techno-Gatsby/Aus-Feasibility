@@ -92,8 +92,8 @@ function editEmployee(id) {
       <td><button class="btn sm bad" data-adel="${i}">✕</button></td></tr>`).join('');
   const m = openModal(isNew ? 'Add personnel' : 'Edit personnel', `
     <div class="row" style="gap:12px;margin-bottom:10px;align-items:center"><div class="avatar lg" id="ee-ph">${esc(initials(e.name))}</div>
-      <div><label class="btn sm">Upload photo…<input type="file" id="ee-phf" accept="image/*" hidden></label>
-      <div class="muted small" id="ee-phs" style="margin-top:4px">${e.photo ? (e.face ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one') : 'A clear, front-facing photo lets the app check that the right person checks in.'}</div></div></div>
+      <div><label class="btn sm">Add photo…<input type="file" id="ee-phf" accept="image/*" hidden></label>
+      <div class="muted small" id="ee-phs" style="margin-top:4px">${e.photo ? (faceRefs(e).length ? `✓ ${faceRefs(e).length} reference face(s) – check-in photos are compared with them. Add up to 3 photos.` : 'No face found in this photo – use a clear, front-facing one') : 'A clear, front-facing photo lets the app check that the right person checks in. Up to 3 photos.'}</div></div></div>
     <div class="form">
       <label class="f">Name *<input type="text" id="ee-name" value="${esc(e.name)}"></label>
       <label class="f">Emp ID (LS code, e.g. C14761)<input type="text" id="ee-code" value="${esc(e.empCode)}"></label>
@@ -154,9 +154,9 @@ function editEmployee(id) {
   photoURL(e).then(u => { if (u) $('#ee-ph', m).innerHTML = `<img src="${u}" alt="">`; });
   $('#ee-phf', m).onchange = async ev => {
     const f = ev.target.files[0]; if (!f) return; $('#ee-phs', m).textContent = 'Reading the face…';
-    const r = await setPersonPhoto(e, f);
+    const r = await setPersonPhoto(e, f, true); ev.target.value = '';
     $('#ee-ph', m).innerHTML = `<img src="${await photoURL(e)}" alt="">`;
-    $('#ee-phs', m).textContent = r === 'face' ? '✓ Face recognised – check-in photos are compared with it' : 'No face found in this photo – use a clear, front-facing one';
+    $('#ee-phs', m).textContent = r === 'noface' ? 'No face found in this photo – use a clear, front-facing one' : `✓ ${faceRefs(e).length} reference face(s)${r === 'many' ? ' – more than one face in this photo, use one with only this person' : ''}. Up to 3 photos (different light / angle) make the check more accurate.`;
   };
   $('#ee-addasg', m).onclick = () => {
     readAsg(m);

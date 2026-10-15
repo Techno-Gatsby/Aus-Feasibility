@@ -1,0 +1,7 @@
+{
+  "appId": "ae.latinem.attendance",
+  "appName": "LS Attendance",
+  "webDir": "www",
+  "server": { "url": "https://REPLACED-AT-BUILD/worker/", "cleartext": false },
+  "android": { "useLegacyBridge": true }
+}
