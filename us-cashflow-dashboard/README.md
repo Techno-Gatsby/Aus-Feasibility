@@ -64,7 +64,11 @@ and to profit before overheads and tax. The buttons above the table switch every
 (Landowner, plotted lot area), **Per acre** (Landowner, Consol) and **% of sales**, so e.g. the
 construction rate per home and per sq ft, or the sale price per lot, per acre and per sq ft,
 read straight off. All projects divides the totals by the units or area of the projects that have
-them (Creek Park Commercial, land only, is left out of those).
+them (Creek Park Commercial, land only, is left out of those). Land area and plotted lot area come
+from the project details (the models' figures, or one typed in there): the lot-buying projects
+(Projects 9–12 in the report, 1–4 in the models) buy finished lots, so their lot price includes land
+and infrastructure and the models give them no acreage; their columns say so, and a land area typed
+into their project details gives them per-acre figures.
 
 ## G&A
 

@@ -67,6 +67,10 @@
       for (const p of names) {
         const b = rows.get(p);
         const o = { key: ent + '|' + p, entity: ent, project: p, units: Math.round(num(b.units)), acres: null, sba: num(b.sba) ? Math.round(b.sba) : null };
+        // A lot-buying project: the Homebuilder buys finished lots from outside the group, so the
+        // Landowner has no land, lots or infrastructure for it (and the models no acreage).
+        const lb = lo.get(p);
+        if (ent !== 'landowner') o.lot_buying = !!B.landowner && !(lb && (num(lb.units) || num(lb.land)));
         if (ent === 'landowner') {
           Object.assign(o, {
             acres: num(b.acres) ? r2(b.acres) : null, sales: r2(num(b.sales)), land: r2(num(b.land)), infra: r2(num(b.infra)),
