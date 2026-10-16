@@ -121,7 +121,7 @@
         const eq = val('equity_infused', c);
         if (!eq) continue;
         out.push({
-          key: ent + '|' + project, entity: ent, project, revenue: val('revenue', c), equity_infused: eq, roe: val('roe', c),
+          key: ent + '|' + project, entity: ent, project, revenue: val('topline', c) != null ? val('topline', c) : val('revenue', c), equity_infused: eq, roe: val('roe', c),
           source: `Executive Summary (${s.name}), row ${b.rows.roe.r}, column ${XLSXLite.colName(c)}`,
         });
       }

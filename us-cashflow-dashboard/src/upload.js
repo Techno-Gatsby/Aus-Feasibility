@@ -121,7 +121,8 @@
     const cs = find(d.consol_cf, 'All Projects', /^sales$/i), hs = find(d.homebuilder_cf, 'All Projects', /^sales$/i);
     if (cs && hs) out.push({ ok: Math.abs(cs.Total - hs.Total) <= 1, label: 'Consol sales equal Homebuilder sales', detail: Math.abs(cs.Total - hs.Total) > 1 ? `Consol ${money(cs.Total)}, Homebuilder ${money(hs.Total)}` : '' });
     const sv = (d.project_summary || []).find((r) => r.entity === 'consol' && r.project === 'All Projects');
-    if (sv && cs && sv.revenue != null) out.push({ ok: Math.abs(sv.revenue - cs.Total) <= 1, label: 'Executive summary revenue matches the Consol cashflow', detail: Math.abs(sv.revenue - cs.Total) > 1 ? `summary ${money(sv.revenue)}, cashflow ${money(cs.Total)}` : '' });
+    const top = sv ? (sv.topline != null ? sv.topline : sv.revenue) : null;
+    if (sv && cs && top != null) out.push({ ok: Math.abs(top - cs.Total) <= 1, label: 'Executive summary topline matches the Consol cashflow sales', detail: Math.abs(top - cs.Total) > 1 ? `summary ${money(top)}, cashflow ${money(cs.Total)}` : '' });
     for (const [ds, name] of [['consol_pl', 'Consol'], ['landowner_pl', 'Landowner'], ['homebuilder_pl', 'Homebuilder']]) {
       if (!report.refreshed.includes(ds)) continue;
       const top = d[ds].filter((r) => !r.parent);

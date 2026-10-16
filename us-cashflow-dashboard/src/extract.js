@@ -371,7 +371,9 @@
   // Executive summary tiles: 'Summary val' has a Landowner, Homebuilder and Consolidated
   // block, projects across the header row and 'Total' at the end.
   const SUMMARY_FIELDS = [
-    [/^topline|^revenue/, 'revenue'], [/^gross profit %/, 'gp_pct'], [/^gross profit/, 'gross_profit'],
+    // 'Topline / Revenue' in one row, or 'Topline' (sales value; ROE = topline / equity) and
+    // 'Revenue' (recognised; the margins are over it) in two.
+    [/^revenue|^topline\s*\/\s*revenue/, 'revenue'], [/^topline/, 'topline'], [/^gross profit %/, 'gp_pct'], [/^gross profit/, 'gross_profit'],
     [/^net profit %/, 'np_pct'], [/^net profit/, 'net_profit'], [/^total equity infused/, 'equity_infused'],
     [/^debt raised/, 'debt_raised'], [/^irr \(pre/, 'irr_pre'], [/^irr \(post/, 'irr_post'],
     [/^ret(u|ur)n on equity/, 'roe'], [/^margin to equity/, 'margin_to_equity'], [/^debt to equity/, 'debt_to_equity'],
