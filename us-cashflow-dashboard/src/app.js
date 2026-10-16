@@ -284,25 +284,28 @@
     { const kb = sec.querySelector('.view-cf .irrk'); const b = kb.querySelector('b'); const ir = dash.data('project_irr');
       b.classList.remove('dash-skeleton');
       const row = ir.status === 'ok' ? ir.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
-      if (row) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = row.pretax_equity_irr == null ? 'n/a' : (row.pretax_equity_irr * 100).toFixed(2) + '%'; } else b.textContent = '—';
-      // All Projects: the same after overheads, where the summary gives it.
-      let oh = kb.querySelector('.ksub2'); const ov = row ? row.pretax_equity_irr_inc_oh : null;
-      kb.classList.toggle('hasoh', ov != null);
-      if (ov != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'After overheads ' + (ov * 100).toFixed(2) + '%'; } else if (oh) oh.remove();
+      // All Projects leads with the IRR after overheads, the projects' IRR under it.
+      const ov = row ? row.pretax_equity_irr_inc_oh : null, v0 = row ? row.pretax_equity_irr : null, lead = ov != null;
+      if (row) { b.setAttribute('data-where', 'key=' + enc(row.key)); const v = lead ? ov : v0; b.textContent = v == null ? 'n/a' : (v * 100).toFixed(2) + '%'; } else b.textContent = '—';
+      let oh = kb.querySelector('.ksub2');
+      kb.classList.toggle('hasoh', lead && v0 != null);
+      if (lead && v0 != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'Before overheads ' + (v0 * 100).toFixed(2) + '%'; } else if (oh) oh.remove();
       kb.onclick = null; kb.style.cursor = 'default'; }
     { const sd = dash.data('project_summary');
       const row = sd.status === 'ok' ? sd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
       const F = { money: (v) => money(v), pct: (v) => (v * 100).toFixed(1) + '%', x: (v) => v.toFixed(2) + 'x' };
       sec.querySelectorAll('.view-cf .sumk').forEach((kb) => {
         const b = kb.querySelector('b'), f = kb.dataset.f; b.classList.remove('dash-skeleton'); kb.style.cursor = 'default';
-        const v = row ? row[f] : null;
+        // All Projects leads with the company figure after overheads (as in the Executive Report),
+        // the projects' total before overheads under it.
+        const v0 = row ? row[f] : null, ov = row ? row[f + '_inc_oh'] : null, lead = ov != null;
+        const v = lead ? ov : v0;
         if (row && v != null) { b.setAttribute('data-where', 'key=' + enc(row.key)); b.textContent = F[kb.dataset.fmt](v); } else b.textContent = 'n/a';
         const sb = kb.querySelector('.ksub:not(.ksub2)');
-        if (sb) { const sv = row ? row[kb.dataset.sub] : null; if (row && sv != null) { sb.setAttribute('data-where', 'key=' + enc(row.key)); sb.textContent = (sv * 100).toFixed(1) + '% margin'; } else sb.textContent = ''; }
-        // All Projects: the same after overheads, where the summary gives it.
-        let oh = kb.querySelector('.ksub2'); const ov = row ? row[f + '_inc_oh'] : null;
-        kb.classList.toggle('hasoh', ov != null);
-        if (ov != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'After overheads ' + F[kb.dataset.fmt](ov); } else if (oh) oh.remove();
+        if (sb) { const sv = row ? row[kb.dataset.sub + (lead ? '_inc_oh' : '')] : null; if (row && sv != null) { sb.setAttribute('data-where', 'key=' + enc(row.key)); sb.textContent = (sv * 100).toFixed(1) + '% margin'; } else sb.textContent = ''; }
+        let oh = kb.querySelector('.ksub2');
+        kb.classList.toggle('hasoh', lead && v0 != null);
+        if (lead && v0 != null) { if (!oh) { oh = document.createElement('small'); oh.className = 'ksub ksub2'; kb.appendChild(oh); } oh.textContent = 'Before overheads ' + F[kb.dataset.fmt](v0); } else if (oh) oh.remove();
       }); }
     { const xd = dash.data('kpi_extra');
       const row = xd.status === 'ok' ? xd.data.find((x) => x.entity === S.tab && x.project === st.proj) : null;
@@ -405,7 +408,7 @@
     tile(t2, 'Average home price', mn(p.avg_home_price_m), 'project_profile', 'avg_home_price_m', project);
     tile(t2, 'Pre-tax IRR', pct(p.pretax_irr), 'project_profile', 'pretax_irr', project);
     tile(t2, 'Land cost', mn(p.land_cost_m), 'project_profile', 'land_cost_m', project);
-    tile(t2, 'Infrastructure cost', mn(p.infra_cost_m), 'project_profile', 'infra_cost_m', project);
+    tile(t2, 'Construction cost', mn(p.construction_cost_m), 'project_profile', 'construction_cost_m', project);
     tile(t2, 'Total direct cost', mn(p.total_direct_cost_m), 'project_profile', 'total_direct_cost_m', project);
     c2.appendChild(t2);
     g.append(c1, c2); box.appendChild(g);
@@ -449,7 +452,7 @@
     const ents = ent.status === 'ok' ? ent.data.filter((r) => r.project === project) : [];
     if (ents.length) {
       tc.appendChild(el('h5', null, 'Key milestones'));
-      tc.appendChild(etable(ents, [['entity', 'Type'], ['timeline', 'Timeline'], ['land_parcel_receipt', 'Land parcel receipt'], ['sales_commencement', 'Sales commencement'], ['development_completion', 'Development completion'], ['hand_over', 'Hand over']], (r, f) => r[f] || '–', 'ctr'));
+      tc.appendChild(etable(ents, [['entity', 'Type'], ['timeline', 'Timeline'], ['land_parcel_receipt', 'Land parcel receipt'], ['sales_commencement', 'Sales commencement'], ['sales_completion', 'Sales completion'], ['hand_over', 'Hand over']], (r, f) => r[f] || '–', 'ctr'));
     }
     box.appendChild(tc);
 
@@ -512,8 +515,11 @@
     const prow = pl.status === 'ok' ? pl.data.filter((r) => r.project === project) : [];
     if (prow.length) {
       const pc = el('div', 'pdcard'); pc.appendChild(el('h4', null, 'Projected P&L (consolidated), USD'));
-      const yrs = periodsOf(pl).filter((y) => /^FY/.test(y) && prow.some((r) => Math.abs(+r[y] || 0) > 0.5));
-      const yr0 = periodsOf(pl).filter((y) => /^FY/.test(y));
+      // To the consolidated P&L's last year (FY2033, the model horizon), as in the Executive Report.
+      const hzs = periodsOf(dash.data('consol_pl')).filter((y) => /^FY\d{4}$/.test(y)), hz = hzs[hzs.length - 1];
+      const yr0 = periodsOf(pl).filter((y) => /^FY/.test(y) && (!hz || y <= hz));
+      const yrs = yr0.filter((y) => prow.some((r) => Math.abs(+r[y] || 0) > 0.5));
+      const tot = (r) => yr0.reduce((s, y) => s + (+r[y] || 0), 0);
       const first = yr0.indexOf(yrs[0]), last = yr0.indexOf(yrs[yrs.length - 1]);
       const show = yr0.slice(Math.max(0, first - 1), last + 1);
       const t = el('table', 'mini plmini'); t.setAttribute('data-source', 'consol_project_pl'); t.setAttribute('data-row-key', 'key');
@@ -525,7 +531,7 @@
       prow.forEach((r) => {
         const tr = el('tr', { header: 'g', total: 't' }[r.kind] || ''); tr.dataset.key = r.key;
         td(tr, r.line, 'l');
-        const c = td(tr, r.kind === 'header' ? '' : fmt(r.Total, r.line), 'tot'); if (+r.Total < -0.5) c.classList.add('neg');
+        const c = td(tr, r.kind === 'header' ? '' : fmt(tot(r), r.line), 'tot'); if (tot(r) < -0.5) c.classList.add('neg');
         show.forEach((y) => { const x = td(tr, r.kind === 'header' ? '' : fmt(r[y], r.line)); if (+r[y] < -0.5) x.classList.add('neg'); });
         tb.appendChild(tr);
       });
@@ -555,12 +561,12 @@
     ['gross_revenue_m', 'Gross revenue ($Mn)', 'num', 'Finance metrics'], ['npat_m', 'Net profit after tax ($Mn)', 'num', 'Finance metrics'],
     ['gross_profit_m', 'Gross profit ($Mn)', 'num', 'Finance metrics'], ['equity_required_m', 'Equity required ($Mn)', 'num', 'Finance metrics'],
     ['avg_home_price_m', 'Average home price ($Mn)', 'num', 'Finance metrics'], ['pretax_irr', 'Pre-tax IRR (%)', 'pct', 'Finance metrics'],
-    ['land_cost_m', 'Land cost ($Mn)', 'num', 'Finance metrics'], ['infra_cost_m', 'Infrastructure cost ($Mn)', 'num', 'Finance metrics'],
+    ['land_cost_m', 'Land cost ($Mn)', 'num', 'Finance metrics'], ['construction_cost_m', 'Construction cost ($Mn)', 'num', 'Finance metrics'],
     ['total_direct_cost_m', 'Total direct cost ($Mn)', 'num', 'Finance metrics'],
   ];
   const EF = [
     ['land_parcel_receipt', 'Land parcel receipt', 'month'], ['sales_commencement', 'Sales commencement', 'month'],
-    ['development_completion', 'Development completion', 'month'], ['hand_over', 'Hand over', 'month'], ['equity_release', 'Equity release', 'month'],
+    ['sales_completion', 'Sales completion', 'month'], ['hand_over', 'Hand over', 'month'], ['equity_release', 'Equity release', 'month'],
     ['pretax_irr', 'Pre-tax IRR (%)', 'pct'], ['net_revenue_m', 'Net revenue ($Mn)', 'num'], ['gp_margin', 'GP margin (%)', 'pct'], ['net_margin', 'Net margin (%)', 'pct'],
   ];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

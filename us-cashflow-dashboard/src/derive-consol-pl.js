@@ -8,6 +8,8 @@
 //   new'), brokerage and marketing: the cashflow totals; all spread over the years by revenue;
 // - real property tax: 'RPT transfer to Cost of revenue' by year ('Real property tax V2 - updated');
 //   what is still deferred after its last year is spread over the later revenue years;
+// - finance income: the cashflow's 'Interest income on bank deposit' in the year it is earned
+//   (as in the Executive Report's project P&L pages);
 // - franchise tax on gross profit and corporate tax on profit before tax, at the rates in 'Cons Assumption'.
 (function (X) {
   'use strict';
@@ -27,11 +29,11 @@
     ['brokerage', 'Brokerage costs', 'item'], ['totaldirect', 'Total direct costs', 'total'],
     ['gp', 'Gross Profit', 'total'], [null, 'Indirect costs', 'header'],
     ['marketing', 'Marketing & Selling Expenses (2%)', 'item'], ['rpt', 'Real property tax', 'item'],
-    ['finance', 'Finance costs', 'item'], ['franchise', 'Franchise tax', 'item'],
+    ['finance', 'Finance costs', 'item'], ['interest', 'Finance income', 'item'], ['franchise', 'Franchise tax', 'item'],
     ['toverhead', 'Total overheads', 'total'], ['npbt', 'Net Profit before tax', 'total'],
     ['corptax', 'Corporate tax', 'total'], ['npat', 'Net Profit after tax', 'total'],
   ];
-  // Subtotals 'Cons P&L' shows that the project layout leaves out (projects have no finance income).
+  // Subtotals 'Cons P&L' shows that the project layout leaves out.
   const EXTRA = [['netfinance', 'Total Net Finance costs'], ['statetax', 'Total State taxes']];
   const BUDGET = [['land', /^land cost/], ['construction', /^construction cost/], ['dns', /^design .*supervision/], ['authority', /^authority cost/], ['finance', /^finance cost/]];
   const CF_TOTALS = [['brokerage', /^brokerage$/], ['marketing', /^sales & marketing/]];
@@ -110,8 +112,9 @@
         const line = (re) => cf.rows.find((r) => r.project === p && re.test(lower(r.line)));
         const revLine = line(/^revenue$/);
         if (!revLine) continue;
-        const rev = {}; for (const y of years) rev[y] = 0;
-        for (const per of cf.periods) rev[fyOf(per)] += num(revLine[per]);
+        const rev = {}, intr = {}; for (const y of years) rev[y] = intr[y] = 0;
+        const intLine = line(/^interest income/);
+        for (const per of cf.periods) { rev[fyOf(per)] += num(revLine[per]); intr[fyOf(per)] += intLine ? num(intLine[per]) : 0; }
         const total = years.reduce((s, y) => s + rev[y], 0);
         if (Math.abs(total) < 0.5) continue; // no sales, no P&L (e.g. land held for later)
         const b = budget[bOf(p)], t = rpt.projects[rOf(p)];
@@ -128,9 +131,10 @@
           o.totaldirect = o.land + o.construction + o.dns + o.authority + o.brokerage;
           o.gp = o.revenue - o.totaldirect;
           o.franchise = o.gp * rates.franchise;
-          o.netfinance = o.finance;
+          o.interest = -intr[y];
+          o.netfinance = o.finance + o.interest;
           o.statetax = o.rpt + o.franchise;
-          o.toverhead = o.marketing + o.rpt + o.finance + o.franchise;
+          o.toverhead = o.marketing + o.rpt + o.finance + o.interest + o.franchise;
           o.npbt = o.gp - o.toverhead;
           o.corptax = o.npbt * rates.corptax;
           o.npat = o.npbt - o.corptax;

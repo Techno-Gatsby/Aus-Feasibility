@@ -57,7 +57,10 @@
         const line = clean(s.get(r, h.c)), code = s.get(r, h.c - 1);
         if (code != null && clean(code)) lastCode = r;
         if (!line) continue;
-        const keep = (code != null && clean(code)) || (/^total/i.test(line) && r - lastCode <= 2) || /^return on equity/i.test(line);
+        // A line without a Sr No right under a numbered one (Consol 'Sundry Creditors (Others)') too.
+        const hasNums = P.some((p) => isNum(s.get(r, p.c)) || (p.c2 > p.c && isNum(s.get(r, p.c2))));
+        const keep = (code != null && clean(code)) || (/^total/i.test(line) && r - lastCode <= 2) || /^return on equity/i.test(line)
+          || (hasNums && r - lastCode === 1 && !/^(check|diff)/i.test(line));
         if (!keep) { if (rows.length && /^(sr\.?\s*no|assets|equity)/i.test(line)) break; continue; }
         let nf = 0, ns = 0, anyF = false, anyS = false;
         const vals = P.map((p) => {
@@ -75,6 +78,20 @@
         x.vals.forEach((o, j) => { row['p' + (j + 1)] = o.v == null ? null : row.kind === 'pct' ? o.v : r2(o.v); });
         row._cells = x.vals.map((o) => o.c);
         out.push(row);
+      });
+      // A line over sub-items left blank (or 0) in the sheet while its sub-items are not, e.g.
+      // the first period's 'Total bank and cash balance' and 'Total Equity': their sum, as in
+      // the Executive Report.
+      const lines = out.filter((r) => r.parent === sk);
+      lines.forEach((r, i) => {
+        if (r.level || r.kind === 'pct') return;
+        const kids = [];
+        for (let k = i - 1; k >= 0 && lines[k].level; k--) kids.push(lines[k]);
+        if (!kids.length) return;
+        P.forEach((p, j) => {
+          const f = 'p' + (j + 1), sum = kids.reduce((t, x) => t + (isNum(x[f]) ? x[f] : 0), 0);
+          if (!r[f] && Math.abs(sum) >= 0.5 && kids.some((x) => isNum(x[f]))) r[f] = r2(sum);
+        });
       });
     });
     return out;

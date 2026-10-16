@@ -45,7 +45,9 @@
       }
       const val = (ent, project, f) => {
         const c = (sv.cols.find((x) => x.project === project) || {}).c;
-        const b = sv.blocks[ent], x = b && b.rows[f] ? b.rows[f].row : extra[ent] && extra[ent][f];
+        const b = sv.blocks[ent];
+        if (b && b.rows[f]) return c ? sv.get(ent, c, f) : null;
+        const x = extra[ent] && extra[ent][f];
         return c && x && isNum(x[c]) ? x[c] : null;
       };
       return { sv, val, projects: sv.cols.map((x) => x.project).filter((p) => p !== 'All Projects') };
@@ -80,16 +82,18 @@
     };
     const lot = rows.some((x) => x.lotBuying);
     const m = ent === 'landowner'
-      ? { land: pick(/^land/i, 'finish'), sales: pick(/^lot/i, 'start'), dev: pick(/^horizontal/i, 'finish', 1), hand: pick(/^lot/i, 'finish', 1) }
-      : { land: lot ? pick(/^land/i, 'finish') : pick(/^lot/i, 'start') || pick(/^vertical/i, 'start'), sales: pick(/^home/i, 'start'), dev: pick(/^vertical/i, 'finish', 1), hand: pick(/^close/i, 'start', 1) };
-    const from = ent === 'landowner' ? m.land : pick(/^vertical/i, 'start');
+      ? { land: pick(/^land/i, 'finish'), sales: pick(/^lot/i, 'start'), done: pick(/^lot/i, 'finish', 1), hand: pick(/^lot/i, 'finish', 1) }
+      : { land: lot ? pick(/^land/i, 'finish') : pick(/^lot/i, 'start') || pick(/^vertical/i, 'start'), sales: pick(/^home/i, 'start'), done: pick(/^home/i, 'finish', 1), hand: pick(/^close/i, 'start', 1) };
+    // As in the Executive Report: the timeline runs from land parcel receipt to hand over, and
+    // sales completion is the last lot (Landowner) or home (Homebuilder) sale.
+    const from = m.land;
     const tbd = (d) => mon(d) || 'TBD';
     return {
       timeline: from && m.hand ? mon(from) + ' – ' + mon(m.hand) : 'TBD',
-      land_parcel_receipt: tbd(m.land), sales_commencement: tbd(m.sales), development_completion: tbd(m.dev), hand_over: tbd(m.hand),
+      land_parcel_receipt: tbd(m.land), sales_commencement: tbd(m.sales), sales_completion: tbd(m.done), hand_over: tbd(m.hand),
     };
   }
-  const MILESTONES = ['timeline', 'land_parcel_receipt', 'sales_commencement', 'development_completion', 'hand_over'];
+  const MILESTONES = ['timeline', 'land_parcel_receipt', 'sales_commencement', 'sales_completion', 'hand_over'];
 
   // The model's own cashflow per entity (falls back to the cashflow dataset), memoised.
   async function ownCF(ctx, ent) {
@@ -118,6 +122,7 @@
       const sba = rows ? sum(rows, 'sba') : old.nsa_sqft;
       const plotted = old.plotted_sqft != null ? old.plotted_sqft : null;
       const tdc = pl.find((r) => r.project === p && r.kind !== 'header' && concept(r.line) === 'totaldirect');
+      const cons = pl.find((r) => r.project === p && r.kind !== 'header' && concept(r.line) === 'construction');
       const land = nz(val('landowner', p, 'land')) || val('homebuilder', p, 'land');
       // The consolidated column is blank for a project without returns (land held for later).
       const eq = nz(val('consol', p, 'equity_infused')) || num(val('landowner', p, 'equity_infused')) + num(val('homebuilder', p, 'equity_infused'));
@@ -135,7 +140,7 @@
         equity_required_m: mn(eq),
         avg_home_price_m: rev && units ? mn(rev / units) : null,
         pretax_irr: rev && isNum(irr) && irr ? round(irr, 3) : null,
-        land_cost_m: pnl(land), infra_cost_m: pnl(val('landowner', p, 'infra')),
+        land_cost_m: pnl(land), infra_cost_m: pnl(val('landowner', p, 'infra')), construction_cost_m: pnl(cons ? cons.Total : null),
         total_direct_cost_m: pnl(tdc ? tdc.Total : num(rev) - num(val('consol', p, 'gross_profit'))),
         note: old.note != null ? old.note : '',
       });
@@ -160,9 +165,12 @@
     const cut = stub.length ? Math.max(...stub) : Math.min(...cf.landowner.periods.map(periodYear)) - 1;
     // Years run on to the last one in which any project infuses or releases equity, so a model
     // with more years loses none of it.
+    // As in the Executive Report, a release dated July to December funds the following year.
+    const late = (ent, p) => { const d = rel[ent] && rel[ent][p]; return d ? +d.slice(5, 7) >= 7 : false; };
     let last = cut + EQ_YEARS;
     for (const ent of ['landowner', 'homebuilder']) for (const r of cf[ent].rows) {
-      if (/^equity (infusion|release)$/i.test(r.line)) for (const k of cf[ent].periods) if (Math.abs(num(r[k])) >= 0.5) last = Math.max(last, periodYear(k));
+      const shift = /^equity release$/i.test(r.line) && late(ent, r.project) ? 1 : 0;
+      if (/^equity (infusion|release)$/i.test(r.line)) for (const k of cf[ent].periods) if (Math.abs(num(r[k])) >= 0.5) last = Math.max(last, periodYear(k) + shift);
     }
     const cols = [{ key: "equity Till Dec'" + String(cut).slice(2), test: (y) => y <= cut }];
     for (let y = cut + 1; y <= last; y++) cols.push({ key: 'equity FY' + y, test: (x) => x === y });
@@ -180,20 +188,18 @@
         const ratio = (f) => (rev && isNum(val(ent, p, f)) ? round(val(ent, p, f), 3) : null);
         o.pretax_irr = ratio('irr_pre'); o.gp_margin = ratio('gp_pct'); o.net_margin = ratio('np_pct');
         o.equity_required_m = mn(eq);
-        // Equity schedule ($Mn): infusions by year from the cashflow, less the equity released.
-        // The release is shown as equity returned plus net profit (Summary val), in the year(s)
-        // the cashflow releases it.
+        // Equity schedule ($Mn): infusions by year from the cashflow, less the cashflow's equity
+        // release (equity returned plus profit), a July-December release in the following year.
         const line = (re) => cf[ent].rows.find((r) => r.project === p && re.test(r.line));
-        const inf = line(/^equity infusion$/i), rls = line(/^equity release$/i);
-        const relTot = rls ? cf[ent].periods.reduce((s, k) => s + num(rls[k]), 0) : 0;
-        const back = num(eq) + num(val(ent, p, 'net_profit'));
+        const inf = line(/^equity infusion$/i), rls = line(/^equity release$/i), shift = late(ent, p) ? 1 : 0;
         const net = cols.map(() => 0);
         let funding = 0;
         for (const k of cf[ent].periods) {
-          const i = cols.findIndex((c) => c.test(periodYear(k)));
-          if (i < 0) continue;
-          const r = relTot ? (num(rls[k]) / relTot) * back : 0;
-          net[i] += num(inf && inf[k]) - r; funding -= r;
+          const i = cols.findIndex((c) => c.test(periodYear(k))), j = cols.findIndex((c) => c.test(periodYear(k) + shift));
+          if (i >= 0) net[i] += num(inf && inf[k]);
+          const r = rls ? num(rls[k]) : 0;
+          if (j >= 0) net[j] -= r;
+          funding -= r;
         }
         o.revenue_funding_m = mn(funding);
         o.equity_release = rel[ent] ? mon(rel[ent][p]) : old.equity_release || null;
@@ -236,9 +242,21 @@
           const y = periodYear(k), b = (by[y] = by[y] || { v: 0, u: 0 });
           b.v += num(sv[k]); b.u += raw[p] ? raw[p][k] || 0 : num(su && su[k]);
         }
-        for (const [y, b] of Object.entries(by)) {
-          if (mn(b.v, 1)) out.push({ key: `${p}|${label}|${y}`, project: p, entity: label, year: +y, sales_value_m: mn(b.v, 1), units: Math.round(b.u) });
+        // Units as in the Executive Report: each year rounded, then made to add up to the project's
+        // number of units (the line's Topline column) one unit at a time, in the year that rounded
+        // the other way with the most units, else in the last year with sales. Only a gap of up to
+        // one unit a year is closed (rounding); a larger one is the model's and is left as it is.
+        const ys = Object.keys(by).map(Number).sort((a, b) => a - b), act = ys.filter((y) => Math.abs(by[y].u) > 1e-6);
+        const units = Object.fromEntries(ys.map((y) => [y, Math.round(by[y].u)]));
+        const total = su && isNum(su.Budget) && su.Budget > 0 ? Math.round(su.Budget) : null;
+        let diff = total != null && act.length ? total - act.reduce((t, y) => t + units[y], 0) : 0;
+        if (Math.abs(diff) > act.length) diff = 0;
+        for (let guard = 0; diff && guard < 100; guard++) {
+          const sgn = Math.sign(diff), other = act.filter((y) => sgn * (by[y].u - units[y]) > 1e-9).sort((a, b) => by[b].u - by[a].u);
+          const y = other.length ? other[0] : act[act.length - 1];
+          units[y] += sgn; diff -= sgn;
         }
+        for (const y of ys) { const b = by[y]; if (mn(b.v, 1)) out.push({ key: `${p}|${label}|${y}`, project: p, entity: label, year: y, sales_value_m: mn(b.v, 1), units: units[y] }); }
       }
     }
     if (!any) throw new Error("needs 'landowner Projectwise cashflow' or 'Homebuilde Projectwise cashflow'");

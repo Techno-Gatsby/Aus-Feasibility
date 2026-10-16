@@ -112,16 +112,16 @@
   // entity only when equity goes into it there (the landowner has no lot-buying projects,
   // the homebuilder nothing in the commercial land).
   X.step('project_roe', async (ctx) => {
-    const { s, cols, blocks } = await readSummary(ctx);
+    const { s, cols, blocks, get } = await readSummary(ctx);
     const out = [];
     for (const ent of ['landowner', 'homebuilder', 'consol']) {
       const b = blocks[ent]; if (!b || !b.rows.roe) continue;
-      const val = (f, c) => { const x = b.rows[f]; const v = x ? x.row[c] : null; return isNum(v) ? v : null; };
+      const val = (f, c) => get(ent, c, f);
       for (const { c, project } of cols) {
         const eq = val('equity_infused', c);
         if (!eq) continue;
         out.push({
-          key: ent + '|' + project, entity: ent, project, revenue: val('topline', c) != null ? val('topline', c) : val('revenue', c), equity_infused: eq, roe: val('roe', c),
+          key: ent + '|' + project, entity: ent, project, revenue: val('revenue', c), equity_infused: eq, roe: val('roe', c),
           source: `Executive Summary (${s.name}), row ${b.rows.roe.r}, column ${XLSXLite.colName(c)}`,
         });
       }

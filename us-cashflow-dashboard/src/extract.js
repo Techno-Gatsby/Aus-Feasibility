@@ -371,8 +371,8 @@
   // Executive summary tiles: 'Summary val' has a Landowner, Homebuilder and Consolidated
   // block, projects across the header row and 'Total' at the end.
   const SUMMARY_FIELDS = [
-    // 'Topline / Revenue' in one row, or 'Topline' (sales value; ROE = topline / equity) and
-    // 'Revenue' (recognised; the margins are over it) in two.
+    // 'Topline / Revenue' in one row, or 'Topline' (full-life sales value) and 'Revenue' (to the
+    // model's last P&L year, FY2033) in two; see get() in readSummary for how they are used.
     [/^revenue|^topline\s*\/\s*revenue/, 'revenue'], [/^topline/, 'topline'], [/^gross profit %/, 'gp_pct'], [/^gross profit/, 'gross_profit'],
     [/^net profit %/, 'np_pct'], [/^net profit/, 'net_profit'], [/^total equity infused/, 'equity_infused'],
     [/^debt raised/, 'debt_raised'], [/^irr \(pre/, 'irr_pre'], [/^irr \(post/, 'irr_post'],
@@ -395,28 +395,66 @@
       // 'Total' is All Projects; 'Total (inc Overheads)' is the same less the overheads, not a project.
       const incOh = Object.keys(hdr).map(Number).find((c) => c > 2 && /^total\s*\(\s*inc/i.test(clean(hdr[c])));
       const cols = Object.keys(hdr).map(Number).filter((c) => c > 2 && c !== incOh && clean(hdr[c])).map((c) => ({ c, project: /^total$/i.test(clean(hdr[c])) ? 'All Projects' : clean(hdr[c]) }));
-      return { s, cols, blocks, incOh };
+      // The figures as the Executive Report uses them. With 'Topline' and 'Revenue' in two rows,
+      // revenue is the full-life topline and the margins are gross profit (full life) and net
+      // profit (to FY2033) over it; the sheet's own % rows divide by revenue to FY2033 only.
+      const get = (ent, c, f) => {
+        const b = blocks[ent], raw = (k) => { const x = b && b.rows[k]; const v = x && c != null ? x.row[c] : null; return isNum(v) ? v : null; };
+        const split = !!(b && b.rows.topline && b.rows.revenue);
+        if (!split) return f === 'topline' ? raw('revenue') : f === 'revenue_pl' ? null : raw(f);
+        const top = raw('topline');
+        if (f === 'revenue' || f === 'topline') return top;
+        if (f === 'revenue_pl') return raw('revenue');
+        if (f === 'gp_pct') return top ? (raw('gross_profit') || 0) / top : raw(f);
+        if (f === 'np_pct') return top ? (raw('net_profit') || 0) / top : raw(f);
+        return raw(f);
+      };
+      return { s, cols, blocks, incOh, get };
     });
   }
   step('project_summary', async (ctx) => {
-    const { s, cols, blocks, incOh } = await readSummary(ctx);
+    const { s, cols, blocks, incOh, get } = await readSummary(ctx);
     const out = [];
+    // All Projects at company level, as on the Executive Report's overview and P&L pages:
+    // revenue and gross profit to FY2033 from the entity's P&L; net profit after overheads from
+    // 'Total (inc Overheads)' (Consol), the Homebuilder P&L and the Landowner model's 'HS P&L'
+    // (the summary's own Homebuilder figure takes off the Landowner's pre-Sep'26 result).
+    const PL = { consol: 'consol_pl', landowner: 'landowner_pl', homebuilder: 'homebuilder_pl' };
+    const plTop = (ds, k) => { const r = (ctx.get(ds) || []).find((x) => !x.level && x.kind !== 'header' && concept(x.line) === k); return r && isNum(r.Total) ? r.Total : null; };
+    let hsNp = null;
+    const hs = await ctx.sheetOf('landowner', 'HS P&L');
+    if (hs) {
+      let dc = null, tc = null;
+      for (const r of hs.rowNums()) {
+        const row = hs.row(r);
+        if (dc == null) { for (const [c, v] of Object.entries(row)) { if (/^description$/i.test(clean(v))) dc = +c; if (/^total$/i.test(clean(v))) tc = +c; } if (dc == null || tc == null) dc = tc = null; continue; }
+        if (/^net profit$/i.test(clean(row[dc])) && isNum(row[tc])) { hsNp = row[tc]; break; }
+      }
+    }
     for (const ent of ['landowner', 'homebuilder', 'consol']) {
       const b = blocks[ent]; if (!b) continue;
       for (const { c, project } of cols) {
         const o = { key: ent + '|' + project, entity: ent, project };
-        for (const [, f] of SUMMARY_FIELDS) { const x = b.rows[f]; const v = x ? x.row[c] : null; o[f] = isNum(v) ? v : null; }
+        for (const [, f] of SUMMARY_FIELDS) o[f] = get(ent, c, f);
+        if (b.rows.topline && b.rows.revenue) o.revenue_pl = get(ent, c, 'revenue_pl');
         // Ratios over a zero base are blank, not 0%.
         if (!o.revenue) o.gp_pct = o.np_pct = null;
         if (!o.equity_infused) o.irr_post = o.roe = o.margin_to_equity = o.debt_to_equity = null;
         o.source = 'Executive Summary (Summary val sheet, Landowner model)';
         o.roe_multiple = o.margin_to_equity != null ? Math.round((1 + o.margin_to_equity) * 10000) / 10000 : null;
-        // All Projects after overheads, from 'Total (inc Overheads)'.
-        if (project === 'All Projects' && incOh) {
-          const at = (f) => { const x = b.rows[f]; const v = x ? x.row[incOh] : null; return isNum(v) ? v : null; };
-          o.overheads = at('overheads');
-          for (const f of ['net_profit', 'np_pct', 'irr_pre', 'irr_post', 'margin_to_equity']) o[f + '_inc_oh'] = at(f);
-          o.roe_multiple_inc_oh = o.margin_to_equity_inc_oh != null ? Math.round((1 + o.margin_to_equity_inc_oh) * 10000) / 10000 : null;
+        if (project === 'All Projects') {
+          const rev = plTop(PL[ent], 'revenue'), gp = plTop(PL[ent], 'gp');
+          if (rev && gp != null) { o.revenue_pl = rev; o.gross_profit = gp; o.gp_pct = gp / rev; }
+          const at = (f) => (incOh != null ? get(ent, incOh, f) : null);
+          const after = ent === 'homebuilder' ? plTop('homebuilder_pl', 'npat') : ent === 'landowner' ? (hsNp != null ? hsNp : plTop('landowner_pl', 'npat')) : (at('net_profit') != null ? at('net_profit') : plTop('consol_pl', 'npat'));
+          if (after != null) {
+            o.overheads = at('overheads');
+            o.net_profit_inc_oh = after;
+            o.np_pct_inc_oh = rev ? after / rev : null;
+            o.irr_pre_inc_oh = at('irr_pre'); o.irr_post_inc_oh = at('irr_post');
+            o.margin_to_equity_inc_oh = o.equity_infused ? after / o.equity_infused : null;
+            o.roe_multiple_inc_oh = o.margin_to_equity_inc_oh != null ? Math.round((1 + o.margin_to_equity_inc_oh) * 10000) / 10000 : null;
+          }
         }
         out.push(o);
       }

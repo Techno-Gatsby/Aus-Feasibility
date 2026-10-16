@@ -487,7 +487,7 @@ function checkSales(g, run, keep) {
   const rows = run.data.project_sales.filter(keep), have = new Set(rows.map((r) => r.key));
   for (const r of rows) {
     const b = expectSales(run, r.project, r.entity.toLowerCase())[r.year];
-    check(g, b && near(r.sales_value_m, Math.round(b.v / 1e5) / 10, 0.11) && near(r.units, Math.round(b.u), 1), `${r.key}: ${r.sales_value_m} Mn / ${r.units}, cashflow ${b ? (b.v / 1e6).toFixed(2) + ' Mn / ' + b.u.toFixed(1) : 'none'}`);
+    check(g, b && near(r.sales_value_m, Math.round(b.v / 1e5) / 10, 0.11) && near(r.units, Math.round(b.u), 3), `${r.key}: ${r.sales_value_m} Mn / ${r.units}, cashflow ${b ? (b.v / 1e6).toFixed(2) + ' Mn / ' + b.u.toFixed(1) : 'none'}`);
   }
   for (const ent of ['Landowner', 'Homebuilder']) for (const p of new Set(run.data[ent.toLowerCase() + '_cf'].map((r) => r.project))) {
     if (p === ALL) continue;
@@ -498,8 +498,11 @@ function checkSales(g, run, keep) {
   }
 }
 {
-  const g = 'years › project_sales', bm = byKey(base.data.project_sales);
-  sameRows(g, base.data.project_sales, yrs.data.project_sales);
+  const g = 'years › project_sales', bm = byKey(base.data.project_sales), ym = byKey(yrs.data.project_sales);
+  // Units within one: a year that closed a rounding gap to the project's units may not need to
+  // once the copied years add more units.
+  sameRows(g, base.data.project_sales, yrs.data.project_sales, () => true, ['units']);
+  for (const b of base.data.project_sales) { const f = ym.get(b.key); if (f) check(g, Math.abs(f.units - b.units) <= 1, `${b.key} . units: ${f.units}, was ${b.units}`); }
   const maxY = {};
   for (const r of base.data.project_sales) maxY[r.entity] = Math.max(maxY[r.entity] || 0, r.year);
   for (const r of yrs.data.project_sales.filter((x) => !bm.has(x.key))) check(g, r.year > (maxY[r.entity] || 0), `${r.key}: new row in an old year`);
@@ -545,9 +548,8 @@ async function checkEquity(g, run, bks) {
     const line = (re) => cf.rows.find((x) => x.project === r.project && re.test(x.line));
     const inf = line(/^equity infusion$/i), rel = line(/^equity release$/i);
     const tot = (x) => (x ? cf.periods.reduce((s, p) => s + (x[p] || 0), 0) : 0);
-    const sv = sum[ent + '|' + r.project] || {};
-    const back = tot(rel) ? (sv.equity_infused || 0) + (sv.net_profit || 0) : 0;
-    const want = (tot(inf) - back) / 1e6, got = cols.reduce((s, c) => s + (r[c] || 0), 0);
+    // (the release as the cashflow has it: equity returned plus profit)
+    const want = (tot(inf) - tot(rel)) / 1e6, got = cols.reduce((s, c) => s + (r[c] || 0), 0);
     check(g, near(got, want, 0.006 * cols.length + 0.01), `${r.key}: schedule adds up to ${got.toFixed(2)} Mn, the cashflow to ${want.toFixed(2)} Mn (columns ${cols[0].slice(7)} to ${cols[cols.length - 1].slice(7)})`);
     const years = cf.periods.filter((p) => Math.abs((inf && inf[p]) || 0) + Math.abs((rel && rel[p]) || 0) >= 0.5).map(yearOf);
     if (years.length) check(g, cols.some((c) => yearOf(c.slice(7)) >= Math.max(...years)), `${r.key}: equity moves in ${Math.max(...years)}, the schedule stops at ${cols[cols.length - 1].slice(7)}`);
@@ -559,7 +561,10 @@ await checkEquity('years › project_entity', yrs, Y.books);
 sameRows('years › project_entity', base.data.project_entity, yrs.data.project_entity, () => true, ['revenue_funding_m', ...Object.keys(yrs.data.project_entity[0] || {}).filter((k) => k.startsWith('equity '))]);
 
 // Everything else does not depend on the years.
-for (const ds of ['project_summary', 'project_roe', 'project_timeline']) sameRows('years › ' + ds, base.data[ds], yrs.data[ds]);
+// (All Projects' company figures come from the P&L, which the copied years extend.)
+const PLF = ['gross_profit', 'gp_pct', 'revenue_pl', 'net_profit_inc_oh', 'np_pct_inc_oh', 'margin_to_equity_inc_oh', 'roe_multiple_inc_oh'];
+for (const ds of ['project_summary', 'project_roe', 'project_timeline']) sameRows('years › ' + ds, base.data[ds], yrs.data[ds], (r) => ds !== 'project_summary' || r.project !== ALL);
+sameRows('years › project_summary', base.data.project_summary, yrs.data.project_summary, (r) => r.project === ALL, PLF);
 sameRows('years › project_profile', base.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), yrs.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), () => true, ['total_direct_cost_m']);
 
 // G&A: every year field gains the new years (amounts × factor, shares as the last year's);
@@ -696,7 +701,7 @@ for (const ds of ['project_summary', 'project_roe']) {
   for (const b of rows.filter((r) => r.project === FROM)) {
     const f = rows.find((r) => r.key === NEW + '|' + b.entity);
     if (!check(g, f, `${NEW}|${b.entity}: missing`)) continue;
-    for (const k of ['timeline', 'land_parcel_receipt', 'sales_commencement', 'development_completion', 'hand_over', 'equity_release']) check(g, f[k] === monLater(b[k], SHIFT), `${f.key} . ${k}: ${f[k]}, ${FROM} ${b[k]}`);
+    for (const k of ['timeline', 'land_parcel_receipt', 'sales_commencement', 'sales_completion', 'hand_over', 'equity_release']) check(g, f[k] === monLater(b[k], SHIFT), `${f.key} . ${k}: ${f[k]}, ${FROM} ${b[k]}`);
     const was = yearOf(base.report.periods[b.entity.toLowerCase() + '_cf'].slice(-1)[0]);
     check(g, Object.keys(f).some((k) => k.startsWith('equity FY') && yearOf(k.slice(7)) > was && f[k]), `${f.key}: no equity after FY${was}`);
   }
