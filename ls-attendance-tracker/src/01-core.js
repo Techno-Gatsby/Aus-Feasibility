@@ -233,6 +233,7 @@ const sec = (id, title, body, extra = '') => `<div class="sec ${SEC_CLOSED.has(i
 function bindSecs(root) { root.querySelectorAll('.sec>.sh').forEach(h => h.onclick = e => { if (e.target.closest('button,input,select,a')) return; const s = h.parentElement; s.classList.toggle('closed'); s.classList.contains('closed') ? SEC_CLOSED.add(s.dataset.sec) : SEC_CLOSED.delete(s.dataset.sec); }); }
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms); }
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
+  if (typeof TOUR !== "undefined") TOUR.stop();
   const m = $('#modal');
   m.style.width = opts.width || '';
   m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3><button class="btn sm" data-x>✕</button></div>

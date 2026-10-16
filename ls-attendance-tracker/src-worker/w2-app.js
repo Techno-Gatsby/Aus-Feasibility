@@ -219,13 +219,36 @@ function takePhoto(caption, cam = openCam()) {
   });
 }
 
+/* ---------- tour of the Today screen (only when ? is tapped) ---------- */
+function tour() {
+  const steps = [['.place', 'tour1'], ['.clockw', 'tour2'], ['#mapcard', 'tour3'], ['#b-punch', 'tour4'], ['.tabs-b', 'tour5']].filter(([q]) => { const e = $(q); return e && e.getBoundingClientRect().height > 4; });
+  let i = 0; const hole = document.createElement('div'), tip = document.createElement('div'); hole.className = 'tour-hole'; tip.className = 'tour-tip';
+  document.body.append(hole, tip);
+  const end = () => { hole.remove(); tip.remove(); removeEventListener('resize', place); };
+  function place() {
+    const el = $(steps[i][0]); if (!el) return end(); const r = el.getBoundingClientRect(), p = 6, vh = innerHeight;
+    Object.assign(hole.style, { top: r.top - p + 'px', left: r.left - p + 'px', width: r.width + p * 2 + 'px', height: r.height + p * 2 + 'px' });
+    const th = tip.offsetHeight, below = r.bottom + p + 12;
+    tip.style.top = (below + th < vh - 8 ? below : Math.max(8, r.top - p - 12 - th)) + 'px';
+  }
+  function show(n) {
+    i = n; const [q, k] = steps[i], [ti, d] = t(k).split(' | ');
+    $(q).scrollIntoView({ block: 'center' });
+    tip.innerHTML = `<div class="tour-n" dir="ltr">${i + 1} / ${steps.length}</div><b>${esc(ti)}</b><p>${esc(d)}</p><div class="tour-b">${i ? `<button class="btn" data-tb>${ic('back')}</button>` : ''}<span style="flex:1"></span><button class="btn pri" data-tn>${i < steps.length - 1 ? ic('arrow') : ic('check')}</button></div>`;
+    tip.querySelector('[data-tn]').onclick = () => i < steps.length - 1 ? show(i + 1) : end();
+    if (tip.querySelector('[data-tb]')) tip.querySelector('[data-tb]').onclick = () => show(i - 1);
+    setTimeout(place, 250);
+  }
+  hole.onclick = end; addEventListener('resize', place); haptic(10); show(0);
+}
+
 /* ---------- screens ---------- */
 function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', dock = '' } = {}) {
   try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
   clearInterval(W.tick); W.tick = null;
   document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock);
   $('#app').innerHTML = `<header class="top"><span class="mark">LS</span><p class="crumb"><span>Latinem</span><b>${esc(crumb || t('title'))}</b></p><span class="sp"></span>
-    <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
+    <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${tab === 'home' && W.prof && !W.sup ? `<button id="b-tour" class="ib" aria-label="${t('tourT')}" title="${t('tourT')}"><b style="font-size:15px">?</b></button>` : ''}${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
     ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main>${body}</main>
     ${dock ? `<div class="dock"><div class="in">${dock}</div></div>` : ''}
     ${tabs ? `<nav class="tabs-b"><div class="in">${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
@@ -339,6 +362,7 @@ function renderHome() {
   const card = $('#mapcard');
   $('#b-exp').onclick = () => { card.classList.add('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   $('#b-mapx').onclick = () => { card.classList.remove('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
+  if ($('#b-tour')) $('#b-tour').onclick = tour;
   $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); drawMap();
 }

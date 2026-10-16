@@ -417,3 +417,14 @@ table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
 .ppl .pr:hover{background:var(--surface2)}
 .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}
 .dot.on{background:var(--pos)}.dot.pe{background:var(--warn)}.dot.no{background:var(--neg)}
+
+/* tour this page (starts only from the ? button / Help menu) */
+.tour-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:transparent;color:inherit;font:700 12px var(--font-body);cursor:pointer;margin-left:10px;display:inline-grid;place-items:center}
+.tour-btn:hover{background:rgba(255,255,255,.15)}
+.tour-hole{position:fixed;z-index:9000;border-radius:8px;box-shadow:0 0 0 9999px rgba(10,16,28,.55);outline:2px solid var(--accent);pointer-events:none;transition:all .2s ease}
+.tour-tip{position:fixed;z-index:9001;background:var(--surface);color:var(--text);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:12px 14px 10px;font-size:12.5px;line-height:1.45}
+.tour-tip b{display:block;font-size:13.5px;color:var(--heading);margin:2px 22px 4px 0}
+.tour-tip p{margin:0 0 10px}
+.tour-tip .tour-n{font:600 10.5px var(--font-mono);color:var(--faint);letter-spacing:.04em}
+.tour-tip .tour-b{display:flex;gap:6px;align-items:center}
+.tour-tip .tour-x{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--faint);cursor:pointer;font-size:13px}
