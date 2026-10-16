@@ -1183,9 +1183,9 @@
     root.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === S.tab)));
     root.querySelectorAll('section.tab').forEach((s) => (s.hidden = s.id !== S.tab));
     const sec = document.getElementById(S.tab), E = ENT[S.tab], st = S.ent[S.tab];
-    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga', ex = st.stmt === 'exp';
-    sec.querySelector('.view-cf').hidden = pl || act || ga || ex; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga; sec.querySelector('.view-exp').hidden = !ex;
-    sec.querySelector('.hint-cf').hidden = pl || act || ga || ex; sec.querySelector('.hint-pl').hidden = !pl;
+    const pl = st.stmt === 'pl', act = st.stmt === 'act', ga = st.stmt === 'ga', ex = st.stmt === 'exp', un = st.stmt === 'unit';
+    sec.querySelector('.view-cf').hidden = pl || act || ga || ex || un; sec.querySelector('.view-pl').hidden = !pl; sec.querySelector('.view-act').hidden = !act; sec.querySelector('.view-ga').hidden = !ga; sec.querySelector('.view-exp').hidden = !ex; sec.querySelector('.view-unit').hidden = !un;
+    sec.querySelector('.hint-cf').hidden = pl || act || ga || ex || un; sec.querySelector('.hint-pl').hidden = !pl;
     sec.querySelectorAll('.stmtseg button').forEach((b) => {
       b.classList.toggle('on', b.dataset.s === st.stmt);
       b.onclick = () => { st.stmt = b.dataset.s; render(); };
@@ -1216,10 +1216,11 @@
     pdt.replaceChildren();
     pdt.hidden = !(canTop && st.detailTop);
     if (canTop && st.detailTop) pdt.appendChild(makeDetails(st.proj));
-    if (ga || ex) {
+    if (ga || ex || un) {
       sec.querySelector('.projl').hidden = true; pdb.hidden = true; pdt.hidden = true; col.hidden = true;
-      const ent = { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab], V = ga ? window.SobhaGA : window.SobhaExposure;
-      if (V) V.render(sec.querySelector(ga ? '.view-ga' : '.view-exp'), ent, col);
+      const ent = { consol: 'consol', landowner: 'lo', homebuilder: 'hb' }[S.tab], V = ga ? window.SobhaGA : ex ? window.SobhaExposure : window.SobhaUnit;
+      if (un) dash.data('unit_economics');
+      if (V) V.render(sec.querySelector(ga ? '.view-ga' : ex ? '.view-exp' : '.view-unit'), ent, col);
       return;
     }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }

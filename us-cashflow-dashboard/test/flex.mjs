@@ -569,6 +569,23 @@ const PLF = ['gross_profit', 'gp_pct', 'revenue_pl', 'net_profit_inc_oh', 'np_pc
 for (const ds of ['project_summary', 'project_roe', 'project_timeline']) sameRows('years › ' + ds, base.data[ds], yrs.data[ds], (r) => ds !== 'project_summary' || r.project !== ALL);
 sameRows('years › project_summary', base.data.project_summary, yrs.data.project_summary, (r) => r.project === ALL, PLF);
 sameRows('years › project_profile', base.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), yrs.data.project_profile.map((r) => Object.assign({ key: r.project }, r)), () => true, ['total_direct_cost_m']);
+// Unit economics: the budgets have no years; brokerage, marketing and property tax are the project
+// P&L's full-life totals, which take in the new years.
+const UE_PL = ['brokerage', 'marketing', 'rpt', 'direct', 'total', 'gross_profit', 'profit', 'source'];
+sameRows('years › unit_economics', base.data.unit_economics, yrs.data.unit_economics, () => true, UE_PL);
+// Each row adds up: direct cost, total cost and profits from its parts.
+function checkUnit(g, run) {
+  const sum = (r, ks) => ks.reduce((s, k) => s + (r[k] || 0), 0);
+  for (const r of run.data.unit_economics) {
+    const lo = r.entity === 'landowner';
+    const direct = lo ? sum(r, ['land', 'infra', 'pid_processing', 'pid_reimb']) : sum(r, [r.entity === 'consol' ? 'lo_total' : 'land', 'construction', 'dns', 'authority', 'brokerage']);
+    const total = direct + sum(r, lo ? ['rpt', 'finance'] : ['marketing', 'rpt', 'finance']);
+    check(g, near(r.direct, direct, 0.05) && near(r.total, total, 0.05) && near(r.gross_profit, r.sales - r.direct, 0.05) && near(r.profit, r.sales - r.total, 0.05), `${r.key}: does not add up`);
+    if (r.entity === 'consol' && r.infra_net != null) check(g, near(r.land + r.infra_net + r.lo_other, r.lo_total, 0.05), `${r.key}: Landowner cost split`);
+  }
+  check(g, ['consol', 'landowner', 'homebuilder'].every((e) => run.data.unit_economics.some((r) => r.entity === e)), 'an entity is missing');
+}
+checkUnit('years › unit_economics', yrs);
 
 // G&A: every year field gains the new years (amounts × factor, shares as the last year's);
 // the depreciation schedule is read for whichever new years 'Cal.' has.
@@ -679,6 +696,18 @@ for (const ds of ['consol_cf', 'landowner_cf', 'homebuilder_cf']) {
   check('project › ' + ds, prj.data[ds].some((r) => isNew(r) && /^sales$/i.test(r.line) && prj.report.periods[ds].slice(-N).some((p) => r[p] > 0)), `${NEW} has no sales in the new years`);
 }
 for (const ds of ['landowner_pl', 'homebuilder_pl']) shifted('project › ' + ds, prj.data[ds], periodsOf(prj.data[ds]), true);
+// Unit economics: the new project's budget rows are Brook Hollow's; the others are as they were.
+{
+  const g = 'project › unit_economics', U = prj.data.unit_economics;
+  checkUnit(g, prj);
+  sameRows(g, yrs.data.unit_economics, U, (r) => !isNew(r));
+  const BUD = ['units', 'sba', 'acres', 'sales', 'land', 'infra', 'pid_processing', 'pid_reimb', 'construction', 'dns', 'authority', 'finance', 'lo_total', 'infra_net', 'lo_other'];
+  for (const e of ['consol', 'landowner', 'homebuilder']) {
+    const f = U.find((r) => r.entity === e && r.project === FROM), n = U.find((r) => r.entity === e && isNew(r));
+    if (!check(g, f && n, `${e}: no row for ${NEW}`)) continue;
+    for (const k of BUD) check(g, near(n[k], f[k]), `${n.key} . ${k}: ${fmt(n[k])}, ${FROM} ${fmt(f[k])}`);
+  }
+}
 // The company statements are as they were; the new project shows under their lines.
 for (const ds of CO) {
   const g = 'project › ' + ds;

@@ -54,6 +54,18 @@ statements (Consol, Landowner, Homebuilder; cash flow and P&L):
 **Upload Excel** reads the filled-in file back: typed yellow cells replace the dashboard's
 actuals for those cells, blank cells keep what the dashboard has.
 
+## Unit economics
+
+Each entity tab has a **Unit economics** view: every project side by side (All projects last),
+first its size (acres, lots or homes, density, plotted lot area and average lot size for the
+Landowner, saleable area and average home size), then sales and the cost build-up to gross profit
+and to profit before overheads and tax. The buttons above the table switch every figure between
+**Total**, **Per lot / Per home**, **Per sq ft** (of saleable area, SBA), **Per sq ft of lot**
+(Landowner, plotted lot area), **Per acre** (Landowner, Consol) and **% of sales**, so e.g. the
+construction rate per home and per sq ft, or the sale price per lot, per acre and per sq ft,
+read straight off. All projects divides the totals by the units or area of the projects that have
+them (Creek Park Commercial, land only, is left out of those).
+
 ## G&A
 
 Each entity tab has a **G&A** view next to Cashflow, P&L and Actuals: Consol shows OHcost-H+V,
@@ -114,6 +126,7 @@ Actuals tab.
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
 | Actuals (plan columns) | the cashflow and P&L datasets above, Homebuilder `Cons P&L` |
 | Exposure | Consol `Cons Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`; the breakdown follows each line's formulas into the sheets they point at (inventory, land bank, land under development, schedules, land payable, …) |
+| Unit economics | each model's project budget, full life: Landowner `HS Budget costs1` (acres, lots, home SBA, lot sales, land, infra, PID processing and reimbursement, property tax, finance and loan fees), Homebuilder `Cons Budgetd Costs` (homes, SBA, sales, lot cost, construction, D&S, authority, finance), Consol `Cons Budgetd Costs new` (its land cost, the Landowner's whole budget, split by `HS Budget costs1` into land, infra net of PID and the Landowner's property tax and finance). Brokerage, sales & marketing and the Homebuilder's property tax from the project P&L (full life), so a project's direct cost and gross profit are its P&L's and the project cards'. Plotted lot area from the project details |
 | G&A (in each entity tab) | G&A workbook (recognised by `OHcost-H+V`) › `OHcost-H+V` / `OHcost-H` / `OHcost-V` for the three tables; a Consol head opens to its OHcost-H and OHcost-V rows (paired by the G&A row their formulas read, else by label). When the workbook also has `G&A`, `Cal.`, `OPEX` and `CAPEX` (e.g. the Rev.05 *With Working* file): cost, OH % / Proj. %, LO / HB share (the *Sobha Developers* and *Sobha Homes* blocks; the *Project Prelims* blocks after them are not read; the table ends at its grand total, notes and the summary below it are skipped), the full-cost view and the drill-down to the OPEX lines and depreciation batches. Without them (an OHcost-only workbook), LO / HB share comes from the Land Development / Developer (Homes) rows and the earlier workbook's lines are not kept |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is

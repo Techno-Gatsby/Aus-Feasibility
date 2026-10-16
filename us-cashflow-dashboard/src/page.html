@@ -454,6 +454,21 @@
 .sb .gat tr.gapart>td:first-child{padding-left:62px}
 .sb .gat tr.p.gasub>td:first-child{padding-left:66px}
 .sb .gaseg{margin-bottom:10px}
+/* Unit economics */
+.sb .uebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
+.sb .ueseg button{white-space:nowrap}
+.sb .uewhat{color:var(--muted);font-size:12px}
+.sb .uet>thead>tr>th{vertical-align:bottom;line-height:1.25}
+.sb .uet>thead>tr>th .uenm{display:block}
+.sb .uet>thead>tr>th .uest{display:block;font-weight:500;font-size:10.5px;opacity:.75;letter-spacing:.02em}
+.sb .uet>tbody>tr>td:first-child{min-width:260px}
+.sb .uet td.uall,.sb .uet th.uall{border-left:1px solid var(--line)}
+.sb .uet td.uall{font-weight:700;background:#FFFCF7}
+.sb .uet tr.g>td.uall{background:var(--pale)}
+.sb .uet tr.st>td{font-weight:600;color:var(--ink)}
+.sb .uet tr.uerev>td{font-weight:700;color:var(--ink)}
+.sb .uet tr.uem>td{color:var(--muted);font-style:italic;border-bottom-color:transparent}
+@media(max-width:600px){.sb .uet>tbody>tr>td:first-child{min-width:170px;max-width:170px;white-space:normal}}
 .sb .gat tr.gashare>td{color:var(--muted);font-size:11.5px;background:var(--soft)}
 .sb .gaflag{display:inline-block;margin-left:6px;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:var(--neg);color:#fff;font-size:10px;font-weight:700;cursor:help;vertical-align:1px}
 .sb .nest td.galine{text-align:left;white-space:normal;min-width:200px;max-width:380px}
@@ -471,7 +486,7 @@
  <div class="body">
 <section class="tab" id="consol" role="tabpanel" aria-labelledby="tab-consol" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button><button type="button" data-s="unit">Unit economics</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -486,6 +501,7 @@
  </div>
  <div class="view-ga" hidden></div>
  <div class="view-exp" hidden></div>
+ <div class="view-unit" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -501,7 +517,7 @@
 </section>
 <section class="tab" id="landowner" role="tabpanel" aria-labelledby="tab-landowner" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button><button type="button" data-s="unit">Unit economics</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -516,6 +532,7 @@
  </div>
  <div class="view-ga" hidden></div>
  <div class="view-exp" hidden></div>
+ <div class="view-unit" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
@@ -531,7 +548,7 @@
 </section>
 <section class="tab" id="homebuilder" role="tabpanel" aria-labelledby="tab-homebuilder" hidden>
  <div class="ctl">
-  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button></div>
+  <div class="seg stmtseg" role="group" aria-label="Statement"><button type="button" data-s="cf" class="on">Cashflow</button><button type="button" data-s="pl">P&amp;L</button><button type="button" data-s="act">Actuals</button><button type="button" data-s="ga">G&amp;A</button><button type="button" data-s="exp">Exposure</button><button type="button" data-s="unit">Unit economics</button></div>
   <label class="projl">Project <select class="proj" aria-label="Project"></select></label>
   <span class="hint hint-cf"></span>
   <span class="hint hint-pl" hidden></span>
@@ -546,6 +563,7 @@
  </div>
  <div class="view-ga" hidden></div>
  <div class="view-exp" hidden></div>
+ <div class="view-unit" hidden></div>
  <div class="view-act" hidden>
   <div class="actbar">
    <div class="seg actseg" role="group" aria-label="Statement"><button type="button" data-a="cf" class="on">Cash flow</button><button type="button" data-a="pl">P&amp;L</button></div>
