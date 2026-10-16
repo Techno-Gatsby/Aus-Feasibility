@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>OpenPaws icons</title>
+<style>body{margin:0;background:transparent} canvas{display:block}</canvas></style></head>
+<body>
+<canvas id="c"></canvas>
+<script src="../src/renderer/shared/species.js"></script>
+<script src="../src/renderer/shared/engine.js"></script>
+<script src="../src/renderer/shared/draw.js"></script>
+<script>
+// Dev tool: draws the app and tray icons with the cat renderer. ?kind=app|tray|template&size=N
+const q = new URLSearchParams(location.search);
+const kind = q.get('kind') || 'app'; const S = parseInt(q.get('size') || '1024', 10);
+const c = document.getElementById('c'); c.width = S; c.height = S;
+const x = c.getContext('2d');
+function cat(scale, preset, floorY, cx) {
+  const w = PawsEngine.createWorld({ width: S, height: S, floor: floorY, seed: 4 });
+  const p = PawsEngine.addPet(w, { id: 'icon', preset: preset || 'ginger-tabby', size: scale, stats: { happiness: 95, bond: 90 }, accessories: { neck: 'collar', neckColor: '#ffffff' } }, { x: cx || S / 2 });
+  p.facing = 1; PawsEngine.setState(w, p, 'sit'); p.t = 0.4; p.anim.blink = 0;
+  PawsDraw.drawPet(x, p, 0.4, { noShadow: true });
+}
+if (kind === 'app') {
+  // macOS-style rounded square with a warm gradient, the cat sitting front-on.
+  const r = S * 0.225, m = S * 0.1;
+  x.save(); x.beginPath(); x.roundRect(m, m, S - 2 * m, S - 2 * m, r); x.clip();
+  const g = x.createLinearGradient(0, m, 0, S - m); g.addColorStop(0, '#ffd2b0'); g.addColorStop(1, '#f2627a');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  const glow = x.createRadialGradient(S / 2, S * 0.78, S * 0.05, S / 2, S * 0.78, S * 0.5); glow.addColorStop(0, 'rgba(255,255,255,0.45)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = glow; x.fillRect(0, 0, S, S);
+  x.fillStyle = 'rgba(120,40,40,0.18)'; x.beginPath(); x.ellipse(S / 2, S * 0.83, S * 0.25, S * 0.03, 0, 0, Math.PI * 2); x.fill();
+  cat(S / 92 * 0.74, 'ginger-tabby', S * 0.82, S * 0.47);
+  x.restore();
+} else {
+  // Tray: a paw print. Template (macOS) is solid black on transparent; tray is coral.
+  x.fillStyle = kind === 'template' ? '#000' : '#e8516b';
+  const u = S / 22;
+  x.beginPath(); x.ellipse(11 * u, 14.2 * u, 5.2 * u, 4.4 * u, 0, 0, Math.PI * 2); x.fill();
+  for (const [px, py, rx, ry, a] of [[4.6, 8.6, 1.9, 2.5, -0.35], [8.4, 5.2, 2.0, 2.7, -0.1], [13.6, 5.2, 2.0, 2.7, 0.1], [17.4, 8.6, 1.9, 2.5, 0.35]]) { x.beginPath(); x.ellipse(px * u, py * u, rx * u, ry * u, a, 0, Math.PI * 2); x.fill(); }
+}
+document.title = 'ready';
+</script></body></html>

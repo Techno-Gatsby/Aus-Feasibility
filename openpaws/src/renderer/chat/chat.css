@@ -1,0 +1,26 @@
+body { display: flex; flex-direction: column; height: 100vh; background: var(--surface-2); }
+header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); -webkit-app-region: drag; }
+body.mac header { padding-top: 30px; }
+header select, header button { -webkit-app-region: no-drag; }
+#avatar { width: 54px; height: 46px; border-radius: 12px; background: radial-gradient(100% 90% at 50% 100%, #ffe7d6, #f6efe6); flex: none; }
+.who { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.who b { font-size: 15px; }
+#petSel { width: auto; max-width: 130px; padding: 5px 8px; font-size: 12px; }
+#log { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 82%; padding: 9px 13px; border-radius: 18px; white-space: pre-wrap; word-wrap: break-word; animation: up .2s both; }
+.msg.cat { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; box-shadow: var(--shadow); }
+.msg.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+.msg.note { align-self: center; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 8px; }
+.msg.err { align-self: center; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+#chips { display: flex; gap: 6px; padding: 0 12px 8px; overflow-x: auto; scrollbar-width: none; }
+#chips::-webkit-scrollbar { display: none; }
+#chips button { font: inherit; font-size: 12px; white-space: nowrap; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+#chips button:hover { border-color: var(--accent); }
+form { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--surface); }
+textarea#input { min-height: 40px; max-height: 140px; resize: none; border-radius: 20px; padding: 10px 14px; }
+#mic.rec { background: var(--accent); color: #fff; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }

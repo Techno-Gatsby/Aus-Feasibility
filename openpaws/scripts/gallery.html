@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpenPaws pose gallery</title>
+<style>
+  body { margin: 0; background: #f4f1ec; font: 12px system-ui, sans-serif; color: #333; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="../src/renderer/shared/species.js"></script>
+<script src="../src/renderer/shared/engine.js"></script>
+<script src="../src/renderer/shared/draw.js"></script>
+<script>
+// Dev tool: renders every preset in a set of poses so the procedural art can be reviewed at a glance.
+// Open in a browser, or pass ?presets=a,b&states=sit,walk&size=1.6
+const q = new URLSearchParams(location.search);
+const size = parseFloat(q.get('size') || '1.5');
+const presets = (q.get('presets') || PawsSpecies.PRESETS.map((p) => p.id).join(',')).split(',');
+const states = (q.get('states') || 'sit,idle,walk,run,loaf,sleep,groom,knead,hunt,trick:wave,beg,held').split(',');
+const cellW = 150 * size / 1.5; const cellH = 130 * size / 1.5;
+const cv = document.getElementById('c');
+const dpr = window.devicePixelRatio || 1;
+cv.width = (states.length * cellW + 120) * dpr; cv.height = (presets.length * cellH + 30) * dpr;
+cv.style.width = (states.length * cellW + 120) + 'px'; cv.style.height = (presets.length * cellH + 30) + 'px';
+const ctx = cv.getContext('2d');
+ctx.scale(dpr, dpr);
+const time = parseFloat(q.get('t') || '0.6');
+ctx.fillStyle = '#555';
+states.forEach((s, i) => ctx.fillText(s, 120 + i * cellW + 8, 16));
+presets.forEach((pid, r) => {
+  ctx.fillStyle = '#555';
+  ctx.fillText(PawsSpecies.preset(pid).label, 6, 30 + r * cellH + cellH / 2);
+  states.forEach((st, i) => {
+    const x0 = 120 + i * cellW; const y0 = 30 + r * cellH;
+    ctx.fillStyle = (r + i) % 2 ? '#ece7e0' : '#f7f4ef';
+    ctx.fillRect(x0, y0, cellW, cellH);
+    const w = PawsEngine.createWorld({ width: cellW, height: cellH, floor: cellH - 14, seed: 1 });
+    const cfg = { id: pid + st, preset: pid, size, stats: { happiness: 90, bond: 80 }, accessories: q.get('acc') ? JSON.parse(q.get('acc')) : {} };
+    const p = PawsEngine.addPet(w, cfg, { x: cellW / 2 });
+    p.facing = 1;
+    const [name, arg] = st.split(':');
+    if (name === 'held') {
+      w.pointer = { x: cellW / 2, y: 22, vx: 0, vy: 0 };
+      PawsEngine.setState(w, p, 'held');
+      p.y = 22 + p.dims.h * 0.92;
+    } else if (name === 'walk' || name === 'run') {
+      PawsEngine.setState(w, p, name, { tx: 10000 });
+      p.vx = name === 'run' ? 170 : 50; p.anim.phase = time * 4;
+    } else if (name === 'jump') {
+      PawsEngine.setState(w, p, 'jump'); p.surface = 'air'; p.y = cellH - 40; p.vy = -200;
+    } else {
+      PawsEngine.setState(w, p, name, arg ? { trick: arg } : {});
+      p.t = Math.min(time, p.dur || time);
+      p.vx = 0;
+    }
+    if (name === 'trick') p.t = time;
+    ctx.save();
+    ctx.translate(x0, y0);
+    ctx.beginPath(); ctx.rect(0, 0, cellW, cellH); ctx.clip();
+    ctx.fillStyle = 'rgba(0,0,0,0.05)'; ctx.fillRect(0, w.floor, cellW, cellH - w.floor);
+    PawsDraw.drawPet(ctx, p, time, { weather: q.get('weather') ? { condition: q.get('weather') } : null });
+    ctx.restore();
+  });
+});
+document.title = 'ready';
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+# Builds the OpenPaws desktop cat (openpaws/) for macOS, Windows and Linux.
+# Runs only when files under openpaws/ change; the feasibility app is unaffected.
+# Installers are attached to each run as downloadable artifacts.
+name: OpenPaws
+
+on:
+  push:
+    paths: ['openpaws/**', '.github/workflows/openpaws.yml']
+  pull_request:
+    paths: ['openpaws/**', '.github/workflows/openpaws.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openpaws-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: openpaws
+
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip # CPU inference only; skip optional CUDA downloads
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned builds unless signing secrets are configured
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: openpaws/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: dist:mac
+            artifact: OpenPaws-macOS
+            files: |
+              openpaws/dist/*.dmg
+              openpaws/dist/*.zip
+          - os: windows-latest
+            script: dist:win
+            artifact: OpenPaws-Windows
+            files: |
+              openpaws/dist/*.exe
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: OpenPaws-Linux
+            files: |
+              openpaws/dist/*.AppImage
+              openpaws/dist/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: openpaws/package-lock.json
+      - run: npm ci
+      - run: npm run ${{ matrix.script }} -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 30

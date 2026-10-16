@@ -1,0 +1,5 @@
+node_modules/
+dist/
+smoke-shots/
+*.log
+.DS_Store

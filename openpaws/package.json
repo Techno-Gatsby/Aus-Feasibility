@@ -1,0 +1,145 @@
+{
+  "name": "openpaws",
+  "productName": "OpenPaws",
+  "version": "0.1.0",
+  "description": "An open-source AI desktop cat that lives on your dock or taskbar: adopt a cat or make one from photos of your own, chat with it, and let it handle reminders, focus sessions, weather, calendar and memory.",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "author": "OpenPaws contributors",
+  "homepage": "https://github.com/techno-gatsby/aus-feasibility/tree/main/openpaws",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test test/*.test.js",
+    "smoke": "electron . --smoke",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "icons": "echo \"Open scripts/icons.html in a browser to regenerate build/ icons\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
+    "chrono-node": "2.10.1",
+    "node-ical": "0.27.2"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "pngjs": "7.0.0"
+  },
+  "optionalDependencies": {
+    "onnxruntime-node": "1.29.0"
+  },
+  "build": {
+    "appId": "app.openpaws.desktop",
+    "productName": "OpenPaws",
+    "copyright": "Copyright (c) 2026 OpenPaws contributors",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/tray*.png",
+      "package.json",
+      "LICENSE",
+      "NOTICE.md",
+      "!**/*.map"
+    ],
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**"
+    ],
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Talk to your cat with push-to-talk.",
+        "LSUIElement": false
+      },
+      "x64ArchFiles": "**/onnxruntime-node/**",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v6/linux/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/win32/**"
+      ]
+    },
+    "dmg": {
+      "title": "OpenPaws ${version}",
+      "artifactName": "OpenPaws-${version}-mac-universal.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v6/linux/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "OpenPaws-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "OpenPaws-${version}-portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Amusement",
+      "icon": "build/icon.png",
+      "maintainer": "OpenPaws contributors",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/win32/**"
+      ]
+    }
+  },
+  "keywords": [
+    "desktop-pet",
+    "cat",
+    "electron",
+    "ai",
+    "companion",
+    "shimeji",
+    "pomodoro",
+    "reminders"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techno-gatsby/aus-feasibility.git",
+    "directory": "openpaws"
+  }
+}

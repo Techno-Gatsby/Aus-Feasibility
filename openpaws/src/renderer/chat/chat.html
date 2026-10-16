@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: paws-asset:; media-src 'self' data: blob: mediastream: paws-asset:; connect-src 'self' data: blob: paws-asset:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Chat</title>
+<link rel="stylesheet" href="../shared/ui.css">
+<link rel="stylesheet" href="chat.css">
+</head>
+<body>
+<header id="head">
+  <canvas id="avatar"></canvas>
+  <div class="who"><b id="name">Cat</b><span id="sub" class="small muted">online · purring</span></div>
+  <select id="petSel" title="Talk to"></select>
+</header>
+<div id="log" aria-live="polite"></div>
+<div id="chips"></div>
+<form id="form">
+  <button type="button" id="mic" class="btn icon-btn ghost" title="Hold to talk">🎙</button>
+  <textarea id="input" rows="1" placeholder="Message your cat…"></textarea>
+  <button type="submit" class="btn primary icon-btn" id="send" title="Send">➤</button>
+</form>
+<script src="../shared/bridge.js"></script>
+<script src="../shared/species.js"></script>
+<script src="../shared/engine.js"></script>
+<script src="../shared/draw.js"></script>
+<script src="../shared/sprites.js"></script>
+<script src="../shared/preview.js"></script>
+<script src="chat.js"></script>
+</body>
+</html>
