@@ -228,16 +228,17 @@ function tour() {
   function place() {
     const el = $(steps[i][0]); if (!el) return end(); const r = el.getBoundingClientRect(), p = 6, vh = innerHeight;
     Object.assign(hole.style, { top: r.top - p + 'px', left: r.left - p + 'px', width: r.width + p * 2 + 'px', height: r.height + p * 2 + 'px' });
-    const th = tip.offsetHeight, below = r.bottom + p + 12;
-    tip.style.top = (below + th < vh - 8 ? below : Math.max(8, r.top - p - 12 - th)) + 'px';
+    // bubble docked at the bottom (thumb stays put); moves to the top only when the highlighted part is down there
+    const th = tip.offsetHeight, low = r.bottom > vh - th - 40;
+    tip.style.top = (low ? 64 : vh - th - 24) + 'px';
   }
   function show(n) {
     i = n; const [q, k] = steps[i], [ti, d] = t(k).split(' | ');
-    $(q).scrollIntoView({ block: 'center' });
+    $(q).scrollIntoView({ block: 'center', behavior: 'smooth' });
     tip.innerHTML = `<div class="tour-n" dir="ltr">${i + 1} / ${steps.length}</div><b>${esc(ti)}</b><p>${esc(d)}</p><div class="tour-b">${i ? `<button class="btn" data-tb>${ic('back')}</button>` : ''}<span style="flex:1"></span><button class="btn pri" data-tn>${i < steps.length - 1 ? ic('arrow') : ic('check')}</button></div>`;
     tip.querySelector('[data-tn]').onclick = () => i < steps.length - 1 ? show(i + 1) : end();
     if (tip.querySelector('[data-tb]')) tip.querySelector('[data-tb]').onclick = () => show(i - 1);
-    setTimeout(place, 250);
+    place(); setTimeout(place, 400);
   }
   hole.onclick = end; addEventListener('resize', place); haptic(10); show(0);
 }

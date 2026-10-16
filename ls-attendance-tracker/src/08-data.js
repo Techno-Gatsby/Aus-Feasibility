@@ -147,7 +147,7 @@ const MENUS = {
   edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
     ['Add personnel…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
   view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Security Personnel', app: 'Personnel app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
-  help: () => [['Tour this page', () => TOUR.start(curView)], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
@@ -252,7 +252,7 @@ async function init() {
     }, 300);
   }
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
-  $('#tour-btn').onclick = () => TOUR.on ? TOUR.stop() : TOUR.start(curView);
+  $('#tour-btn').onclick = e => TOUR.chooser(e.currentTarget);
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });
   $('#modal-bg').addEventListener('mousedown', e => { if (e.target.id === 'modal-bg') closeModal(); });

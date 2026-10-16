@@ -5,6 +5,7 @@
 const TOUR = (() => {
   const V = id => '#v-' + id;
   const TABS = { sel: '#tabs', t: 'Tabs', d: '<b>Live · Insights · App &amp; review</b> – field work from the phones. <b>Security Personnel · Projects &amp; sites · Settings</b> – your master data. <b>Attendance → Client timesheets → Invoice</b> – the monthly documents, in that order.' };
+  const RAIL = { sel: '#rail', t: 'Clients · projects · sites', d: 'Click a client, project or site in this tree to narrow the open page to it; click again to clear.' };
   const STEPS = {
     live: [TABS,
       { sel: '#lv-site', t: 'Pick a site', d: 'Show one site only, or all sites.' },
@@ -45,49 +46,79 @@ const TOUR = (() => {
       { sel: '[data-sec="rates"]', t: 'Rate card', d: 'AED per person per month by trade – used for invoices (pro-rata on calendar days).' },
       { sel: '[data-sec="codes"]', t: 'Attendance codes', d: 'P, R, A, OFF, leave types… which are billable and which appear on client timesheets.' },
       { sel: '[data-sec="sign"]', t: 'Signatories', d: 'Names printed in the signature boxes of the timesheets.' }],
-    attendance: [TABS,
+    attendance: [TABS, RAIL,
       { sel: '#av-ym', t: 'Period', d: 'Payroll cycle or calendar month; the arrows move one period.' },
       { sel: '#av-filt', t: 'Filters', d: 'Narrow by name, trade, shift or status. The tree on the left limits to a client, project or site.' },
       { sel: '#av-kpis', t: 'Totals', d: 'Personnel, billable days (P + R), absent, off, leave and days not marked yet.' },
       { sel: '#grid-wrap', t: 'Attendance grid', d: 'Click or drag to select days, then type a code (P, A, O…). Right-click for punch details from the phone app. A dot = came from the app.' },
       { sel: '#toolbar', t: 'Toolbar', d: 'Set site / shift for relievers, Undo, Lock month when payroll is closed, and Export the master sheet to Excel.' }],
-    timesheets: [TABS,
+    timesheets: [TABS, RAIL,
       { sel: '#tv-ym', t: 'Month and client', d: 'Pick the month (and a client) – one LS/DO/F-026 sheet per project.' },
       { sel: V('timesheets') + ' .tw', t: 'Projects', d: 'Click a row to preview its sheet. Tick projects to print or export them together.' },
       { sel: '#tv-sheets', t: 'Sheet preview', d: 'Exactly what prints: shifts, names, days and totals, reliever rows, grand total and signatures.' },
       { sel: '#toolbar', t: 'Print and Excel', d: 'Print / PDF or Export Excel for the ticked projects.' }],
-    invoices: [TABS,
+    invoices: [TABS, RAIL,
       { sel: V('invoices') + ' .dh', t: 'Invoices', d: 'Tax invoice break-up per client and period, built from the attendance and the rate card.' },
       { sel: '[data-sec="iv1"]', t: 'Invoice details', d: 'Client, projects and period – the lines fill from attendance.' },
       { sel: '[data-sec="ivp"]', t: 'Invoice pack', d: 'The PDF pack in the client\'s order: SAP invoice, break-up, signed timesheets and the project\'s Work Order Instruction.' },
       { sel: '#toolbar', t: 'Toolbar', d: 'New invoice, Download pack PDF, identify an existing PDF\'s pages, and save.' }]
   };
-  let steps = [], i = 0, hole = null, tip = null;
+  // End to end: setup → daily → month end → insights, opening each tab on the way
+  const FULL = [
+    { view: 'projects', sel: '#tabs', t: 'How the tracker works – end to end', d: 'About 20 short steps in the order you work: <b>set up</b> projects, sites and personnel once; <b>every day</b> personnel check in on their phones and you review exceptions; at <b>month end</b> attendance becomes client timesheets and invoices. The tour opens each tab for you.' },
+    { view: 'projects', sel: '#rail', t: 'Everything hangs on this tree', d: 'Clients → projects → sites. Selecting one narrows Attendance, Client timesheets and Invoice to it.' },
+    { view: 'projects', sel: '[data-sec="projects"]', t: 'Setup 1 · Projects', d: 'Each project has its client, PO / WOI number, rate basis and documents. The Work Order Instruction uploaded here is reused in every invoice pack of the project.' },
+    { view: 'projects', sel: '[data-sec="locations"]', t: 'Setup 2 · Site locations', d: 'Pin each site (or the whole project) on the map and set the zone radius. Check-ins inside the zone are accepted automatically.' },
+    { view: 'employees', sel: '#v-employees .tw', t: 'Setup 3 · Security personnel', d: 'Everyone with Emp ID, trade, shift and site allocation. Open a person to add up to 3 photos – the face check compares every check-in selfie with them.' },
+    { view: 'employees', sel: '#toolbar', t: 'Setup 4 · App access', d: 'Tick people → <b>App access…</b> creates PINs and prints sign-in slips. <b>Upload photos…</b> adds many photos at once (file name = Emp ID).' },
+    { view: 'app', sel: '#toolbar', t: 'Setup 5 · Publish roster', d: '<b>Publish roster</b> sends personnel, PINs, sites and zones to the phones. Do it again after any change.' },
+    { view: 'app', sel: '#v-app .dh a.btn', t: 'Daily 1 · The phone page', d: 'Personnel sign in with Emp ID + PIN and tap <b>CHECK IN</b> / <b>CHECK OUT</b>: a selfie and GPS are recorded. On Android the app keeps recording the route during the shift. Supervisors use the same page to punch for someone or mark a day.' },
+    { view: 'live', sel: '#lv-map', t: 'Daily 2 · Live', d: 'Who is on duty right now and where, site by site. Sync runs every 5 minutes.' },
+    { view: 'app', sel: '[data-sec="ap-rev"]', t: 'Daily 3 · Review exceptions', d: 'Only unusual check-ins land here: outside the zone, weak GPS, too early, or a face that does not match. Approve → P in Attendance; Reject → stays blank.' },
+    { view: 'app', sel: '[data-sec="ap-miss"]', t: 'Daily 4 · No check-in', d: 'People allocated to a site with no check-in. Decide the day (A, OFF, leave…) – or the supervisor does it on site.' },
+    { view: 'attendance', sel: '#grid-wrap', t: 'Daily 5 · Attendance fills itself', d: 'Accepted check-ins become P (R for relievers) with a dot. Anything else you type: select days, press a code. Right-click a day for the photos and map.' },
+    { view: 'attendance', sel: '#toolbar', t: 'Month end 1 · Close the month', d: 'Check the period, fix blanks (KPIs show what is not marked), then <b>Lock month</b> and <b>Export Excel</b> for payroll.' },
+    { view: 'timesheets', sel: '#v-timesheets .tw', t: 'Month end 2 · Client timesheets', d: 'One LS/DO/F-026 sheet per project, built from the locked attendance. Click to preview, tick to print.' },
+    { view: 'timesheets', sel: '#toolbar', t: 'Month end 3 · Print and sign', d: '<b>Print / PDF</b> for signatures, or Excel. The signed scans go into the invoice pack.' },
+    { view: 'invoices', sel: '#v-invoices .dh', t: 'Month end 4 · Invoice', d: 'The tax invoice break-up: billable days × rate card, per project and period.' },
+    { view: 'invoices', sel: '[data-sec="ivp"]', t: 'Month end 5 · Invoice pack', d: 'Upload the SAP invoice page and the signed timesheets; the project\'s WOI is added automatically. <b>Download pack PDF</b> gives the file to send.' },
+    { view: 'insights', sel: '#v-insights .kpis', t: 'Any time · Insights', d: 'Coverage, punctuality, zone compliance, face check and unusual activity for any period, site or person.' },
+    { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
+    { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
+    { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Edit</b> / <b>View</b> – page commands. <b>Help</b> – tours, keys and codes.' },
+    { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
+  ];
+  let steps = [], i = 0, hole = null, tip = null, moving = false, gen = 0;
   const visible = el => { if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 4 && r.height > 4 && !el.closest('[hidden]'); };
+  // The bubble stays docked bottom-right, so Next is always under the mouse; only the highlight moves.
   function place() {
+    if (!hole || !tip) return;
     const s = steps[i], el = s && $(s.sel); if (!el) return;
     const r = el.getBoundingClientRect(), pad = 6, vw = innerWidth, vh = innerHeight;
-    const top = Math.max(4, r.top - pad), left = Math.max(4, r.left - pad), w = Math.min(vw - 8, r.width + pad * 2), h = Math.min(vh - top - 4, r.height + pad * 2);
+    const top = Math.max(4, r.top - pad), left = Math.max(4, r.left - pad), w = Math.min(vw - left - 4, r.width + pad * 2), h = Math.min(vh - top - 4, r.height + pad * 2);
     Object.assign(hole.style, { top: top + 'px', left: left + 'px', width: w + 'px', height: h + 'px' });
-    const tw = Math.min(360, vw - 24); tip.style.width = tw + 'px';
-    const th = tip.offsetHeight, below = top + h + 12, above = top - th - 12;
-    tip.style.top = (below + th < vh - 8 ? below : above > 8 ? above : Math.max(8, vh - th - 8)) + 'px';
-    tip.style.left = Math.min(vw - tw - 12, Math.max(12, left)) + 'px';
+    const tw = Math.min(380, vw - 32), tl = vw - tw - 24;
+    Object.assign(tip.style, { width: tw + 'px', bottom: '44px', top: 'auto', left: tl + 'px' });
   }
-  function show(n) {
-    i = n; const s = steps[i], el = $(s.sel);
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  async function show(n, dir = 1) {
+    const my = ++gen; i = n; const s = steps[i];
+    if (s.view && curView !== s.view) { moving = true; showView(s.view); moving = false; await new Promise(r => setTimeout(r, ['live', 'insights'].includes(s.view) ? 900 : 300)); if (my !== gen || !tip) return; }
+    const el = $(s.sel);
+    if (!visible(el)) { const nx = i + dir; return nx >= 0 && nx < steps.length ? show(nx, dir) : stop(); }      // not on screen (e.g. empty section): skip
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     tip.innerHTML = `<button class="tour-x" data-tx aria-label="Close">✕</button><div class="tour-n">${i + 1} of ${steps.length}</div><b>${s.t}</b><p>${s.d}</p>
-      <div class="tour-b">${i ? '<button class="btn sm" data-tb>Back</button>' : ''}<span class="spacer"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
+      <div class="tour-b"><button class="btn sm" data-tb ${i ? '' : 'style="visibility:hidden"'}>Back</button><span style="flex:1"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
     tip.querySelector('[data-tx]').onclick = stop;
     tip.querySelector('[data-tn]').onclick = () => i < steps.length - 1 ? show(i + 1) : stop();
-    if (tip.querySelector('[data-tb]')) tip.querySelector('[data-tb]').onclick = () => show(i - 1);
-    requestAnimationFrame(place); tip.querySelector('[data-tn]').focus();
+    tip.querySelector('[data-tb]').onclick = () => i && show(i - 1, -1);
+    tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+    requestAnimationFrame(place); setTimeout(place, 350); tip.querySelector('[data-tn]').focus({ preventScroll: true });
   }
-  const key = e => { if (!tip) return; if (e.key === 'Escape') { e.stopPropagation(); stop(); } else if (e.key === 'ArrowRight') { i < steps.length - 1 ? show(i + 1) : stop(); } else if (e.key === 'ArrowLeft' && i) show(i - 1); };
+  const key = e => { if (!tip) return; if (e.key === 'Escape') { e.stopPropagation(); stop(); } else if (e.key === 'ArrowRight') { i < steps.length - 1 ? show(i + 1) : stop(); } else if (e.key === 'ArrowLeft' && i) show(i - 1, -1); };
+  /** view = a page tour; 'full' = the end-to-end walkthrough */
   function start(view = curView) {
-    stop(); closeMenu?.();
-    steps = (STEPS[view] || [TABS]).filter(s => visible($(s.sel)));
+    stop(); closeMenu?.(); pick?.remove();
+    steps = view === 'full' ? FULL : (STEPS[view] || [TABS]).filter(s => visible($(s.sel)));
     if (!steps.length) return toast('Nothing to show on this page yet');
     hole = document.createElement('div'); hole.className = 'tour-hole';
     tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog');
@@ -95,9 +126,21 @@ const TOUR = (() => {
     addEventListener('resize', place); addEventListener('scroll', place, true); document.addEventListener('keydown', key, true);
     show(0);
   }
+  /** the ? button: choose this page or the full walkthrough */
+  let pick = null;
+  function chooser(btn) {
+    if (tip) return stop(); if (pick) { pick.remove(); pick = null; return; }
+    const r = btn.getBoundingClientRect(); pick = document.createElement('div'); pick.className = 'tour-pick';
+    pick.innerHTML = `<button data-tp="page"><b>Tour this page</b><span>What each part of this page does</span></button><button data-tp="full"><b>How it all works</b><span>End to end: setup → daily → month end</span></button>`;
+    Object.assign(pick.style, { top: r.bottom + 6 + 'px', right: innerWidth - r.right + 'px' }); document.body.appendChild(pick);
+    pick.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => start(b.dataset.tp === 'full' ? 'full' : curView));
+    setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!pick?.contains(e.target)) { pick?.remove(); pick = null; document.removeEventListener('mousedown', off); } }), 0);
+  }
   function stop() {
+    gen++; pick?.remove(); pick = null;
     hole?.remove(); tip?.remove(); hole = tip = null;
     removeEventListener('resize', place); removeEventListener('scroll', place, true); document.removeEventListener('keydown', key, true);
   }
-  return { start, stop, get on() { return !!tip; }, STEPS };
+  // switching tabs from outside closes the tour; the walkthrough's own tab changes do not
+  return { start, chooser, stop: () => { if (!moving) stop(); }, get on() { return !!tip; }, STEPS, FULL };
 })();
