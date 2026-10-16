@@ -1,9 +1,12 @@
 (function () {
+  // ds: the projectwise cashflow (each project, and their sum); co: the company's own cash flow
+  // statement, shown for All Projects with the projects and corporate differences under each line.
   const ENT = {
-    consol: { ds: 'consol_cf', comp: 'consol_components' },
-    landowner: { ds: 'landowner_cf' },
-    homebuilder: { ds: 'homebuilder_cf' },
+    consol: { ds: 'consol_cf', co: 'consol_co_cf', coSheet: "Consol model's 'Cons Cashflow final'", plSheet: "Consol model's 'Cons P&L'", comp: 'consol_components' },
+    landowner: { ds: 'landowner_cf', co: 'landowner_co_cf', coSheet: "Landowner model's 'HS Cashflow P'", plSheet: "Landowner model's 'HS P&L'" },
+    homebuilder: { ds: 'homebuilder_cf', co: 'homebuilder_co_cf', coSheet: "Homebuilder model's 'Cons Cashflow P'", plSheet: "Homebuilder model's 'Cons P&L'" },
   };
+  const CORP = 'Corporate level & differences', ELIM = 'Eliminations & consolidation adjustments';
   const NONPER = new Set(['key', 'project', 'ord', 'line', 'kind', 'Budget', 'Total', 'Sheet', 'Rows', 'Cells', 'Formula (FY2027 cell)', 'Basis', 'parent', 'level', 'stmt', 'role', 'rule']);
   const TEAL = '#0D9488', PURPLE = '#7C3AED', NAVY = '#1A2B6B';
   const S = { tab: 'consol', ent: {}, editing: null, draft: null };
@@ -223,8 +226,16 @@
     const th = (f, t) => { const h = el('th', f === 'line' ? 'l' : 'n', t); h.setAttribute('data-field', f); tr.appendChild(h); };
     tr.replaceChildren(); th('line', 'Particular'); th('Total', 'Total'); P.forEach((p) => th(p, p.replace('-', '–')));
   }
-  function renderTable(sec, E, st, rows, P) {
-    setHead(sec.querySelector('.view-cf .stmt'), P);
+  // The rows the cash flow view shows: All Projects is the company statement when there is one.
+  function cfRows(E, st) {
+    const d = dash.data(E.ds), c = E.co ? dash.data(E.co) : null;
+    if (st.proj === 'All Projects' && c && c.status === 'ok' && c.data.length) return { ds: E.co, rows: c.data, P: periodsOf(c), co: true };
+    return d.status === 'ok' ? { ds: E.ds, rows: d.data, P: periodsOf(d), co: false } : null;
+  }
+  function renderTable(sec, E, st, rows, P, ds) {
+    const table = sec.querySelector('.view-cf .stmt');
+    table.setAttribute('data-source', ds);
+    setHead(table, P);
     const tw = sec.querySelector('.tw');
     const width = Math.max(260, tw.clientWidth - 2);
     const ncols = P.length + 2;
@@ -238,16 +249,16 @@
       if (r.kind === 'header') { firstCell(tr, r.line.replace(/:$/, ''), false); for (let i = 0; i < P.length + 1; i++) td(tr, ''); tb.appendChild(tr); return; }
       const lk = norm(r.line), open = st.lines.has(lk);
       const single = st.proj !== 'All Projects';
-      const can = !single || (E.comp && compsFor(r).length);
+      const pr = single ? [] : rows.filter((x) => x.project !== 'All Projects' && norm(x.line) === lk)
+        .sort((a, b) => order.indexOf(a.project) - order.indexOf(b.project));
+      const can = single ? E.comp && compsFor(r).length : pr.length;
       firstCell(tr, r.line, !!can); numCells(tr, r, P, r.line);
       if (can) clickable(tr, () => toggle(st.lines, lk), open);
       tb.appendChild(tr);
       if (!open || !can) return;
       if (single) { detailRow(tb, r, E, st, P, width, ncols); return; }
-      const pr = rows.filter((x) => x.project !== 'All Projects' && norm(x.line) === lk)
-        .sort((a, b) => order.indexOf(a.project) - order.indexOf(b.project));
       pr.forEach((x) => {
-        const ptr = el('tr', 'p' + (isZero(x, P) ? ' zero' : ''));
+        const ptr = el('tr', 'p' + (isZero(x, P) ? ' zero' : '') + (x.project === CORP ? ' corp' : ''));
         ptr.dataset.key = x.key;
         const pk = lk + '|' + x.project, popen = st.projs.has(pk);
         const pcan = E.comp && compsFor(x).length;
@@ -272,13 +283,14 @@
     const st = S.ent[S.tab], sec = document.getElementById(S.tab);
     st.lines.add(norm(line));
     render();
-    const d = dash.data(ENT[S.tab].ds);
-    const r = d.status === 'ok' && d.data.find((x) => x.project === st.proj && norm(x.line) === norm(line));
+    const v = cfRows(ENT[S.tab], st);
+    const r = v && v.rows.find((x) => x.project === st.proj && norm(x.line) === norm(line));
     const tr = r && sec.querySelector(`.stmt tr[data-key="${CSS.escape(r.key)}"]`);
     if (tr) tr.scrollIntoView({ block: 'center' });
   }
 
-  function renderSummary(sec, E, st, rows, P) {
+  // Tiles read the projectwise statement: for All Projects, the sum of the projects.
+  function renderSummary(sec, E, st, rows) {
     const prow = rows.filter((r) => r.project === st.proj);
     const find = (l) => prow.find((r) => norm(r.line) === norm(l));
     { const kb = sec.querySelector('.view-cf .irrk'); const b = kb.querySelector('b'); const ir = dash.data('project_irr');
@@ -745,7 +757,9 @@
   }
 
   // ---------- P&L ----------
-  const CORP = 'Corporate level & differences', ELIM = 'Eliminations & consolidation adjustments';
+  // P&L tiles by meaning: 'Net Profit before tax' / '… taxes', 'Net Profit after tax' / 'Net Profit / (loss)'.
+  const PLC = [[/^total revenue/, 'rev'], [/gross profit/, 'gp'], [/^total overhead/, 'oh'], [/^net profit before/, 'pbt'], [/^corporate tax/, 'tax'], [/^net profit/, 'np']];
+  const plc = (l) => (PLC.find(([re]) => re.test(norm(l))) || [])[1];
   function renderPL(sec, key, st) {
     const ds = key + '_pl', d = dash.data(ds);
     const tb = sec.querySelector('.plt tbody');
@@ -760,8 +774,9 @@
     const kids = (k) => rows.filter((r) => r.parent === k).sort((a, b) => rank(a.project) - rank(b.project));
     const proj = st.proj;
     const tops = rows.filter((r) => r.level === 0);
+    const top = (l) => tops.find((r) => norm(r.line) === norm(l)) || (plc(l) && tops.find((r) => r.kind !== 'header' && plc(r.line) === plc(l)));
     const find = (l) => {
-      const t = tops.find((r) => norm(r.line) === norm(l));
+      const t = top(l);
       if (!t) return null;
       return proj === 'All Projects' ? t : rows.find((r) => r.parent === t.key && r.project === proj) || null;
     };
@@ -770,7 +785,7 @@
       b.classList.remove('dash-skeleton');
       if (r) { b.setAttribute('data-where', 'key=' + enc(r.key)); b.textContent = money(r.Total, line); } else b.textContent = '–';
       btn.onclick = () => {
-        const t = tops.find((x) => norm(x.line) === norm(line));
+        const t = top(line);
         if (t && proj === 'All Projects') { st.pl.add(t.key); render(); const tr = sec.querySelector(`.plt tr[data-key="${CSS.escape(t.key)}"]`); if (tr) tr.scrollIntoView({ block: 'center' }); }
       };
     });
@@ -1179,6 +1194,7 @@
     sec.querySelectorAll('.tw').forEach((x) => x.classList.toggle('free', !!st.detail));
     const d = dash.data(E.ds);
     PD_SETS.forEach((id) => dash.data(id));
+    if (E.co) dash.data(E.co);
     if (E.comp) { dash.data(E.comp); dash.data('landowner_cf'); dash.data('homebuilder_cf'); }
     const sel = sec.querySelector('.proj');
     if (d.status === 'ok') {
@@ -1208,16 +1224,19 @@
     }
     if (act) { sec.querySelector('.projl').hidden = false; renderActuals(sec, S.tab, st); col.hidden = true; return; }
     if (pl) {
+      const all = st.proj === 'All Projects', pd = dash.data(S.tab + '_pl');
+      sec.querySelector('.hint-pl').textContent = all && pd.status === 'ok' && pd.data.some((r) => r.project === CORP) ? 'Company P&L (' + E.plSheet + '). Open a line for its projects.' : '';
       renderPL(sec, S.tab, st);
       col.hidden = !st.pl.size;
       col.onclick = () => { st.pl.clear(); render(); };
       return;
     }
     sec.querySelector('.projl').hidden = false;
-    if (d.status !== 'ok') { sec.querySelector('.stmt tbody').replaceChildren(); return; }
-    const rows = d.data, P = periodsOf(d);
-    renderTable(sec, E, st, rows, P);
-    renderSummary(sec, E, st, rows, P);
+    const v = cfRows(E, st), hint = sec.querySelector('.hint-cf');
+    hint.textContent = v && v.co ? 'Company cash flow (' + E.coSheet + '). Open a line for its projects.' : '';
+    if (!v || d.status !== 'ok') { sec.querySelector('.stmt tbody').replaceChildren(); return; }
+    renderTable(sec, E, st, v.rows, v.P, v.ds);
+    renderSummary(sec, E, st, d.data);
   }
 
   root.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; dash.setLink(S.tab); render(); }));

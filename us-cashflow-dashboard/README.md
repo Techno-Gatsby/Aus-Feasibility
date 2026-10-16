@@ -102,8 +102,9 @@ Actuals tab.
 
 | Dashboard | Workbook › sheet |
 |---|---|
-| Cashflow tabs | Consol `Consol Projectwise cash`, Landowner `landowner Projectwise cashflow`, Homebuilder `Homebuilde Projectwise cashflow` (not the `… PRT` print copies; without the Landowner / Homebuilder model, the copies inside the Consol model are used) |
-| Landowner / Homebuilder P&L | `landowner Projectwise PL`, `Homebuilde Projectwise PL` (first block = all projects, then one block per project; *Corporate level & differences* is the remainder) |
+| Cashflow tabs, a project | Consol `Consol Projectwise cash`, Landowner `landowner Projectwise cashflow`, Homebuilder `Homebuilde Projectwise cashflow` (not the `… PRT` print copies; without the Landowner / Homebuilder model, the copies inside the Consol model are used) |
+| Cashflow tabs, All Projects | each company's own statement, as in the Executive Report: Consol `Cons Cashflow final …` (matched by name, the date in it may change), Landowner `HS Cashflow P`, Homebuilder `Cons Cashflow P`. Set out on the projectwise lines: the net equity line split into infusions and releases, the PID reimbursement booked against outflows shown as an inflow, salaries, legal and other overheads as *Overheads (G&A)*, the Consol model's *Brokerages & Marketing* split by the Homebuilder model's brokerage, *Till Mar'26* and *Till FY 26* as one *Till Dec'26* column. Each line opens to its projects (from the projectwise sheet, in the statement's periods) and *Corporate level & differences* (overheads, one project's release netted against another's infusion, years after the statement's last). The tiles above stay the sum of the projects |
+| Landowner / Homebuilder P&L | All Projects: the company P&L, Landowner `HS P&L`, Homebuilder `Cons P&L`, as in the Executive Report; each line opens to the projects' lines from `landowner Projectwise PL` / `Homebuilde Projectwise PL` (one block per project) and *Corporate level & differences* (overheads, their allocation by year). Without the company sheet, the projectwise sheet's own first block |
 | Consol P&L | `Cons P&L` for the totals; per project (project panel) calculated from revenue in the Consol cashflow, costs from `Cons Budgetd Costs new` spread by revenue, property tax from `Real property tax V2 - updated`, finance income as the project's cashflow interest in the year earned, tax rates from `Cons Assumption`; the panel shows it to the `Cons P&L` horizon (FY2033), as the Executive Report does |
 | Consol line breakdown | which Landowner/Homebuilder lines each `Consol Projectwise cash` cell sums (cells calculated in the Consol sheet itself show as *Consol-sheet override*) |
 | Equity IRR | `Summary val` › IRR (Pre tax) of each entity's block (All Projects from `Total`, and after overheads from `Total (inc Overheads)`); where it is blank or 0, the XIRR row under the project's block of the cashflow sheet |
@@ -113,7 +114,7 @@ Actuals tab.
 | Timeline | BP Input Sheets › `Timeline Assumptions` |
 | Actuals (plan columns) | the cashflow and P&L datasets above, Homebuilder `Cons P&L` |
 | Exposure | Consol `Cons Exposure`, Landowner `HS Exposure`, Homebuilder `Cons Exposure`; the breakdown follows each line's formulas into the sheets they point at (inventory, land bank, land under development, schedules, land payable, …) |
-| G&A (in each entity tab) | G&A workbook (recognised by `OHcost-H+V`) › `OHcost-H+V` / `OHcost-H` / `OHcost-V` for the three tables; a Consol head opens to its OHcost-H and OHcost-V rows (paired by the G&A row their formulas read, else by label). When the workbook also has `G&A`, `Cal.`, `OPEX` and `CAPEX`: cost, OH % / Proj. %, LO / HB share, the full-cost view and the drill-down to the OPEX lines and depreciation batches. Without them (an OHcost-only workbook), LO / HB share comes from the Land Development / Developer (Homes) rows and the earlier workbook's lines are not kept |
+| G&A (in each entity tab) | G&A workbook (recognised by `OHcost-H+V`) › `OHcost-H+V` / `OHcost-H` / `OHcost-V` for the three tables; a Consol head opens to its OHcost-H and OHcost-V rows (paired by the G&A row their formulas read, else by label). When the workbook also has `G&A`, `Cal.`, `OPEX` and `CAPEX` (e.g. the Rev.05 *With Working* file): cost, OH % / Proj. %, LO / HB share (the *Sobha Developers* and *Sobha Homes* blocks; the *Project Prelims* blocks after them are not read; the table ends at its grand total, notes and the summary below it are skipped), the full-cost view and the drill-down to the OPEX lines and depreciation batches. Without them (an OHcost-only workbook), LO / HB share comes from the Land Development / Developer (Homes) rows and the earlier workbook's lines are not kept |
 
 Sheet names live in `MODELS` and `SHEETS` at the top of `src/extract.js`; a renamed sheet is
 a one-line change there (the G&A and Exposure sheets: top of `src/derive-ga.js`,
@@ -135,8 +136,8 @@ node test/flex.mjs              # models with 5 more years and a new project (ma
 ```
 
 `test/flex.mjs` changes the fixture workbooks in memory the way a later model would: every sheet
-read by year gets five more years (cashflows to FY 2040; the G&A sheet's year blocks and the
-OHcost sheets to FY 2035; each Exposure table five more periods), and Brook Hollow is copied as a new
+read by year gets five more years (cashflows to FY 2040; the company statements five more; the G&A
+sheet's year blocks and the OHcost sheets five more; each Exposure table five more periods), and Brook Hollow is copied as a new
 project after the last one in every per-project sheet, running five years later. It checks
 that every dataset picks up the new years and the new project, and runs the Actuals Excel test on
 the result. `--dump=file.json` / `--write=dir` save that data or those workbooks (model figures:

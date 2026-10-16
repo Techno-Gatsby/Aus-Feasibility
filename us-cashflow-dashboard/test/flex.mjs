@@ -109,7 +109,10 @@ const YEAR_SHEETS = {
   'landowner Projectwise PL': 'pl', 'Homebuilde Projectwise PL': 'pl', 'Cons P&L': 'pl',
   'Real property tax V2 - updated': 'rpt',
   'OHcost-H+V': 'oh', 'OHcost-H': 'oh', 'OHcost-V': 'oh',
+  // The companies' own statements (one block, no projects).
+  'HS P&L': 'pl', 'HS Cashflow P': 'prt', 'Cons Cashflow P': 'prt', 'Cons Cashflow final 18.3.26': 'prt',
 };
+const COMPANY = new Set(['Cons P&L', 'HS P&L', 'HS Cashflow P', 'Cons Cashflow P', 'Cons Cashflow final 18.3.26']);
 const EXPOSURE = ['Cons Exposure', 'HS Exposure'];
 
 // The year columns at index a (width w) copied N times after them; f(x, k, r, j) gives each copy.
@@ -281,7 +284,7 @@ const edits = {
     : n === 'G&A' ? [(g, i) => { i.years = addGAYears(g); }]
     : EXPOSURE.includes(n) ? [(g, i) => { i.years = addExposureYears(g); }] : []),
   project: (n) => {
-    if (YEAR_SHEETS[n] === 'prt' || YEAR_SHEETS[n] === 'pl' && n !== 'Cons P&L') return [(g, i) => { i.block = addBlock(g, YEAR_SHEETS[n], i.years); }];
+    if ((YEAR_SHEETS[n] === 'prt' || YEAR_SHEETS[n] === 'pl') && !COMPANY.has(n)) return [(g, i) => { i.block = addBlock(g, YEAR_SHEETS[n], i.years); }];
     if (n === 'Summary val') return [(g, i) => { i.column = addSummaryColumn(g); }];
     if (['Cons Budgetd Costs new', 'Cons Budgetd Costs', 'HS Budget costs1'].includes(n)) return [(g, i) => { i.list = addListRow(g, /^project name$/i); }];
     if (n === 'Real property tax V2 - updated') return [(g, i) => { i.list = addListRow(g, /^rpt transfer to cost of revenue$/i); }];
@@ -334,7 +337,7 @@ const near = (a, b, tol = 0.001) => ((a == null || a === '') && (b == null || b 
 const byKey = (rows) => new Map((rows || []).map((r) => [r.key, r]));
 const periodsOf = (rows) => [...new Set((rows || []).flatMap((r) => Object.keys(r).filter((k) => /^FY\d{4}$|^Till |^[A-Z][a-z]{2}-[A-Z][a-z]{2}'\d{2}$/.test(k))))];
 const yearOf = (p) => { const m = String(p).match(/^FY(\d{4})$/) || String(p).match(/'(\d{2})$/); return m ? (m[1].length === 2 ? 2000 + +m[1] : +m[1]) : null; };
-const sourceInfo = (run, info, ds) => { const s = run.report.sources[ds]; return s ? info[s.split(', ')[0]] || {} : {}; };
+const sourceInfo = (run, info, ds) => { const s = run.report.sources[ds]; return s ? info[s.split(/[;,] /)[0]] || {} : {}; };
 const fmt = (v) => (isNum(v) ? Math.round(v * 100) / 100 : JSON.stringify(v));
 // The same rows in two runs (fields compared with near; a field null in one and missing in the other is the same).
 function sameRows(group, A, B, keep = () => true, skip = [], tol = 0.001) {
@@ -572,6 +575,8 @@ sameRows('years › project_profile', base.data.project_profile.map((r) => Objec
 {
   // (the OHcost tables' years: a G&A workbook may have no G&A sheet, so no ga_lines)
   const last = Math.max(...base.data.ga_oh.flatMap((r) => Object.keys(r).map((k) => +(k.match(/^v (\d{4})$/) || [])[1] || 0)));
+  // (the G&A sheet may run further than the OHcost tables: its new years follow its own last)
+  const lastGA = Math.max(last, ...base.data.ga_lines.flatMap((r) => Object.keys(r).map((k) => +(k.match(/^(?:cost|oh) (\d{4})$/) || [])[1] || 0)));
   const g = 'years › ga_lines', fm = byKey(yrs.data.ga_lines);
   check(g, yrs.data.ga_lines.length === base.data.ga_lines.length, `${yrs.data.ga_lines.length} rows`);
   for (const b of base.data.ga_lines) {
@@ -580,8 +585,8 @@ sameRows('years › project_profile', base.data.project_profile.map((r) => Objec
     // (rule_oh / rule_cost read formulas, which this test does not re-point when it inserts columns)
     for (const k of Object.keys(b)) if (!['source', 'rule_oh', 'rule_cost'].includes(k)) check(g, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`);
     for (const fld of ['cost', 'oh', 'proj', 'lo', 'hb', 'lo_pct', 'hb_pct']) for (let k = 1; k <= N; k++) {
-      const v = b[fld + ' ' + last], want = !isNum(v) ? v : /_pct$/.test(fld) ? v : v * factor(k);
-      check(g, near(f[fld + ' ' + (last + k)], want, 0.02), `${b.key} . ${fld} ${last + k}: ${fmt(f[fld + ' ' + (last + k)])}, expected ${fmt(want)}`);
+      const v = b[fld + ' ' + lastGA], want = !isNum(v) ? v : /_pct$/.test(fld) ? v : v * factor(k);
+      check(g, near(f[fld + ' ' + (lastGA + k)], want, 0.02), `${b.key} . ${fld} ${lastGA + k}: ${fmt(f[fld + ' ' + (lastGA + k)])}, expected ${fmt(want)}`);
     }
   }
   const g2 = 'years › ga_oh', om = byKey(yrs.data.ga_oh);
@@ -591,8 +596,38 @@ sameRows('years › project_profile', base.data.project_profile.map((r) => Objec
     for (const k of Object.keys(b)) if (k !== 'source') check(g2, near(f[k], b[k]), `${b.key} . ${k}: ${fmt(f[k])}, was ${fmt(b[k])}`);
     for (const p of ['v', 'p']) for (let k = 1; k <= N; k++) { const v = b[p + ' ' + last], want = isNum(v) ? v * factor(k) : v; check(g2, near(f[p + ' ' + (last + k)], want, 0.02), `${b.key} . ${p} ${last + k}: ${fmt(f[p + ' ' + (last + k)])}, expected ${fmt(want)}`); }
   }
-  sameRows('years › ga_components', base.data.ga_components, yrs.data.ga_components, () => true, Array.from({ length: N }, (_, k) => 'v ' + (last + k + 1)));
+  sameRows('years › ga_components', base.data.ga_components, yrs.data.ga_components, () => true, Array.from({ length: N }, (_, k) => 'v ' + (lastGA + k + 1)));
 }
+// Company cash flows (the companies' own statements for All Projects): they add up, each line is its
+// projects plus the corporate remainder, and the company sheet's new years are its last × factor.
+const CO = ['consol_co_cf', 'landowner_co_cf', 'homebuilder_co_cf'];
+function checkCompany(g, run) {
+  const ds = g.split(' › ')[1], rows = run.data[ds] || [], P = run.report.periods[ds] || [], tops = rows.filter((r) => r.project === ALL);
+  if (!check(g, tops.length && P.length, 'no statement')) return;
+  const t = (re) => tops.find((r) => re.test(r.line));
+  const op = t(/^opening balance$/i), ti = t(/^total inflows$/i), to = t(/^total outflows$/i), cl = t(/^closing balance$/i);
+  P.forEach((p) => check(g, near((op ? op[p] : 0) + ti[p] - to[p], cl[p], 1), `${p}: opening + inflows − outflows ${fmt((op ? op[p] : 0) + ti[p] - to[p])}, closing ${fmt(cl[p])}`));
+  for (const r of tops) {
+    const kids = rows.filter((x) => x.project !== ALL && x.ord === r.ord);
+    if (!kids.length || r.kind === 'header') continue;
+    for (const p of P) check(g, near(kids.reduce((s, x) => s + (x[p] || 0), 0), r[p], 1), `${r.key} ${p}: projects and corporate ${fmt(kids.reduce((s, x) => s + (x[p] || 0), 0))}, line ${fmt(r[p])}`);
+  }
+}
+for (const ds of CO) {
+  const g = 'years › ' + ds, add = sourceInfo(yrs, Y.info, ds).years;
+  checkCompany(g, yrs);
+  if (!check(g, add, 'sheet not changed')) continue;
+  const was = base.report.periods[ds], now = yrs.report.periods[ds], last = was[was.length - 1];
+  check(g, JSON.stringify(now) === JSON.stringify(was.concat(add.labels)), `periods ${now.join(', ')}`);
+  const fm = byKey(yrs.data[ds]);
+  for (const b of base.data[ds].filter((r) => r.project === ALL)) {
+    const f = fm.get(b.key);
+    if (!check(g, f, `${b.key}: missing`) || !check(g, f.line === b.line, `${b.key}: ${f.line}, was ${b.line}`)) continue;
+    for (const p of was) check(g, near(f[p], b[p]), `${b.key} ${p}: ${fmt(f[p])}, was ${fmt(b[p])}`);
+    add.labels.forEach((p, i) => { const want = b.kind === 'header' ? null : (b[last] || 0) * factor(i + 1); check(g, near(f[p], want, 0.02), `${b.key} ${p}: ${fmt(f[p])}, expected ${fmt(want)}`); });
+  }
+}
+
 // Exposure: each table's periods, then N more (figures × factor); what a line is made of still adds up.
 {
   const g = 'years › exposure', fm = byKey(yrs.data.exposure);
@@ -644,6 +679,14 @@ for (const ds of ['consol_cf', 'landowner_cf', 'homebuilder_cf']) {
   check('project › ' + ds, prj.data[ds].some((r) => isNew(r) && /^sales$/i.test(r.line) && prj.report.periods[ds].slice(-N).some((p) => r[p] > 0)), `${NEW} has no sales in the new years`);
 }
 for (const ds of ['landowner_pl', 'homebuilder_pl']) shifted('project › ' + ds, prj.data[ds], periodsOf(prj.data[ds]), true);
+// The company statements are as they were; the new project shows under their lines.
+for (const ds of CO) {
+  const g = 'project › ' + ds;
+  checkCompany(g, prj);
+  sameRows(g, yrs.data[ds].filter((r) => r.project === ALL), prj.data[ds].filter((r) => r.project === ALL));
+  const ent = ds.replace('_co_cf', '_cf');
+  if (prj.data[ent].some(isNew)) check(g, prj.data[ds].some(isNew), `${NEW} not under the lines`);
+}
 {
   const g = 'project › consol_pl', P = periodsOf(prj.data.consol_pl);
   const kids = prj.data.consol_pl.filter(isNew);

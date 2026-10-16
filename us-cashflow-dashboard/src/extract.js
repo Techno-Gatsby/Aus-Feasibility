@@ -29,6 +29,13 @@
     budget: [['consol', 'Cons Budgetd Costs new'], ['homebuilder', 'Cons Budgetd Costs']],
     exposure: [['consol', 'Cons Exposure']],
     timeline: [['bpinput', 'Timeline Assumptions']],
+    // Each company's own statements (the Executive Report's): the 'All Projects' figures.
+    landowner_co_pl: [['landowner', 'HS P&L']],
+    homebuilder_co_pl: [['homebuilder', 'Cons P&L']],
+    landowner_co_cf: [['landowner', 'HS Cashflow P']],
+    homebuilder_co_cf: [['homebuilder', 'Cons Cashflow P']],
+    // 'Cons Cashflow final 18.3.26': the date in its name changes, so matched by pattern.
+    consol_co_cf: [['consol', /^cons cashflow final(?!.*monthly)/i, 'Cons Cashflow final …']],
   };
 
   function detect(wb) {
@@ -54,11 +61,14 @@
   const lower = (s) => clean(s).toLowerCase();
   const iso = (v) => (isNum(v) ? root.XLSXLite.serialToISO(v) : null);
 
-  // 'Till 31 Aug'26' -> "Till Aug'26", "Sept'26 to Dec'26" -> "Sep-Dec'26", 'FY 26' / 'FY 2027' -> 'FY2027'.
+  // 'Till 31 Aug'26' -> "Till Aug'26", 'Till FY 26' -> "Till Dec'26", "Sept'26 to Dec'26" -> "Sep-Dec'26",
+  // 'FY 26' / 'FY 2027' -> 'FY2027'.
   function periodLabel(s) {
     const t = clean(s);
     let m = t.match(/^FY\s*'?(\d{2}|\d{4})$/i);
     if (m) return 'FY' + (m[1].length === 2 ? '20' + m[1] : m[1]);
+    m = t.match(/^Till\s+FY\s*'?(?:20)?(\d{2})$/i);
+    if (m) return "Till Dec'" + m[1];
     m = t.match(/^Till\s+(?:\d{1,2}\s+)?([A-Za-z]{3})[A-Za-z]*\s*'(\d{2})$/i);
     if (m) return 'Till ' + m[1][0].toUpperCase() + m[1].slice(1, 3).toLowerCase() + "'" + m[2];
     m = t.match(/^([A-Za-z]{3})[A-Za-z]*\s*'(\d{2})\s+to\s+([A-Za-z]{3})[A-Za-z]*\s*'(\d{2})$/i);
@@ -141,18 +151,19 @@
   const CONCEPTS = [
     [/^total revenue/, 'revenue'], [/^land cost/, 'land'], [/^infra cost/, 'infra'], [/^other direct cost/, 'otherdirect'],
     [/^construction cost/, 'construction'], [/^design .*supervision/, 'dns'], [/^authority cost/, 'authority'],
-    [/^brokerage/, 'brokerage'], [/^(total direct costs?|cost of revenue)$/, 'totaldirect'], [/^gross profit/, 'gp'],
+    [/^brokerage/, 'brokerage'], [/^(total direct costs?|(total )?cost of revenue|direct costs?)$/, 'totaldirect'], [/^(project )?gross profit/, 'gp'],
     [/^legal/, 'legal'], [/^general .*admin/, 'gna'], [/^staff/, 'staff'], [/^total general overhead/, 'tgo'],
     [/^marketing/, 'marketing'], [/^(total )?finance costs? \(net\)$|^total net finance/, 'netfinance'],
     [/^external finance|^finance costs?$/, 'finance'], [/^interest income|^finance income/, 'interest'],
     [/^real property tax/, 'rpt'], [/^franchise tax/, 'franchise'], [/^total state tax/, 'statetax'],
     [/^total overhead/, 'toverhead'], [/^net profit before tax/, 'npbt'], [/^corporate tax/, 'corptax'],
-    [/^net profit( after tax|\s*\/\s*\(loss\))/, 'npat'],
+    [/^net profit( after tax|\s*\/\s*\(loss\)|$)/, 'npat'],
   ];
   const concept = (line) => { const l = lower(line); for (const [re, k] of CONCEPTS) if (re.test(l)) return k; return null; };
+  const TOTAL_C = new Set(['totaldirect', 'gp', 'tgo', 'netfinance', 'statetax', 'toverhead', 'npbt', 'npat']);
   const plKind = (line, hasNums) => {
     if (!hasNums) return 'header';
-    return /^(total\b|gross profit|net profit|cost of revenue$|finance costs \(net\))/i.test(clean(line)) ? 'total' : 'item';
+    return /^(total\b|gross profit|net profit|cost of revenue$|finance costs \(net\))/i.test(clean(line)) || TOTAL_C.has(concept(line)) ? 'total' : 'item';
   };
 
   // One block = consecutive rows under a header row ('Description' in the label column).
@@ -214,7 +225,7 @@
         if (!t) continue;
         const a = (acc[t.key] = acc[t.key] || { t, vals: {}, total: 0 });
         for (const p of periods) a.vals[p] = (a.vals[p] || 0) + num(ln.vals[p]);
-        a.total += ln.total != null ? ln.total : periods.reduce((s, p) => s + num(ln.vals[p]), 0);
+        a.total += ln.total != null && !opt.sumPeriods ? ln.total : periods.reduce((s, p) => s + num(ln.vals[p]), 0);
       }
       for (const a of Object.values(acc)) {
         const o = { key: b.project + '|' + a.t.key.split('|')[1], parent: a.t.key, level: 1, project: b.project, line: a.t.line, kind: a.t.kind };
@@ -246,6 +257,48 @@
     return { rows: top.concat(plChildren(top, blocks.slice(1), periods, {})), periods, blocks, top };
   }
 
+  // ---- company P&Ls ('HS P&L', the Homebuilder 'Cons P&L') ------------------------------
+  // One block under the 'Description' header, line numbers in the column before it. A label
+  // without figures is a section header, unless it is numbered (a repeated sub-header, or an
+  // empty line such as 'Other Income'). Only lines the statement concepts know are kept; of
+  // two lines with one meaning an all-zero one is a placeholder ('Staff/ Manpower - Shared
+  // service', a 'Real Property tax' under overheads). A total named like its section header
+  // becomes 'Total …' so the two read apart. Returns { rows: [{line, kind, c, <period>: v}], periods }.
+  const SUMMARY_FIX = { taxes: 'Corporate taxes', 'project gross profit': 'Gross Profit', 'net profit': 'Net Profit after tax' };
+  function readSummaryPL(s) {
+    let labelCol = null, noCol = null;
+    for (const r of s.rowNums()) {
+      const row = s.row(r), c = Object.keys(row).find((k) => /^description$/i.test(clean(row[k])));
+      if (c == null) continue;
+      labelCol = +c;
+      noCol = +(Object.keys(row).find((k) => /^s[lr]\.?\s*no\.?$/i.test(clean(row[k]))) || labelCol - 1);
+      break;
+    }
+    if (labelCol == null) throw new Error(`no 'Description' header in '${s.name}'`);
+    const { blocks, periods } = readPLBlocks(s, { labelCol });
+    if (!blocks.length || !blocks[0].lines.length || !periods.length) throw new Error(`no P&L found in '${s.name}'`);
+    const out = [];
+    let sec = null;
+    for (const ln of blocks[0].lines) {
+      if (!periods.some((p) => ln.vals[p] != null)) {
+        if (clean(s.row(ln.row)[noCol])) continue;
+        const last = out[out.length - 1];
+        if (!(last && last.kind === 'header' && lower(last.line) === lower(ln.label))) out.push(sec = { line: clean(ln.label), kind: 'header', c: null });
+        continue;
+      }
+      let line = clean(ln.label);
+      line = SUMMARY_FIX[lower(line)] || line;
+      const c = concept(line);
+      if (!c) continue;
+      const kind = plKind(line, true);
+      if (kind === 'total' && sec && lower(sec.line) === lower(line)) line = c === 'totaldirect' && /^direct/i.test(line) ? 'Total direct costs' : 'Total ' + line[0].toLowerCase() + line.slice(1);
+      const o = { line, kind, c, zero: periods.every((p) => !num(ln.vals[p])) };
+      for (const p of periods) o[p] = num(ln.vals[p]);
+      out.push(o);
+    }
+    return { rows: out.filter((o) => o.kind === 'header' || !o.zero || !out.some((x) => x !== o && x.c === o.c && !x.zero)).map(({ zero, ...o }) => o), periods };
+  }
+
   // ---- context and steps -------------------------------------------------------------
   const steps = [];
   // Register a dataset builder. fn(ctx) returns rows, or throws when its inputs are missing.
@@ -266,9 +319,10 @@
       has: (model) => !!models[model],
       // First available sheet for an input key; null when no uploaded file has it.
       async sheet(key) {
-        for (const [model, name] of SHEETS[key] || []) {
+        for (const [model, pat] of SHEETS[key] || []) {
           const b = models[model];
-          if (!b || !b.wb.has(name)) continue;
+          const name = b && (pat instanceof RegExp ? b.wb.sheetNames.find((n) => pat.test(n)) : pat);
+          if (!b || !name || !b.wb.has(name)) continue;
           const s = await b.wb.sheet(name);
           if (s.uncached) report.warnings.push(`${b.name} › ${name}: ${s.uncached} formula cells have no saved value — open the file in Excel, recalculate and save it again`);
           return Object.assign(s, { model, file: b.name });
@@ -277,7 +331,7 @@
       },
       // A named sheet of an uploaded model, for inputs not listed in SHEETS.
       async sheetOf(model, name) { const b = models[model]; return b && b.wb.has(name) ? Object.assign(await b.wb.sheet(name), { model, file: b.name }) : null; },
-      async need(key) { const s = await ctx.sheet(key); if (!s) throw new Error('needs ' + (SHEETS[key] || [[null, key]]).map((x) => `'${x[1]}'`).join(' or ')); return s; },
+      async need(key) { const s = await ctx.sheet(key); if (!s) throw new Error('needs ' + (SHEETS[key] || [[null, key]]).map((x) => `'${x[2] || x[1]}'`).join(' or ')); return s; },
       // A dataset: freshly built in this run, else the current one.
       get: (name) => (name in ctx.data ? ctx.data[name] : (prev[name] || [])),
       fresh: (name) => name in ctx.data,
@@ -314,12 +368,27 @@
       return cf.rows;
     });
   }
+  // The 'All Projects' lines are the company's own P&L ('HS P&L', the Homebuilder 'Cons P&L'),
+  // as in the Executive Report; each project's lines hang under them from the projectwise
+  // sheet, and whatever the projects do not explain shows as 'Corporate level & differences'
+  // (the company's overheads, their allocation by year). Without the company sheet, the
+  // projectwise sheet's own 'All Projects' block.
   for (const ent of ['landowner', 'homebuilder']) {
     step(ent + '_pl', async (ctx) => {
       const s = await ctx.need(ent + '_pl');
       const pl = await ctx.memo('pl:' + ent, async () => readProjectPL(s));
-      ctx.report.sources[ent + '_pl'] = `${s.file} › ${s.name}`;
-      return pl.rows;
+      const co = await ctx.sheet(ent + '_co_pl');
+      ctx.report.sources[ent + '_pl'] = (co ? `${co.file} › ${co.name}; ` : '') + `${s.file} › ${s.name}`;
+      if (!co) return pl.rows;
+      const { rows, periods } = await ctx.memo('copl:' + ent, async () => readSummaryPL(co));
+      const top = rows.map((x, i) => {
+        const o = { key: 'All|' + pad2(i + 1), parent: '', level: 0, project: 'All Projects', line: x.line, kind: x.kind };
+        let sum = 0;
+        for (const p of periods) { const v = x.kind === 'header' ? null : r2(num(x[p])); o[p] = v; sum += v || 0; }
+        o.Total = x.kind === 'header' ? null : r2(sum);
+        return o;
+      });
+      return top.concat(plChildren(top, pl.blocks, periods, { sumPeriods: true }));
     });
   }
 
@@ -553,6 +622,6 @@
   root.SobhaExtract = {
     MODELS, SHEETS, detect, missingFor, build, step,
     // Shared with the derived-dataset files.
-    lib: { isNum, num, r2, pad2, clean, lower, iso, periodLabel, headerCols, layout, readCF, readPLBlocks, topLines, plChildren, concept, plKind, readProjectPL, readSummary, readTimeline, timelineMatch, nameKey, CORP },
+    lib: { isNum, num, r2, pad2, clean, lower, iso, periodLabel, headerCols, layout, readCF, readPLBlocks, topLines, plChildren, concept, plKind, readProjectPL, readSummaryPL, readSummary, readTimeline, timelineMatch, nameKey, CORP },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

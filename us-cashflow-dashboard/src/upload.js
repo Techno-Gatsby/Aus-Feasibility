@@ -17,6 +17,7 @@
   const NAMES = {
     consol_cf: 'Consol cashflow', landowner_cf: 'Landowner cashflow', homebuilder_cf: 'Homebuilder cashflow',
     consol_pl: 'Consol P&L', landowner_pl: 'Landowner P&L', homebuilder_pl: 'Homebuilder P&L',
+    consol_co_cf: 'Consol company cash flow', landowner_co_cf: 'Landowner company cash flow', homebuilder_co_cf: 'Homebuilder company cash flow',
     consol_components: 'Consol line breakdown', consol_project_pl: 'Consolidated P&L per project',
     project_summary: 'Profit, equity and ROE tiles', project_roe: 'Return on equity', project_irr: 'Equity IRR',
     kpi_extra: 'Units, cost and debt tiles', project_timeline: 'Timeline', project_profile: 'Project details',
@@ -117,6 +118,14 @@
       out.push({ ok: !badTot.length, label: `${name} cashflow: inflow and outflow totals add up`, detail: badTot.slice(0, 3).join('; ') + (badTot.length > 3 ? ` and ${badTot.length - 3} more` : '') });
       const s = find(rows, 'All Projects', /^sales$/i), rv = find(rows, 'All Projects', /^revenue$/i);
       if (s && rv && Math.abs((s.Total || 0) - (rv.Total || 0)) > 1) out.push({ ok: false, warn: true, label: `${name} cashflow: revenue total differs from sales total`, detail: `by ${money((rv.Total || 0) - (s.Total || 0))}` });
+    }
+    // The companies' own cash flow statements (All Projects).
+    for (const [ds, name] of [['consol_co_cf', 'Consol'], ['landowner_co_cf', 'Landowner'], ['homebuilder_co_cf', 'Homebuilder']]) {
+      if (!report.refreshed.includes(ds)) continue;
+      const rows = d[ds], P = report.periods[ds] || [], r = (re) => find(rows, 'All Projects', re);
+      const op = r(/^opening balance$/i), cl = r(/^closing balance$/i), ti = r(/^total inflows$/i), to = r(/^total outflows$/i), bad = [];
+      if (cl && ti && to) P.forEach((q) => { const diff = (op ? op[q] || 0 : 0) + (ti[q] || 0) - (to[q] || 0) - (cl[q] || 0); if (Math.abs(diff) > 1) bad.push(`${q} (off by ${money(diff)})`); });
+      out.push({ ok: !bad.length, label: `${name} company cash flow: closing balance = opening + inflows − outflows`, detail: bad.slice(0, 3).join('; ') + (bad.length > 3 ? ` and ${bad.length - 3} more` : '') });
     }
     const cs = find(d.consol_cf, 'All Projects', /^sales$/i), hs = find(d.homebuilder_cf, 'All Projects', /^sales$/i);
     if (cs && hs) out.push({ ok: Math.abs(cs.Total - hs.Total) <= 1, label: 'Consol sales equal Homebuilder sales', detail: Math.abs(cs.Total - hs.Total) > 1 ? `Consol ${money(cs.Total)}, Homebuilder ${money(hs.Total)}` : '' });

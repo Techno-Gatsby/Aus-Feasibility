@@ -8,10 +8,8 @@
 // year (Till Aug + Sep-Dec, or FY2025 + FY2026, or the P&L's FY 26), then one column per FY.
 (function (X) {
   'use strict';
-  const { num, r2, pad2, clean, lower, concept, plKind, readPLBlocks, CORP } = X.lib;
+  const { num, r2, pad2, lower, concept, readSummaryPL, CORP } = X.lib;
 
-  // The Homebuilder model's own summary P&L: the Homebuilder 'All Projects' plan figures.
-  X.SHEETS.homebuilder_summary_pl = [['homebuilder', 'Cons P&L']];
 
   const ALL = 'All Projects';
   const CFS = ['consol_cf', 'landowner_cf', 'homebuilder_cf'], PLS = ['consol_pl', 'landowner_pl', 'homebuilder_pl'];
@@ -59,57 +57,16 @@
     return rules;
   }
 
-  // ---- Homebuilder summary P&L ('Cons P&L') --------------------------------------------
-  // One block under the 'Description' header, line numbers in the column before it. A label
-  // without figures is a section header, unless it is numbered (a repeated sub-header, or an
-  // empty line such as 'Other Income'). Only lines the statement concepts know are kept; of
-  // two lines with one meaning an all-zero one is a placeholder ('Staff/ Manpower - Shared
-  // service', a 'Real Property tax' under overheads). A total named like its section header
-  // becomes 'Total …' so the two read apart.
-  const SUMMARY_FIX = { taxes: 'Corporate taxes' }; // the income tax line under profit before tax
-  function readSummaryPL(s) {
-    let labelCol = null, noCol = null;
-    for (const r of s.rowNums()) {
-      const row = s.row(r), c = Object.keys(row).find((k) => /^description$/i.test(clean(row[k])));
-      if (c == null) continue;
-      labelCol = +c;
-      noCol = +(Object.keys(row).find((k) => /^s[lr]\.?\s*no\.?$/i.test(clean(row[k]))) || labelCol - 1);
-      break;
-    }
-    if (labelCol == null) throw new Error(`no 'Description' header in '${s.name}'`);
-    const { blocks, periods } = readPLBlocks(s, { labelCol });
-    if (!blocks.length || !blocks[0].lines.length || !periods.length) throw new Error(`no P&L found in '${s.name}'`);
-    const out = [];
-    let sec = null;
-    for (const ln of blocks[0].lines) {
-      if (!periods.some((p) => ln.vals[p] != null)) {
-        if (clean(s.row(ln.row)[noCol])) continue;
-        const last = out[out.length - 1];
-        if (!(last && last.kind === 'header' && lower(last.line) === lower(ln.label))) out.push(sec = { line: clean(ln.label), kind: 'header', c: null });
-        continue;
-      }
-      let line = clean(ln.label);
-      line = SUMMARY_FIX[lower(line)] || line;
-      const c = concept(line);
-      if (!c) continue;
-      const kind = plKind(line, true);
-      if (kind === 'total' && sec && lower(sec.line) === lower(line)) line = 'Total ' + line[0].toLowerCase() + line.slice(1);
-      const o = { line, kind, c, zero: periods.every((p) => !num(ln.vals[p])) };
-      for (const p of periods) o[p] = num(ln.vals[p]);
-      out.push(o);
-    }
-    return out.filter((o) => o.kind === 'header' || !o.zero || !out.some((x) => x !== o && x.c === o.c && !x.zero)).map(({ zero, ...o }) => o);
-  }
-
   // ---- the step ------------------------------------------------------------------------
   X.step('actuals_plan', async (ctx) => {
     // Built from this run's statements, else the current ones; nothing new, nothing to do.
-    const hs = await ctx.sheet('homebuilder_summary_pl');
+    // The Homebuilder model's own summary P&L: the Homebuilder 'All Projects' plan figures.
+    const hs = await ctx.sheet('homebuilder_co_pl');
     if (!hs && !CFS.concat(PLS).some((st) => ctx.fresh(st))) throw new Error('needs the model workbooks');
     const src = {};
     for (const st of CFS.concat(PLS, ['consol_project_pl'])) { src[st] = ctx.get(st); if (!src[st].length) throw new Error('needs ' + st); }
     let summary;
-    if (hs) { summary = readSummaryPL(hs); ctx.report.sources.homebuilder_summary_pl = `${hs.file} › ${hs.name}`; }
+    if (hs) summary = (await ctx.memo('copl:homebuilder', async () => readSummaryPL(hs))).rows;
     else {
       // Without the Homebuilder model its 'All Projects' P&L lines stay as they are, with their
       // roles, so the other statements can still be refreshed.

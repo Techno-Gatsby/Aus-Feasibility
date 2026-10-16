@@ -56,6 +56,9 @@
     const above = (re) => { const x = find(s, re, 1, h.r - 1); return x ? x.c : null; };
     const cOH = above(/^total oh$/), cLO = above(/^sobha developers/), cHB = above(/^sobha homes/);
     if (!cOH || !cLO || !cHB) throw new Error("the 'G&A' sheet is missing the 'TOTAL OH', 'Sobha Developers' or 'Sobha Homes' columns");
+    // The Homebuilder block runs to the next block titled on its row (Rev.05 has 'PROJECT PRELIMS' blocks after it).
+    const hbAt = find(s, /^sobha homes/, 1, h.r - 1), hbRow = s.row(hbAt.r);
+    const hbEnd = Math.min(Infinity, ...Object.keys(hbRow).map(Number).filter((c) => c > cHB && typeof hbRow[c] === 'string' && clean(hbRow[c])));
     const sub = s.row(h.r + 1);
     const at = (re) => +(Object.keys(sub).find((c) => typeof sub[c] === 'string' && re.test(lower(sub[c]))) || 0);
     const cOHp = at(/^oh$/), cPp = at(/^proj/);
@@ -65,8 +68,8 @@
       const c = +k;
       if (lower(v) === 'amount') {
         const y = yearAt(c - 1) || yearAt(c);
-        if (y) B[c < cOHp ? 'cost' : c < cLO ? 'oh' : c < cHB ? 'lo' : 'hb'][y] = c;
-      } else if (isYear(v) && c >= cLO) B[c < cHB ? 'lo_pct' : 'hb_pct'][v] = c;
+        if (y && c < hbEnd) B[c < cOHp ? 'cost' : c < cLO ? 'oh' : c < cHB ? 'lo' : 'hb'][y] = c;
+      } else if (isYear(v) && c >= cLO && c < hbEnd) B[c < cHB ? 'lo_pct' : 'hb_pct'][v] = c;
     }
     const years = Object.keys(B.oh).map(Number).sort((a, b) => a - b);
     if (!years.length) throw new Error("the 'G&A' sheet has no year columns under 'TOTAL OH'");
@@ -298,11 +301,20 @@
       }
       byRow[r] = row; lines.push(row); last = row;
     }
+    // The table ends at its last sub-total, the grand total ('N Sub-Total (F+ M)'); some
+    // workbooks have a note and a summary by cost category below it, which are not heads.
+    const end = lines.map((x) => x.kind).lastIndexOf('subtotal');
+    if (end >= 0 && end < lines.length - 1) {
+      const cut = new Set(lines.splice(end + 1).map((x) => x.key));
+      for (let i = comps.length - 1; i >= 0; i--) if (cut.has(comps[i].head)) comps.splice(i, 1);
+      for (const r of Object.keys(byRow)) if (cut.has(byRow[r].key)) delete byRow[r];
+      last = lines[end];
+    }
     if (last && last.kind === 'subtotal') last.kind = 'total';
     // Project share of subtotals: the same rows the subtotal's overhead formula adds.
     for (const r of labelled) {
       const row = byRow[r];
-      if (row.kind !== 'subtotal' && row.kind !== 'total') continue;
+      if (!row || (row.kind !== 'subtotal' && row.kind !== 'total')) continue;
       const f = s.formula(r, L.B.oh[Y[0]]);
       if (!f) continue;
       const kids = rowsIn(f).filter((x) => byRow[x] && x !== r);
