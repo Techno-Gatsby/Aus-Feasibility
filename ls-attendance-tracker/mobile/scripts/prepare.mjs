@@ -8,6 +8,17 @@ const cfg = JSON.parse(readFileSync('capacitor.config.json', 'utf8'));
 cfg.server.url = url.endsWith('/') ? url : url + '/'; cfg.server.allowNavigation = [new URL(url).host];
 writeFileSync('capacitor.config.json', JSON.stringify(cfg, null, 2));
 
+// iPhone: copy the recorder, use its view controller (registers the plugin), resume recording on every app start
+if (process.argv[2] === 'ios') {
+  const I = 'ios/App/App/';
+  if (!existsSync(I + 'AppDelegate.swift')) { console.error('Run `npx cap add ios` first'); process.exit(1); }
+  cpSync('ios-src/LsTracker.swift', I + 'LsTracker.swift');
+  const sb = I + 'Base.lproj/Main.storyboard'; let x = readFileSync(sb, 'utf8');
+  x = x.replace(/customClass="CAPBridgeViewController" customModule="Capacitor"/, 'customClass="LsBridgeViewController" customModule="App" customModuleProvider="target"'); writeFileSync(sb, x);
+  let ad = readFileSync(I + 'AppDelegate.swift', 'utf8');
+  if (!ad.includes('LsTracker.shared')) ad = ad.replace(/(didFinishLaunchingWithOptions[^{]*\{)/, '$1\n        LsTracker.shared.resumeIfShift()'); writeFileSync(I + 'AppDelegate.swift', ad);
+  console.log('App opens', cfg.server.url, '· iPhone recorder added'); process.exit(0);
+}
 const A = 'android/app/', mf = A + 'src/main/AndroidManifest.xml', gr = A + 'build.gradle';
 if (!existsSync(mf)) { console.error('Run `npx cap add android` first'); process.exit(1); }
 cpSync('android-src', A + 'src/main/java', { recursive: true });           // MainActivity (registers the plugin) + tracker

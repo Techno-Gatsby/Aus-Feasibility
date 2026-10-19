@@ -1,0 +1,46 @@
+# Builds the LS Attendance iPhone app (ls-attendance-tracker/mobile) without an Apple account → artifact "ls-attendance-ios"
+# (LS-Attendance-unsigned.ipa). Install it free with SideStore / AltStore (signed with the user's own Apple ID, renewed every 7 days),
+# or sign it later with an Apple Developer account. See ls-attendance-tracker/mobile/README.md.
+name: iPhone app
+on:
+  workflow_dispatch:
+    inputs:
+      worker_url:
+        description: 'Phone page address, e.g. https://<your-app>.azurestaticapps.net/worker/'
+        required: false
+  push:
+    paths: ['ls-attendance-tracker/mobile/ios-src/**', 'ls-attendance-tracker/mobile/scripts/**', '.github/workflows/ls-ios-app.yml']
+jobs:
+  build:
+    runs-on: macos-14
+    defaults: { run: { working-directory: ls-attendance-tracker/mobile } }
+    env:
+      LS_WORKER_URL: ${{ inputs.worker_url || vars.LS_WORKER_URL || 'https://example.azurestaticapps.net/worker/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npx cap add ios
+      - run: node scripts/prepare.mjs ios
+      - name: Permissions and background location (Info.plist), recorder in the Xcode project
+        run: |
+          P=ios/App/App/Info.plist; B=/usr/libexec/PlistBuddy
+          $B -c "Add :NSLocationWhenInUseUsageDescription string 'LS Attendance records your location at check-in and during your shift.'" $P || true
+          $B -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string 'LS Attendance keeps recording your location during your shift, also with the screen locked, until you check out.'" $P || true
+          $B -c "Add :NSLocationAlwaysUsageDescription string 'LS Attendance keeps recording your location during your shift until you check out.'" $P || true
+          $B -c "Add :NSCameraUsageDescription string 'LS Attendance takes a photo at check-in and scans patrol checkpoint QR codes.'" $P || true
+          $B -c "Add :UIBackgroundModes array" $P || true
+          $B -c "Add :UIBackgroundModes:0 string location" $P || true
+          ruby -e "require 'xcodeproj'; p = Xcodeproj::Project.open('ios/App/App.xcodeproj'); t = p.targets.find { |x| x.name == 'App' }; g = p.main_group['App']; unless g.files.any? { |f| f.path == 'LsTracker.swift' } then r = g.new_file('LsTracker.swift'); t.add_file_references([r]) end; p.save"
+      - run: npx cap sync ios
+      - name: Build (unsigned)
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet
+          mkdir -p "$RUNNER_TEMP/out/Payload" && cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/out/Payload/"
+          cd "$RUNNER_TEMP/out" && zip -qr LS-Attendance-unsigned.ipa Payload && ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ls-attendance-ios
+          path: ${{ runner.temp }}/out/LS-Attendance-unsigned.ipa

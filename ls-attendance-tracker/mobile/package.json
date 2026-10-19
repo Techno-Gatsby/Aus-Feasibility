@@ -1,7 +1,13 @@
 {
   "name": "ls-attendance-android",
   "private": true,
-  "description": "Android app for Security Personnel Attendance: the phone page plus a built-in recorder that keeps the shift location going with the screen off, the app closed and after a restart.",
-  "dependencies": { "@capacitor/android": "6.2.2", "@capacitor/core": "6.2.2" },
-  "devDependencies": { "@capacitor/cli": "6.2.2" }
+  "description": "LS Attendance app (Android and iPhone): the phone page plus a built-in recorder that keeps the shift location going with the screen off or the app closed.",
+  "dependencies": {
+    "@capacitor/android": "6.2.2",
+    "@capacitor/core": "6.2.2",
+    "@capacitor/ios": "6.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.2"
+  }
 }

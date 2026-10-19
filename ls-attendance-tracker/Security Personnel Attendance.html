@@ -1087,7 +1087,10 @@ function startGps() {
    until check-out; it stores points on the phone and sends them itself.
    Web page / home-screen app (iPhone): every 10 minutes or after ~50 m while the page is open; the screen can be
    kept awake during the shift. Points are kept on the phone until they are sent. */
-const PING_MS = 10 * 60000, NT = () => window.Capacitor?.Plugins?.LsTracker;
+const PING_MS = 10 * 60000;
+// the app's built-in recorder (Android and iPhone); also found when the native bridge exposes registerPlugin only
+let NT_P = null;
+const NT = () => window.Capacitor?.Plugins?.LsTracker || (window.Capacitor?.isNativePlatform?.() && window.Capacitor.registerPlugin ? (NT_P ||= window.Capacitor.registerPlugin('LsTracker')) : null);
 const STANDALONE = (() => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })();
 let wake = null, sending = false;
 const pingBuf = () => { try { return JSON.parse(ls.get('ls.pings') || '[]'); } catch (e) { return []; } };
