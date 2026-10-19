@@ -90,7 +90,7 @@ const TOUR = (() => {
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
     { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Help</b> – settings, tours, keys and codes. <b>⚙</b> – this Settings page.' },
-    { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (needs an Anthropic API key, added once in its ⚙ settings).' },
+    { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (for now through the Claude CLI on this PC: run <code>node tools/claude-bridge.mjs</code> and keep it open).' },
     { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
   ];
   let steps = [], i = 0, hole = null, tip = null, moving = false, gen = 0;

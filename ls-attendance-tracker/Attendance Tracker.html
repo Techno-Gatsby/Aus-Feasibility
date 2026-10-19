@@ -4364,7 +4364,7 @@ const TOUR = (() => {
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
     { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Help</b> – settings, tours, keys and codes. <b>⚙</b> – this Settings page.' },
-    { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (needs an Anthropic API key, added once in its ⚙ settings).' },
+    { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (for now through the Claude CLI on this PC: run <code>node tools/claude-bridge.mjs</code> and keep it open).' },
     { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
   ];
   let steps = [], i = 0, hole = null, tip = null, moving = false, gen = 0;
@@ -4666,25 +4666,25 @@ async function exportDirectoryXlsx(blank = false) {
    Ask Claude – an assistant that analyses the tracker's data: security
    personnel and HR details, attendance, check-ins / check-outs, shift
    positions (routes), sites and zones.
-   - Uses the official Anthropic JavaScript SDK in this browser with the
-     user's own API key (kept only in this browser).
-   - Claude never receives the whole data set: it writes small read-only
-     JavaScript analyses, run here in an isolated Web Worker (no network);
-     only the results go back to Claude.
+   - For now runs through the Claude CLI on this PC: tools/claude-bridge.mjs
+     passes the question to `claude -p` (the user's own Claude sign-in, no
+     API key in the page). An Azure server-side key can replace it later.
+   - Claude never reads the data set: it writes small read-only JavaScript
+     analyses, run over a snapshot with the helpers below; only the
+     results go back to Claude.
    ===================================================================== */
 const AI = {
-  SDK: 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.135.0/+esm',
-  MODELS: [['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
-  msgs: [], busy: false, client: null, worker: null, ready: null, open: false,
-  get key() { try { return localStorage.getItem('ls.claudeKey') || ''; } catch (e) { return ''; } },
-  set key(v) { try { v ? localStorage.setItem('ls.claudeKey', v) : localStorage.removeItem('ls.claudeKey'); } catch (e) { } this.client = null; },
-  get model() { try { return localStorage.getItem('ls.claudeModel') || 'claude-opus-5-5'; } catch (e) { return 'claude-opus-5-5'; } },
+  MODELS: [['', 'Claude CLI default'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
+  chat: '', asked: 0, busy: false, worker: null, ready: null, open: false,
+  get bridge() { try { return localStorage.getItem('ls.claudeBridge') || 'http://localhost:8787'; } catch (e) { return 'http://localhost:8787'; } },
+  set bridge(v) { try { v ? localStorage.setItem('ls.claudeBridge', v) : localStorage.removeItem('ls.claudeBridge'); } catch (e) { } },
+  get model() { try { return localStorage.getItem('ls.claudeModel') || ''; } catch (e) { return ''; } },
   set model(v) { try { localStorage.setItem('ls.claudeModel', v); } catch (e) { } },
   get personal() { try { return localStorage.getItem('ls.claudePersonal') === '1'; } catch (e) { return false; } },
   set personal(v) { try { localStorage.setItem('ls.claudePersonal', v ? '1' : '0'); } catch (e) { } this.ready = null; }
 };
 
-/* ---------- data snapshot for the analysis worker ---------- */
+/* ---------- data snapshot for the analyses ---------- */
 async function aiSnapshot() {
   const today = todayISO(), pings = await PINGS.load(), personal = AI.personal;
   const P = S.employees.map(e => {
@@ -4718,7 +4718,7 @@ async function aiSnapshot() {
     shiftHours: +S.settings.shiftHours || 12
   };
 }
-/** The worker: holds the snapshot, runs Claude's read-only analysis code with helpers; no network, no page access */
+/** Analysis runner (run by the bridge in an isolated Node context): holds the snapshot, runs Claude's read-only analysis code with helpers H; no network */
 const AI_WORKER = `
 for (const k of ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'importScripts', 'indexedDB', 'caches', 'BroadcastChannel']) { try { Object.defineProperty(self, k, { value: undefined, configurable: false }); } catch (e) { } }
 let D = null;
@@ -4762,32 +4762,17 @@ self.onmessage = e => {
     postMessage({ id: m.id, ok: true, result: s.length > 30000 ? s.slice(0, 30000) + ' …[truncated – return less data, e.g. counts or the first 50 rows]' : s });
   } catch (err) { postMessage({ id: m.id, ok: false, result: String(err && err.stack || err).split('\\n').slice(0, 4).join('\\n') }); }
 };`;
-async function aiWorker() {
-  if (AI.ready) return AI.ready;
-  return AI.ready = (async () => {
-    AI.worker?.terminate();
-    AI.worker = new Worker(URL.createObjectURL(new Blob([AI_WORKER, '\n', beatRoundsCore.toString()], { type: 'text/javascript' })));
-    AI.worker.postMessage({ snapshot: await aiSnapshot() });
-    return AI.worker;
-  })();
-}
-let AI_SEQ = 0;
-async function aiRun(code) {
-  const w = await aiWorker(), id = ++AI_SEQ;
-  return new Promise(res => {
-    const t = setTimeout(() => { w.removeEventListener('message', on); AI.ready = null; w.terminate(); res({ ok: false, result: 'Stopped after 20 seconds – make the analysis simpler.' }); }, 20000);
-    const on = e => { if (e.data.id !== id) return; clearTimeout(t); w.removeEventListener('message', on); res(e.data); };
-    w.addEventListener('message', on); w.postMessage({ id, code });
-  });
-}
-
 /* ---------- Claude ---------- */
 const AI_SYSTEM = () => `You are the analysis assistant inside the Latinem Securities (LS) Attendance Tracker, a Dubai security-guarding company. The user is an LS manager. Answer questions about security personnel, HR details, attendance, check-ins / check-outs, shift routes, sites and zones by computing from the data – never guess numbers.
 
 Today is ${todayISO()} (Dubai time, UTC+4). Dates are ISO strings YYYY-MM-DD; timestamps (ts) are epoch milliseconds.
 
 HOW TO WORK
-- Use the run_analysis tool: write a JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result (counts, short lists, top-N). Never return the whole data set. Several small analyses are better than one huge one.
+- Compute with the Bash tool, always exactly in this form (set the Bash description to one short line shown to the user, e.g. "Visas expiring in November"):
+  node analyse.mjs <<'EOF'
+  <JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result>
+  EOF
+  It prints the JSON result. Return counts, short lists or top-N – never the whole data set. Several small analyses are better than one huge one. Do not read or list files; everything is reachable through D and H.
 - State the assumption behind any interpretation (for example "next month = ${(() => { const d = new Date(todayISO() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })()}").
 - Answer in short, plain sentences, then a compact Markdown table when listing people (Emp code, name, site/project, the relevant value). Mention how many rows you left out.
 - "Beats" = patrol beats (D.beats): checkpoints at a site visited in rounds every everyMin minutes, by QR scan (D.scans) or by a recorded position within the checkpoint radius. Use H.beatRounds for who completed their rounds / missed checkpoints. Where a site has no beat, "following the beat" means staying inside the allocated site's zone – use H.beatCompliance. Positions exist only for people using the phone app.
@@ -4809,59 +4794,40 @@ HELPERS (H)
 distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatRounds(personId, from, to) → [{date, beat, site, expected, done, completion %, scanned, gps, missed[{checkpoint, rounds}]}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
 
 Example: const next = H.addMonths(D.today, 1).slice(0, 7); return D.personnel.filter(p => !p.left && p.visaExpiry.startsWith(next)).map(p => [p.code, p.name, p.visaExpiry]);`;
-const AI_TOOLS = [{
-  name: 'run_analysis',
-  description: 'Run a read-only JavaScript analysis over the tracker data in the browser. The code is the body of function(D, H) and must return a small JSON-serialisable value. No network or page access. Returns the JSON result, or the error message.',
-  eager_input_streaming: true,
-  input_schema: { type: 'object', properties: { purpose: { type: 'string', description: 'One short line shown to the user, e.g. "Visas expiring in November"' }, code: { type: 'string', description: 'Function body using D and H; must end with a return statement' } }, required: ['purpose', 'code'] }
-}];
-async function aiClient() {
-  if (AI.client) return AI.client;
-  if (!AI.key) throw new Error('Add your Anthropic API key in the assistant settings (⚙) first.');
-  const { default: Anthropic } = await import(AI.SDK);
-  // the key is the user's own and stays in this browser; requests go straight to api.anthropic.com
-  return AI.client = new Anthropic({ apiKey: AI.key, dangerouslyAllowBrowser: true });
-}
+/** worker code + snapshot go to the bridge, which runs the same analyses with the claude CLI */
 async function aiAsk(text) {
   if (AI.busy || !text.trim()) return;
   AI.busy = true; aiPaint();
   const box = $('#ai-log'), turn = document.createElement('div'); turn.className = 'ai-turn';
   turn.innerHTML = `<div class="ai-q">${esc(text)}</div><div class="ai-a"><div class="ai-steps"></div><div class="ai-text"><span class="ai-dots">Thinking…</span></div></div>`;
   box.appendChild(turn); box.scrollTop = box.scrollHeight;
-  const steps = $('.ai-steps', turn), out = $('.ai-text', turn); let shown = '';
+  const steps = $('.ai-steps', turn), out = $('.ai-text', turn), st = {}; let shown = '';
   const show = () => { out.innerHTML = aiMarkdown(shown) || '<span class="ai-dots">Thinking…</span>'; box.scrollTop = box.scrollHeight; };
-  const base = AI.msgs.length;
-  AI.msgs.push({ role: 'user', content: text });
+  AI.chat ||= Math.random().toString(36).slice(2);
   try {
-    const client = await aiClient(), model = AI.model;
-    for (let round = 0; round < 12; round++) {
-      const params = { model, max_tokens: 16000, system: [{ type: 'text', text: AI_SYSTEM(), cache_control: { type: 'ephemeral' } }], tools: AI_TOOLS, messages: AI.msgs, thinking: { type: 'adaptive' }, output_config: { effort: 'medium' } };
-      // refusal fallback (server side) on the Opus / Sonnet models; Haiku has none
-      if (model !== 'claude-haiku-5-5') Object.assign(params, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
-      const stream = client.beta.messages.stream(params);
-      stream.on('text', d => { shown += d; show(); });
-      const msg = await stream.finalMessage();
-      AI.msgs.push({ role: 'assistant', content: msg.content });                 // append-only history
-      if (msg.stop_reason === 'refusal') { shown += (shown ? '\n\n' : '') + '_Claude declined to answer this request._'; break; }
-      const uses = msg.content.filter(b => b.type === 'tool_use');
-      if (msg.stop_reason !== 'tool_use' || !uses.length) { if (msg.stop_reason === 'max_tokens') shown += '\n\n_(answer cut short)_'; break; }
-      const results = [];
-      for (const u of uses) {
-        const inp = u.input || {};
-        if (u.name !== 'run_analysis' || typeof inp.code !== 'string' || !inp.code.trim()) { results.push({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: JSON.stringify({ INVALID_JSON: JSON.stringify(inp) }) }); continue; }
-        const st = document.createElement('details'); st.className = 'ai-step'; st.innerHTML = `<summary>${esc(inp.purpose || 'Analysing')}…</summary><pre>${esc(inp.code)}</pre>`; steps.appendChild(st);
-        const r = await aiRun(inp.code);
-        st.querySelector('summary').textContent = `${r.ok ? '✓' : '✕'} ${inp.purpose || 'Analysis'}`;
-        st.insertAdjacentHTML('beforeend', `<pre class="res">${esc(r.result.slice(0, 2000))}</pre>`);
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: r.result, ...(r.ok ? {} : { is_error: true }) });
+    const r = await fetch(AI.bridge.replace(/\/+$/, '') + '/ask', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat: AI.chat, question: text, model: AI.model, system: AI_SYSTEM(), worker: AI_WORKER + '\n' + beatRoundsCore.toString(), snapshot: await aiSnapshot() }) })
+      .catch(() => { throw new Error(`Can't reach the Claude CLI bridge at ${AI.bridge}. On this PC run: node tools/claude-bridge.mjs (and keep it open).`); });
+    if (!r.ok) throw new Error(`Bridge: ${r.status} ${await r.text()}`);
+    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', end = null;
+    for (;;) {
+      const { value, done } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+        if (m.t === 'text') { shown += m.d; show(); }
+        else if (m.t === 'turn') { if (shown && !shown.endsWith('\n\n')) shown += '\n\n'; }
+        else if (m.t === 'step') { const d = st[m.id] = document.createElement('details'); d.className = 'ai-step'; d.innerHTML = `<summary>${esc(m.purpose || 'Analysing')}…</summary><pre>${esc(m.code)}</pre>`; steps.appendChild(d); }
+        else if (m.t === 'result' && st[m.id]) { const d = st[m.id]; d.querySelector('summary').textContent = `${m.ok ? '✓' : '✕'} ${d.querySelector('summary').textContent.replace(/…$/, '')}`; d.insertAdjacentHTML('beforeend', `<pre class="res">${esc(m.result.slice(0, 2000))}</pre>`); }
+        else if (m.t === 'done') end = m;
       }
-      AI.msgs.push({ role: 'user', content: results });                          // all results in one message
-      if (shown) shown += '\n\n';
     }
+    if (!end) throw new Error('The bridge stopped before Claude finished.');
+    if (!end.ok) throw new Error(/login|auth|sign/i.test(end.error) ? 'Claude CLI is not signed in – run `claude` once in a terminal on this PC and sign in.' : end.error || 'Claude CLI failed');
+    if (!shown.trim()) shown = end.text;
+    AI.asked++;
   } catch (e) {
-    AI.msgs.length = base;                                                    // drop the failed exchange, keep history consistent
-    const msg = e?.status === 401 ? 'The API key was not accepted – check it in settings (⚙).' : e?.status === 429 ? 'Too many requests right now – try again in a minute.' : (e?.message || String(e));
-    shown += (shown ? '\n\n' : '') + '**' + msg + '**';
+    shown += (shown ? '\n\n' : '') + '**' + (e?.message || String(e)) + '**';
   } finally { AI.busy = false; show(); aiPaint(); }
 }
 /** Small Markdown: headings, bold, italics, inline code, lists, tables, code blocks */
@@ -4892,19 +4858,19 @@ function aiToggle(force) {
   if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); }
   p.innerHTML = `<div class="ai-h"><b>✦ Ask Claude</b><span class="pill">beta</span><span class="spacer"></span>
       <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
-    <div class="ai-settings" id="ai-settings" ${AI.key ? 'hidden' : ''}>
-      <label class="f">Anthropic API key <span class="muted">(kept only in this browser)</span><input type="password" id="ai-key" value="${esc(AI.key)}" placeholder="sk-ant-…" autocomplete="off"></label>
+    <div class="ai-settings" id="ai-settings" hidden>
+      <label class="f">Claude CLI bridge <span class="muted">(on this PC run <code>node tools/claude-bridge.mjs</code>)</span><input type="text" id="ai-bridge" value="${esc(AI.bridge)}" placeholder="http://localhost:8787" autocomplete="off"></label>
       <label class="f">Model<select id="ai-model">${opts(AI.MODELS, AI.model)}</select></label>
       <label class="chk"><input type="checkbox" id="ai-personal" ${AI.personal ? 'checked' : ''}> Let Claude use passport, Emirates ID, phone numbers, home address and health details</label>
-      <p class="muted small">Your questions and the results of each analysis are sent to Anthropic's API; the data itself stays in this browser and is analysed here. Usage is billed to the API key's account.</p>
+      <p class="muted small">Questions and the results of each analysis go to Claude through the Claude CLI signed in on this PC (its own plan or account). The data snapshot stays on this PC and is analysed there.</p>
       <button class="btn sm pri" id="ai-save">Save</button></div>
-    <div class="ai-log" id="ai-log">${AI.msgs.length ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. Claude works out the answer from the data in this tracker.</p>
+    <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. Claude works out the answer from the data in this tracker.</p>
       <div class="ai-chips">${AI_SUGGEST.map(q => `<button class="chip" data-aq="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
     <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="2" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
   $('#ai-x').onclick = () => aiToggle(false);
   $('#ai-set').onclick = () => { $('#ai-settings').hidden = !$('#ai-settings').hidden; };
-  $('#ai-save').onclick = () => { AI.key = $('#ai-key').value.trim(); AI.model = $('#ai-model').value; AI.personal = $('#ai-personal').checked; $('#ai-settings').hidden = !!AI.key; toast(AI.key ? 'Assistant ready' : 'API key removed'); };
-  $('#ai-new').onclick = () => { AI.msgs = []; AI.ready = null; aiToggle(true); };
+  $('#ai-save').onclick = () => { AI.bridge = $('#ai-bridge').value.trim(); AI.model = $('#ai-model').value; AI.personal = $('#ai-personal').checked; $('#ai-settings').hidden = true; toast('Saved'); };
+  $('#ai-new').onclick = () => { AI.chat = ''; AI.asked = 0; aiToggle(true); };
   p.querySelectorAll('[data-aq]').forEach(b => b.onclick = () => { $('#ai-q').value = b.dataset.aq; $('#ai-form').requestSubmit(); });
   $('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value; if (!q.trim()) return; $('#ai-q').value = ''; p.querySelector('.ai-hello')?.remove(); aiAsk(q); };
   $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
