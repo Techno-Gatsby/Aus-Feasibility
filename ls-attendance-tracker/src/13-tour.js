@@ -4,7 +4,7 @@
    ===================================================================== */
 const TOUR = (() => {
   const V = id => '#v-' + id;
-  const TABS = { sel: '#tabs', t: 'Tabs', d: '<b>Live · Insights · App &amp; review</b> – field work from the phones. <b>Security Personnel · Projects &amp; sites · Settings</b> – your master data. <b>Attendance → Client timesheets → Invoice</b> – the monthly documents, in that order.' };
+  const TABS = { sel: '#tabs', t: 'Tabs', d: '<b>Today · Insights</b> – field work from the phones (Today has the live map and the review list). <b>Security Personnel · Projects &amp; sites</b> – your master data. <b>Attendance → Billing</b> – the monthly documents (Billing has client timesheets and the invoice). Settings is the <b>⚙</b> button at the top right.' };
   const RAIL = { sel: '#rail', t: 'Clients · projects · sites', d: 'Click a client, project or site in this tree to narrow the open page to it; click again to clear.' };
   const STEPS = {
     live: [TABS,
@@ -89,7 +89,7 @@ const TOUR = (() => {
     { view: 'insights', sel: '#v-insights .kpis', t: 'Any time · Insights', d: 'Coverage, punctuality, zone compliance, face check and unusual activity for any period, site or person.' },
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
-    { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Edit</b> / <b>View</b> – page commands. <b>Help</b> – tours, keys and codes.' },
+    { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Help</b> – settings, tours, keys and codes. <b>⚙</b> – this Settings page.' },
     { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (needs an Anthropic API key, added once in its ⚙ settings).' },
     { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
   ];

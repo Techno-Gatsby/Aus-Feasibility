@@ -105,9 +105,19 @@ let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
   TOUR.stop(); curView = v;
-  $$('#tabs .doctab').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $$('#tabs .doctab').forEach(b => b.classList.toggle('on', (b.dataset.group || b.dataset.view).split(' ').includes(v)));
   $$('.doc').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  renderSubtabs();
   VIEWS[v](); renderToolbar(); renderStatus();
+}
+// Today and Billing each hold two pages, switched just under the tabs
+const SUBTABS = { live: [['live', 'Live map'], ['app', 'Review & phone app <span class="n" id="sub-badge"></span>']], timesheets: [['timesheets', '1 Client timesheets'], ['invoices', '2 Invoice']] };
+SUBTABS.app = SUBTABS.live; SUBTABS.invoices = SUBTABS.timesheets;
+function renderSubtabs() {
+  const st = $('#subtabs'), it = SUBTABS[curView];
+  st.innerHTML = it ? `<span class="seg">${it.map(([k, l]) => `<button data-sub="${k}" class="${k === curView ? 'on' : ''}">${l}</button>`).join('')}</span>` : '';
+  st.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => showView(b.dataset.sub));
+  renderStatus();
 }
 function renderAll() { VIEWS[curView](); renderToolbar(); renderTree(); renderStatus(); }
 
@@ -117,7 +127,7 @@ const TOOLBAR = {
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
-  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the personnel app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick security personnel for bulk actions', dis: true }]; },
+  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Set end date…', f: bulkEnd }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
   live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
   insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
@@ -132,7 +142,7 @@ function renderToolbar() {
   tb.querySelector('[data-cmd=tree]').onclick = () => $('#body').classList.toggle('notree');
 }
 function renderStatus() {
-  const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; }
+  const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
   const unl = S.sites.filter(s => !s.projectId).length;
   const per = curView === 'attendance' && AV.ym ? (() => { const { start, end } = attPeriod(); return `${AV.mode === 'payroll' ? 'Payroll' : 'Calendar'} month ${fmtMonYY(AV.ym)} · ${fmtDMY(start)} – ${fmtDMY(end)}`; })() : curView === 'timesheets' && TV.ym ? `Calendar month ${fmtMonYY(TV.ym)}` : 'Ready';
   $('#status').textContent = per;
@@ -144,10 +154,7 @@ const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
-    ['Add personnel…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
-  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Security Personnel', app: 'Personnel app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
-  help: () => [['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
@@ -253,6 +260,7 @@ async function init() {
   }
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
   $('#tour-btn').onclick = e => TOUR.chooser(e.currentTarget);
+  $('#set-btn').onclick = () => showView('data');
   $('#ai-btn').onclick = () => aiToggle();
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });

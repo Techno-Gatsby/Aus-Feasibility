@@ -61,7 +61,7 @@ a:hover{text-decoration:underline}
 .railhead{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:650;padding:6px 8px}
 .railhead .muted{text-transform:none;letter-spacing:0;font-weight:500}
 .rail input[type=search]{width:100%;margin:2px 0 6px}
-.workspace{display:grid;grid-template-rows:auto 1fr;min-height:0;background:var(--canvas)}
+.workspace{display:grid;grid-template-rows:auto auto 1fr;min-height:0;background:var(--canvas)}
 .statusbar{display:flex;gap:18px;align-items:center;background:var(--surface);border-top:1px solid var(--line2);padding:4px 12px;font-size:11.5px;color:var(--mute)}
 @media (max-width:900px){.body{grid-template-columns:1fr}.rail{display:none}.menubar .brand small{display:none}}
 
@@ -487,3 +487,8 @@ table.dir td.p1{font-family:var(--font-mono)}
 .cpst{display:flex;gap:4mm;align-items:center;border:1.5px dashed #555;border-radius:4mm;padding:4mm;break-inside:avoid}
 .cpst img{width:38mm;height:38mm;image-rendering:pixelated}
 .cpst b{display:block;font-size:14pt;margin-bottom:2mm}.cpst span{display:block;font-size:9pt;color:#333}.cpst small{display:block;margin-top:3mm;font-size:7pt;color:#666}
+
+/* sub-pages of a tab (Today: Live / Review, Billing: Timesheets / Invoice) */
+.subtabs:not(:empty){padding:8px 12px 0;background:var(--surface)}
+.subtabs .seg button .n{margin-left:4px;font-weight:700}
+.subtabs .seg button .n:empty{display:none}

@@ -68,7 +68,7 @@ a:hover{text-decoration:underline}
 .railhead{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:650;padding:6px 8px}
 .railhead .muted{text-transform:none;letter-spacing:0;font-weight:500}
 .rail input[type=search]{width:100%;margin:2px 0 6px}
-.workspace{display:grid;grid-template-rows:auto 1fr;min-height:0;background:var(--canvas)}
+.workspace{display:grid;grid-template-rows:auto auto 1fr;min-height:0;background:var(--canvas)}
 .statusbar{display:flex;gap:18px;align-items:center;background:var(--surface);border-top:1px solid var(--line2);padding:4px 12px;font-size:11.5px;color:var(--mute)}
 @media (max-width:900px){.body{grid-template-columns:1fr}.rail{display:none}.menubar .brand small{display:none}}
 
@@ -495,6 +495,11 @@ table.dir td.p1{font-family:var(--font-mono)}
 .cpst img{width:38mm;height:38mm;image-rendering:pixelated}
 .cpst b{display:block;font-size:14pt;margin-bottom:2mm}.cpst span{display:block;font-size:9pt;color:#333}.cpst small{display:block;margin-top:3mm;font-size:7pt;color:#666}
 
+/* sub-pages of a tab (Today: Live / Review, Billing: Timesheets / Invoice) */
+.subtabs:not(:empty){padding:8px 12px 0;background:var(--surface)}
+.subtabs .seg button .n{margin-left:4px;font-weight:700}
+.subtabs .seg button .n:empty{display:none}
+
 </style>
 </head>
 <body>
@@ -502,13 +507,12 @@ table.dir td.p1{font-family:var(--font-mono)}
   <div class="menubar">
     <span class="brand"><span class="mark">LS</span>Attendance Tracker <small>Latinem Securities</small></span>
     <button class="menu" data-menu="file">File</button>
-    <button class="menu" data-menu="edit">Edit</button>
-    <button class="menu" data-menu="view">View</button>
     <button class="menu" data-menu="help">Help</button>
     <span class="spacer"></span>
     <span id="savestate"></span>
     <button class="ai-btn" id="ai-btn" title="Ask Claude about the data">✦ Ask Claude</button>
     <button class="tour-btn" id="tour-btn" title="Tour this page" aria-label="Tour this page">?</button>
+    <button class="tour-btn" id="set-btn" title="Settings" aria-label="Settings">⚙</button>
   </div>
   <div class="toolbar" id="toolbar"></div>
   <div class="body" id="body">
@@ -519,18 +523,16 @@ table.dir td.p1{font-family:var(--font-mono)}
     </nav>
     <main class="workspace">
       <div class="doctabs" id="tabs" role="tablist">
-        <button class="doctab fo" data-view="live">Live</button>
+        <button class="doctab fo" data-view="live" data-group="live app">Today <span class="n" id="app-badge"></span></button>
         <button class="doctab fo" data-view="insights">Insights</button>
-        <button class="doctab fo" data-view="app">App &amp; review <span class="n" id="app-badge"></span></button>
         <span class="gap"></span>
         <button class="doctab" data-view="employees">Security Personnel</button>
         <button class="doctab" data-view="projects">Projects &amp; sites</button>
-        <button class="doctab" data-view="data">Settings</button>
         <span class="gsep"></span>
-        <button class="doctab" data-view="attendance"><span class="n">1</span>Attendance</button>
-        <button class="doctab" data-view="timesheets"><span class="n">2</span>Client timesheets</button>
-        <button class="doctab" data-view="invoices"><span class="n">3</span>Invoice</button>
+        <button class="doctab" data-view="attendance">Attendance</button>
+        <button class="doctab" data-view="timesheets" data-group="timesheets invoices">Billing</button>
       </div>
+      <div class="subtabs" id="subtabs"></div>
       <div class="docarea">
         <section id="v-attendance" class="doc view on"></section>
         <section id="v-timesheets" class="doc view"></section>
@@ -3362,9 +3364,19 @@ let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
   TOUR.stop(); curView = v;
-  $$('#tabs .doctab').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $$('#tabs .doctab').forEach(b => b.classList.toggle('on', (b.dataset.group || b.dataset.view).split(' ').includes(v)));
   $$('.doc').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  renderSubtabs();
   VIEWS[v](); renderToolbar(); renderStatus();
+}
+// Today and Billing each hold two pages, switched just under the tabs
+const SUBTABS = { live: [['live', 'Live map'], ['app', 'Review & phone app <span class="n" id="sub-badge"></span>']], timesheets: [['timesheets', '1 Client timesheets'], ['invoices', '2 Invoice']] };
+SUBTABS.app = SUBTABS.live; SUBTABS.invoices = SUBTABS.timesheets;
+function renderSubtabs() {
+  const st = $('#subtabs'), it = SUBTABS[curView];
+  st.innerHTML = it ? `<span class="seg">${it.map(([k, l]) => `<button data-sub="${k}" class="${k === curView ? 'on' : ''}">${l}</button>`).join('')}</span>` : '';
+  st.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => showView(b.dataset.sub));
+  renderStatus();
 }
 function renderAll() { VIEWS[curView](); renderToolbar(); renderTree(); renderStatus(); }
 
@@ -3374,7 +3386,7 @@ const TOOLBAR = {
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
-  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', { l: 'Assign to site…', f: () => bulkAssign('site'), dis: !n }, { l: 'Change shift…', f: () => bulkAssign('shift'), dis: !n }, { l: 'Set end date…', f: bulkEnd, dis: !n }, { l: 'Delete…', f: bulkDelete, dis: !n }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), dis: !n, t: 'Enable the personnel app, give PINs, print slips' }, { l: n ? `${n} ticked` : 'Tick security personnel for bulk actions', dis: true }]; },
+  employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Set end date…', f: bulkEnd }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
   projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
   live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
   insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
@@ -3389,7 +3401,7 @@ function renderToolbar() {
   tb.querySelector('[data-cmd=tree]').onclick = () => $('#body').classList.toggle('notree');
 }
 function renderStatus() {
-  const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; }
+  const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
   const unl = S.sites.filter(s => !s.projectId).length;
   const per = curView === 'attendance' && AV.ym ? (() => { const { start, end } = attPeriod(); return `${AV.mode === 'payroll' ? 'Payroll' : 'Calendar'} month ${fmtMonYY(AV.ym)} · ${fmtDMY(start)} – ${fmtDMY(end)}`; })() : curView === 'timesheets' && TV.ym ? `Calendar month ${fmtMonYY(TV.ym)}` : 'Ready';
   $('#status').textContent = per;
@@ -3401,10 +3413,7 @@ const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  edit: () => [['Undo', undoAtt, 'Ctrl+Z'], ['Select all days', () => { if (!AV.rows.length) return; AV.anchor = { r: 0, c: 0 }; AV.sel = { r0: 0, c0: 0, r1: AV.rows.length - 1, c1: AV.dates.length - 1 }; paintSel(); }], ['Set site / shift for selection…', () => openCellEditor(), 'Enter'], ['Clear selected days', () => applyToSel(null, false), 'Del'], null,
-    ['Add personnel…', () => editEmployee(null)], ['Add client…', () => editClient(null)], ['Add project…', () => editProject(null)], ['Add site…', () => editSite(null, SEL.project || null)]],
-  view: () => [...Object.entries({ attendance: 'Attendance', timesheets: 'Client timesheets', invoices: 'Invoice', employees: 'Security Personnel', app: 'Personnel app', projects: 'Projects & sites', data: 'Settings' }).map(([k, l]) => [l, () => showView(k)]), null, ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks]],
-  help: () => [['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
@@ -3510,6 +3519,7 @@ async function init() {
   }
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
   $('#tour-btn').onclick = e => TOUR.chooser(e.currentTarget);
+  $('#set-btn').onclick = () => showView('data');
   $('#ai-btn').onclick = () => aiToggle();
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });
@@ -4268,7 +4278,7 @@ async function faceCheckPunches(quiet = true) {
    ===================================================================== */
 const TOUR = (() => {
   const V = id => '#v-' + id;
-  const TABS = { sel: '#tabs', t: 'Tabs', d: '<b>Live · Insights · App &amp; review</b> – field work from the phones. <b>Security Personnel · Projects &amp; sites · Settings</b> – your master data. <b>Attendance → Client timesheets → Invoice</b> – the monthly documents, in that order.' };
+  const TABS = { sel: '#tabs', t: 'Tabs', d: '<b>Today · Insights</b> – field work from the phones (Today has the live map and the review list). <b>Security Personnel · Projects &amp; sites</b> – your master data. <b>Attendance → Billing</b> – the monthly documents (Billing has client timesheets and the invoice). Settings is the <b>⚙</b> button at the top right.' };
   const RAIL = { sel: '#rail', t: 'Clients · projects · sites', d: 'Click a client, project or site in this tree to narrow the open page to it; click again to clear.' };
   const STEPS = {
     live: [TABS,
@@ -4353,7 +4363,7 @@ const TOUR = (() => {
     { view: 'insights', sel: '#v-insights .kpis', t: 'Any time · Insights', d: 'Coverage, punctuality, zone compliance, face check and unusual activity for any period, site or person.' },
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
-    { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Edit</b> / <b>View</b> – page commands. <b>Help</b> – tours, keys and codes.' },
+    { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Help</b> – settings, tours, keys and codes. <b>⚙</b> – this Settings page.' },
     { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (needs an Anthropic API key, added once in its ⚙ settings).' },
     { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
   ];
