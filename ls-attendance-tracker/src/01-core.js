@@ -300,7 +300,7 @@ const Files = {
 };
 const b64 = { enc: async blob => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, dec: (s, type) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type }); } };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };
-function markDirty() { DATA_VER++; if (typeof AI !== 'undefined') AI.ready = null; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
+function markDirty() { DATA_VER++; if (typeof AI !== 'undefined') AI.prep = null; store.dirty = true; renderSaveState(); clearTimeout(store.timer); store.timer = setTimeout(saveNow, 500); }
 async function saveNow() {
   clearTimeout(store.timer);
   if (store.saving) { store.timer = setTimeout(saveNow, 300); return; }

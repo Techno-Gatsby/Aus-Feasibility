@@ -10,20 +10,21 @@
      results go back to Claude.
    ===================================================================== */
 const AI = {
-  MODELS: [['', 'Default'], ['claude-opus-5-5', 'Most capable'], ['claude-sonnet-5-5', 'Balanced'], ['claude-haiku-5-5', 'Fastest']],
-  chat: '', asked: 0, busy: false, worker: null, ready: null, open: false,
+  MODELS: [['claude-sonnet-5-5', 'Balanced (fast)'], ['claude-opus-5-5', 'Most capable'], ['claude-haiku-5-5', 'Fastest']],
+  chat: '', asked: 0, busy: false, prep: null, open: false,
   get bridge() { try { return localStorage.getItem('ls.claudeBridge') || 'http://localhost:8787'; } catch (e) { return 'http://localhost:8787'; } },
   set bridge(v) { try { v ? localStorage.setItem('ls.claudeBridge', v) : localStorage.removeItem('ls.claudeBridge'); } catch (e) { } },
-  get model() { try { return localStorage.getItem('ls.claudeModel') || ''; } catch (e) { return ''; } },
+  get model() { try { return localStorage.getItem('ls.claudeModel') || 'claude-sonnet-5-5'; } catch (e) { return 'claude-sonnet-5-5'; } },
   set model(v) { try { localStorage.setItem('ls.claudeModel', v); } catch (e) { } },
   get personal() { try { return localStorage.getItem('ls.claudePersonal') === '1'; } catch (e) { return false; } },
-  set personal(v) { try { localStorage.setItem('ls.claudePersonal', v ? '1' : '0'); } catch (e) { } this.ready = null; }
+  set personal(v) { try { localStorage.setItem('ls.claudePersonal', v ? '1' : '0'); } catch (e) { } this.prep = null; }
 };
 
 /* ---------- data snapshot for the analyses ---------- */
+const aiYield = () => new Promise(r => setTimeout(r, 0));          // let clicks through while the snapshot is built
 async function aiSnapshot() {
-  const today = todayISO(), pings = await PINGS.load(), personal = AI.personal;
-  const P = S.employees.map(e => {
+  const today = todayISO(), pings = await PINGS.load(), personal = AI.personal, P = [];
+  for (let k = 0; k < S.employees.length; k++) { const e = S.employees[k]; if (k % 50 === 49) await aiYield(); P.push((() => {
     const a = assignOn(e, today) || e.assign?.[e.assign.length - 1], hr = e.hr || {};
     const o = {
       id: e.id, code: e.empCode || '', name: e.name, agency: e.agency || '', trade: e.trade || '', designation: hr.designation || e.trade || '', group: hr.group || '',
@@ -37,9 +38,9 @@ async function aiSnapshot() {
     };
     if (personal) Object.assign(o, { passport: hr.passport || '', eid: hr.eid || '', phone: hr.phone || '', phone2: hr.phone2 || '', altContact: hr.altContact || '', homeAddress: hr.homeAddress || '', health: hr.health || '' });
     return o;
-  });
-  const att = {};
-  for (const id in S.att) { const m = att[id] = {}; for (const d in S.att[id]) { const c = getCell(id, d); m[d] = c?.s ? [c.c, c.s] : [c?.c]; } }
+  })()); }
+  const att = {}; let n = 0;
+  for (const id in S.att) { if (++n % 50 === 0) await aiYield(); const m = att[id] = {}; for (const d in S.att[id]) { const c = getCell(id, d); m[d] = c?.s ? [c.c, c.s] : [c?.c]; } }
   return {
     today, personal,
     personnel: P,
@@ -104,13 +105,9 @@ const AI_SYSTEM = () => `You are "the LS assistant", the analysis assistant insi
 Today is ${todayISO()} (Dubai time, UTC+4). Dates are ISO strings YYYY-MM-DD; timestamps (ts) are epoch milliseconds.
 
 HOW TO WORK
-- Compute with the Bash tool, always exactly in this form (set the Bash description to one short line shown to the user, e.g. "Visas expiring in November"):
-  node analyse.mjs <<'EOF'
-  <JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result>
-  EOF
-  It prints the JSON result. Return counts, short lists or top-N – never the whole data set. Several small analyses are better than one huge one. Do not read or list files; everything is reachable through D and H.
+- Compute with the run_analysis tool: code = a JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result; purpose = one short line shown to the user (e.g. "Visas expiring in November"). Answer with ONE analysis whenever possible (return everything the answer needs at once) – speed matters. Return counts, short lists or top-N – never the whole data set.
 - State the assumption behind any interpretation (for example "next month = ${(() => { const d = new Date(todayISO() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })()}").
-- Never mention Claude, Anthropic, models, tools, Bash, files or analyse.mjs to the user – just say what you checked (e.g. "I checked the visa dates").
+- Never mention Claude, Anthropic, models, tools or code to the user – just say what you checked (e.g. "I checked the visa dates").
 - Answer in short, plain sentences, then a compact Markdown table when listing people (Emp code, name, site/project, the relevant value). Mention how many rows you left out.
 - "Beats" = patrol beats (D.beats): checkpoints at a site visited in rounds every everyMin minutes, by QR scan (D.scans) or by a recorded position within the checkpoint radius. Use H.beatRounds for who completed their rounds / missed checkpoints. Where a site has no beat, "following the beat" means staying inside the allocated site's zone – use H.beatCompliance. Positions exist only for people using the phone app.
 - Personnel who have left (left = true) are excluded unless the question is about them.${AI.personal ? '' : '\n- Passport, Emirates ID, phone numbers, home address and health details are not shared with you; say so if asked.'}
@@ -131,20 +128,34 @@ HELPERS (H)
 distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatRounds(personId, from, to) → [{date, beat, site, expected, done, completion %, scanned, gps, missed[{checkpoint, rounds}]}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
 
 Example: const next = H.addMonths(D.today, 1).slice(0, 7); return D.personnel.filter(p => !p.left && p.visaExpiry.startsWith(next)).map(p => [p.code, p.name, p.visaExpiry]);`;
-/** worker code + snapshot go to the bridge, which runs the same analyses with the claude CLI */
+const aiUrl = path => AI.bridge.replace(/\/+$/, '') + path;
+const AI_OFFLINE = () => `The assistant is offline – it could not reach ${AI.bridge}. On this PC start tools/Start Assistant.cmd (or node tools/claude-bridge.mjs) and keep it open.`;
+/** Snapshot + analysis code go to the bridge once per data version (prefetched when the panel opens); it also warms up the engine */
+function aiPrepare() {
+  AI.chat ||= Math.random().toString(36).slice(2);
+  return AI.prep ||= (async () => {
+    const version = Date.now().toString(36), snapshot = await aiSnapshot();
+    const r = await fetch(aiUrl('/data'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat: AI.chat, version, model: AI.model, system: AI_SYSTEM(), worker: AI_WORKER + '\n' + beatRoundsCore.toString(), snapshot }) })
+      .catch(() => { throw new Error(AI_OFFLINE()); });
+    if (!r.ok) throw new Error(`Bridge: ${r.status} ${await r.text()}`);
+    return version;
+  })().catch(e => { AI.prep = null; throw e; });
+}
 async function aiAsk(text) {
   if (AI.busy || !text.trim()) return;
   AI.busy = true; aiPaint();
   const box = $('#ai-log'), turn = document.createElement('div'); turn.className = 'ai-turn';
-  turn.innerHTML = `<div class="ai-q">${esc(text)}</div><div class="ai-a"><div class="ai-steps"></div><div class="ai-text"><span class="ai-dots">Thinking…</span></div></div>`;
+  turn.innerHTML = `<div class="ai-q">${esc(text)}</div><div class="ai-a"><div class="ai-steps"></div><div class="ai-text"><span class="ai-dots">Reading the data…</span></div></div>`;
   box.appendChild(turn); box.scrollTop = box.scrollHeight;
-  const steps = $('.ai-steps', turn), out = $('.ai-text', turn), st = {}; let shown = '';
-  const show = () => { out.innerHTML = aiMarkdown(shown) || '<span class="ai-dots">Thinking…</span>'; box.scrollTop = box.scrollHeight; };
-  AI.chat ||= Math.random().toString(36).slice(2);
+  const steps = $('.ai-steps', turn), out = $('.ai-text', turn), st = {}; let shown = '', status = 'Reading the data…';
+  let frame = 0;                                                               // streamed text is drawn at most once per frame
+  const draw = () => { frame = 0; out.innerHTML = aiMarkdown(shown) || `<span class="ai-dots">${esc(status)}</span>`; box.scrollTop = box.scrollHeight; };
+  const show = () => { frame ||= requestAnimationFrame(draw); };
   try {
-    const r = await fetch(AI.bridge.replace(/\/+$/, '') + '/ask', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat: AI.chat, question: text, model: AI.model, system: AI_SYSTEM(), worker: AI_WORKER + '\n' + beatRoundsCore.toString(), snapshot: await aiSnapshot() }) })
-      .catch(() => { throw new Error(`The assistant is offline – it could not reach ${AI.bridge}. On this PC start tools/Start Assistant.cmd (or node tools/claude-bridge.mjs) and keep it open.`); });
+    const ask = async () => fetch(aiUrl('/ask'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat: AI.chat, version: await aiPrepare(), question: text, model: AI.model }) })
+      .catch(() => { throw new Error(AI_OFFLINE()); });
+    let r = await ask(); status = 'Thinking…'; show();
+    if (r.status === 409) { AI.prep = null; r = await ask(); }               // the bridge restarted or lost the data: send it again
     if (!r.ok) throw new Error(`Bridge: ${r.status} ${await r.text()}`);
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', end = null;
     for (;;) {
@@ -154,7 +165,7 @@ async function aiAsk(text) {
         const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
         if (m.t === 'text') { shown += m.d; show(); }
         else if (m.t === 'turn') { if (shown && !shown.endsWith('\n\n')) shown += '\n\n'; }
-        else if (m.t === 'step') { const d = st[m.id] = document.createElement('details'); d.className = 'ai-step'; d.innerHTML = `<summary>${esc(m.purpose || 'Analysing')}…</summary><pre>${esc(m.code)}</pre>`; steps.appendChild(d); }
+        else if (m.t === 'step') { status = (m.purpose || 'Analysing') + '…'; show(); const d = st[m.id] = document.createElement('details'); d.className = 'ai-step'; d.innerHTML = `<summary>${esc(m.purpose || 'Analysing')}…</summary><pre>${esc(m.code)}</pre>`; steps.appendChild(d); }
         else if (m.t === 'result' && st[m.id]) { const d = st[m.id]; d.querySelector('summary').textContent = `${m.ok ? '✓' : '✕'} ${d.querySelector('summary').textContent.replace(/…$/, '')}`; d.insertAdjacentHTML('beforeend', `<pre class="res">${esc(m.result.slice(0, 2000))}</pre>`); }
         else if (m.t === 'done') end = m;
       }
@@ -165,7 +176,7 @@ async function aiAsk(text) {
     AI.asked++;
   } catch (e) {
     shown += (shown ? '\n\n' : '') + '**' + (e?.message || String(e)) + '**';
-  } finally { AI.busy = false; show(); aiPaint(); }
+  } finally { AI.busy = false; cancelAnimationFrame(frame); draw(); aiPaint(); }
 }
 /** Small Markdown: headings, bold, italics, inline code, lists, tables, code blocks */
 function aiMarkdown(md) {
@@ -182,7 +193,8 @@ function aiMarkdown(md) {
     if (/^#{1,4}\s/.test(l)) { out.push(`<h4>${inl(l.replace(/^#+\s*/, ''))}</h4>`); i++; continue; }
     if (/^\s*([-*]|\d+\.)\s+/.test(l)) { const ol = /^\s*\d+\./.test(l), it = []; while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) it.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, '')); out.push(`<${ol ? 'ol' : 'ul'}>${it.map(x => `<li>${inl(x)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`); continue; }
     if (!l.trim()) { i++; continue; }
-    const p = []; while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|\s*([-*]|\d+\.)\s|\s*\|)/.test(lines[i])) p.push(lines[i++]); out.push(`<p>${inl(p.join('<br>'))}</p>`);
+    // the first line is always taken, so a lone "|" line (a table still streaming in) cannot stall the loop
+    const p = [lines[i++]]; while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|\s*([-*]|\d+\.)\s|\s*\|)/.test(lines[i])) p.push(lines[i++]); out.push(`<p>${inl(p.join('<br>'))}</p>`);
   }
   return out.join('');
 }
@@ -203,16 +215,18 @@ function aiToggle(force) {
       <button class="btn sm pri" id="ai-save">Save</button></div>
     <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. The assistant works out the answer from the data in this tracker.</p>
       <div class="ai-chips">${AI_SUGGEST.map(q => `<button class="chip" data-aq="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
-    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="2" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
+    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="1" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
   $('#ai-x').onclick = () => aiToggle(false);
   $('#ai-set').onclick = () => { $('#ai-settings').hidden = !$('#ai-settings').hidden; };
   $('#ai-save').onclick = () => { AI.bridge = $('#ai-bridge').value.trim(); AI.model = $('#ai-model').value; AI.personal = $('#ai-personal').checked; $('#ai-settings').hidden = true; toast('Saved'); };
-  $('#ai-new').onclick = () => { AI.chat = ''; AI.asked = 0; aiToggle(true); };
+  $('#ai-new').onclick = () => { AI.chat = ''; AI.asked = 0; AI.prep = null; aiToggle(true); };
   p.querySelectorAll('[data-aq]').forEach(b => b.onclick = () => { $('#ai-q').value = b.dataset.aq; $('#ai-form').requestSubmit(); });
-  $('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value; if (!q.trim()) return; $('#ai-q').value = ''; p.querySelector('.ai-hello')?.remove(); aiAsk(q); };
+  $('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value; if (!q.trim()) return; $('#ai-q').value = ''; $('#ai-q').style.height = ''; p.querySelector('.ai-hello')?.remove(); aiAsk(q); };
+  $('#ai-q').oninput = e => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 96) + 'px'; };
+  aiPrepare().catch(() => { });                                              // build + upload the data and warm up the engine while the user types
   $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
   aiPaint(); $('#ai-q').focus();
 }
 function aiPaint() { const b = $('#ai-send'); if (b) { b.disabled = AI.busy; b.textContent = AI.busy ? '…' : 'Ask'; } }
 // data changed (sync, import, edits): the next analysis uses a fresh snapshot
-function aiDataChanged() { AI.ready = null; }
+function aiDataChanged() { AI.prep = null; }
