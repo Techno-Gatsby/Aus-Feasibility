@@ -1,20 +1,20 @@
 /* =====================================================================
    Employees: list, add / edit / delete, assignments, bulk actions
    ===================================================================== */
-const EV = { q: '', status: 'active', type: '', site: '', project: '', checked: new Set() };
+const EV = { q: '', status: 'active', type: '', site: '', project: '', view: 'list', checked: new Set() };
 
 function renderEmployees() {
   const v = $('#v-employees');
   const today = todayISO(), q = norm(EV.q);
   const list = S.employees.filter(e => {
     const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
-    if (EV.status === 'active' && e.end && e.end < today) return false;
-    if (EV.status === 'left' && !(e.end && e.end < today)) return false;
+    if (EV.status === 'active' && hasLeft(e)) return false;
+    if (EV.status === 'left' && !hasLeft(e)) return false;
     if (EV.type === 'ls' && e.agency) return false;
     if (EV.type === 'sub' && !e.agency) return false;
     if (EV.site && cur?.site !== EV.site) return false;
     if (EV.project && IX.site.get(cur?.site)?.projectId !== EV.project) return false;
-    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q) && !norm(e.agency).includes(q)) return false;
+    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q) && !norm(e.agency).includes(q) && !norm(e.hr?.designation).includes(q) && !norm(e.hr?.nationality).includes(q)) return false;
     return true;
   });
   const scope = EV.site ? siteName(EV.site) : EV.project ? IX.proj.get(EV.project)?.name : '';
@@ -22,8 +22,10 @@ function renderEmployees() {
       ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="ev-unscope" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
       <input type="search" id="ev-q" placeholder="Name / ID / agency" value="${esc(EV.q)}" style="width:200px">
       <select id="ev-status">${opts([['active', 'Current'], ['left', 'Left'], ['all', 'Everyone']], EV.status)}</select>
-      <select id="ev-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>`)
-  + `<div class="dc"><div class="tw fill"><table><thead><tr>
+      <select id="ev-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>
+      <span class="seg" id="ev-view"><button data-vw="list" class="${EV.view === 'list' ? 'on' : ''}">List</button><button data-vw="dir" class="${EV.view === 'dir' ? 'on' : ''}">Directory</button></span>`)
+  + (EV.view === 'dir' ? `<div class="dc"><div class="tw fill dirwrap">${EV.status !== 'left' ? directoryHTML(list.filter(e => !hasLeft(e)), false) : ''}${EV.status !== 'active' ? directoryHTML(list.filter(hasLeft), true) : ''}</div></div>` : '')
+  + (EV.view === 'dir' ? '' : `<div class="dc"><div class="tw fill"><table><thead><tr>
     <th><input type="checkbox" id="ev-all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>End date</th><th></th></tr></thead>
     <tbody>${list.map(e => {
       const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
@@ -31,15 +33,16 @@ function renderEmployees() {
       return `<tr><td><input type="checkbox" data-chk="${e.id}" ${EV.checked.has(e.id) ? 'checked' : ''}></td>
         <td class="mono">${esc(e.empCode)}</td><td><a href="#" data-edit="${e.id}">${esc(e.name)}</a></td><td>${esc(e.agency || '')}</td><td>${esc(e.trade || '')}</td>
         <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="muted">${esc(p?.name || '')}</td>
-        <td class="mono">${fmtDMY(e.doj)}</td><td>${e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : ''}</td>
+        <td class="mono">${fmtDMY(e.doj)}</td><td>${e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : hasLeft(e) ? `<span class="pill neg">${esc(hrStatus(e))} – no date</span>` : ''}</td>
         <td><button class="btn sm" data-edit="${e.id}">Edit</button></td></tr>`;
-    }).join('') || '<tr><td colspan="11" class="muted">No security personnel match.</td></tr>'}</tbody></table></div></div>`;
+    }).join('') || '<tr><td colspan="11" class="muted">No security personnel match.</td></tr>'}</tbody></table></div></div>`);
+  v.querySelectorAll('[data-vw]').forEach(b => b.onclick = () => { EV.view = b.dataset.vw; renderEmployees(); });
   if ($('#ev-unscope')) $('#ev-unscope').onclick = clearSel;
   $('#ev-q').oninput = e => { EV.q = e.target.value; clearTimeout(EV._t); EV._t = setTimeout(() => { renderEmployees(); const i = $('#ev-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   for (const k of ['status', 'type']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
   v.querySelectorAll('[data-edit]').forEach(b => b.onclick = ev => { ev.preventDefault(); editEmployee(b.dataset.edit); });
   v.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { c.checked ? EV.checked.add(c.dataset.chk) : EV.checked.delete(c.dataset.chk); renderToolbar(); });
-  $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); renderToolbar(); };
+  if ($('#ev-all')) $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); renderToolbar(); };
 }
 
 function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more security personnel first'); return l; }
@@ -110,6 +113,7 @@ function editEmployee(id) {
     <p class="muted small" style="margin-top:0">Each row applies from its date until the next. Day exceptions (relieving elsewhere) are set in the grid.</p>
     <table><thead><tr><th>From</th><th>Site (project)</th><th>Shift</th><th></th></tr></thead><tbody id="ee-asg">${asgRows()}</tbody></table>
     <button class="btn sm" id="ee-addasg" style="margin-top:6px">Add allocation</button>
+    ${hrFormHTML(e)}
     ${!isNew ? `<p class="muted small">${nAtt} attendance day(s) on file.</p>` : ''}
     ${!isNew ? (() => { const a = e.app || {}, last = Object.values(S.punches || {}).filter(p => p.wid === e.id).sort((x, y) => y.ts - x.ts)[0];
       return `<h3 style="margin:14px 0 6px">Personnel app</h3><div class="row"><span class="pill ${a.on ? 'pos' : ''}">${a.on ? 'Enabled' : 'Not enabled'}</span>${a.on ? `<span class="muted small">ID <b class="mono">${esc(appCode(e))}</b> · PIN set ${esc(fmtDMY(a.pinAt))}${last ? ` · last punch ${new Date(last.ts).toLocaleString()}` : ''}</span>` : ''}<span class="spacer"></span>
@@ -122,7 +126,7 @@ function editEmployee(id) {
       { label: 'Cancel' },
       {
         label: 'Save', cls: 'pri', onClick: m => {
-          readAsg(m);
+          readAsg(m); readHrForm(m, e);
           e.name = $('#ee-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase();
           if (!e.name) { toast('Name is required'); return false; }
           e.empCode = $('#ee-code', m).value.trim().toUpperCase();

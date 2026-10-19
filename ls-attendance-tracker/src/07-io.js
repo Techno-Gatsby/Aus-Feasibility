@@ -287,6 +287,8 @@ function detectSheets(wb) {
   const found = [];
   wb.SheetNames.forEach((n, i) => {
     const rows = sheetRows(wb, n), hidden = isHidden(wb, i);
+    const el = parseEmployeeList(rows, n);
+    if (el) { const left = el.rows.filter(r => r.left).length; found.push({ n, hidden, type: 'employees', p: el, info: `${el.rows.length} security personnel${left ? ` · ${left} resigned` : ''} · ${el.cols} detail columns` }); return; }
     const m = parseMasterSheet(rows);
     if (m && m.rows.length) { found.push({ n, hidden, type: 'master', p: m, info: `${m.rows.length} security personnel · ${fmtDMY(m.dates[0])} – ${fmtDMY(m.dates[m.dates.length - 1])}` }); return; }
     const c = parseClientSheet(rows);
@@ -296,9 +298,10 @@ function detectSheets(wb) {
 }
 /** Import the picked sheets. picks = [{ k: index in found, ym?: 'YYYY-MM' }] */
 function runImport(found, picks, ow) {
-  const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null, anyClient = false;
+  const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const people = { updated: 0, created: 0, resigned: 0, noDate: [] }; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null, anyClient = false;
   for (const { k, ym } of picks) {
     const f = found[k]; if (!f) continue;
+    if (f.type === 'employees') { const r = applyEmployeeListImport(f.p); people.updated += r.updated; people.created += r.created; people.resigned += r.resigned; people.noDate.push(...r.noDate); continue; }
     const r = f.type === 'master' ? applyMasterImport(f.p, ow) : (anyClient = true, applyClientImport({ ...f.p, ym: ym || f.p.ym }, ow, null, shared));
     for (const x in t) t[x] += r[x] || 0; r.newCodes?.forEach(x => codes.add(x)); if (r.double) dbl.push(...r.double);
     if (f.type === 'master' && (!lastMaster || f.p.dates.at(-1) > lastMaster.dates.at(-1))) lastMaster = f.p;
@@ -308,19 +311,19 @@ function runImport(found, picks, ow) {
   pruneSites(); const autoMapped = autoMapSites();
   if (lastMaster) { AV.ym = cycleOfDate(lastMaster.dates[lastMaster.dates.length - 1]); AV.mode = 'payroll'; }
   markDirty();
-  return { t, dbl, codes: [...codes], autoMapped, unm: S.sites.filter(x => !x.projectId).length };
+  return { t, dbl, people, codes: [...codes], autoMapped, unm: S.sites.filter(x => !x.projectId).length };
 }
 /** One entry point for the Import Excel button. */
 async function importExcel(file) {
   const wb = await readWorkbook(file);
   const found = detectSheets(wb);
-  if (!found.length) { toast('No attendance found. A master sheet needs a NAME column and a row of dates; a client timesheet needs PROJECT NAME, MONTH and SITE NAME.', 7000); return; }
+  if (!found.length) { toast('Nothing found to import. A master sheet needs a NAME column and a row of dates; a client timesheet needs PROJECT NAME, MONTH and SITE NAME; an employee list needs EMP. CODE, NAME and detail columns.', 8000); return; }
   const master = found.find(f => f.type === 'master');
   const defYm = master ? ymOf(master.p.dates[master.p.dates.length - 1]) : addMonths(ymOf(todayISO()), -1);
   openModal('Import ' + file.name, `
     <div class="tw"><table><thead><tr><th></th><th>Sheet</th><th>Type</th><th>Contents</th></tr></thead><tbody>
     ${found.map((f, k) => `<tr><td><input type="checkbox" data-sh="${k}" ${f.hidden ? '' : 'checked'}></td><td><b>${esc(f.n)}</b>${f.hidden ? ' <span class="pill">hidden</span>' : ''}</td>
-      <td>${f.type === 'master' ? 'Master attendance' : 'Client timesheet'}</td><td>${esc(f.info)}${f.type === 'client' ? `<div class="row" style="margin-top:4px"><span class="muted">Month</span><input type="month" data-ym="${k}" value="${f.p.multi && master ? defYm : (f.p.ym || defYm)}">${f.p.ym && f.p.multi && master && f.p.ym !== defYm ? `<span class="pill neg">sheet says ${fmtMonYY(f.p.ym)}</span>` : ''}</div>` : ''}</td></tr>`).join('')}
+      <td>${f.type === 'master' ? 'Master attendance' : f.type === 'employees' ? (f.p.resign ? 'Employee list – resigned' : 'Employee list') : 'Client timesheet'}</td><td>${esc(f.info)}${f.type === 'client' ? `<div class="row" style="margin-top:4px"><span class="muted">Month</span><input type="month" data-ym="${k}" value="${f.p.multi && master ? defYm : (f.p.ym || defYm)}">${f.p.ym && f.p.multi && master && f.p.ym !== defYm ? `<span class="pill neg">sheet says ${fmtMonYY(f.p.ym)}</span>` : ''}</div>` : ''}</td></tr>`).join('')}
     </tbody></table></div>
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="im-ow" checked> Replace days already entered</label>`,
     [{ label: 'Cancel' }, {
@@ -328,6 +331,8 @@ async function importExcel(file) {
         const picks = [...m.querySelectorAll('[data-sh]:checked')].map(c => ({ k: +c.dataset.sh, ym: m.querySelector(`[data-ym="${c.dataset.sh}"]`)?.value }));
         const r = runImport(found, picks, $('#im-ow', m).checked); renderAll();
         openModal('Import complete', `<div class="kpis">${[['Security personnel added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+          ${r.people.updated + r.people.created ? `<div class="note"><b>Employee details:</b> ${r.people.updated} updated · ${r.people.created} added${r.people.resigned ? ` · ${r.people.resigned} marked resigned` : ''}. Spellings and formats were tidied (nationality, blood group, dates, #REF!).</div>` : ''}
+          ${r.people.noDate.length ? `<div class="alert"><div><b>${r.people.noDate.length} resigned without a last working day</b> – set the end date in Security Personnel so they stop appearing in attendance:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.people.noDate.map(esc).join('<br>')}</div></div></div>` : ''}
           ${r.dbl.length ? `<div class="alert"><div><b>${r.dbl.length} person-day(s) appear on two rows for the same day</b> – the later row was kept. Check in the source sheet:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
           ${r.t.conflicts ? `<div class="note">${r.t.conflicts} day(s) differed between payroll and client sheet – the client sheet was used.</div>` : ''}
           ${r.autoMapped ? `<p>${r.autoMapped} payroll site label(s) linked automatically to their project.</p>` : ''}

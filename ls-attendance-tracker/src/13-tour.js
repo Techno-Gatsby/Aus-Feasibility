@@ -34,8 +34,9 @@ const TOUR = (() => {
     employees: [TABS,
       { sel: '#ev-q', t: 'Find', d: 'Search by name or Emp ID; the filters next to it narrow by status and type.' },
       { sel: V('employees') + ' .tw', t: 'Security personnel', d: 'Click a name to edit: photos for the face check (up to 3), site allocation history, app access and PIN.' },
+      { sel: '#ev-view', t: 'List or Directory', d: '<b>Directory</b> shows every HR detail in the LS Employee List layout: grouped by designation, service and age worked out, SIRA / visa expiry in amber (30 days) or red (expired). Status "Left" shows the Resignation list.' },
       { sel: '#ev-all', t: 'Tick for bulk changes', d: 'Tick several people, then use the toolbar: assign to site, change shift, end date, app access…' },
-      { sel: '#toolbar', t: 'Toolbar', d: '<b>Upload photos…</b> adds many reference photos at once – name each file by Emp ID, e.g. C52392.jpg.' }],
+      { sel: '#toolbar', t: 'Toolbar', d: '<b>Import employee list…</b> reads the EMPLOYEE LIST / RESIGNATION workbook (matched by Emp. Code). <b>Export directory</b> and <b>Blank template</b> give it back in the same layout. <b>Upload photos…</b> adds reference photos (file name = Emp ID).' }],
     projects: [TABS,
       { sel: '#pv-q', t: 'Find', d: 'Search clients, projects and sites.' },
       { sel: '[data-sec="projects"]', t: 'Projects', d: 'Each card shows the client, sites, rate and documents. Click Edit to change details, the location pin and zone, or the WOI.' },
@@ -86,6 +87,7 @@ const TOUR = (() => {
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },
     { view: 'data', sel: '.menubar', t: 'Menus', d: '<b>File</b> – import Excel, backup, restore. <b>Edit</b> / <b>View</b> – page commands. <b>Help</b> – tours, keys and codes.' },
+    { view: 'data', sel: '#ai-btn', t: 'Ask Claude', d: 'Ask questions in plain English – e.g. whose visa expires next month, who keeps leaving their site zone, which sites had most absences. Claude works the answer out from this data (needs an Anthropic API key, added once in its ⚙ settings).' },
     { view: 'data', sel: '#tour-btn', t: 'Help any time', d: 'Click <b>?</b> for a tour of the page you are on, or this full walkthrough again.' }
   ];
   let steps = [], i = 0, hole = null, tip = null, moving = false, gen = 0;
