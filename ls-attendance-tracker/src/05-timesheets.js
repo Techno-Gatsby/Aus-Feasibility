@@ -51,8 +51,16 @@ function buildTimesheet(projectId, ym) {
 
 /** Signature label: the Elwood sheets leave the second box (acknowledge) unlabelled */
 const sigLabel = (p, s, i) => i === 1 && p?.tsNoAck ? '' : s.label;
-/** Name cell: long names get a smaller size so they fit on one or two lines */
-function tsNameTd(name) { const n = String(name || '').length; return `<td class="nm${n > 38 ? ' s2' : n > 26 ? ' s1' : ''}">${esc(name)}</td>`; }
+/** One text size for the whole sheet: the largest (up to 8.5 px) at which the longest site, shift, name and code fit their columns (names may use two lines) */
+const TS_W = 1096, TS_COL = { site: 8, shift: 4, name: 17, code: 9, total: 5 };
+let tsCtx = null;
+function tsFontSize(ts) {
+  tsCtx ||= document.createElement('canvas').getContext('2d');
+  const need = (t, pct, lines = 1, bold = false) => { if (!t) return 9; tsCtx.font = `${bold ? '700 ' : ''}10px Verdana, Tahoma, Arial, sans-serif`; const room = (TS_W * pct / 100 - 6) * lines, w = lines > 1 ? tsCtx.measureText(t).width * 1.1 : Math.max(...t.split(/\s+/).map(x => tsCtx.measureText(x).width)); return 10 * room / w; };
+  let fs = 8.5;
+  for (const sec of ts.sections) { fs = Math.min(fs, need(sec.name, TS_COL.site, 1, true)); for (const r of sec.rows) fs = Math.min(fs, need(r.shift, TS_COL.shift), need(r.name || r.emp.name, TS_COL.name, 2), need(empCodeLabel(r.emp), TS_COL.code, 2)); }
+  return Math.max(6.5, Math.floor(fs * 4) / 4);
+}
 /** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets */
 function tsSheetHTML(ts) {
   const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days;
@@ -61,14 +69,14 @@ function tsSheetHTML(ts) {
   for (const sec of ts.sections) {
     sec.rows.forEach((r, i) => {
       body += `<tr>${i === 0 ? `<td class="site" rowspan="${sec.rows.length}">${esc(sec.name)}</td>` : ''}
-        <td>${esc(r.shift)}</td>${tsNameTd(r.name || r.emp.name)}<td>${esc(empCodeLabel(r.emp))}</td>
+        <td>${esc(r.shift)}</td><td class="nm">${esc(r.name || r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
         ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return c && codeDef(c).client ? `<td>${esc(c === 'OFF' ? (p?.tsOff || 'O') : c)}</td>` : '<td class="x"></td>'; }).join('')}
         <td class="tot">${r.total}</td></tr>`;
     });
   }
   if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
   const sg = st.signatories;
-  return `<div class="sheet land ts-sheet">
+  return `<div class="sheet land ts-sheet" style="--tsf:${tsFontSize(ts)}px">
     <table class="ts-top"><tbody>
       <tr><td colspan="3" class="c b">${esc(st.companyShort)}</td><td rowspan="3" class="lg"><img src="${LOGO}" alt=""></td></tr>
       <tr><td colspan="3" class="c b">${esc(st.tsTitle)}</td></tr>
@@ -78,7 +86,7 @@ function tsSheetHTML(ts) {
       <table class="ts-mb"><tr><td class="k">MONTH</td><td class="v">${fmtMonYY(ts.ym)}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
       <table class="ts-legend">${tsLegend(p).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
     </div>
-    <table class="ts"><thead><tr><th style="width:8%">SITE NAME</th><th style="width:4%">SHIFT<br>D/N</th><th style="width:17%">NAME</th><th style="width:7%">EMP. CODE</th>${dayTh}<th class="tt" style="width:6%">TOTAL DAYS</th></tr></thead>
+    <table class="ts"><thead><tr><th style="width:${TS_COL.site}%">SITE NAME</th><th style="width:${TS_COL.shift}%">SHIFT<br>D/N</th><th style="width:${TS_COL.name}%">NAME</th><th style="width:${TS_COL.code}%">EMP. CODE</th>${dayTh}<th class="tt" style="width:${TS_COL.total}%">TOTAL DAYS</th></tr></thead>
     <tbody>${body}<tr class="gtr"><td colspan="${N - 6 + 4}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
     <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
   </div>`;
@@ -100,13 +108,14 @@ function renderTimesheets() {
   v.innerHTML = docHead('Client timesheets', `one LS/DO/F-026 sheet per project · ${chosen.length} ticked for print / export`, `
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
       <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`)
-  + `<div class="dc"><div class="split" style="grid-template-columns:minmax(360px,460px) 1fr">
+  + `<div class="dc"><div class="split" style="grid-template-columns:minmax(320px,380px) 1fr">
     <div class="tw" style="max-height:calc(100vh - 190px)"><table><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
-    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td title="${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}</td>
+    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td class="tvn" title="${esc(p.name)} · ${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}</td>
       <td class="num">${ts.rows.length || ''}</td><td class="num">${ts.total || ''}</td><td class="num">${ts.total ? qtyFmt(ts.total / D) : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No projects yet.</td></tr>'}
     </tbody><tfoot><tr class="total"><td></td><td>${all.length} projects</td><td></td><td class="num">${sumDays}</td><td class="num">${qtyFmt(sumDays / D)}</td></tr></tfoot></table></div>
     <div id="tv-sheets" style="min-width:0;overflow:auto">${pv ? tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>
   </div></div>`;
+  tsScale();
   const tw = $('.tw', v); if (tw) tw.scrollTop = sTop; if ($('#tv-sheets')) $('#tv-sheets').scrollLeft = sLeft;
   const rer = () => { renderTimesheets(); renderStatus(); };
   $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; rer(); } };
@@ -119,10 +128,16 @@ function renderTimesheets() {
     if (e.target.matches('input')) return;
     const x = all.find(a => a.p.id === tr.dataset.pv); if (!x) return;
     TV.preview = x.p.id; v.querySelectorAll('[data-pv].on').forEach(r => r.classList.remove('on')); tr.classList.add('on');
-    const box = $('#tv-sheets'); box.innerHTML = tsSheetHTML(x.ts); box.scrollLeft = 0;
+    const box = $('#tv-sheets'); box.innerHTML = tsSheetHTML(x.ts); box.scrollLeft = 0; tsScale();
   });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
 }
+/** The preview shows the whole A4 sheet, scaled down to the pane (same layout as the print) */
+function tsScale() {
+  const box = $('#tv-sheets'), sh = box?.querySelector('.ts-sheet'); if (!sh) return;
+  sh.style.zoom = Math.min(1, (box.clientWidth - 2) / 1120).toFixed(3);
+}
+addEventListener('resize', () => curView === 'timesheets' && tsScale());
 /** Toolbar / menu commands for the ticked projects */
 function tsCmd(cmd) {
   if (curView !== 'timesheets') showView('timesheets');

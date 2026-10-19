@@ -261,7 +261,7 @@ async function init() {
   $$('#tabs .doctab').forEach(b => b.onclick = () => showView(b.dataset.view));
   $('#tour-btn').onclick = e => TOUR.chooser(e.currentTarget);
   $('#set-btn').onclick = () => showView('data');
-  $('#ai-btn').onclick = () => aiToggle();
+  $('#ai-fab').onclick = () => aiToggle();
   $$('.menu').forEach(b => { b.onclick = e => { e.stopPropagation(); b.classList.contains('open') ? closeMenu() : openMenu(b); }; b.onmouseenter = () => { if (!$('#dropdown').hidden) openMenu(b); }; });
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown,.menu')) closeMenu(); });
   $('#modal-bg').addEventListener('mousedown', e => { if (e.target.id === 'modal-bg') closeModal(); });

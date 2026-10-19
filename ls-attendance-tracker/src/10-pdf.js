@@ -58,10 +58,12 @@ const PDFX = (() => {
   /** Render a generated sheet (HTML with class "sheet") to a PNG at 2× */
   async function htmlToPng(html, land) {
     await loadScript(LIB.html2canvas);
-    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-30000px;top:0;background:#fff;z-index:-1';
+    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:0;top:0;background:#fff;z-index:-1;padding:4px';
     host.innerHTML = html; document.body.appendChild(host);
     const el = host.firstElementChild; Object.assign(el.style, { margin: '0', border: '0', boxShadow: 'none', width: land ? '1120px' : '800px', maxWidth: 'none', overflow: 'visible' });
-    try { const c = await html2canvas(el, { scale: 2, backgroundColor: '#fff', logging: false, useCORS: true }); return { png: c.toDataURL('image/png'), w: c.width, h: c.height }; }
+    await Promise.all([...host.querySelectorAll('img')].map(im => im.decode().catch(() => { })));     // logos fully loaded before the capture
+    try { // foreignObject: the browser draws the page itself, so table lines and the crossed-out cells look exactly as on screen / print
+      const c = await html2canvas(host, { scale: 2, backgroundColor: '#fff', logging: false, useCORS: true, foreignObjectRendering: true, x: 0, y: 0, scrollX: 0, scrollY: 0, width: host.offsetWidth, height: host.offsetHeight, windowWidth: host.offsetWidth + 40 }); return { png: c.toDataURL('image/png'), w: c.width, h: c.height }; }
     finally { host.remove(); }
   }
   /** parts: { pdf: Blob, pages?: [0-based] } | { html, land } → one PDF Blob (A4, generated pages placed as images) */

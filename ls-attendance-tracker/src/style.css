@@ -161,7 +161,7 @@ th,td{padding:5px 11px;border-bottom:1px solid var(--line);text-align:left;verti
 th{background:var(--raised);font-weight:650;font-size:10.6px;line-height:1.35;color:var(--mute);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line2);padding:7px 11px;position:sticky;top:0;z-index:1}
 tbody tr:hover td{background:var(--surface2)}
 tbody tr.on td{background:var(--accent-soft2)}
-tbody tr:last-child td{border-bottom:0}
+tbody tr:last-child td:where(:not(.sheet td)){border-bottom:0}
 tr.total td{font-weight:650;border-top:2px solid var(--line2);color:var(--heading)}
 td.lab{font-weight:500;color:var(--heading)}
 table input,table select{min-height:26px;padding:2px 6px;font-size:12px}
@@ -297,7 +297,7 @@ table.ag td.sum{overflow:hidden;text-overflow:ellipsis}
 table.ag tfoot td{font-size:9px;padding:0;text-overflow:clip;letter-spacing:-.03em}
 
 /* ---- SAP tax invoice page (Elwood invoice 2026-0900000689) ---- */
-.sap{font-family:Arial,Helvetica,sans-serif;font-size:11px;border:1px solid #000!important;padding:0!important}
+.sap{font-family:Arial,Helvetica,sans-serif;font-size:11px;border:1px solid #000!important;padding:0!important;min-height:1150px}
 .sap td,.sap th{font-size:11px;white-space:normal}
 .sap-logo{text-align:center;padding:14px 0 6px}.sap-logo img{height:110px}
 .sap-from{padding:8px 4px;line-height:1.75}
@@ -307,11 +307,11 @@ table.sap-hd>tbody>tr>td{vertical-align:top;padding:4px;line-height:1.75;width:5
 table.sap-hd>tbody>tr>td:first-child{border-right:1px solid #000}
 .sap .pre{white-space:pre-line}
 table.kv0{border-collapse:collapse;width:auto}table.kv0 td{padding:0 6px 0 0;border:0;line-height:1.75}
-table.sap-l{width:100%;border-collapse:collapse}
+table.sap-l{width:100%;border-collapse:collapse;table-layout:fixed}
 table.sap-l th,table.sap-l td{border:1px solid #000;padding:6px 3px;font-size:12.5px}
-table.sap-l th{font-weight:700;font-size:13px;background:none}
+table.sap-l th{font-weight:700;font-size:13px;background:none;text-align:center;white-space:nowrap;padding:8px 2px}
 table.sap-l td.c{text-align:center}
-table.sap-l tr.b td{font-weight:700;font-size:13px}
+table.sap-l tr.b td:first-child{font-weight:700;font-size:13px}table.sap-l tr.b:last-child td:last-child{font-weight:700}
 .sap-w{padding:6px 4px 14px}
 .sap-bank{padding:8px 4px}.sap-bank>b{display:block;margin-bottom:10px}
 .sap-decl{padding:50px 4px 20px}
@@ -351,7 +351,7 @@ table.ts th,table.ts td{border:1px solid #444;padding:1px;text-align:center;heig
 table.ts th{background:#cfe2f6;font-weight:700}
 table.ts th.d{font-size:8px}
 table.ts td.site{font-weight:700;vertical-align:middle}
-table.ts td.x{background:linear-gradient(to top right,transparent calc(50% - .6px),#555 50%,transparent calc(50% + .6px)),linear-gradient(to top left,transparent calc(50% - .6px),#555 50%,transparent calc(50% + .6px)),#d8d8d8}
+table.ts td.x{background:linear-gradient(to top right,transparent calc(50% - .6px),#8a8a8a 50%,transparent calc(50% + .6px)),linear-gradient(to top left,transparent calc(50% - .6px),#8a8a8a 50%,transparent calc(50% + .6px)),#ececec}
 table.ts td.tot,table.ts th.tt{background:#8db4e2;font-weight:700}
 table.ts tr.gtr td{background:#fff;height:22px}
 table.ts tr.gtr td.nb{border-right:0}
@@ -360,7 +360,7 @@ table.ts-sign{width:100%;border-collapse:collapse;border:1.5px solid #000;border
 table.ts-sign td{border:1px solid #000;text-align:center;font-weight:700;height:16px;width:20%}
 table.ts-sign tr.nm td{height:70px;vertical-align:bottom;font-weight:600;padding:4px 6px}
 @media print{table.ts td.x,table.ts td.tot,table.ts th,table.ts tr.gtr td,table.ts-legend td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-table.ts td,table.ts th{white-space:normal;overflow-wrap:anywhere}
+table.ts td,table.ts th{white-space:normal;overflow-wrap:normal;word-break:normal;overflow:hidden}
 
 /* ---- worker app (admin side) ---- */
 table.ag td.d .pd{position:absolute;bottom:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
@@ -393,8 +393,6 @@ table.kvt{width:auto;font-size:12px}table.kvt td{padding:2px 8px 2px 0;border:0;
 
 /* timesheet name column: left aligned, at most two lines; long names a size smaller */
 table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;display:table-cell}
-table.ts td.nm.s1{font-size:7.5px}
-table.ts td.nm.s2{font-size:7px;letter-spacing:-.15px}
 
 /* tab groups: documents · field operations · masters */
 .doctabs .gsep{width:18px;flex:none;align-self:stretch;border-right:1px solid var(--line2);margin-right:16px}
@@ -459,7 +457,7 @@ table.dir td.p1{font-family:var(--font-mono)}
 /* Ask Claude panel */
 .ai-btn{border:1px solid rgba(255,255,255,.45);background:transparent;color:inherit;border-radius:12px;padding:3px 10px;font:600 11.5px var(--font-body);cursor:pointer;margin-left:10px}
 .ai-btn:hover{background:rgba(255,255,255,.15)}
-.ai-panel{position:fixed;z-index:8000;top:44px;right:12px;bottom:34px;width:min(480px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--line2);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
+.ai-panel{position:fixed;z-index:8000;right:20px;bottom:96px;height:min(640px,calc(100vh - 150px));width:min(440px,calc(100vw - 40px));background:var(--surface);border:1px solid var(--line2);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
 .ai-h{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .ai-h b{font-size:13.5px;color:var(--heading)}
 .ai-settings{padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface2);display:grid;gap:8px}
@@ -492,3 +490,13 @@ table.dir td.p1{font-family:var(--font-mono)}
 .subtabs:not(:empty){padding:8px 12px 0;background:var(--surface)}
 .subtabs .seg button .n{margin-left:4px;font-weight:700}
 .subtabs .seg button .n:empty{display:none}
+#tv-sheets .sheet.land{max-width:none;margin:0}
+#tv-sheets{overflow-x:hidden!important}
+.tvn{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-fab{position:fixed;z-index:8001;right:20px;bottom:36px;width:52px;height:52px;border-radius:50%;border:0;background:var(--navy);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;display:grid;place-items:center;transition:transform .15s}
+.ai-fab:hover{transform:scale(1.06)}
+.ai-fab:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media print{.ai-fab,.ai-panel{display:none!important}}
+/* one text size for the whole sheet (set from the longest entry) */
+.ts-sheet table.ts td,.ts-sheet table.ts th{font-size:var(--tsf,8.5px)}
+.ts-sheet table.ts th.d{font-size:calc(var(--tsf,8.5px) - .5px)}

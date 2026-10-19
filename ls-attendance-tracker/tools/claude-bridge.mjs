@@ -107,7 +107,7 @@ http.createServer((req, res) => {
     return;
   }
   res.writeHead(404); res.end();
-}).listen(PORT, '127.0.0.1', () => console.log(`Ask Claude bridge ready on http://localhost:${PORT} – keep this window open. (Ctrl+C to stop)`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Assistant bridge ready on http://localhost:${PORT} – keep this window open. (Ctrl+C to stop)`));
 
 const clean = () => { try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { } process.exit(); };
 process.on('SIGINT', clean); process.on('SIGTERM', clean);

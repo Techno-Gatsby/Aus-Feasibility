@@ -10,7 +10,7 @@
      results go back to Claude.
    ===================================================================== */
 const AI = {
-  MODELS: [['', 'Claude CLI default'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
+  MODELS: [['', 'Default'], ['claude-opus-5-5', 'Most capable'], ['claude-sonnet-5-5', 'Balanced'], ['claude-haiku-5-5', 'Fastest']],
   chat: '', asked: 0, busy: false, worker: null, ready: null, open: false,
   get bridge() { try { return localStorage.getItem('ls.claudeBridge') || 'http://localhost:8787'; } catch (e) { return 'http://localhost:8787'; } },
   set bridge(v) { try { v ? localStorage.setItem('ls.claudeBridge', v) : localStorage.removeItem('ls.claudeBridge'); } catch (e) { } },
@@ -99,7 +99,7 @@ self.onmessage = e => {
   } catch (err) { postMessage({ id: m.id, ok: false, result: String(err && err.stack || err).split('\\n').slice(0, 4).join('\\n') }); }
 };`;
 /* ---------- Claude ---------- */
-const AI_SYSTEM = () => `You are the analysis assistant inside the Latinem Securities (LS) Attendance Tracker, a Dubai security-guarding company. The user is an LS manager. Answer questions about security personnel, HR details, attendance, check-ins / check-outs, shift routes, sites and zones by computing from the data – never guess numbers.
+const AI_SYSTEM = () => `You are "the LS assistant", the analysis assistant inside the Latinem Securities (LS) Attendance Tracker, a Dubai security-guarding company. The user is an LS manager. Answer questions about security personnel, HR details, attendance, check-ins / check-outs, shift routes, sites and zones by computing from the data – never guess numbers.
 
 Today is ${todayISO()} (Dubai time, UTC+4). Dates are ISO strings YYYY-MM-DD; timestamps (ts) are epoch milliseconds.
 
@@ -110,6 +110,7 @@ HOW TO WORK
   EOF
   It prints the JSON result. Return counts, short lists or top-N – never the whole data set. Several small analyses are better than one huge one. Do not read or list files; everything is reachable through D and H.
 - State the assumption behind any interpretation (for example "next month = ${(() => { const d = new Date(todayISO() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })()}").
+- Never mention Claude, Anthropic, models, tools, Bash, files or analyse.mjs to the user – just say what you checked (e.g. "I checked the visa dates").
 - Answer in short, plain sentences, then a compact Markdown table when listing people (Emp code, name, site/project, the relevant value). Mention how many rows you left out.
 - "Beats" = patrol beats (D.beats): checkpoints at a site visited in rounds every everyMin minutes, by QR scan (D.scans) or by a recorded position within the checkpoint radius. Use H.beatRounds for who completed their rounds / missed checkpoints. Where a site has no beat, "following the beat" means staying inside the allocated site's zone – use H.beatCompliance. Positions exist only for people using the phone app.
 - Personnel who have left (left = true) are excluded unless the question is about them.${AI.personal ? '' : '\n- Passport, Emirates ID, phone numbers, home address and health details are not shared with you; say so if asked.'}
@@ -143,7 +144,7 @@ async function aiAsk(text) {
   try {
     const r = await fetch(AI.bridge.replace(/\/+$/, '') + '/ask', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat: AI.chat, question: text, model: AI.model, system: AI_SYSTEM(), worker: AI_WORKER + '\n' + beatRoundsCore.toString(), snapshot: await aiSnapshot() }) })
-      .catch(() => { throw new Error(`Can't reach the Claude CLI bridge at ${AI.bridge}. On this PC run: node tools/claude-bridge.mjs (and keep it open).`); });
+      .catch(() => { throw new Error(`The assistant is offline – it could not reach ${AI.bridge}. On this PC start tools/Start Assistant.cmd (or node tools/claude-bridge.mjs) and keep it open.`); });
     if (!r.ok) throw new Error(`Bridge: ${r.status} ${await r.text()}`);
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', end = null;
     for (;;) {
@@ -158,8 +159,8 @@ async function aiAsk(text) {
         else if (m.t === 'done') end = m;
       }
     }
-    if (!end) throw new Error('The bridge stopped before Claude finished.');
-    if (!end.ok) throw new Error(/login|auth|sign/i.test(end.error) ? 'Claude CLI is not signed in – run `claude` once in a terminal on this PC and sign in.' : end.error || 'Claude CLI failed');
+    if (!end) throw new Error('The assistant stopped before finishing – try again.');
+    if (!end.ok) throw new Error(/login|auth|sign/i.test(end.error) ? 'The assistant engine on this PC is not signed in – run `claude` once in a terminal and sign in.' : end.error || 'The assistant could not answer – try again.');
     if (!shown.trim()) shown = end.text;
     AI.asked++;
   } catch (e) {
@@ -192,15 +193,15 @@ function aiToggle(force) {
   AI.open = force ?? !AI.open; let p = $('#ai-panel');
   if (!AI.open) { p?.remove(); return; }
   if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); }
-  p.innerHTML = `<div class="ai-h"><b>✦ Ask Claude</b><span class="pill">beta</span><span class="spacer"></span>
+  p.innerHTML = `<div class="ai-h"><b>Assistant</b><span class="pill">beta</span><span class="spacer"></span>
       <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
     <div class="ai-settings" id="ai-settings" hidden>
-      <label class="f">Claude CLI bridge <span class="muted">(on this PC run <code>node tools/claude-bridge.mjs</code>)</span><input type="text" id="ai-bridge" value="${esc(AI.bridge)}" placeholder="http://localhost:8787" autocomplete="off"></label>
+      <label class="f">Assistant engine address <span class="muted">(on this PC run <code>tools/Start Assistant.cmd</code>)</span><input type="text" id="ai-bridge" value="${esc(AI.bridge)}" placeholder="http://localhost:8787" autocomplete="off"></label>
       <label class="f">Model<select id="ai-model">${opts(AI.MODELS, AI.model)}</select></label>
-      <label class="chk"><input type="checkbox" id="ai-personal" ${AI.personal ? 'checked' : ''}> Let Claude use passport, Emirates ID, phone numbers, home address and health details</label>
-      <p class="muted small">Questions and the results of each analysis go to Claude through the Claude CLI signed in on this PC (its own plan or account). The data snapshot stays on this PC and is analysed there.</p>
+      <label class="chk"><input type="checkbox" id="ai-personal" ${AI.personal ? 'checked' : ''}> Let the assistant use passport, Emirates ID, phone numbers, home address and health details</label>
+      <p class="muted small">Questions and the results of each analysis go to the assistant engine signed in on this PC. The data snapshot stays on this PC and is analysed there.</p>
       <button class="btn sm pri" id="ai-save">Save</button></div>
-    <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. Claude works out the answer from the data in this tracker.</p>
+    <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. The assistant works out the answer from the data in this tracker.</p>
       <div class="ai-chips">${AI_SUGGEST.map(q => `<button class="chip" data-aq="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
     <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="2" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
   $('#ai-x').onclick = () => aiToggle(false);
