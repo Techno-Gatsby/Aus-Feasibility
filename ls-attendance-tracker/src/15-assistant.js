@@ -48,7 +48,10 @@ async function aiSnapshot() {
     codes: S.codes.map(c => ({ code: c.code, label: c.label, billable: !!c.billable })),
     attendance: att,
     punches: Object.values(S.punches || {}).map(p => ({ id: p.id, personId: p.wid, type: p.type, ts: p.ts, workDate: p.workDate, lat: p.lat, lng: p.lng, acc: p.acc, siteId: p.siteId, dist: p.dist, inZone: !!p.inZone, status: p.status, reasons: p.reasons || [], flags: p.flags || [], reliever: !!p.reliever, by: p.by || '', face: p.face ? (p.face.d != null ? FACE.verdict(p.face.d) : p.face.none ? 'no face' : 'unclear') : null })),
-    pings
+    pings,
+    beats: S.sites.flatMap(st => beatsOf(st).map(b => ({ id: b.id, siteId: st.id, site: st.name, name: b.name, shift: b.shift || 'ALL', everyMin: +b.everyMin || 60, assignees: b.assignees || [], checkpoints: (b.checkpoints || []).map(c => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, radius: +c.radius || 25 })) }))),
+    scans: Object.values(S.scans || {}).map(x => ({ personId: x.personId, siteId: x.siteId, beatId: x.beatId, checkpointId: x.checkpointId, checkpoint: x.checkpoint, ts: x.ts, dist: x.dist, ok: !!x.ok })),
+    shiftHours: +S.settings.shiftHours || 12
   };
 }
 /** The worker: holds the snapshot, runs Claude's read-only analysis code with helpers; no network, no page access */
@@ -69,6 +72,20 @@ const H = {
   codeOn(personId, date) { return D.attendance[personId]?.[date]?.[0] || null; },
   zoneCheck(pt, siteId) { const s = H.site(siteId); if (!s || !s.pins.length) return null; let best = null; for (const p of s.pins) { const d = H.distance(pt, p); if (!best || d < best.d) best = { d, radius: p.radius, inside: d - (pt.acc || 0) <= p.radius }; } return best; },
   positions(personId, from, to) { const t0 = new Date(from + 'T00:00:00+04:00').getTime(), t1 = new Date(to + 'T23:59:59+04:00').getTime() + 12 * 3600000; const out = D.punches.filter(p => p.personId === personId && p.status !== 'rejected' && p.ts >= t0 && p.ts <= t1).map(p => ({ ts: p.ts, lat: p.lat, lng: p.lng, acc: p.acc, kind: p.type })); for (const x of D.pings[personId] || []) if (x[0] >= t0 && x[0] <= t1) out.push({ ts: x[0], lat: x[1], lng: x[2], acc: x[3], kind: 'position' }); return out.sort((a, b) => a.ts - b.ts); },
+  beatRounds(personId, from, to) {
+    const out = [], person = D.personnel.find(p => p.id === personId); if (!person) return out;
+    const ins = D.punches.filter(p => p.personId === personId && p.type === 'in' && p.status !== 'rejected' && p.workDate >= from && p.workDate <= to);
+    for (const p of ins) {
+      const o = D.punches.find(x => x.personId === personId && x.type === 'out' && x.ts > p.ts && x.ts - p.ts < 18 * 3600000), end = Math.min(o ? o.ts : p.ts + D.shiftHours * 3600000, Date.now());
+      for (const b of D.beats.filter(b => b.siteId === p.siteId && (b.shift === 'ALL' || b.shift === person.shift) && (!b.assignees.length || b.assignees.includes(personId)))) {
+        const v = D.scans.filter(x => x.personId === personId && x.beatId === b.id && x.ok && x.ts >= p.ts && x.ts < end).map(x => ({ cp: x.checkpointId, ts: x.ts, src: 'scan' }));
+        for (const q of H.positions(personId, p.workDate, p.workDate)) if (q.ts >= p.ts && q.ts < end) for (const c of b.checkpoints) if (H.distance(q, c) - Math.min(q.acc || 0, 30) <= c.radius) v.push({ cp: c.id, ts: q.ts, src: 'gps' });
+        const r = beatRoundsCore(b, p.ts, end, v);
+        out.push({ date: p.workDate, beat: b.name, site: b.site, expected: r.expected, done: r.done, completion: r.completion, scanned: r.scanned, gps: r.gps, missed: Object.entries(r.missed).map(([id, n]) => ({ checkpoint: (b.checkpoints.find(c => c.id === id) || {}).name || id, rounds: n })) });
+      }
+    }
+    return out;
+  },
   beatCompliance(personId, from, to) { let n = 0, out = 0; const where = []; for (const x of H.positions(personId, from, to)) { const site = H.siteOn(personId, H.dubaiDate(x.ts)); const z = site && H.zoneCheck(x, site); if (!z) continue; n++; if (!z.inside) { out++; if (where.length < 5) where.push({ at: new Date(x.ts).toISOString(), metresFromPin: z.d }); } } return { positions: n, outside: out, shareOutside: n ? Math.round(1000 * out / n) / 10 : null, examples: where }; }
 };
 self.onmessage = e => {
@@ -85,7 +102,7 @@ async function aiWorker() {
   if (AI.ready) return AI.ready;
   return AI.ready = (async () => {
     AI.worker?.terminate();
-    AI.worker = new Worker(URL.createObjectURL(new Blob([AI_WORKER], { type: 'text/javascript' })));
+    AI.worker = new Worker(URL.createObjectURL(new Blob([AI_WORKER, '\n', beatRoundsCore.toString()], { type: 'text/javascript' })));
     AI.worker.postMessage({ snapshot: await aiSnapshot() });
     return AI.worker;
   })();
@@ -109,7 +126,7 @@ HOW TO WORK
 - Use the run_analysis tool: write a JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result (counts, short lists, top-N). Never return the whole data set. Several small analyses are better than one huge one.
 - State the assumption behind any interpretation (for example "next month = ${(() => { const d = new Date(todayISO() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })()}").
 - Answer in short, plain sentences, then a compact Markdown table when listing people (Emp code, name, site/project, the relevant value). Mention how many rows you left out.
-- "Beats" / "routes" = staying inside the zone of the site the person is allocated to on that day; LS has no separate patrol beats yet. Use H.beatCompliance. Positions exist only for people using the phone app.
+- "Beats" = patrol beats (D.beats): checkpoints at a site visited in rounds every everyMin minutes, by QR scan (D.scans) or by a recorded position within the checkpoint radius. Use H.beatRounds for who completed their rounds / missed checkpoints. Where a site has no beat, "following the beat" means staying inside the allocated site's zone – use H.beatCompliance. Positions exist only for people using the phone app.
 - Personnel who have left (left = true) are excluded unless the question is about them.${AI.personal ? '' : '\n- Passport, Emirates ID, phone numbers, home address and health details are not shared with you; say so if asked.'}
 
 DATA (D)
@@ -121,9 +138,11 @@ DATA (D)
 - D.attendance[personId][date] = [code] or [code, siteIdWhenRelieving]
 - D.punches[]: id, personId, type ('in'/'out'), ts, workDate, lat, lng, acc (GPS ± metres), siteId, dist (m from pin), inZone, status (accepted / pending / rejected), reasons[], flags[] (e.g. 'late 12 min', 'offline', 'early leave'), reliever, by, face ('match' / 'unsure' / 'different' / 'no face' / null)
 - D.pings[personId] = [[ts, lat, lng, acc], …] – positions recorded during shifts (every ~5–10 min)
+- D.beats[]: id, siteId, site, name, shift (ALL/DAY/NIGHT), everyMin, assignees[personId] (empty = everyone at the site), checkpoints[{id, name, lat, lng, radius}]
+- D.scans[]: personId, siteId, beatId, checkpointId, checkpoint, ts, dist (m from checkpoint), ok (false = scanned far away)
 
 HELPERS (H)
-distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
+distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatRounds(personId, from, to) → [{date, beat, site, expected, done, completion %, scanned, gps, missed[{checkpoint, rounds}]}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
 
 Example: const next = H.addMonths(D.today, 1).slice(0, 7); return D.personnel.filter(p => !p.left && p.visaExpiry.startsWith(next)).map(p => [p.code, p.name, p.visaExpiry]);`;
 const AI_TOOLS = [{
@@ -202,7 +221,7 @@ function aiMarkdown(md) {
 }
 
 /* ---------- panel ---------- */
-const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not staying within their assigned site zone during shifts this week?', 'Which sites had the most absences this month?', 'Who was late for check-in more than 3 times in the last 30 days?', 'Whose SIRA expires in the next 60 days?', 'Summarise today: on duty, not checked in, punches to review'];
+const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not completing their patrol rounds this week?', 'Who is not staying within their assigned site zone during shifts this week?', 'Which sites had the most absences this month?', 'Who was late for check-in more than 3 times in the last 30 days?', 'Whose SIRA expires in the next 60 days?', 'Summarise today: on duty, not checked in, punches to review'];
 function aiToggle(force) {
   AI.open = force ?? !AI.open; let p = $('#ai-panel');
   if (!AI.open) { p?.remove(); return; }

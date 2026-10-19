@@ -62,7 +62,7 @@ const LSAPI = (() => {
   const DEFAULTS = { radius: 100, maxAcc: 50, windowMin: 60, lateMin: 15, photo: true, bindDevice: true, dupMin: 30, shiftHours: 12, starts: { DAY: '07:00', NIGHT: '19:00' }, lockTries: 5, lockMin: 15, tokenHours: 20 };
 
   /**
-   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
+   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, scans, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
    * opts: { store, secret, now: () => ms }
    */
   function create({ store, secret, now = () => Date.now() }) {
@@ -83,6 +83,8 @@ const LSAPI = (() => {
     const isViewer = req => isSup(req) || roles(req).includes('viewer');
     const byCode = async code => { const c = String(code || '').trim().toUpperCase(); return (await store.list('workers', w => w.code === c, { code: c }))[0] || null; };
 
+    const cleanBeats = bs => (Array.isArray(bs) ? bs : []).slice(0, 50).map(b => ({ id: String(b.id), name: String(b.name || '').slice(0, 60), shift: ['DAY', 'NIGHT'].includes(b.shift) ? b.shift : 'ALL', everyMin: Math.max(10, +b.everyMin || 60), assignees: (b.assignees || []).map(String).slice(0, 500),
+      checkpoints: (b.checkpoints || []).slice(0, 100).map(c => ({ id: String(c.id), name: String(c.name || '').slice(0, 60), lat: +c.lat, lng: +c.lng, radius: Math.max(5, +c.radius || 25) })) }));
     async function profile(w) {
       const c = await cfg(), t = now(), today = dxbDate(t);
       const sites = await store.list('sites');
@@ -184,6 +186,20 @@ const LSAPI = (() => {
         }
         return J(200, { saved: n });
       },
+      // patrol checkpoint scanned on the phone (QR "LSCP|siteId|checkpointId"), GPS-checked against the checkpoint
+      'POST worker/scan': async req => {
+        const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH');
+        const b = req.body || {}, m = String(b.code || '').match(/^LSCP\|([^|]+)\|([^|]+)$/); if (!m) return err(400, 'Not an LS checkpoint code', 'BAD_CODE');
+        const site = await store.get('sites', m[1]); let beat = null, cp = null;
+        for (const x of site?.beats || []) { const c = (x.checkpoints || []).find(c => c.id === m[2]); if (c) { beat = x; cp = c; break; } }
+        if (!cp) return err(404, 'Checkpoint not found – ask the admin to publish the roster', 'NO_CHECKPOINT');
+        const t = now(), lat = +b.lat, lng = +b.lng, acc = Math.round(+b.acc || 0), ts = Math.min(+b.ts || t, t);
+        if (b.clientId) { const dup = (await store.list('scans', x => x.clientId === b.clientId, { clientId: b.clientId }))[0]; if (dup) return J(200, { scan: dup, repeat: true }); }
+        const has = isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && lat !== 0;
+        const dist = has ? distance({ lat, lng }, cp) : null, ok = has && dist - Math.min(acc, 50) <= (+cp.radius || 25) + 30;
+        const scan = { id: rid(), personId: w.id, code: w.code, name: w.name, siteId: site.id, beatId: beat.id, checkpointId: cp.id, checkpoint: cp.name, beat: beat.name, ts, lat: has ? lat : null, lng: has ? lng : null, acc, dist, ok, clientId: b.clientId || '', serverTs: t };
+        await store.put('scans', scan); return J(200, { scan });
+      },
       /* ---------- supervisor ---------- */
       'GET supervisor/board': async req => {
         if (!isSup(req)) return err(403, 'Supervisor role required');
@@ -223,7 +239,7 @@ const LSAPI = (() => {
           await store.put('workers', w); seen.add(w.id);
         }
         if (b.full) for (const w of await store.list('workers')) if (!seen.has(w.id) && w.enabled) { w.enabled = false; await store.put('workers', w); }
-        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
+        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
         if (b.settings) await store.put('config', { id: 'app', v: { ...((await store.get('config', 'app'))?.v || {}), ...b.settings } });
         return J(200, { workers: seen.size, sites: (b.sites || []).length });
       },
@@ -249,6 +265,7 @@ const LSAPI = (() => {
         return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
       },
       'GET admin/pings': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), pings: (await store.list('pings', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
+      'GET admin/scans': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), scans: (await store.list('scans', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
       'GET admin/marks': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), marks: await store.list('marks', m => m.serverTs > since, { since }) }); },
       'GET health': async () => J(200, { ok: true, time: now() })
     };

@@ -487,6 +487,14 @@ table.dir td.p1{font-family:var(--font-mono)}
 .ai-in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
 .ai-in textarea{flex:1;resize:none;font:12.5px var(--font-body);padding:7px 9px;border:1px solid var(--line2);border-radius:8px}
 
+/* patrol beats */
+.cp-pin span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1F8A5B;color:#fff;font:700 11px var(--font-body);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.cp-pin.miss span{background:#D0473A}.cp-pin.seen span{background:#1F8A5B}
+.cpsheet{display:grid;grid-template-columns:1fr 1fr;gap:10mm;padding:10mm!important}
+.cpst{display:flex;gap:4mm;align-items:center;border:1.5px dashed #555;border-radius:4mm;padding:4mm;break-inside:avoid}
+.cpst img{width:38mm;height:38mm;image-rendering:pixelated}
+.cpst b{display:block;font-size:14pt;margin-bottom:2mm}.cpst span{display:block;font-size:9pt;color:#333}.cpst small{display:block;margin-top:3mm;font-size:7pt;color:#666}
+
 </style>
 </head>
 <body>
@@ -609,7 +617,7 @@ const LSAPI = (() => {
   const DEFAULTS = { radius: 100, maxAcc: 50, windowMin: 60, lateMin: 15, photo: true, bindDevice: true, dupMin: 30, shiftHours: 12, starts: { DAY: '07:00', NIGHT: '19:00' }, lockTries: 5, lockMin: 15, tokenHours: 20 };
 
   /**
-   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
+   * store: { get(t, id), put(t, obj), list(t, filterFn?, hint?), del(t, id),   hint = { wid, code, since, fromDate, workDate, clientId, enabled }; tables: workers, sites, punches, marks, pings, scans, config lets a server store filter before the scan; putBlob(name, bytes, type), getBlob(name) → {bytes, type} }
    * opts: { store, secret, now: () => ms }
    */
   function create({ store, secret, now = () => Date.now() }) {
@@ -630,6 +638,8 @@ const LSAPI = (() => {
     const isViewer = req => isSup(req) || roles(req).includes('viewer');
     const byCode = async code => { const c = String(code || '').trim().toUpperCase(); return (await store.list('workers', w => w.code === c, { code: c }))[0] || null; };
 
+    const cleanBeats = bs => (Array.isArray(bs) ? bs : []).slice(0, 50).map(b => ({ id: String(b.id), name: String(b.name || '').slice(0, 60), shift: ['DAY', 'NIGHT'].includes(b.shift) ? b.shift : 'ALL', everyMin: Math.max(10, +b.everyMin || 60), assignees: (b.assignees || []).map(String).slice(0, 500),
+      checkpoints: (b.checkpoints || []).slice(0, 100).map(c => ({ id: String(c.id), name: String(c.name || '').slice(0, 60), lat: +c.lat, lng: +c.lng, radius: Math.max(5, +c.radius || 25) })) }));
     async function profile(w) {
       const c = await cfg(), t = now(), today = dxbDate(t);
       const sites = await store.list('sites');
@@ -731,6 +741,20 @@ const LSAPI = (() => {
         }
         return J(200, { saved: n });
       },
+      // patrol checkpoint scanned on the phone (QR "LSCP|siteId|checkpointId"), GPS-checked against the checkpoint
+      'POST worker/scan': async req => {
+        const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH');
+        const b = req.body || {}, m = String(b.code || '').match(/^LSCP\|([^|]+)\|([^|]+)$/); if (!m) return err(400, 'Not an LS checkpoint code', 'BAD_CODE');
+        const site = await store.get('sites', m[1]); let beat = null, cp = null;
+        for (const x of site?.beats || []) { const c = (x.checkpoints || []).find(c => c.id === m[2]); if (c) { beat = x; cp = c; break; } }
+        if (!cp) return err(404, 'Checkpoint not found – ask the admin to publish the roster', 'NO_CHECKPOINT');
+        const t = now(), lat = +b.lat, lng = +b.lng, acc = Math.round(+b.acc || 0), ts = Math.min(+b.ts || t, t);
+        if (b.clientId) { const dup = (await store.list('scans', x => x.clientId === b.clientId, { clientId: b.clientId }))[0]; if (dup) return J(200, { scan: dup, repeat: true }); }
+        const has = isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && lat !== 0;
+        const dist = has ? distance({ lat, lng }, cp) : null, ok = has && dist - Math.min(acc, 50) <= (+cp.radius || 25) + 30;
+        const scan = { id: rid(), personId: w.id, code: w.code, name: w.name, siteId: site.id, beatId: beat.id, checkpointId: cp.id, checkpoint: cp.name, beat: beat.name, ts, lat: has ? lat : null, lng: has ? lng : null, acc, dist, ok, clientId: b.clientId || '', serverTs: t };
+        await store.put('scans', scan); return J(200, { scan });
+      },
       /* ---------- supervisor ---------- */
       'GET supervisor/board': async req => {
         if (!isSup(req)) return err(403, 'Supervisor role required');
@@ -770,7 +794,7 @@ const LSAPI = (() => {
           await store.put('workers', w); seen.add(w.id);
         }
         if (b.full) for (const w of await store.list('workers')) if (!seen.has(w.id) && w.enabled) { w.enabled = false; await store.put('workers', w); }
-        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
+        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
         if (b.settings) await store.put('config', { id: 'app', v: { ...((await store.get('config', 'app'))?.v || {}), ...b.settings } });
         return J(200, { workers: seen.size, sites: (b.sites || []).length });
       },
@@ -796,6 +820,7 @@ const LSAPI = (() => {
         return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
       },
       'GET admin/pings': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), pings: (await store.list('pings', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
+      'GET admin/scans': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), scans: (await store.list('scans', x => x.serverTs > since, { since })).sort((a, b) => a.serverTs - b.serverTs) }); },
       'GET admin/marks': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), marks: await store.list('marks', m => m.serverTs > since, { since }) }); },
       'GET health': async () => J(200, { ok: true, time: now() })
     };
@@ -1919,6 +1944,7 @@ function renderProjects() {
     ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
     ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
     ${!projPin.length && !withPin.length ? '<p class="muted small" style="margin:0">Nothing set yet – use <b>Edit</b> on a project or a site.</p>' : ''}`, '', ); })()}
+  ${beatsSectionHTML()}
   ${sec('projects', 'Projects', projRows.map(p => {
       const c = IX.client.get(p.clientId); const b = p.billing || {};
       const ss = sitesOfProject(p.id);
@@ -1939,6 +1965,7 @@ function renderProjects() {
   </div>`;
   bindSecs(v);
   if ($('#pv-zones')) $('#pv-zones').onclick = zonesMap;
+  bindBeatsSection($('#v-projects'));
   if ($('#pv-bulkdocs')) $('#pv-bulkdocs').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) bulkDocs(fs).catch(err => toast(err.message, 6000)); };
   if ($('#pv-unfocus')) $('#pv-unfocus').onclick = () => { PV.focus = ''; clearSel(); };
   if ($('#pv-bulk')) {
@@ -2133,7 +2160,8 @@ function editSite(id, projectId) {
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
     </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
     <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
-    ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}`,
+    ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}
+    ${id ? `<h3 style="margin:14px 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : ''}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
       S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -2151,6 +2179,7 @@ function editSite(id, projectId) {
     }], { width: 'min(1500px,94vw)' });
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
   $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
+  m.querySelectorAll('[data-esb]').forEach(x => x.onclick = () => { if (!sitePins(IX.site.get(id)).length) return toast('Save a location for the site first'); editBeat(id, x.dataset.esb || null); });
 }
 /** Bulk upload of Work Order Instructions (one PDF per WOI, or one PDF holding several): matched to projects by the WOI / PO number or project code in the text */
 async function bulkDocs(files) {
@@ -3539,7 +3568,7 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s) }));
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length) }));
   const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
@@ -3578,6 +3607,8 @@ async function syncApp(quiet) {
     c.lastSync = r.body.now;
     const mk = await cl.call('GET', 'admin/marks', null, { query: { since: c.lastMarkSync || 0 } });
     if (mk.status === 200) { S.marks ||= {}; for (const x of mk.body.marks) { S.marks[x.id] = x; applyMark(x, stats); } c.lastMarkSync = mk.body.now; }
+    const sc = await cl.call('GET', 'admin/scans', null, { query: { since: c.lastScanSync || 0 } });
+    if (sc.status === 200) { S.scans ||= {}; for (const x of sc.body.scans) S.scans[x.id] = x; c.lastScanSync = sc.body.now; }
     const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
     if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
     reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
@@ -3917,6 +3948,12 @@ async function renderLive() {
   let map; try { map = await LSMap.create($('#lv-map'), { zoom: 12 }); } catch (e) { $('#lv-map').innerHTML = `<p class="muted" style="padding:12px">${esc(e.message)}</p>`; return; }
   const L = window.L, b = [], mk = [];
   for (const s of S.sites) for (const p of sitePins(s)) if (!LV.site || s.id === LV.site) { LSMap.zone(map, p, { label: s.name, fill: .06, marker: false }); b.push([p.lat, p.lng]); }
+  // patrol checkpoints with the last visit today
+  const t0 = new Date(today + 'T00:00:00+04:00').getTime();
+  for (const s of S.sites) if (!LV.site || s.id === LV.site) for (const bt of beatsOf(s)) for (const [i, c] of (bt.checkpoints || []).entries()) {
+    const last = Object.values(S.scans || {}).filter(x => x.checkpointId === c.id && x.ts >= t0).sort((a, b) => b.ts - a.ts)[0];
+    L.marker([c.lat, c.lng], { icon: L.divIcon({ className: 'cp-pin' + (last ? ' seen' : ''), html: `<span>${i + 1}</span>`, iconSize: [24, 24] }) }).addTo(map).bindTooltip(`${esc(c.name)} · ${esc(bt.name)}${last ? ` · scanned ${tm(last.ts)} by ${esc(last.name)}` : ' · not scanned today'}`);
+  }
   const col = { on: '#1F8A5B', pe: '#B7791F', done: '#8A94A6' };
   rows.forEach((r, i) => {
     if (!r.pos || !col[r.st]) return;
@@ -3983,11 +4020,24 @@ async function renderInsights() {
   for (const [w, t] of tracks) for (let i = 1; i < t.length; i++) { const a = t[i - 1], b = t[i], km = geo(a, b) / 1000, h = (b.ts - a.ts) / 3600000; if (km > 2 && h > 0 && km / h > 120) { odd.push(['Impossible travel', `${IX.emp.get(w)?.name || w} · ${km.toFixed(1)} km in ${hm(b.ts - a.ts)} · ${fmtDMY(new Date(b.ts).toISOString().slice(0, 10))}`, b.p?.id || '']); break; } }
   for (const p of P) { if ((p.flags || []).includes('clock')) odd.push(['Phone clock wrong', `${p.name} · ${fmtDMY(p.workDate)}`, p.id]); }
   const offl = P.filter(p => (p.flags || []).includes('offline')).length;
+  // patrol beats: rounds per shift, then per beat and per person
+  const BR = await beatReport(INS.from, INS.to, (emp, site) => empOk(emp) && siteOk(site.id));
+  const byBeat = new Map(), byGuard = new Map();
+  for (const r of BR) {
+    const k = r.site.id + '|' + r.beat.id, x = byBeat.get(k) || byBeat.set(k, { site: r.site, beat: r.beat, shifts: 0, exp: 0, done: 0, missed: {} }).get(k);
+    x.shifts++; x.exp += r.expected; x.done += r.done; for (const c in r.missed) x.missed[c] = (x.missed[c] || 0) + r.missed[c];
+    const g = byGuard.get(r.emp.id) || byGuard.set(r.emp.id, { emp: r.emp, beats: new Set(), shifts: 0, exp: 0, done: 0, miss: 0, scans: 0, gps: 0 }).get(r.emp.id);
+    g.beats.add(r.beat.name); g.shifts++; g.exp += r.expected; g.done += r.done; g.miss += Object.values(r.missed).reduce((a, b) => a + b, 0); g.scans += r.scanned; g.gps += r.gps;
+    if (r.expected >= 2 && r.done === 0) odd.push(['Missed every patrol round', `${r.emp.name} · ${r.beat.name} at ${r.site.name} · ${fmtDMY(r.date)}`, '']);
+  }
+  const far = Object.values(S.scans || {}).filter(x => !x.ok && x.ts >= new Date(INS.from + 'T00:00:00+04:00').getTime() && empOk(IX.emp.get(x.personId)) && siteOk(x.siteId));
+  for (const x of far) odd.push(['Scan far from checkpoint', `${x.name} · ${x.checkpoint} (${x.beat}) · ${x.dist == null ? 'no GPS' : x.dist + ' m away'} · ${fmtDMY(new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10))} ${tm(x.ts)}`, '']);
+  const cpName = (b, id) => b.checkpoints.find(c => c.id === id)?.name || id;
   // person profile
   const pe = INS.person ? IX.emp.get(INS.person) : null, track = pe ? tracks.get(pe.id) || [] : [];
   const pDays = [...new Set(track.map(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10)))].sort();
   if (pe && !pDays.includes(INS.day)) INS.day = pDays[pDays.length - 1] || '';
-  INS.last = { covRows, bySite, byPerson, hs, odd, pinFix };
+  INS.last = { covRows, bySite, byPerson, hs, odd, pinFix, byBeat, byGuard, cpName };
 
   const projs = S.projects.filter(p => p.active !== false).map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1]));
   const sites = S.sites.filter(s => !INS.project || s.projectId === INS.project).map(s => [s.id, s.name]).sort((a, b) => a[1].localeCompare(b[1]));
@@ -4016,6 +4066,9 @@ async function renderInsights() {
         <div class="tw" style="max-height:250px"><table><thead><tr><th>Most often late</th><th class="num">Check-ins</th><th class="num">Late</th><th class="num">Avg min</th></tr></thead><tbody>${[...byPerson].filter(([, x]) => x.late).sort((a, b) => b[1].late - a[1].late).slice(0, 12).map(([w, x]) => `<tr data-pp="${w}" style="cursor:pointer"><td>${esc(IX.emp.get(w)?.name || w)}</td><td class="num">${x.n}</td><td class="num">${x.late}</td><td class="num">${Math.round(x.lm / x.late)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nobody late.</td></tr>'}</tbody></table></div>`)}
       ${sec('in-zone', 'Zone compliance by site', bySite.size ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th>Inside zone</th><th class="num">Median distance</th><th class="num">Median GPS ±</th><th class="num">To review</th></tr></thead><tbody>${[...bySite].map(([s, x]) => `<tr><td>${esc(siteName(s) || '—')}</td><td class="num">${x.n}</td><td>${pbar(pct(x.inZ, x.n), pct(x.inZ, x.n) < 80 ? 'w' : 'p')}</td><td class="num">${med(x.dist) ?? '—'} m</td><td class="num">${med(x.acc)} m</td><td class="num">${x.pend || ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No check-ins in this range.</p>')}
       ${sec('in-pin', `Pin check <span class="cnt">${pinFix.length}</span>`, pinFix.length ? `<p class="muted small" style="margin-top:0">At these sites accurate check-ins (GPS ±30 m or better) cluster away from the pin – the pin is probably misplaced.</p><div class="tw"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th class="num">Off by</th><th></th></tr></thead><tbody>${pinFix.map((f, i) => `<tr><td>${esc(f.s.name)}</td><td class="num">${f.n}</td><td class="num">${f.d} m</td><td><button class="btn sm" data-pin="${i}">Move pin there</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">All pins match where people check in (needs 5+ accurate check-ins per site).</p>')}
+      ${sec('in-beats', `Beat compliance <span class="cnt">${allBeats().length} beat(s)</span>`, BR.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Beat</th><th>Site</th><th class="num">Shifts</th><th class="num">Rounds done</th><th>Completion</th><th>Most missed</th></tr></thead><tbody>${[...byBeat.values()].map(x => { const pc = pct(x.done, x.exp), mm = Object.entries(x.missed).sort((a, b) => b[1] - a[1])[0]; return `<tr><td><b>${esc(x.beat.name)}</b></td><td>${esc(x.site.name)}</td><td class="num">${x.shifts}</td><td class="num">${x.done} / ${x.exp}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="small">${mm ? `${esc(cpName(x.beat, mm[0]))} (${mm[1]}×)` : '—'}</td></tr>`; }).join('')}</tbody></table></div>
+        <div class="tw" style="max-height:260px;margin-top:8px"><table><thead><tr><th>Security personnel</th><th>Beat</th><th class="num">Shifts</th><th>Rounds completed</th><th class="num">Checkpoints missed</th><th class="num">Scans / GPS</th></tr></thead><tbody>${[...byGuard.values()].sort((a, b) => pct(a.done, a.exp) - pct(b.done, b.exp)).map(g => { const pc = pct(g.done, g.exp); return `<tr data-pp="${g.emp.id}" style="cursor:pointer"><td>${esc(g.emp.name)} <span class="mono muted">${esc(g.emp.empCode || '')}</span></td><td class="small">${esc([...g.beats].join(', '))}</td><td class="num">${g.shifts}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="num">${g.miss || ''}</td><td class="num">${g.scans} / ${g.gps}</td></tr>`; }).join('')}</tbody></table></div>`
+        : `<p class="muted" style="margin:0">${allBeats().length ? 'No shifts at sites with a patrol beat in this range.' : 'No patrol beats yet – add them in Projects &amp; sites → Patrol beats.'}</p>`)}
       ${sec('in-odd', `Unusual activity <span class="pill ${odd.length ? 'neg' : ''}">${odd.length}</span>`, odd.length ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>What</th><th>Details</th><th></th></tr></thead><tbody>${odd.map(([a, b, id]) => `<tr><td><b>${esc(a)}</b></td><td style="white-space:normal">${esc(b)}</td><td>${id ? `<button class="btn sm" data-pd="${id}">Details</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing unusual: no shared phones, face mismatches, impossible travel or wrong phone clocks.</p>')}
     </div></div>`;
   // events
@@ -4037,6 +4090,10 @@ async function renderInsights() {
   for (const s of S.sites) if (siteOk(s.id)) for (const p of sitePins(s)) { LSMap.zone(map, p, { label: s.name, fill: .05, marker: false }); b.push([p.lat, p.lng]); }
   const top = hs[0]?.ms || 1, hm2 = [];
   hs.forEach((h, i) => { hm2[i] = L.circle([h.lat, h.lng], { radius: 12 + 40 * Math.sqrt(h.ms / top), color: '#D0473A', weight: 1, fillColor: '#D0473A', fillOpacity: .15 + .45 * (h.ms / top) }).addTo(map).bindTooltip(`#${i + 1} · ${hm(h.ms)} · ${h.who.size} person(s)`); b.push([h.lat, h.lng]); });
+  for (const s of S.sites) if (siteOk(s.id)) for (const b of beatsOf(s)) for (const [i, c] of (b.checkpoints || []).entries()) {
+    const r = pe && INS.day ? BR.find(x => x.emp.id === pe.id && x.date === INS.day && x.beat.id === b.id) : null, miss = r ? (r.missed[c.id] || 0) : null;
+    L.marker([c.lat, c.lng], { icon: L.divIcon({ className: 'cp-pin' + (miss == null ? '' : miss ? ' miss' : ' seen'), html: `<span>${i + 1}</span>`, iconSize: [24, 24] }) }).addTo(map).bindTooltip(`${c.name} · ${b.name}${miss == null ? '' : miss ? ` · missed in ${miss} of ${r.expected} round(s)` : ' · visited every round'}`);
+  }
   if (pe && INS.day) {
     const day = track.filter(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10) === INS.day);
     if (day.length) {
@@ -4059,6 +4116,7 @@ async function exportInsights() {
   add('Punctuality', [['Security personnel', 'Emp ID', 'Check-ins', 'Late', 'Avg late min', 'Outside zone'], ...[...X.byPerson].map(([w, x]) => [IX.emp.get(w)?.name || w, empCodeLabel(IX.emp.get(w) || {}), x.n, x.late, x.late ? Math.round(x.lm / x.late) : 0, x.out])]);
   add('Zone', [['Site', 'Check-ins', 'Inside zone', 'To review'], ...[...X.bySite].map(([s, x]) => [siteName(s), x.n, x.inZ, x.pend])]);
   add('Hotspots', [['#', 'Latitude', 'Longitude', 'Hours', 'People', 'Nearest site', 'Distance m'], ...X.hs.map((h, i) => { const ns = nearSite(h); return [i + 1, +h.lat.toFixed(6), +h.lng.toFixed(6), +(h.ms / 3600000).toFixed(2), h.who.size, ns?.s.name || '', ns ? Math.round(ns.d) : '']; })]);
+  add('Beats', [['Security personnel', 'Emp ID', 'Beats', 'Shifts', 'Rounds expected', 'Rounds done', 'Completion %', 'Checkpoints missed', 'QR scans', 'GPS visits'], ...[...X.byGuard.values()].map(g => [g.emp.name, g.emp.empCode || '', [...g.beats].join(', '), g.shifts, g.exp, g.done, pct(g.done, g.exp), g.miss, g.scans, g.gps])]);
   add('Unusual', [['What', 'Details'], ...X.odd.map(([a, b]) => [a, b])]);
   XLSX.writeFile(wb, `LS Insights ${INS.from} to ${INS.to}.xlsx`);
 }
@@ -4228,6 +4286,7 @@ const TOUR = (() => {
       { sel: '[data-sec="in-pun"]', t: 'Punctuality', d: 'Weekly on-time trend and who is late most often. Click a name to open their profile.' },
       { sel: '[data-sec="in-zone"]', t: 'Zone compliance', d: 'How many check-ins are inside the zone, the typical distance and GPS accuracy per site.' },
       { sel: '[data-sec="in-pin"]', t: 'Pin check', d: 'If accurate check-ins cluster away from a pin, the pin is probably misplaced – one click moves it there.' },
+      { sel: '[data-sec="in-beats"]', t: 'Beat compliance', d: 'Patrol rounds done vs expected per beat and per person, and the checkpoints missed most. A checkpoint counts when its QR sticker is scanned, or when the recorded route passes within its radius.' },
       { sel: '[data-sec="in-odd"]', t: 'Unusual activity', d: 'Shared phones, a different face, impossible travel, a wrong phone clock. Details opens the punch.' },
       { sel: '#toolbar', t: 'Face check and export', d: 'Run face check compares new check-in photos with personnel photos now. Export Excel saves every table above.' }],
     app: [TABS,
@@ -4246,6 +4305,7 @@ const TOUR = (() => {
     projects: [TABS,
       { sel: '#pv-q', t: 'Find', d: 'Search clients, projects and sites.' },
       { sel: '[data-sec="projects"]', t: 'Projects', d: 'Each card shows the client, sites, rate and documents. Click Edit to change details, the location pin and zone, or the WOI.' },
+      { sel: '[data-sec="beats"]', t: 'Patrol beats', d: 'Checkpoints at a site that guards visit in rounds. Add a beat, click the map to place checkpoints, assign personnel, print the QR stickers and stick them at each checkpoint. Publish roster sends beats to the phones.' },
       { sel: '[data-sec="locations"]', t: 'Locations for the phones', d: 'Sites need a pin and a zone (on the site or its project) before check-ins can be accepted automatically.' },
       { sel: '#toolbar', t: 'Add and upload', d: 'Add a client, project or site. <b>Upload documents in bulk</b> matches Work Order Instructions to projects by WOI / PO number.' }],
     data: [TABS,
@@ -4280,6 +4340,7 @@ const TOUR = (() => {
     { view: 'employees', sel: '#toolbar', t: 'Setup 4 · App access', d: 'Tick people → <b>App access…</b> creates PINs and prints sign-in slips. <b>Upload photos…</b> adds many photos at once (file name = Emp ID).' },
     { view: 'app', sel: '#toolbar', t: 'Setup 5 · Publish roster', d: '<b>Publish roster</b> sends personnel, PINs, sites and zones to the phones. Do it again after any change.' },
     { view: 'app', sel: '#v-app .dh a.btn', t: 'Daily 1 · The phone page', d: 'Personnel sign in with Emp ID + PIN and tap <b>CHECK IN</b> / <b>CHECK OUT</b>: a selfie and GPS are recorded. On Android the app keeps recording the route during the shift. Supervisors use the same page to punch for someone or mark a day.' },
+    { view: 'projects', sel: '[data-sec="beats"]', t: 'Setup 2b · Patrol beats', d: 'Optional: checkpoints at a site, visited in rounds. Guards scan the QR sticker at each checkpoint; the Android app also counts a checkpoint when the route passes it. Insights → Beat compliance shows missed rounds.' },
     { view: 'live', sel: '#lv-map', t: 'Daily 2 · Live', d: 'Who is on duty right now and where, site by site. Sync runs every 5 minutes.' },
     { view: 'app', sel: '[data-sec="ap-rev"]', t: 'Daily 3 · Review exceptions', d: 'Only unusual check-ins land here: outside the zone, weak GPS, too early, or a face that does not match. Approve → P in Attendance; Reject → stays blank.' },
     { view: 'app', sel: '[data-sec="ap-miss"]', t: 'Daily 4 · No check-in', d: 'People allocated to a site with no check-in. Decide the day (A, OFF, leave…) – or the supervisor does it on site.' },
@@ -4641,7 +4702,10 @@ async function aiSnapshot() {
     codes: S.codes.map(c => ({ code: c.code, label: c.label, billable: !!c.billable })),
     attendance: att,
     punches: Object.values(S.punches || {}).map(p => ({ id: p.id, personId: p.wid, type: p.type, ts: p.ts, workDate: p.workDate, lat: p.lat, lng: p.lng, acc: p.acc, siteId: p.siteId, dist: p.dist, inZone: !!p.inZone, status: p.status, reasons: p.reasons || [], flags: p.flags || [], reliever: !!p.reliever, by: p.by || '', face: p.face ? (p.face.d != null ? FACE.verdict(p.face.d) : p.face.none ? 'no face' : 'unclear') : null })),
-    pings
+    pings,
+    beats: S.sites.flatMap(st => beatsOf(st).map(b => ({ id: b.id, siteId: st.id, site: st.name, name: b.name, shift: b.shift || 'ALL', everyMin: +b.everyMin || 60, assignees: b.assignees || [], checkpoints: (b.checkpoints || []).map(c => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, radius: +c.radius || 25 })) }))),
+    scans: Object.values(S.scans || {}).map(x => ({ personId: x.personId, siteId: x.siteId, beatId: x.beatId, checkpointId: x.checkpointId, checkpoint: x.checkpoint, ts: x.ts, dist: x.dist, ok: !!x.ok })),
+    shiftHours: +S.settings.shiftHours || 12
   };
 }
 /** The worker: holds the snapshot, runs Claude's read-only analysis code with helpers; no network, no page access */
@@ -4662,6 +4726,20 @@ const H = {
   codeOn(personId, date) { return D.attendance[personId]?.[date]?.[0] || null; },
   zoneCheck(pt, siteId) { const s = H.site(siteId); if (!s || !s.pins.length) return null; let best = null; for (const p of s.pins) { const d = H.distance(pt, p); if (!best || d < best.d) best = { d, radius: p.radius, inside: d - (pt.acc || 0) <= p.radius }; } return best; },
   positions(personId, from, to) { const t0 = new Date(from + 'T00:00:00+04:00').getTime(), t1 = new Date(to + 'T23:59:59+04:00').getTime() + 12 * 3600000; const out = D.punches.filter(p => p.personId === personId && p.status !== 'rejected' && p.ts >= t0 && p.ts <= t1).map(p => ({ ts: p.ts, lat: p.lat, lng: p.lng, acc: p.acc, kind: p.type })); for (const x of D.pings[personId] || []) if (x[0] >= t0 && x[0] <= t1) out.push({ ts: x[0], lat: x[1], lng: x[2], acc: x[3], kind: 'position' }); return out.sort((a, b) => a.ts - b.ts); },
+  beatRounds(personId, from, to) {
+    const out = [], person = D.personnel.find(p => p.id === personId); if (!person) return out;
+    const ins = D.punches.filter(p => p.personId === personId && p.type === 'in' && p.status !== 'rejected' && p.workDate >= from && p.workDate <= to);
+    for (const p of ins) {
+      const o = D.punches.find(x => x.personId === personId && x.type === 'out' && x.ts > p.ts && x.ts - p.ts < 18 * 3600000), end = Math.min(o ? o.ts : p.ts + D.shiftHours * 3600000, Date.now());
+      for (const b of D.beats.filter(b => b.siteId === p.siteId && (b.shift === 'ALL' || b.shift === person.shift) && (!b.assignees.length || b.assignees.includes(personId)))) {
+        const v = D.scans.filter(x => x.personId === personId && x.beatId === b.id && x.ok && x.ts >= p.ts && x.ts < end).map(x => ({ cp: x.checkpointId, ts: x.ts, src: 'scan' }));
+        for (const q of H.positions(personId, p.workDate, p.workDate)) if (q.ts >= p.ts && q.ts < end) for (const c of b.checkpoints) if (H.distance(q, c) - Math.min(q.acc || 0, 30) <= c.radius) v.push({ cp: c.id, ts: q.ts, src: 'gps' });
+        const r = beatRoundsCore(b, p.ts, end, v);
+        out.push({ date: p.workDate, beat: b.name, site: b.site, expected: r.expected, done: r.done, completion: r.completion, scanned: r.scanned, gps: r.gps, missed: Object.entries(r.missed).map(([id, n]) => ({ checkpoint: (b.checkpoints.find(c => c.id === id) || {}).name || id, rounds: n })) });
+      }
+    }
+    return out;
+  },
   beatCompliance(personId, from, to) { let n = 0, out = 0; const where = []; for (const x of H.positions(personId, from, to)) { const site = H.siteOn(personId, H.dubaiDate(x.ts)); const z = site && H.zoneCheck(x, site); if (!z) continue; n++; if (!z.inside) { out++; if (where.length < 5) where.push({ at: new Date(x.ts).toISOString(), metresFromPin: z.d }); } } return { positions: n, outside: out, shareOutside: n ? Math.round(1000 * out / n) / 10 : null, examples: where }; }
 };
 self.onmessage = e => {
@@ -4678,7 +4756,7 @@ async function aiWorker() {
   if (AI.ready) return AI.ready;
   return AI.ready = (async () => {
     AI.worker?.terminate();
-    AI.worker = new Worker(URL.createObjectURL(new Blob([AI_WORKER], { type: 'text/javascript' })));
+    AI.worker = new Worker(URL.createObjectURL(new Blob([AI_WORKER, '\n', beatRoundsCore.toString()], { type: 'text/javascript' })));
     AI.worker.postMessage({ snapshot: await aiSnapshot() });
     return AI.worker;
   })();
@@ -4702,7 +4780,7 @@ HOW TO WORK
 - Use the run_analysis tool: write a JavaScript function body that receives D (data) and H (helpers) and returns a small JSON-serialisable result (counts, short lists, top-N). Never return the whole data set. Several small analyses are better than one huge one.
 - State the assumption behind any interpretation (for example "next month = ${(() => { const d = new Date(todayISO() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })()}").
 - Answer in short, plain sentences, then a compact Markdown table when listing people (Emp code, name, site/project, the relevant value). Mention how many rows you left out.
-- "Beats" / "routes" = staying inside the zone of the site the person is allocated to on that day; LS has no separate patrol beats yet. Use H.beatCompliance. Positions exist only for people using the phone app.
+- "Beats" = patrol beats (D.beats): checkpoints at a site visited in rounds every everyMin minutes, by QR scan (D.scans) or by a recorded position within the checkpoint radius. Use H.beatRounds for who completed their rounds / missed checkpoints. Where a site has no beat, "following the beat" means staying inside the allocated site's zone – use H.beatCompliance. Positions exist only for people using the phone app.
 - Personnel who have left (left = true) are excluded unless the question is about them.${AI.personal ? '' : '\n- Passport, Emirates ID, phone numbers, home address and health details are not shared with you; say so if asked.'}
 
 DATA (D)
@@ -4714,9 +4792,11 @@ DATA (D)
 - D.attendance[personId][date] = [code] or [code, siteIdWhenRelieving]
 - D.punches[]: id, personId, type ('in'/'out'), ts, workDate, lat, lng, acc (GPS ± metres), siteId, dist (m from pin), inZone, status (accepted / pending / rejected), reasons[], flags[] (e.g. 'late 12 min', 'offline', 'early leave'), reliever, by, face ('match' / 'unsure' / 'different' / 'no face' / null)
 - D.pings[personId] = [[ts, lat, lng, acc], …] – positions recorded during shifts (every ~5–10 min)
+- D.beats[]: id, siteId, site, name, shift (ALL/DAY/NIGHT), everyMin, assignees[personId] (empty = everyone at the site), checkpoints[{id, name, lat, lng, radius}]
+- D.scans[]: personId, siteId, beatId, checkpointId, checkpoint, ts, dist (m from checkpoint), ok (false = scanned far away)
 
 HELPERS (H)
-distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
+distance(a,b) metres · addDays(d,n) · addMonths(d,n) · daysBetween(a,b) · monthOf(d) · dubaiDate(ts) · person(codeOrIdOrName) · site(id) · siteOn(personId,date) · codeOn(personId,date) · zoneCheck({lat,lng,acc}, siteId) → {d, radius, inside} · positions(personId, from, to) → [{ts,lat,lng,acc,kind}] · beatRounds(personId, from, to) → [{date, beat, site, expected, done, completion %, scanned, gps, missed[{checkpoint, rounds}]}] · beatCompliance(personId, from, to) → {positions, outside, shareOutside %, examples}
 
 Example: const next = H.addMonths(D.today, 1).slice(0, 7); return D.personnel.filter(p => !p.left && p.visaExpiry.startsWith(next)).map(p => [p.code, p.name, p.visaExpiry]);`;
 const AI_TOOLS = [{
@@ -4795,7 +4875,7 @@ function aiMarkdown(md) {
 }
 
 /* ---------- panel ---------- */
-const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not staying within their assigned site zone during shifts this week?', 'Which sites had the most absences this month?', 'Who was late for check-in more than 3 times in the last 30 days?', 'Whose SIRA expires in the next 60 days?', 'Summarise today: on duty, not checked in, punches to review'];
+const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not completing their patrol rounds this week?', 'Who is not staying within their assigned site zone during shifts this week?', 'Which sites had the most absences this month?', 'Who was late for check-in more than 3 times in the last 30 days?', 'Whose SIRA expires in the next 60 days?', 'Summarise today: on duty, not checked in, punches to review'];
 function aiToggle(force) {
   AI.open = force ?? !AI.open; let p = $('#ai-panel');
   if (!AI.open) { p?.remove(); return; }
@@ -4823,6 +4903,136 @@ function aiToggle(force) {
 function aiPaint() { const b = $('#ai-send'); if (b) { b.disabled = AI.busy; b.textContent = AI.busy ? '…' : 'Ask'; } }
 // data changed (sync, import, edits): the next analysis uses a fresh snapshot
 function aiDataChanged() { AI.ready = null; }
+
+/* =====================================================================
+   Patrol beats: checkpoints at a site that guards visit in rounds.
+   A checkpoint counts as visited by a QR scan on the phone (GPS-checked)
+   or by a recorded shift position passing within its radius.
+   site.beats = [{ id, name, shift: ALL|DAY|NIGHT, everyMin, assignees: [personId],
+                   checkpoints: [{ id, name, lat, lng, radius }] }]
+   ===================================================================== */
+/** Pure: rounds of one beat in one shift. visits = [{ cp, ts, src }]. Also runs in the Ask Claude worker. */
+function beatRoundsCore(beat, start, end, visits) {
+  const every = Math.max(10, +beat.everyMin || 60) * 60000, dur = Math.max(0, end - start);
+  const expected = Math.max(1, Math.floor(dur / every)), cps = beat.checkpoints || [];
+  const missed = {}; let done = 0; const rounds = [];
+  for (let r = 0; r < expected; r++) {
+    const a = start + r * every, b = a + every;
+    const seen = new Set(visits.filter(v => v.ts >= a && v.ts < b).map(v => v.cp));
+    const miss = cps.filter(c => !seen.has(c.id));
+    if (!miss.length && cps.length) done++;
+    miss.forEach(c => { missed[c.id] = (missed[c.id] || 0) + 1; });
+    rounds.push({ from: a, to: b, visited: cps.length - miss.length, of: cps.length });
+  }
+  return { expected, done, completion: Math.round(100 * done / expected), missed, rounds, scanned: visits.filter(v => v.src === 'scan').length, gps: visits.filter(v => v.src === 'gps').length };
+}
+const beatsOf = s => s?.beats || [];
+const allBeats = () => S.sites.flatMap(s => beatsOf(s).map(b => ({ ...b, siteId: s.id, siteName: s.name })));
+function beatAppliesTo(b, emp, shift) { return (b.shift === 'ALL' || !b.shift || b.shift === shift) && (!b.assignees?.length || b.assignees.includes(emp.id)); }
+/** Visits of one checkpoint set by a person in [start, end): QR scans (ok) + positions within the radius */
+function beatVisits(personId, beat, start, end, pings) {
+  const out = [];
+  for (const x of Object.values(S.scans || {})) if (x.personId === personId && x.beatId === beat.id && x.ok && x.ts >= start && x.ts < end) out.push({ cp: x.checkpointId, ts: x.ts, src: 'scan' });
+  const pts = [...(pings?.[personId] || []).filter(p => p[0] >= start && p[0] < end).map(p => ({ ts: p[0], lat: p[1], lng: p[2], acc: p[3] || 0 })),
+    ...Object.values(S.punches || {}).filter(p => p.wid === personId && p.ts >= start && p.ts < end).map(p => ({ ts: p.ts, lat: p.lat, lng: p.lng, acc: p.acc || 0 }))];
+  for (const p of pts) for (const c of beat.checkpoints || []) if (LSAPI.distance(p, c) - Math.min(p.acc, 30) <= (+c.radius || 25)) out.push({ cp: c.id, ts: p.ts, src: 'gps' });
+  return out.sort((a, b) => a.ts - b.ts);
+}
+/** Every shift (check-in → check-out) in the range at a site with a beat that applies → rounds */
+async function beatReport(from, to, filter = () => true) {
+  const pings = await PINGS.load(), hours = (+S.settings.shiftHours || 12) * 3600000, rows = [];
+  const ins = Object.values(S.punches || {}).filter(p => p.type === 'in' && p.status !== 'rejected' && p.workDate >= from && p.workDate <= to).sort((a, b) => a.ts - b.ts);
+  for (const p of ins) {
+    const emp = IX.emp.get(p.wid), site = IX.site.get(p.siteId); if (!emp || !site || !beatsOf(site).length || !filter(emp, site)) continue;
+    const out = Object.values(S.punches).find(o => o.type === 'out' && o.wid === p.wid && o.ts > p.ts && o.ts - p.ts < 18 * 3600000);
+    const end = Math.min(out ? out.ts : p.ts + hours, Date.now()), shift = shiftOn(emp, p.workDate) || emp.shift || 'DAY';
+    for (const b of beatsOf(site)) {
+      if (!beatAppliesTo(b, emp, shift) || !(b.checkpoints || []).length) continue;
+      const r = beatRoundsCore(b, p.ts, end, beatVisits(emp.id, b, p.ts, end, pings));
+      rows.push({ emp, site, beat: b, date: p.workDate, start: p.ts, end, ...r });
+    }
+  }
+  return rows;
+}
+
+/* ---------- Projects & sites: list of beats ---------- */
+function beatsSectionHTML() {
+  const bs = allBeats();
+  return sec('beats', `Patrol beats <span class="cnt">${bs.length} beat(s) · ${bs.reduce((a, b) => a + (b.checkpoints?.length || 0), 0)} checkpoints</span>`, `
+    <div class="row" style="margin-bottom:8px"><select id="pb-site">${opts(S.sites.filter(s => sitePins(s).length).map(s => [s.id, `${s.name} · ${projOfSite(s.id)?.name || '—'}`]).sort((a, b) => a[1].localeCompare(b[1])), '', 'Pick a site with a location…')}</select>
+      <button class="btn sm pri" id="pb-add">Add patrol beat</button><span class="muted small">Checkpoints are visited in rounds: by scanning the QR sticker on the phone, or automatically when the recorded route passes within the checkpoint radius.</span></div>
+    ${bs.length ? `<div class="tw" style="max-height:260px"><table><thead><tr><th>Site</th><th>Beat</th><th>Shift</th><th class="num">Round every</th><th class="num">Checkpoints</th><th>Assigned</th><th></th></tr></thead><tbody>
+    ${bs.map(b => `<tr><td>${esc(b.siteName)}</td><td><b>${esc(b.name)}</b></td><td>${esc(b.shift || 'ALL')}</td><td class="num">${b.everyMin || 60} min</td><td class="num">${b.checkpoints?.length || 0}</td>
+      <td class="small">${b.assignees?.length ? b.assignees.map(id => esc(IX.emp.get(id)?.name || id)).slice(0, 3).join(', ') + (b.assignees.length > 3 ? ` +${b.assignees.length - 3}` : '') : '<span class="muted">everyone on the site</span>'}</td>
+      <td style="white-space:nowrap"><button class="btn sm" data-pbe="${b.siteId}|${b.id}">Edit</button> <button class="btn sm" data-pbq="${b.siteId}|${b.id}">QR stickers</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small" style="margin:0">No patrol beats yet.</p>'}`);
+}
+function bindBeatsSection(v) {
+  if ($('#pb-add', v)) $('#pb-add', v).onclick = () => { const s = $('#pb-site', v).value; if (!s) return toast('Pick a site first'); editBeat(s, null); };
+  v.querySelectorAll('[data-pbe]').forEach(b => b.onclick = () => { const [s, id] = b.dataset.pbe.split('|'); editBeat(s, id); });
+  v.querySelectorAll('[data-pbq]').forEach(b => b.onclick = () => { const [s, id] = b.dataset.pbq.split('|'); printBeatQR(s, id); });
+}
+
+/* ---------- edit a beat: checkpoints on the map, assignees ---------- */
+function editBeat(siteId, beatId) {
+  const site = IX.site.get(siteId); if (!site) return;
+  const old = beatsOf(site).find(b => b.id === beatId);
+  const b = old ? JSON.parse(JSON.stringify(old)) : { id: uid('b'), name: 'Beat ' + (beatsOf(site).length + 1), shift: 'ALL', everyMin: 60, assignees: [], checkpoints: [] };
+  const today = todayISO(), people = S.employees.filter(e => employedOn(e, today) && (siteOn(e, today) === siteId || b.assignees.includes(e.id))).sort((a, c) => a.name.localeCompare(c.name));
+  const m = openModal(`${old ? 'Edit' : 'Add'} patrol beat · ${site.name}`, `
+    <div class="form"><label class="f">Beat name<input type="text" id="be-name" value="${esc(b.name)}"></label>
+      <label class="f">Shift<select id="be-shift">${opts([['ALL', 'Day and night'], ['DAY', 'Day'], ['NIGHT', 'Night']], b.shift || 'ALL')}</select></label>
+      <label class="f">One round every (minutes)<input type="number" id="be-every" min="10" step="5" value="${b.everyMin || 60}"></label></div>
+    <div class="split" style="grid-template-columns:1fr 330px;gap:12px;margin-top:10px">
+      <div><div class="mapbox tall" id="be-map"></div><p class="muted small" style="margin:6px 0 0">Click the map to add a checkpoint; drag a marker to move it. The dashed circle is the site zone.</p></div>
+      <div><h3 style="margin:0 0 6px">Checkpoints <span class="muted small">in patrol order</span></h3><div id="be-cps"></div>
+        <h3 style="margin:14px 0 6px">Assigned security personnel <span class="muted small">– none ticked = everyone on the site</span></h3>
+        <input type="search" id="be-q" placeholder="Find" style="width:100%;margin-bottom:6px"><div id="be-ppl" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 8px">
+        ${people.map(e => `<label class="chk" data-n="${esc(norm(e.name + ' ' + e.empCode))}"><input type="checkbox" data-as="${e.id}" ${b.assignees.includes(e.id) ? 'checked' : ''}> ${esc(e.name)} <span class="mono muted">${esc(e.empCode || '')}</span></label>`).join('') || '<p class="muted small">No one allocated to this site today.</p>'}</div></div></div>`,
+    [...(old ? [{ label: 'Delete beat', cls: 'bad', onClick: async () => { if (!await confirmBox(`Delete the patrol beat "${old.name}"?`, 'Delete', 'bad')) return false; site.beats = beatsOf(site).filter(x => x.id !== old.id); markDirty(); renderAll(); } }] : []),
+     { label: 'Cancel' },
+     { label: 'Save', cls: 'pri', onClick: m => {
+        b.name = $('#be-name', m).value.trim() || b.name; b.shift = $('#be-shift', m).value; b.everyMin = Math.max(10, +$('#be-every', m).value || 60);
+        b.assignees = [...m.querySelectorAll('[data-as]:checked')].map(c => c.dataset.as);
+        if (!b.checkpoints.length) { toast('Add at least one checkpoint on the map'); return false; }
+        site.beats = [...beatsOf(site).filter(x => x.id !== b.id), b]; markDirty(); renderAll();
+        if (S.employees.some(e => e.app?.on)) toast('Beat saved – Publish roster (App & review) to send it to the phones', 5000);
+      } }], { width: 'min(1300px,94vw)' });
+  $('#be-q', m).oninput = e => { const q = norm(e.target.value); m.querySelectorAll('#be-ppl [data-n]').forEach(l => l.hidden = q && !l.dataset.n.includes(q)); };
+  let map = null, layer = null; const L = () => window.L;
+  const cpsTable = () => {
+    $('#be-cps', m).innerHTML = b.checkpoints.length ? `<table><thead><tr><th>#</th><th>Name</th><th class="num">Radius m</th><th></th></tr></thead><tbody>${b.checkpoints.map((c, i) => `<tr><td>${i + 1}</td><td><input type="text" data-cn="${i}" value="${esc(c.name)}" style="width:100%"></td><td class="num"><input type="number" data-cr="${i}" value="${c.radius || 25}" min="5" max="200" style="width:60px"></td>
+      <td style="white-space:nowrap">${i ? `<button class="btn sm" data-cu="${i}" title="Earlier">↑</button>` : ''}<button class="btn sm bad" data-cd="${i}" title="Remove">✕</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted small">No checkpoints yet – click the map.</p>';
+    m.querySelectorAll('[data-cn]').forEach(i => i.oninput = () => { b.checkpoints[+i.dataset.cn].name = i.value; });
+    m.querySelectorAll('[data-cr]').forEach(i => i.onchange = () => { b.checkpoints[+i.dataset.cr].radius = Math.max(5, +i.value || 25); draw(); });
+    m.querySelectorAll('[data-cd]').forEach(x => x.onclick = () => { b.checkpoints.splice(+x.dataset.cd, 1); cpsTable(); draw(); });
+    m.querySelectorAll('[data-cu]').forEach(x => x.onclick = () => { const i = +x.dataset.cu; [b.checkpoints[i - 1], b.checkpoints[i]] = [b.checkpoints[i], b.checkpoints[i - 1]]; cpsTable(); draw(); });
+  };
+  const draw = () => {
+    if (!map) return; layer?.remove(); layer = L().layerGroup().addTo(map);
+    b.checkpoints.forEach((c, i) => {
+      L().circle([c.lat, c.lng], { radius: +c.radius || 25, color: '#1F8A5B', weight: 1.5, fillOpacity: .12 }).addTo(layer);
+      const mk = L().marker([c.lat, c.lng], { draggable: true, icon: L().divIcon({ className: 'cp-pin', html: `<span>${i + 1}</span>`, iconSize: [24, 24] }) }).addTo(layer).bindTooltip(c.name);
+      mk.on('dragend', () => { const p = mk.getLatLng(); c.lat = +p.lat.toFixed(6); c.lng = +p.lng.toFixed(6); draw(); });
+    });
+    if (b.checkpoints.length > 1) L().polyline(b.checkpoints.map(c => [c.lat, c.lng]), { color: '#1F8A5B', weight: 2, dashArray: '4 6' }).addTo(layer);
+  };
+  cpsTable();
+  const pin = sitePins(site)[0];
+  LSMap.create($('#be-map', m), { zoom: 18, center: pin ? [pin.lat, pin.lng] : undefined, satellite: true }).then(mp => {
+    map = mp; for (const p of sitePins(site)) { const z = LSMap.zone(map, p, { label: site.name, fill: .04, marker: false }); z.c?.setStyle?.({ dashArray: '6 6' }); }
+    map.on('click', e => { b.checkpoints.push({ id: uid('cp'), name: 'Checkpoint ' + (b.checkpoints.length + 1), lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), radius: 25 }); cpsTable(); draw(); });
+    draw(); if (b.checkpoints.length) map.fitBounds(b.checkpoints.map(c => [c.lat, c.lng]), { padding: [40, 40], maxZoom: 19 });
+  }).catch(e => { $('#be-map', m).innerHTML = `<p class="muted" style="padding:12px">${esc(e.message)}</p>`; });
+}
+
+/* ---------- QR stickers ---------- */
+const beatQRText = (siteId, cpId) => `LSCP|${siteId}|${cpId}`;
+async function printBeatQR(siteId, beatId) {
+  const site = IX.site.get(siteId), b = beatsOf(site).find(x => x.id === beatId); if (!b) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js');
+  const qr = t => { const q = qrcode(0, 'M'); q.addData(t); q.make(); return q.createDataURL(6, 3); };
+  printHTML(`<div class="sheet port cpsheet">${b.checkpoints.map((c, i) => `<div class="cpst"><img src="${qr(beatQRText(siteId, c.id))}" alt=""><div><b>${esc(c.name)}</b><span>${esc(site.name)} · ${esc(b.name)} · checkpoint ${i + 1} of ${b.checkpoints.length}</span><small>Latinem Securities – scan with “Scan checkpoint” in the LS Attendance app</small></div></div>`).join('')}</div>`);
+}
 
 </script>
 </body>

@@ -46,6 +46,7 @@ function renderProjects() {
     ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
     ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
     ${!projPin.length && !withPin.length ? '<p class="muted small" style="margin:0">Nothing set yet – use <b>Edit</b> on a project or a site.</p>' : ''}`, '', ); })()}
+  ${beatsSectionHTML()}
   ${sec('projects', 'Projects', projRows.map(p => {
       const c = IX.client.get(p.clientId); const b = p.billing || {};
       const ss = sitesOfProject(p.id);
@@ -66,6 +67,7 @@ function renderProjects() {
   </div>`;
   bindSecs(v);
   if ($('#pv-zones')) $('#pv-zones').onclick = zonesMap;
+  bindBeatsSection($('#v-projects'));
   if ($('#pv-bulkdocs')) $('#pv-bulkdocs').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) bulkDocs(fs).catch(err => toast(err.message, 6000)); };
   if ($('#pv-unfocus')) $('#pv-unfocus').onclick = () => { PV.focus = ''; clearSel(); };
   if ($('#pv-bulk')) {
@@ -260,7 +262,8 @@ function editSite(id, projectId) {
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
     </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
     <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
-    ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}`,
+    ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}
+    ${id ? `<h3 style="margin:14px 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : ''}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
       S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -278,6 +281,7 @@ function editSite(id, projectId) {
     }], { width: 'min(1500px,94vw)' });
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
   $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
+  m.querySelectorAll('[data-esb]').forEach(x => x.onclick = () => { if (!sitePins(IX.site.get(id)).length) return toast('Save a location for the site first'); editBeat(id, x.dataset.esb || null); });
 }
 /** Bulk upload of Work Order Instructions (one PDF per WOI, or one PDF holding several): matched to projects by the WOI / PO number or project code in the text */
 async function bulkDocs(files) {

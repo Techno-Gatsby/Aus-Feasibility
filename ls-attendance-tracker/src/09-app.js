@@ -44,7 +44,7 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s) }));
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length) }));
   const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
@@ -83,6 +83,8 @@ async function syncApp(quiet) {
     c.lastSync = r.body.now;
     const mk = await cl.call('GET', 'admin/marks', null, { query: { since: c.lastMarkSync || 0 } });
     if (mk.status === 200) { S.marks ||= {}; for (const x of mk.body.marks) { S.marks[x.id] = x; applyMark(x, stats); } c.lastMarkSync = mk.body.now; }
+    const sc = await cl.call('GET', 'admin/scans', null, { query: { since: c.lastScanSync || 0 } });
+    if (sc.status === 200) { S.scans ||= {}; for (const x of sc.body.scans) S.scans[x.id] = x; c.lastScanSync = sc.body.now; }
     const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
     if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
     reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);

@@ -52,7 +52,7 @@ async function flushQueue() {
   if (!W.token) return; const items = await qAll(); let sent = 0;
   for (const x of items) {
     try {
-      const r = x.sup ? await W.api.call('POST', 'supervisor/punch', x.body) : await W.api.call('POST', 'worker/punch', x.body, { token: W.token });
+      const r = x.scan ? await W.api.call('POST', 'worker/scan', x.body, { token: W.token }) : x.sup ? await W.api.call('POST', 'supervisor/punch', x.body) : await W.api.call('POST', 'worker/punch', x.body, { token: W.token });
       if (r.status === 401) break;
       await qDel(x.clientId); sent++;
     } catch (e) { break; }                      // still offline
@@ -219,9 +219,65 @@ function takePhoto(caption, cam = openCam()) {
   });
 }
 
+/* ---------- patrol beats: rounds of checkpoints, scanned with the QR stickers ---------- */
+const myScans = () => { try { return JSON.parse(ls.get('ls.scans') || '[]'); } catch (e) { return []; } };
+function myBeats() {
+  const P = W.prof; if (!P?.site || !P.open) return [];
+  return (P.site.beats || []).filter(b => (b.shift === 'ALL' || !b.shift || b.shift === P.worker.shift) && (!b.assignees?.length || b.assignees.includes(P.worker.id)) && b.checkpoints?.length);
+}
+function beatProgress(b) {
+  const start = W.prof.open.ts, every = Math.max(10, +b.everyMin || 60) * 60000, r = Math.max(0, Math.floor((Date.now() - start) / every));
+  const total = Math.max(1, Math.floor((+(W.prof.settings?.shiftHours) || 12) * 3600000 / every)), a = start + r * every;
+  const seen = new Set(myScans().filter(x => x.beat === b.id && x.ok && x.ts >= a && x.ts < a + every).map(x => x.cp));
+  const next = b.checkpoints.find(c => !seen.has(c.id));
+  return { round: Math.min(r + 1, total), total, done: seen.size, of: b.checkpoints.length, next, due: a + every };
+}
+function patrolCard() {
+  const bs = myBeats(); if (!bs.length) return '';
+  return `<section class="patrol"><div class="k">${t('patrol')}</div>${bs.map(b => { const p = beatProgress(b); return `<div class="pb"><div><b>${esc(b.name)}</b><span>${t('roundOf').replace('{r}', p.round).replace('{n}', p.total)} · ${p.done} / ${p.of} ${t('cpsDone')}</span>
+    <small>${p.next ? `${t('nextCp')}: <b>${esc(p.next.name)}</b> · ${t('dueBy')} ${hhmm(p.due)}` : t('roundDone')}</small></div><div class="bar"><i style="width:${Math.round(100 * p.done / p.of)}%"></i></div></div>`; }).join('')}
+    <button class="btn wide" id="b-scan">${ic('locate')} ${t('scanCp')}</button></section>`;
+}
+/** Read a checkpoint QR with the back camera (BarcodeDetector, else jsQR), then record it with the location */
+function readQR() {
+  return new Promise(resolve => {
+    const box = document.createElement('div'); box.className = 'cam qr';
+    box.innerHTML = `<div class="hint">${t('pointCam')}</div><video playsinline autoplay muted></video><div class="qrframe"></div><div class="ctl"><button class="btn" data-x>${t('cancel')}</button></div>`;
+    document.body.appendChild(box);
+    const video = $('video', box); let stream = null, done = false, timer = null;
+    const close = v => { if (done) return; done = true; clearTimeout(timer); stream?.getTracks().forEach(x => x.stop()); box.remove(); resolve(v); };
+    $('[data-x]', box).onclick = () => close(null);
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(async s => {
+      stream = s; video.srcObject = s; await video.play().catch(() => { });
+      let detect;
+      if ('BarcodeDetector' in window && (await BarcodeDetector.getSupportedFormats?.().catch(() => []))?.includes('qr_code')) { const bd = new BarcodeDetector({ formats: ['qr_code'] }); detect = async () => (await bd.detect(video))[0]?.rawValue; }
+      else {
+        await new Promise((ok, no) => { if (window.jsQR) return ok(); const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); });
+        const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+        detect = async () => { const w = video.videoWidth, h = video.videoHeight; if (!w) return null; const k = Math.min(1, 640 / Math.max(w, h)); c.width = w * k; c.height = h * k; g.drawImage(video, 0, 0, c.width, c.height); return window.jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height)?.data; };
+      }
+      const loop = async () => { if (done) return; const v = await detect().catch(() => null); if (v) { haptic(20); return close(v); } timer = setTimeout(loop, 220); };
+      loop();
+    }).catch(() => { $('.hint', box).textContent = t('camOff'); });
+  });
+}
+async function scanCheckpoint() {
+  const code = await readQR(); if (!code) return;
+  const m = String(code).match(/^LSCP\|([^|]+)\|([^|]+)$/), b = m && myBeats().find(x => x.checkpoints.some(c => c.id === m[2]));
+  if (!b) { haptic([80, 50, 80]); return toast(t('scanBad'), 5000); }
+  const cp = b.checkpoints.find(c => c.id === m[2]), g = await freshFix(8000);
+  const body = { code, ts: Date.now(), lat: g?.lat, lng: g?.lng, acc: g?.acc, clientId: uuid() };
+  const keep = ok => { const l = myScans().filter(x => Date.now() - x.ts < 24 * 3600000); l.push({ beat: b.id, cp: cp.id, ts: body.ts, ok }); ls.set('ls.scans', JSON.stringify(l)); };
+  let ok = g ? LSAPI.distance(g, cp) - Math.min(g.acc, 50) <= (+cp.radius || 25) + 30 : false;
+  try { const r = await W.api.call('POST', 'worker/scan', body, { token: W.token }); if (r.status === 200) ok = r.body.scan.ok; else if (r.status === 401) { await qPut({ clientId: body.clientId, body, scan: true }); return signOut(true); } else { toast(r.body?.error || t('scanBad'), 5000); return; } }
+  catch (e) { await qPut({ clientId: body.clientId, body, scan: true }); keep(ok); updateQueueBar(); haptic(40); toast(`${cp.name} · ${t('scanQueued')}`, 4000); return render(); }
+  keep(ok); haptic(ok ? [30, 50, 30] : [80, 50, 80]);
+  toast(ok ? `✓ ${cp.name} · ${hhmm(body.ts)}` : `${cp.name} · ${t('scanFar')}`, 5000); render();
+}
+
 /* ---------- tour of the Today screen (only when ? is tapped) ---------- */
 function tour() {
-  const steps = [['.place', 'tour1'], ['.clockw', 'tour2'], ['#mapcard', 'tour3'], ['#b-punch', 'tour4'], ['.tabs-b', 'tour5']].filter(([q]) => { const e = $(q); return e && e.getBoundingClientRect().height > 4; });
+  const steps = [['.place', 'tour1'], ['.clockw', 'tour2'], ['#mapcard', 'tour3'], ['.patrol', 'tour6'], ['#b-punch', 'tour4'], ['.tabs-b', 'tour5']].filter(([q]) => { const e = $(q); return e && e.getBoundingClientRect().height > 4; });
   let i = 0; const hole = document.createElement('div'), tip = document.createElement('div'); hole.className = 'tour-hole'; tip.className = 'tour-tip';
   document.body.append(hole, tip);
   const end = () => { hole.remove(); tip.remove(); removeEventListener('resize', place); };
@@ -338,6 +394,7 @@ function renderHome() {
       ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
     <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div class="opt"><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
+    ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
     <div class="mapcard" id="mapcard"><div id="map"></div>
       <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
@@ -364,6 +421,7 @@ function renderHome() {
   $('#b-exp').onclick = () => { card.classList.add('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   $('#b-mapx').onclick = () => { card.classList.remove('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   if ($('#b-tour')) $('#b-tour').onclick = tour;
+  if ($('#b-scan')) $('#b-scan').onclick = scanCheckpoint;
   $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); drawMap();
 }

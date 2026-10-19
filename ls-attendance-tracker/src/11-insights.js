@@ -79,6 +79,12 @@ async function renderLive() {
   let map; try { map = await LSMap.create($('#lv-map'), { zoom: 12 }); } catch (e) { $('#lv-map').innerHTML = `<p class="muted" style="padding:12px">${esc(e.message)}</p>`; return; }
   const L = window.L, b = [], mk = [];
   for (const s of S.sites) for (const p of sitePins(s)) if (!LV.site || s.id === LV.site) { LSMap.zone(map, p, { label: s.name, fill: .06, marker: false }); b.push([p.lat, p.lng]); }
+  // patrol checkpoints with the last visit today
+  const t0 = new Date(today + 'T00:00:00+04:00').getTime();
+  for (const s of S.sites) if (!LV.site || s.id === LV.site) for (const bt of beatsOf(s)) for (const [i, c] of (bt.checkpoints || []).entries()) {
+    const last = Object.values(S.scans || {}).filter(x => x.checkpointId === c.id && x.ts >= t0).sort((a, b) => b.ts - a.ts)[0];
+    L.marker([c.lat, c.lng], { icon: L.divIcon({ className: 'cp-pin' + (last ? ' seen' : ''), html: `<span>${i + 1}</span>`, iconSize: [24, 24] }) }).addTo(map).bindTooltip(`${esc(c.name)} · ${esc(bt.name)}${last ? ` · scanned ${tm(last.ts)} by ${esc(last.name)}` : ' · not scanned today'}`);
+  }
   const col = { on: '#1F8A5B', pe: '#B7791F', done: '#8A94A6' };
   rows.forEach((r, i) => {
     if (!r.pos || !col[r.st]) return;
@@ -145,11 +151,24 @@ async function renderInsights() {
   for (const [w, t] of tracks) for (let i = 1; i < t.length; i++) { const a = t[i - 1], b = t[i], km = geo(a, b) / 1000, h = (b.ts - a.ts) / 3600000; if (km > 2 && h > 0 && km / h > 120) { odd.push(['Impossible travel', `${IX.emp.get(w)?.name || w} · ${km.toFixed(1)} km in ${hm(b.ts - a.ts)} · ${fmtDMY(new Date(b.ts).toISOString().slice(0, 10))}`, b.p?.id || '']); break; } }
   for (const p of P) { if ((p.flags || []).includes('clock')) odd.push(['Phone clock wrong', `${p.name} · ${fmtDMY(p.workDate)}`, p.id]); }
   const offl = P.filter(p => (p.flags || []).includes('offline')).length;
+  // patrol beats: rounds per shift, then per beat and per person
+  const BR = await beatReport(INS.from, INS.to, (emp, site) => empOk(emp) && siteOk(site.id));
+  const byBeat = new Map(), byGuard = new Map();
+  for (const r of BR) {
+    const k = r.site.id + '|' + r.beat.id, x = byBeat.get(k) || byBeat.set(k, { site: r.site, beat: r.beat, shifts: 0, exp: 0, done: 0, missed: {} }).get(k);
+    x.shifts++; x.exp += r.expected; x.done += r.done; for (const c in r.missed) x.missed[c] = (x.missed[c] || 0) + r.missed[c];
+    const g = byGuard.get(r.emp.id) || byGuard.set(r.emp.id, { emp: r.emp, beats: new Set(), shifts: 0, exp: 0, done: 0, miss: 0, scans: 0, gps: 0 }).get(r.emp.id);
+    g.beats.add(r.beat.name); g.shifts++; g.exp += r.expected; g.done += r.done; g.miss += Object.values(r.missed).reduce((a, b) => a + b, 0); g.scans += r.scanned; g.gps += r.gps;
+    if (r.expected >= 2 && r.done === 0) odd.push(['Missed every patrol round', `${r.emp.name} · ${r.beat.name} at ${r.site.name} · ${fmtDMY(r.date)}`, '']);
+  }
+  const far = Object.values(S.scans || {}).filter(x => !x.ok && x.ts >= new Date(INS.from + 'T00:00:00+04:00').getTime() && empOk(IX.emp.get(x.personId)) && siteOk(x.siteId));
+  for (const x of far) odd.push(['Scan far from checkpoint', `${x.name} · ${x.checkpoint} (${x.beat}) · ${x.dist == null ? 'no GPS' : x.dist + ' m away'} · ${fmtDMY(new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10))} ${tm(x.ts)}`, '']);
+  const cpName = (b, id) => b.checkpoints.find(c => c.id === id)?.name || id;
   // person profile
   const pe = INS.person ? IX.emp.get(INS.person) : null, track = pe ? tracks.get(pe.id) || [] : [];
   const pDays = [...new Set(track.map(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10)))].sort();
   if (pe && !pDays.includes(INS.day)) INS.day = pDays[pDays.length - 1] || '';
-  INS.last = { covRows, bySite, byPerson, hs, odd, pinFix };
+  INS.last = { covRows, bySite, byPerson, hs, odd, pinFix, byBeat, byGuard, cpName };
 
   const projs = S.projects.filter(p => p.active !== false).map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1]));
   const sites = S.sites.filter(s => !INS.project || s.projectId === INS.project).map(s => [s.id, s.name]).sort((a, b) => a[1].localeCompare(b[1]));
@@ -178,6 +197,9 @@ async function renderInsights() {
         <div class="tw" style="max-height:250px"><table><thead><tr><th>Most often late</th><th class="num">Check-ins</th><th class="num">Late</th><th class="num">Avg min</th></tr></thead><tbody>${[...byPerson].filter(([, x]) => x.late).sort((a, b) => b[1].late - a[1].late).slice(0, 12).map(([w, x]) => `<tr data-pp="${w}" style="cursor:pointer"><td>${esc(IX.emp.get(w)?.name || w)}</td><td class="num">${x.n}</td><td class="num">${x.late}</td><td class="num">${Math.round(x.lm / x.late)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nobody late.</td></tr>'}</tbody></table></div>`)}
       ${sec('in-zone', 'Zone compliance by site', bySite.size ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th>Inside zone</th><th class="num">Median distance</th><th class="num">Median GPS ±</th><th class="num">To review</th></tr></thead><tbody>${[...bySite].map(([s, x]) => `<tr><td>${esc(siteName(s) || '—')}</td><td class="num">${x.n}</td><td>${pbar(pct(x.inZ, x.n), pct(x.inZ, x.n) < 80 ? 'w' : 'p')}</td><td class="num">${med(x.dist) ?? '—'} m</td><td class="num">${med(x.acc)} m</td><td class="num">${x.pend || ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No check-ins in this range.</p>')}
       ${sec('in-pin', `Pin check <span class="cnt">${pinFix.length}</span>`, pinFix.length ? `<p class="muted small" style="margin-top:0">At these sites accurate check-ins (GPS ±30 m or better) cluster away from the pin – the pin is probably misplaced.</p><div class="tw"><table><thead><tr><th>Site</th><th class="num">Check-ins</th><th class="num">Off by</th><th></th></tr></thead><tbody>${pinFix.map((f, i) => `<tr><td>${esc(f.s.name)}</td><td class="num">${f.n}</td><td class="num">${f.d} m</td><td><button class="btn sm" data-pin="${i}">Move pin there</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">All pins match where people check in (needs 5+ accurate check-ins per site).</p>')}
+      ${sec('in-beats', `Beat compliance <span class="cnt">${allBeats().length} beat(s)</span>`, BR.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Beat</th><th>Site</th><th class="num">Shifts</th><th class="num">Rounds done</th><th>Completion</th><th>Most missed</th></tr></thead><tbody>${[...byBeat.values()].map(x => { const pc = pct(x.done, x.exp), mm = Object.entries(x.missed).sort((a, b) => b[1] - a[1])[0]; return `<tr><td><b>${esc(x.beat.name)}</b></td><td>${esc(x.site.name)}</td><td class="num">${x.shifts}</td><td class="num">${x.done} / ${x.exp}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="small">${mm ? `${esc(cpName(x.beat, mm[0]))} (${mm[1]}×)` : '—'}</td></tr>`; }).join('')}</tbody></table></div>
+        <div class="tw" style="max-height:260px;margin-top:8px"><table><thead><tr><th>Security personnel</th><th>Beat</th><th class="num">Shifts</th><th>Rounds completed</th><th class="num">Checkpoints missed</th><th class="num">Scans / GPS</th></tr></thead><tbody>${[...byGuard.values()].sort((a, b) => pct(a.done, a.exp) - pct(b.done, b.exp)).map(g => { const pc = pct(g.done, g.exp); return `<tr data-pp="${g.emp.id}" style="cursor:pointer"><td>${esc(g.emp.name)} <span class="mono muted">${esc(g.emp.empCode || '')}</span></td><td class="small">${esc([...g.beats].join(', '))}</td><td class="num">${g.shifts}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="num">${g.miss || ''}</td><td class="num">${g.scans} / ${g.gps}</td></tr>`; }).join('')}</tbody></table></div>`
+        : `<p class="muted" style="margin:0">${allBeats().length ? 'No shifts at sites with a patrol beat in this range.' : 'No patrol beats yet – add them in Projects &amp; sites → Patrol beats.'}</p>`)}
       ${sec('in-odd', `Unusual activity <span class="pill ${odd.length ? 'neg' : ''}">${odd.length}</span>`, odd.length ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>What</th><th>Details</th><th></th></tr></thead><tbody>${odd.map(([a, b, id]) => `<tr><td><b>${esc(a)}</b></td><td style="white-space:normal">${esc(b)}</td><td>${id ? `<button class="btn sm" data-pd="${id}">Details</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing unusual: no shared phones, face mismatches, impossible travel or wrong phone clocks.</p>')}
     </div></div>`;
   // events
@@ -199,6 +221,10 @@ async function renderInsights() {
   for (const s of S.sites) if (siteOk(s.id)) for (const p of sitePins(s)) { LSMap.zone(map, p, { label: s.name, fill: .05, marker: false }); b.push([p.lat, p.lng]); }
   const top = hs[0]?.ms || 1, hm2 = [];
   hs.forEach((h, i) => { hm2[i] = L.circle([h.lat, h.lng], { radius: 12 + 40 * Math.sqrt(h.ms / top), color: '#D0473A', weight: 1, fillColor: '#D0473A', fillOpacity: .15 + .45 * (h.ms / top) }).addTo(map).bindTooltip(`#${i + 1} · ${hm(h.ms)} · ${h.who.size} person(s)`); b.push([h.lat, h.lng]); });
+  for (const s of S.sites) if (siteOk(s.id)) for (const b of beatsOf(s)) for (const [i, c] of (b.checkpoints || []).entries()) {
+    const r = pe && INS.day ? BR.find(x => x.emp.id === pe.id && x.date === INS.day && x.beat.id === b.id) : null, miss = r ? (r.missed[c.id] || 0) : null;
+    L.marker([c.lat, c.lng], { icon: L.divIcon({ className: 'cp-pin' + (miss == null ? '' : miss ? ' miss' : ' seen'), html: `<span>${i + 1}</span>`, iconSize: [24, 24] }) }).addTo(map).bindTooltip(`${c.name} · ${b.name}${miss == null ? '' : miss ? ` · missed in ${miss} of ${r.expected} round(s)` : ' · visited every round'}`);
+  }
   if (pe && INS.day) {
     const day = track.filter(x => new Date(x.ts + 4 * 3600000).toISOString().slice(0, 10) === INS.day);
     if (day.length) {
@@ -221,6 +247,7 @@ async function exportInsights() {
   add('Punctuality', [['Security personnel', 'Emp ID', 'Check-ins', 'Late', 'Avg late min', 'Outside zone'], ...[...X.byPerson].map(([w, x]) => [IX.emp.get(w)?.name || w, empCodeLabel(IX.emp.get(w) || {}), x.n, x.late, x.late ? Math.round(x.lm / x.late) : 0, x.out])]);
   add('Zone', [['Site', 'Check-ins', 'Inside zone', 'To review'], ...[...X.bySite].map(([s, x]) => [siteName(s), x.n, x.inZ, x.pend])]);
   add('Hotspots', [['#', 'Latitude', 'Longitude', 'Hours', 'People', 'Nearest site', 'Distance m'], ...X.hs.map((h, i) => { const ns = nearSite(h); return [i + 1, +h.lat.toFixed(6), +h.lng.toFixed(6), +(h.ms / 3600000).toFixed(2), h.who.size, ns?.s.name || '', ns ? Math.round(ns.d) : '']; })]);
+  add('Beats', [['Security personnel', 'Emp ID', 'Beats', 'Shifts', 'Rounds expected', 'Rounds done', 'Completion %', 'Checkpoints missed', 'QR scans', 'GPS visits'], ...[...X.byGuard.values()].map(g => [g.emp.name, g.emp.empCode || '', [...g.beats].join(', '), g.shifts, g.exp, g.done, pct(g.done, g.exp), g.miss, g.scans, g.gps])]);
   add('Unusual', [['What', 'Details'], ...X.odd.map(([a, b]) => [a, b])]);
   XLSX.writeFile(wb, `LS Insights ${INS.from} to ${INS.to}.xlsx`);
 }

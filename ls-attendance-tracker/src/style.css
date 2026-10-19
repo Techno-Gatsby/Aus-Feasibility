@@ -479,3 +479,11 @@ table.dir td.p1{font-family:var(--font-mono)}
 .ai-dots{color:var(--faint);animation:aiPulse 1.2s ease-in-out infinite}@keyframes aiPulse{50%{opacity:.4}}
 .ai-in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
 .ai-in textarea{flex:1;resize:none;font:12.5px var(--font-body);padding:7px 9px;border:1px solid var(--line2);border-radius:8px}
+
+/* patrol beats */
+.cp-pin span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1F8A5B;color:#fff;font:700 11px var(--font-body);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.cp-pin.miss span{background:#D0473A}.cp-pin.seen span{background:#1F8A5B}
+.cpsheet{display:grid;grid-template-columns:1fr 1fr;gap:10mm;padding:10mm!important}
+.cpst{display:flex;gap:4mm;align-items:center;border:1.5px dashed #555;border-radius:4mm;padding:4mm;break-inside:avoid}
+.cpst img{width:38mm;height:38mm;image-rendering:pixelated}
+.cpst b{display:block;font-size:14pt;margin-bottom:2mm}.cpst span{display:block;font-size:9pt;color:#333}.cpst small{display:block;margin-top:3mm;font-size:7pt;color:#666}
