@@ -38,7 +38,13 @@ jobs:
         run: |
           xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet
-          mkdir -p "$RUNNER_TEMP/out/Payload" && cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/out/Payload/"
+          APP="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          # the built-in recorder must be inside the app, with its permissions and background mode
+          strings "$APP/App" | grep -q LsTrackerPlugin || { echo "::error::LsTracker recorder missing from the app"; exit 1; }
+          /usr/libexec/PlistBuddy -c "Print :UIBackgroundModes:0" "$APP/Info.plist" | grep -q location || { echo "::error::background location mode missing"; exit 1; }
+          grep -q LsBridgeViewController "$APP/Base.lproj/Main.storyboardc/"*.nib 2>/dev/null || strings -a "$APP/Base.lproj/Main.storyboardc/"* | grep -q LsBridgeViewController || { echo "::error::storyboard does not use LsBridgeViewController"; exit 1; }
+          echo "Recorder, background mode and view controller present"
+          mkdir -p "$RUNNER_TEMP/out/Payload" && cp -R "$APP" "$RUNNER_TEMP/out/Payload/"
           cd "$RUNNER_TEMP/out" && zip -qr LS-Attendance-unsigned.ipa Payload && ls -la
       - uses: actions/upload-artifact@v4
         with:
