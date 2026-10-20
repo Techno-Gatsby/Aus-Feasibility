@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#050606">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="LS Attendance">
@@ -532,6 +532,99 @@ a.getapp{border-color:var(--bronze)}
 .scan-pages b{position:absolute;left:4px;bottom:3px;font-size:11px;color:#fff;text-shadow:0 0 3px #000}
 .list.sup li .scanb{margin-left:6px;align-self:center}
 .scan-pages i.pdf{display:flex;flex-direction:column;align-items:center;justify-content:center;width:72px;height:96px;border-radius:6px;border:1px solid var(--line2);background:#fff3f0;color:#b42318;font-style:normal;font-weight:800;font-size:15px;text-align:center}.scan-pages i.pdf small{font-size:8.5px;font-weight:500;color:var(--t2,#555);word-break:break-all;padding:2px 3px;max-height:40px;overflow:hidden}
+
+/* =========================================================================
+   White look (default): white page, one blue accent, soft layered shadows,
+   figures as small cards with a tinted icon – after the Sobha dashboards.
+   Dark stays available in More → Theme.
+   ========================================================================= */
+:root{--sh1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);--sh2:0 4px 14px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.05);--sh3:0 12px 32px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06)}
+:root[data-theme=dark]{--sh1:none;--sh2:0 6px 18px rgba(0,0,0,.35);--sh3:0 14px 34px rgba(0,0,0,.45)}
+:root[data-theme=light]{color-scheme:light;
+  --bg:#FFFFFF; --s1:#FFFFFF; --s2:#F7F8FA; --s3:#EEF1F5; --s4:#E2E7EE;
+  --line:#EDF0F4; --line2:#E1E6ED; --line3:#C9D1DC;
+  --ink:#101828; --ink2:#344054; --mute:#667085; --faint:#98A2B3;
+  --bronze:#0C68E9; --bronze2:#2F80F0; --bronze-bg:rgba(12,104,233,.09); --on-bronze:#FFFFFF;
+  --sage:#12875A; --sage-bg:#E8F6EF; --cyan:#0E7490; --red:#D92D20; --red-bg:#FDECEA; --orange:#C4570E; --gold:#B54708; --gold-bg:#FEF4E6;
+  --go:#16A34A; --stop:#DC2626}
+:root[data-theme=light] body{background:#fff}
+
+/* header: white bar with a hairline shadow, filled brand mark */
+:root[data-theme=light] .top{background:rgba(255,255,255,.92);border-bottom:0;box-shadow:0 1px 0 var(--line),0 2px 8px rgba(16,24,40,.04)}
+:root[data-theme=light] .top .mark{background:var(--bronze);border-color:var(--bronze);color:#fff;box-shadow:0 2px 6px rgba(12,104,233,.3)}
+:root[data-theme=light] .ib{color:var(--ink2)}
+:root[data-theme=light] .ib:active{background:var(--s3)}
+
+/* cards */
+.card,.clockw,.mapcard,.patrol,.getapp{box-shadow:var(--sh2)}
+:root[data-theme=light] .card,:root[data-theme=light] .clockw,:root[data-theme=light] .mapcard,:root[data-theme=light] .patrol,:root[data-theme=light] .getapp{border-color:var(--line)}
+.card,.clockw,.patrol{border-radius:16px}
+.mapcard{border-radius:16px}
+
+/* figures: separate small cards with an icon in the corner */
+.liverow,.tiles{gap:8px;border:0;background:none;box-shadow:none;border-radius:0}
+.liverow>div,.tile{position:relative;background:var(--s1);border:1px solid var(--line)!important;border-radius:14px;box-shadow:var(--sh1);padding:12px 12px 10px!important;min-width:0}
+.liverow>div:first-child,.tile:first-child{border-inline-start:1px solid var(--line)}
+.kic{position:absolute;top:10px;inset-inline-end:10px;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--bronze-bg);color:var(--bronze)}
+.kic svg.i{width:14px;height:14px;stroke-width:2}
+.liverow b,.tile b{padding-inline-end:28px}
+.tile.P .kic{background:var(--sage-bg);color:var(--sage)}.tile.A .kic{background:var(--red-bg);color:var(--red)}.tile.L .kic{background:var(--gold-bg);color:var(--gold)}.tile:not(.P):not(.A):not(.L) .kic{background:var(--s3);color:var(--mute)}
+.tiles{grid-template-columns:repeat(2,1fr)}
+@media (min-width:400px){.tiles{grid-template-columns:repeat(4,1fr)}}
+
+/* verdict, queue */
+:root[data-theme=light] .conf{box-shadow:var(--sh1);background:var(--s1)}
+:root[data-theme=light] .conf.ok{background:var(--sage-bg)}:root[data-theme=light] .conf.warn{background:var(--gold-bg)}:root[data-theme=light] .conf.bad{background:var(--red-bg)}
+.q{box-shadow:var(--sh1)}
+
+/* buttons, fields */
+:root[data-theme=light] .btn{background:var(--s1);border-color:var(--line2);box-shadow:var(--sh1)}
+:root[data-theme=light] .btn.pri{background:var(--bronze);border-color:var(--bronze);color:#fff;box-shadow:0 4px 12px rgba(12,104,233,.28)}
+:root[data-theme=light] .btn.ghost{background:transparent;box-shadow:none;border-color:transparent}
+:root[data-theme=light] input.f,:root[data-theme=light] select.f,:root[data-theme=light] textarea.f{background:#fff;box-shadow:var(--sh1)}
+.btn,.big,.pad button,.chips button,.tabs-b button,.menu-list button{transition:transform .12s var(--ease),box-shadow .2s,background .2s}
+.btn:active{transform:scale(.98)}
+
+/* the check-in / check-out button */
+.big{box-shadow:0 8px 20px color-mix(in srgb,var(--go) 32%,transparent)}
+.big.out{box-shadow:0 8px 20px color-mix(in srgb,var(--stop) 32%,transparent)}
+:root[data-theme=light] .dock{background:linear-gradient(to top,#fff 72%,rgba(255,255,255,0))}
+
+/* bottom tabs: white with a soft upward shadow, the active tab in a tinted pill */
+:root[data-theme=light] .tabs-b{background:#fff;border-top:0;box-shadow:0 -1px 0 var(--line),0 -4px 16px rgba(16,24,40,.06)}
+.tabs-b button.on::before{display:none}
+.tabs-b button svg.i{padding:3px 14px;box-sizing:content-box;border-radius:999px;transition:background .2s}
+.tabs-b button.on{color:var(--bronze)}
+.tabs-b button.on svg.i{background:var(--bronze-bg)}
+
+/* segmented, chips */
+:root[data-theme=light] .seg,:root[data-theme=light] .modechip{background:var(--s3);border-color:transparent}
+:root[data-theme=light] .seg button.on,:root[data-theme=light] .modechip button.on{background:#fff;color:var(--ink);box-shadow:var(--sh1)}
+:root[data-theme=light] .chips button{background:#fff;box-shadow:var(--sh1)}
+:root[data-theme=light] .chips button.on{background:var(--bronze);border-color:var(--bronze);color:#fff}:root[data-theme=light] .chips button.on b{color:#fff}
+:root[data-theme=light] .mapcard .tools button{background:#fff;box-shadow:var(--sh2);border-color:var(--line)}
+
+/* sign in pad */
+:root[data-theme=light] .pad button{background:#fff;border-color:var(--line);box-shadow:var(--sh1)}
+:root[data-theme=light] .pad button:active{background:var(--s3);box-shadow:none}
+:root[data-theme=light] .pad button.fn{background:transparent;box-shadow:none}
+
+/* month calendar */
+:root[data-theme=light] .cal .d{background:var(--s2);border-color:var(--line)}
+:root[data-theme=light] .cal .d.OFF,:root[data-theme=light] .cal .d.O{background:var(--s3)}
+
+/* avatars, sheets, toast */
+:root[data-theme=light] .who .av,:root[data-theme=light] .sup .av{background:var(--bronze-bg);border-color:transparent;color:var(--bronze)}
+.sheet-menu .in,.sheet-bg .sheet{box-shadow:var(--sh3);border-top:0}
+:root[data-theme=light] .sheet-menu,:root[data-theme=light] .sheet-bg{background:rgba(16,24,40,.45)}
+.toast{box-shadow:var(--sh3);border-radius:12px}
+:root[data-theme=light] .tour-tip{box-shadow:var(--sh3);border-color:var(--line)}
+:root[data-theme=light] .leaflet-tooltip{box-shadow:var(--sh1)}
+
+/* gentle entrance for each screen */
+main>*{animation:rise .35s var(--ease) both}
+main>*:nth-child(2){animation-delay:.03s}main>*:nth-child(3){animation-delay:.06s}main>*:nth-child(4){animation-delay:.09s}main>*:nth-child(n+5){animation-delay:.12s}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
 
 </style>
 </head>
@@ -1139,8 +1232,11 @@ const ic = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidd
 const haptic = p => { try { navigator.vibrate?.(p); } catch (e) { } };
 const tc = n => String(n || '').toLowerCase().replace(/(^|[\s'.-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
 const initials = n => esc(String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join(''));
-function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#ECE9E3'); }
-function isDark() { const th = ls.get('ls.theme') || 'auto'; return th === 'dark' || (th === 'auto' && !matchMedia('(prefers-color-scheme: light)').matches); }
+/* white by default; 'auto' follows the phone, 'dark' is the night look. data-theme is always the resolved look */
+const themePick = () => ls.get('ls.theme') || 'light';
+function isDark() { const th = themePick(); return th === 'dark' || (th === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
+function applyTheme() { document.documentElement.dataset.theme = isDark() ? 'dark' : 'light'; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#FFFFFF'); }
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => themePick() === 'auto' && applyTheme()); } catch (e) { }
 const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 function toast(m, ms = 2800) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
 
@@ -1497,22 +1593,20 @@ function renderHome() {
   // shift window for the progress rule (night shifts run past midnight)
   const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
   const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
-  const hoursToday = today.reduce((x, p) => x + (+p.hours || 0), 0) + (open ? (Date.now() - open.ts) / 3600e3 : 0);
   const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)}</div></section>
     <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
       <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
       ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
-    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div class="opt"><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
     ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
-    <button class="btn wide" id="b-med" style="margin:10px 0">${ic('camera')} ${t('medSend')}</button>
     <div class="mapcard" id="mapcard"><div id="map"></div>
       <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
       <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
       <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
       <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
+    <button class="btn wide" id="b-med" style="margin:0 0 12px">${ic('camera')} ${t('medSend')}</button>
     <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
       ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
         : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
@@ -1525,7 +1619,7 @@ function renderHome() {
     el.textContent = `${h % 12 || 12}:${pad(n.getMinutes())}`;
     $('#k-day').textContent = n.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
     $('#k-am').className = h < 12 ? 'on' : ''; $('#k-pm').className = h >= 12 ? 'on' : '';
-    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); $('#r-h').textContent = (today.reduce((x, p) => x + (+p.hours || 0), 0) + (Date.now() - open.ts) / 3600e3).toFixed(1); }
+    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); }
     const w2 = win(); if (w2 && $('#k-fill')) { $('#k-fill').style.transform = `scaleX(${w2.p.toFixed(3)})`; $('#k-now').style.left = `calc(${(w2.p * 100).toFixed(1)}% - 1px)`; }
   };
   tick(); W.tick = setInterval(tick, 1000);
@@ -1606,13 +1700,13 @@ function renderMonth() {
   const cell = d => { const c = day(d); return `<div class="d ${esc(c)} ${`${ym}-${pad(d)}` === todayISO ? 'today' : ''}"><b>${d}</b>${esc(c)}</div>`; };
   shell(`<section class="place"><div class="n">${esc(t('month'))}</div><div class="z"><b>${esc(mName(ym))}</b> · ${esc(P.worker.code)}</div></section>
     <div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${esc(mName(x))}</button>`).join('')}</div>
-    <div class="tiles"><div class="tile P"><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
+    <div class="tiles"><div class="tile P"><i class="kic">${ic('check')}</i><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><i class="kic">${ic('moon')}</i><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><i class="kic">${ic('x')}</i><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><i class="kic">${ic('cal')}</i><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
     <div class="card"><div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}${[...Array(N)].map((_, i) => cell(i + 1)).join('')}</div>
       <div class="legend"><span><i style="background:var(--sage)"></i>${t('worked')}</span><span><i style="background:var(--faint)"></i>${t('off')}</span><span><i style="background:var(--red)"></i>${t('absent')}</span><span><i style="background:var(--gold)"></i>${t('leave')}</span></div></div>`, { tab: 'month', crumb: t('month') });
   $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
 }
 function renderMore() {
-  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = tc(P.worker.name).split(/\s+/);
+  const P = W.prof, th = themePick(), [first, ...rest] = tc(P.worker.name).split(/\s+/);
   const thL = th === 'dark' ? t('themeDarkS') : th === 'light' ? t('themeLightS') : t('themeAuto');
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
     <div class="card" style="padding:4px 16px"><ul class="menu-list">
@@ -1626,7 +1720,7 @@ function renderMore() {
   $('#m-lang').onclick = () => $('#b-lang').click();
   if ($('#m-inst')) $('#m-inst').onclick = async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => { }); installEvt = null; renderMore(); };
   if ($('#m-awake')) $('#m-awake').onclick = () => { ls.set('ls.awake', (ls.get('ls.awake') ?? (STANDALONE ? '1' : '0')) === '1' ? '0' : '1'); toast(t('awakeS'), 5000); pingTick(); renderMore(); };
-  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
+  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
 /* ---------- supervisor: site board + punch on behalf ---------- */
@@ -1765,7 +1859,6 @@ async function loadDemo() {
 /* ---------- start ---------- */
 if (window.isSecureContext && location.protocol.startsWith('http') && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 setLang(LANG); applyTheme();
-try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { }
 LSMap.load().catch(() => { });                 // fetch the map library while the profile loads
 (async () => {
   // signed in before: draw Today from the last profile at once, then bring it up to date in the background

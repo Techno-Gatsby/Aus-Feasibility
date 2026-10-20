@@ -138,7 +138,7 @@ function rowHTML(i) {
   return `<tr data-r="${i}" class="${left ? 'left' : ''}">
     <td class="fix r" style="left:${L[0]}px">${i + 1}</td>
     <td class="fix nm" style="left:${L[1]}px" data-emp="${emp.id}" title="${esc(emp.name)}${emp.doj ? ' · joined ' + fmtDMY(emp.doj) : ''}${emp.trade ? ' · ' + esc(emp.trade) : ''} – click to edit">${esc(emp.name)}</td>
-    <td class="fix mono" style="left:${L[2]}px">${esc(empCodeLabel(emp))}</td><td class="fix" style="left:${L[3]}px">${esc(shift[0] || '')}</td>
+    <td class="fix mono" style="left:${L[2]}px">${esc(empCodeLabel(emp))}</td><td class="fix" style="left:${L[3]}px;text-align:center;font-size:10.5px" title="${esc(shift)}">${esc(innerWidth < 700 ? shift[0] || '' : shift.charAt(0) + shift.slice(1).toLowerCase())}</td>
     <td class="fix edge" style="left:${L[4]}px" title="${esc(siteName(lastSite))} · ${esc(proj ? proj.name : 'site not linked to a project')}">${esc(siteName(lastSite))}${sites.size > 1 ? ` <span class="tag">+${sites.size - 1}</span>` : ''}</td>
     ${det ? `<td>${esc(emp.trade || '')}</td><td class="mono">${fmtDMY(emp.doj)}</td>` : ''}
     ${cells}
@@ -146,7 +146,7 @@ function rowHTML(i) {
 }
 
 /** Column widths (px): identity block stays pinned while the days scroll */
-const GW_WIDE = [34, 190, 76, 26, 150], GW_SMALL = [22, 104, 58, 18, 64], GD = [112, 78];   // frozen columns: narrower on phones
+const GW_WIDE = [34, 190, 76, 48, 150], GW_SMALL = [22, 104, 58, 34, 64], GD = [112, 78];   // frozen columns: narrower on phones
 const GRID_FIRST = 60, GRID_BATCH = 100;
 /** Column widths: the minimum layout (day cells 32 px – room for OFF), with any spare width of the pane shared out:
  *  the day cells first (up to 44 px), then names and sites, the rest to OTHER */
@@ -178,7 +178,7 @@ function renderGrid() {
   if (!wrap.dataset.fit) { wrap.dataset.fit = 1; gridFitW = 0; gridFit.disconnect(); gridFit.observe(wrap); }
   const col = `<colgroup>${W.map(w => `<col style="width:${w}px">`).join('')}${det ? GD.map(w => `<col style="width:${w}px">`).join('') : ''}${AV.dates.map(() => `<col style="width:${dw}px">`).join('')}<col style="width:34px"><col style="width:38px"><col style="width:${other}px"></colgroup>`;
   wrap.innerHTML = `<table class="ag" style="width:${width}px;--dw:${dw}px">${col}<thead>
-    <tr><th class="fix" rowspan="2" style="left:${L[0]}px">#</th><th class="fix" rowspan="2" style="left:${L[1]}px;text-align:left">Name</th><th class="fix" rowspan="2" style="left:${L[2]}px">Emp ID</th><th class="fix" rowspan="2" style="left:${L[3]}px" title="Shift D/N">S</th><th class="fix edge" rowspan="2" style="left:${L[4]}px;text-align:left">Site</th>${det ? '<th rowspan="2">Trade</th><th rowspan="2">D.O.J</th>' : ''}${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
+    <tr><th class="fix" rowspan="2" style="left:${L[0]}px">#</th><th class="fix" rowspan="2" style="left:${L[1]}px;text-align:left">Name</th><th class="fix" rowspan="2" style="left:${L[2]}px">Emp ID</th><th class="fix" rowspan="2" style="left:${L[3]}px" title="Shift">Shift</th><th class="fix edge" rowspan="2" style="left:${L[4]}px;text-align:left">Site</th>${det ? '<th rowspan="2">Trade</th><th rowspan="2">D.O.J</th>' : ''}${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
     <tr>${dh2}</tr></thead>
     <tbody>${AV.rows.slice(0, GRID_FIRST).map((_, i) => rowHTML(i)).join('')}</tbody>
     <tfoot><tr><td class="fix edge" colspan="5" style="left:0;text-align:right;padding-right:8px">Billable per day</td>${det ? '<td colspan="2"></td>' : ''}${AV.dates.map((_, j) => `<td data-f="${j}"></td>`).join('')}<td colspan="3" id="av-ftot"></td></tr></tfoot></table>`;

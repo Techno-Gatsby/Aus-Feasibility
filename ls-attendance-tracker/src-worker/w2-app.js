@@ -33,8 +33,11 @@ const ic = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidd
 const haptic = p => { try { navigator.vibrate?.(p); } catch (e) { } };
 const tc = n => String(n || '').toLowerCase().replace(/(^|[\s'.-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
 const initials = n => esc(String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join(''));
-function applyTheme() { const th = ls.get('ls.theme') || 'auto'; if (th === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#ECE9E3'); }
-function isDark() { const th = ls.get('ls.theme') || 'auto'; return th === 'dark' || (th === 'auto' && !matchMedia('(prefers-color-scheme: light)').matches); }
+/* white by default; 'auto' follows the phone, 'dark' is the night look. data-theme is always the resolved look */
+const themePick = () => ls.get('ls.theme') || 'light';
+function isDark() { const th = themePick(); return th === 'dark' || (th === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
+function applyTheme() { document.documentElement.dataset.theme = isDark() ? 'dark' : 'light'; document.querySelector('meta[name=theme-color]')?.setAttribute('content', isDark() ? '#050606' : '#FFFFFF'); }
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => themePick() === 'auto' && applyTheme()); } catch (e) { }
 const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 function toast(m, ms = 2800) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
 
@@ -391,22 +394,20 @@ function renderHome() {
   // shift window for the progress rule (night shifts run past midnight)
   const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
   const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
-  const hoursToday = today.reduce((x, p) => x + (+p.hours || 0), 0) + (open ? (Date.now() - open.ts) / 3600e3 : 0);
   const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)}</div></section>
     <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
       <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
       ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
-    <div class="liverow"><div><b id="r-d">—</b><span class="k">${t('toPin')}</span></div><div class="opt"><b id="r-a">—</b><span class="k">${t('gpsAcc')}</span></div><div><b>${radius}</b><span class="k">${t('zoneR')}</span></div><div><b id="r-h">${hoursToday.toFixed(1)}</b><span class="k">${t('hToday')}</span></div></div>
     <div id="gps"></div>
     ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
-    <button class="btn wide" id="b-med" style="margin:10px 0">${ic('camera')} ${t('medSend')}</button>
     <div class="mapcard" id="mapcard"><div id="map"></div>
       <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
       <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
       <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
       <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
+    <button class="btn wide" id="b-med" style="margin:0 0 12px">${ic('camera')} ${t('medSend')}</button>
     <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
       ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
         : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
@@ -419,7 +420,7 @@ function renderHome() {
     el.textContent = `${h % 12 || 12}:${pad(n.getMinutes())}`;
     $('#k-day').textContent = n.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
     $('#k-am').className = h < 12 ? 'on' : ''; $('#k-pm').className = h >= 12 ? 'on' : '';
-    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); $('#r-h').textContent = (today.reduce((x, p) => x + (+p.hours || 0), 0) + (Date.now() - open.ts) / 3600e3).toFixed(1); }
+    if (open) { $('#timer').textContent = dur(Date.now() - open.ts); }
     const w2 = win(); if (w2 && $('#k-fill')) { $('#k-fill').style.transform = `scaleX(${w2.p.toFixed(3)})`; $('#k-now').style.left = `calc(${(w2.p * 100).toFixed(1)}% - 1px)`; }
   };
   tick(); W.tick = setInterval(tick, 1000);
@@ -500,13 +501,13 @@ function renderMonth() {
   const cell = d => { const c = day(d); return `<div class="d ${esc(c)} ${`${ym}-${pad(d)}` === todayISO ? 'today' : ''}"><b>${d}</b>${esc(c)}</div>`; };
   shell(`<section class="place"><div class="n">${esc(t('month'))}</div><div class="z"><b>${esc(mName(ym))}</b> · ${esc(P.worker.code)}</div></section>
     <div class="seg">${months.slice(0, 3).map(x => `<button data-m="${x}" class="${x === ym ? 'on' : ''}">${esc(mName(x))}</button>`).join('')}</div>
-    <div class="tiles"><div class="tile P"><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
+    <div class="tiles"><div class="tile P"><i class="kic">${ic('check')}</i><b>${cnt(/^(P|R)$/)}</b><span>${t('worked')}</span></div><div class="tile"><i class="kic">${ic('moon')}</i><b>${cnt(/^(OFF|O)$/)}</b><span>${t('off')}</span></div><div class="tile A"><i class="kic">${ic('x')}</i><b>${cnt(/^A$/)}</b><span>${t('absent')}</span></div><div class="tile L"><i class="kic">${ic('cal')}</i><b>${cnt(/^(AL|SL|EL|UL)$/)}</b><span>${t('leave')}</span></div></div>
     <div class="card"><div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}${[...Array(N)].map((_, i) => cell(i + 1)).join('')}</div>
       <div class="legend"><span><i style="background:var(--sage)"></i>${t('worked')}</span><span><i style="background:var(--faint)"></i>${t('off')}</span><span><i style="background:var(--red)"></i>${t('absent')}</span><span><i style="background:var(--gold)"></i>${t('leave')}</span></div></div>`, { tab: 'month', crumb: t('month') });
   $$('[data-m]').forEach(b => b.onclick = () => { W.ym = b.dataset.m; renderMonth(); });
 }
 function renderMore() {
-  const P = W.prof, th = ls.get('ls.theme') || 'auto', [first, ...rest] = tc(P.worker.name).split(/\s+/);
+  const P = W.prof, th = themePick(), [first, ...rest] = tc(P.worker.name).split(/\s+/);
   const thL = th === 'dark' ? t('themeDarkS') : th === 'light' ? t('themeLightS') : t('themeAuto');
   shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.worker.code)}</b> · ${esc(P.site?.name || '')}</div></section>
     <div class="card" style="padding:4px 16px"><ul class="menu-list">
@@ -520,7 +521,7 @@ function renderMore() {
   $('#m-lang').onclick = () => $('#b-lang').click();
   if ($('#m-inst')) $('#m-inst').onclick = async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => { }); installEvt = null; renderMore(); };
   if ($('#m-awake')) $('#m-awake').onclick = () => { ls.set('ls.awake', (ls.get('ls.awake') ?? (STANDALONE ? '1' : '0')) === '1' ? '0' : '1'); toast(t('awakeS'), 5000); pingTick(); renderMore(); };
-  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k === 'auto' ? null : k); applyTheme(); renderMore(); }, k === th]));
+  $('#m-theme').onclick = () => menu([['auto', t('themeAuto')], ['dark', t('themeDarkS')], ['light', t('themeLightS')]].map(([k, l]) => [l, () => { ls.set('ls.theme', k); applyTheme(); renderMore(); }, k === th]));
   $('#m-sup').onclick = openSupervisor; $('#m-out').onclick = () => signOut();
 }
 /* ---------- supervisor: site board + punch on behalf ---------- */
@@ -659,7 +660,6 @@ async function loadDemo() {
 /* ---------- start ---------- */
 if (window.isSecureContext && location.protocol.startsWith('http') && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 setLang(LANG); applyTheme();
-try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { }
 LSMap.load().catch(() => { });                 // fetch the map library while the profile loads
 (async () => {
   // signed in before: draw Today from the last profile at once, then bring it up to date in the background

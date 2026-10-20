@@ -784,3 +784,5 @@ table.ag.py td.so{color:var(--accent)}table.ag.py td.sa{color:#11753d}
 table.ag.py th.pt{white-space:normal;line-height:1.15;font-size:8.5px;letter-spacing:.03em}
 table.ag.py th.hd{background:#FFF4D6}
 table.ag.py td.tot{font-size:11px;text-align:center}table.ag.py td.rm{text-align:left;font-family:var(--font-body);font-weight:400}
+/* payroll: the workbook's info columns */
+table.ag.py td.pi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;text-align:center}

@@ -512,3 +512,96 @@ a.getapp{border-color:var(--bronze)}
 .scan-pages b{position:absolute;left:4px;bottom:3px;font-size:11px;color:#fff;text-shadow:0 0 3px #000}
 .list.sup li .scanb{margin-left:6px;align-self:center}
 .scan-pages i.pdf{display:flex;flex-direction:column;align-items:center;justify-content:center;width:72px;height:96px;border-radius:6px;border:1px solid var(--line2);background:#fff3f0;color:#b42318;font-style:normal;font-weight:800;font-size:15px;text-align:center}.scan-pages i.pdf small{font-size:8.5px;font-weight:500;color:var(--t2,#555);word-break:break-all;padding:2px 3px;max-height:40px;overflow:hidden}
+
+/* =========================================================================
+   White look (default): white page, one blue accent, soft layered shadows,
+   figures as small cards with a tinted icon – after the Sobha dashboards.
+   Dark stays available in More → Theme.
+   ========================================================================= */
+:root{--sh1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);--sh2:0 4px 14px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.05);--sh3:0 12px 32px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06)}
+:root[data-theme=dark]{--sh1:none;--sh2:0 6px 18px rgba(0,0,0,.35);--sh3:0 14px 34px rgba(0,0,0,.45)}
+:root[data-theme=light]{color-scheme:light;
+  --bg:#FFFFFF; --s1:#FFFFFF; --s2:#F7F8FA; --s3:#EEF1F5; --s4:#E2E7EE;
+  --line:#EDF0F4; --line2:#E1E6ED; --line3:#C9D1DC;
+  --ink:#101828; --ink2:#344054; --mute:#667085; --faint:#98A2B3;
+  --bronze:#0C68E9; --bronze2:#2F80F0; --bronze-bg:rgba(12,104,233,.09); --on-bronze:#FFFFFF;
+  --sage:#12875A; --sage-bg:#E8F6EF; --cyan:#0E7490; --red:#D92D20; --red-bg:#FDECEA; --orange:#C4570E; --gold:#B54708; --gold-bg:#FEF4E6;
+  --go:#16A34A; --stop:#DC2626}
+:root[data-theme=light] body{background:#fff}
+
+/* header: white bar with a hairline shadow, filled brand mark */
+:root[data-theme=light] .top{background:rgba(255,255,255,.92);border-bottom:0;box-shadow:0 1px 0 var(--line),0 2px 8px rgba(16,24,40,.04)}
+:root[data-theme=light] .top .mark{background:var(--bronze);border-color:var(--bronze);color:#fff;box-shadow:0 2px 6px rgba(12,104,233,.3)}
+:root[data-theme=light] .ib{color:var(--ink2)}
+:root[data-theme=light] .ib:active{background:var(--s3)}
+
+/* cards */
+.card,.clockw,.mapcard,.patrol,.getapp{box-shadow:var(--sh2)}
+:root[data-theme=light] .card,:root[data-theme=light] .clockw,:root[data-theme=light] .mapcard,:root[data-theme=light] .patrol,:root[data-theme=light] .getapp{border-color:var(--line)}
+.card,.clockw,.patrol{border-radius:16px}
+.mapcard{border-radius:16px}
+
+/* figures: separate small cards with an icon in the corner */
+.liverow,.tiles{gap:8px;border:0;background:none;box-shadow:none;border-radius:0}
+.liverow>div,.tile{position:relative;background:var(--s1);border:1px solid var(--line)!important;border-radius:14px;box-shadow:var(--sh1);padding:12px 12px 10px!important;min-width:0}
+.liverow>div:first-child,.tile:first-child{border-inline-start:1px solid var(--line)}
+.kic{position:absolute;top:10px;inset-inline-end:10px;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--bronze-bg);color:var(--bronze)}
+.kic svg.i{width:14px;height:14px;stroke-width:2}
+.liverow b,.tile b{padding-inline-end:28px}
+.tile.P .kic{background:var(--sage-bg);color:var(--sage)}.tile.A .kic{background:var(--red-bg);color:var(--red)}.tile.L .kic{background:var(--gold-bg);color:var(--gold)}.tile:not(.P):not(.A):not(.L) .kic{background:var(--s3);color:var(--mute)}
+.tiles{grid-template-columns:repeat(2,1fr)}
+@media (min-width:400px){.tiles{grid-template-columns:repeat(4,1fr)}}
+
+/* verdict, queue */
+:root[data-theme=light] .conf{box-shadow:var(--sh1);background:var(--s1)}
+:root[data-theme=light] .conf.ok{background:var(--sage-bg)}:root[data-theme=light] .conf.warn{background:var(--gold-bg)}:root[data-theme=light] .conf.bad{background:var(--red-bg)}
+.q{box-shadow:var(--sh1)}
+
+/* buttons, fields */
+:root[data-theme=light] .btn{background:var(--s1);border-color:var(--line2);box-shadow:var(--sh1)}
+:root[data-theme=light] .btn.pri{background:var(--bronze);border-color:var(--bronze);color:#fff;box-shadow:0 4px 12px rgba(12,104,233,.28)}
+:root[data-theme=light] .btn.ghost{background:transparent;box-shadow:none;border-color:transparent}
+:root[data-theme=light] input.f,:root[data-theme=light] select.f,:root[data-theme=light] textarea.f{background:#fff;box-shadow:var(--sh1)}
+.btn,.big,.pad button,.chips button,.tabs-b button,.menu-list button{transition:transform .12s var(--ease),box-shadow .2s,background .2s}
+.btn:active{transform:scale(.98)}
+
+/* the check-in / check-out button */
+.big{box-shadow:0 8px 20px color-mix(in srgb,var(--go) 32%,transparent)}
+.big.out{box-shadow:0 8px 20px color-mix(in srgb,var(--stop) 32%,transparent)}
+:root[data-theme=light] .dock{background:linear-gradient(to top,#fff 72%,rgba(255,255,255,0))}
+
+/* bottom tabs: white with a soft upward shadow, the active tab in a tinted pill */
+:root[data-theme=light] .tabs-b{background:#fff;border-top:0;box-shadow:0 -1px 0 var(--line),0 -4px 16px rgba(16,24,40,.06)}
+.tabs-b button.on::before{display:none}
+.tabs-b button svg.i{padding:3px 14px;box-sizing:content-box;border-radius:999px;transition:background .2s}
+.tabs-b button.on{color:var(--bronze)}
+.tabs-b button.on svg.i{background:var(--bronze-bg)}
+
+/* segmented, chips */
+:root[data-theme=light] .seg,:root[data-theme=light] .modechip{background:var(--s3);border-color:transparent}
+:root[data-theme=light] .seg button.on,:root[data-theme=light] .modechip button.on{background:#fff;color:var(--ink);box-shadow:var(--sh1)}
+:root[data-theme=light] .chips button{background:#fff;box-shadow:var(--sh1)}
+:root[data-theme=light] .chips button.on{background:var(--bronze);border-color:var(--bronze);color:#fff}:root[data-theme=light] .chips button.on b{color:#fff}
+:root[data-theme=light] .mapcard .tools button{background:#fff;box-shadow:var(--sh2);border-color:var(--line)}
+
+/* sign in pad */
+:root[data-theme=light] .pad button{background:#fff;border-color:var(--line);box-shadow:var(--sh1)}
+:root[data-theme=light] .pad button:active{background:var(--s3);box-shadow:none}
+:root[data-theme=light] .pad button.fn{background:transparent;box-shadow:none}
+
+/* month calendar */
+:root[data-theme=light] .cal .d{background:var(--s2);border-color:var(--line)}
+:root[data-theme=light] .cal .d.OFF,:root[data-theme=light] .cal .d.O{background:var(--s3)}
+
+/* avatars, sheets, toast */
+:root[data-theme=light] .who .av,:root[data-theme=light] .sup .av{background:var(--bronze-bg);border-color:transparent;color:var(--bronze)}
+.sheet-menu .in,.sheet-bg .sheet{box-shadow:var(--sh3);border-top:0}
+:root[data-theme=light] .sheet-menu,:root[data-theme=light] .sheet-bg{background:rgba(16,24,40,.45)}
+.toast{box-shadow:var(--sh3);border-radius:12px}
+:root[data-theme=light] .tour-tip{box-shadow:var(--sh3);border-color:var(--line)}
+:root[data-theme=light] .leaflet-tooltip{box-shadow:var(--sh1)}
+
+/* gentle entrance for each screen */
+main>*{animation:rise .35s var(--ease) both}
+main>*:nth-child(2){animation-delay:.03s}main>*:nth-child(3){animation-delay:.06s}main>*:nth-child(4){animation-delay:.09s}main>*:nth-child(n+5){animation-delay:.12s}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
