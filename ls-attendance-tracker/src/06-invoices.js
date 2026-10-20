@@ -330,6 +330,12 @@ function ivCmd(cmd) {
   if (cmd === 'build') { if (!dr.lines.length) return toast('Generate or add lines first'); buildPack(dr).catch(e => toast('Pack failed: ' + e.message, 6000)); }
 }
 /** The whole pack as one PDF: uploaded pages copied as they are, generated pages rendered to A4 images */
+/** the invoice pack as one PDF blob (SAP invoice, break-up, signed timesheets, WOI) */
+async function packBlob(dr, onStep) {
+  const sl = packSlots(dr), parts = [];
+  for (const x of sl) { if (x.html) parts.push({ html: x.html }); else { const b = await Files.get(x.fileId); if (!b) throw new Error(`File missing in this browser: ${x.t}`); parts.push({ pdf: b }); } }
+  return PDFX.build(parts, onStep);
+}
 async function buildPack(dr) {
   const sl = packSlots(dr), parts = [];
   for (const x of sl) { if (x.html) parts.push({ html: x.html }); else { const b = await Files.get(x.fileId); if (!b) throw new Error(`File missing in this browser: ${x.t}`); parts.push({ pdf: b }); } }

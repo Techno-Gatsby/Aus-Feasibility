@@ -709,3 +709,4 @@ tr.warnrow td{background:#fff8e6}
 .sp-pg{border:1px solid var(--line2);border-radius:6px;padding:6px;background:var(--raised)}
 .sp-pg img{width:100%;display:block;border:1px solid var(--line2);background:#fff}
 .sp-pg .row{gap:6px;margin-top:4px}.sp-pg input{flex:1;min-width:0}
+.ml-att{border:1px solid var(--line2);border-radius:var(--r);padding:8px;margin:8px 0}.ml-att>.row{gap:8px;margin-bottom:6px;flex-wrap:wrap}
