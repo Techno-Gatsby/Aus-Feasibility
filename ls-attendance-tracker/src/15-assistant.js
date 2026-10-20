@@ -11,7 +11,7 @@
    ===================================================================== */
 const AI = {
   MODELS: [['claude-sonnet-5-5', 'Balanced (fast)'], ['claude-opus-5-5', 'Most capable'], ['claude-haiku-5-5', 'Fastest']],
-  chat: '', asked: 0, busy: false, prep: null, open: false,
+  chat: '', asked: 0, busy: false, prep: null, open: false, big: false,
   get bridge() { try { return localStorage.getItem('ls.claudeBridge') || 'http://localhost:8787'; } catch (e) { return 'http://localhost:8787'; } },
   set bridge(v) { try { v ? localStorage.setItem('ls.claudeBridge', v) : localStorage.removeItem('ls.claudeBridge'); } catch (e) { } },
   get model() { try { return localStorage.getItem('ls.claudeModel') || 'claude-sonnet-5-5'; } catch (e) { return 'claude-sonnet-5-5'; } },
@@ -188,7 +188,7 @@ function aiMarkdown(md) {
     if (/^\s*\|.*\|\s*$/.test(l) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || '')) {
       const row = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
       const h = row(l); i += 2; const rows = []; while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(row(lines[i++]));
-      out.push(`<div class="ai-tw"><table><thead><tr>${h.map(c => `<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`); continue;
+      out.push(`<div class="ai-tw"><table><thead><tr>${h.map(c => `<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td${/^[-+]?[\d,.]+%?$/.test(c) ? ' class="n"' : ''}>${inl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`); continue;
     }
     if (/^#{1,4}\s/.test(l)) { out.push(`<h4>${inl(l.replace(/^#+\s*/, ''))}</h4>`); i++; continue; }
     if (/^\s*([-*]|\d+\.)\s+/.test(l)) { const ol = /^\s*\d+\./.test(l), it = []; while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) it.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, '')); out.push(`<${ol ? 'ol' : 'ul'}>${it.map(x => `<li>${inl(x)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`); continue; }
@@ -204,9 +204,9 @@ const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not completing the
 function aiToggle(force) {
   AI.open = force ?? !AI.open; let p = $('#ai-panel');
   if (!AI.open) { p?.remove(); return; }
-  if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); }
+  if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); aiSize(p); }
   p.innerHTML = `<div class="ai-h"><b>Assistant</b><span class="pill">beta</span><span class="spacer"></span>
-      <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
+      <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-big" title="Larger / smaller">${AI.big ? '⤡' : '⤢'}</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
     <div class="ai-settings" id="ai-settings" hidden>
       <label class="f">Assistant engine address <span class="muted">(on this PC run <code>tools/Start Assistant.cmd</code>)</span><input type="text" id="ai-bridge" value="${esc(AI.bridge)}" placeholder="http://localhost:8787" autocomplete="off"></label>
       <label class="f">Model<select id="ai-model">${opts(AI.MODELS, AI.model)}</select></label>
@@ -215,8 +215,15 @@ function aiToggle(force) {
       <button class="btn sm pri" id="ai-save">Save</button></div>
     <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. The assistant works out the answer from the data in this tracker.</p>
       <div class="ai-chips">${AI_SUGGEST.map(q => `<button class="chip" data-aq="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
-    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="1" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
+    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="1" placeholder="Ask about visas, attendance, sites…"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
   $('#ai-x').onclick = () => aiToggle(false);
+  $('#ai-big').onclick = () => { AI.big = !AI.big; aiSize(p); $('#ai-big').textContent = AI.big ? '⤡' : '⤢'; };
+  p.insertAdjacentHTML('afterbegin', '<div class="ai-grip" title="Drag to resize"></div>');
+  p.querySelector('.ai-grip').onpointerdown = e => {
+    e.preventDefault(); const g = e.currentTarget, x0 = e.clientX, y0 = e.clientY, r = p.getBoundingClientRect(); g.setPointerCapture(e.pointerId); AI.big = false; $('#ai-big').textContent = '⤢';
+    g.onpointermove = m => aiSize(p, { w: r.width + x0 - m.clientX, h: r.height + y0 - m.clientY });
+    g.onpointerup = () => { g.onpointermove = g.onpointerup = null; try { localStorage.setItem('ls.aiSize', JSON.stringify({ w: Math.round(p.offsetWidth), h: Math.round(p.offsetHeight) })); } catch (x) { } };
+  };
   $('#ai-set').onclick = () => { $('#ai-settings').hidden = !$('#ai-settings').hidden; };
   $('#ai-save').onclick = () => { AI.bridge = $('#ai-bridge').value.trim(); AI.model = $('#ai-model').value; AI.personal = $('#ai-personal').checked; $('#ai-settings').hidden = true; toast('Saved'); };
   $('#ai-new').onclick = () => { AI.chat = ''; AI.asked = 0; AI.prep = null; aiToggle(true); };
@@ -227,6 +234,16 @@ function aiToggle(force) {
   $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
   aiPaint(); $('#ai-q').focus();
 }
+/** Panel size: dragged with the top-left grip (remembered), or the large size from the ⤢ button; always inside the window */
+function aiSize(p, want) {
+  if (!p) return;
+  let sz = want; if (!sz) { try { sz = JSON.parse(localStorage.getItem('ls.aiSize') || 'null'); } catch (e) { } }
+  if (AI.big) sz = { w: 760, h: innerHeight * .85 };
+  if (!sz) { p.style.width = p.style.height = ''; return; }
+  p.style.width = Math.round(Math.max(340, Math.min(sz.w, innerWidth - 40))) + 'px';
+  p.style.height = Math.round(Math.max(360, Math.min(sz.h, innerHeight - 120))) + 'px';
+}
+addEventListener('resize', () => aiSize($('#ai-panel')));
 function aiPaint() { const b = $('#ai-send'); if (b) { b.disabled = AI.busy; b.textContent = AI.busy ? '…' : 'Ask'; } }
 // data changed (sync, import, edits): the next analysis uses a fresh snapshot
 function aiDataChanged() { AI.prep = null; }
