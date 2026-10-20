@@ -148,7 +148,20 @@ function rowHTML(i) {
 /** Column widths (px): identity block stays pinned while the days scroll */
 const GW = [34, 190, 76, 26, 150], GD = [112, 78];
 const GRID_FIRST = 60, GRID_BATCH = 100;
-function gridCols() { const left = []; GW.reduce((a, w, i) => (left[i] = a, a + w), 0); return { left, width: GW.reduce((a, b) => a + b, 0) + (AV.details ? GD[0] + GD[1] : 0) + AV.dates.length * 28 + 34 + 38 + 110 }; }
+/** Column widths: the minimum layout, with any spare width of the pane shared out – names and sites first, then the day cells (up to 42 px), the rest to OTHER */
+function gridCols() {
+  const n = AV.dates.length, det = AV.details, fixed = (det ? GD[0] + GD[1] : 0) + 34 + 38;
+  const base = GW.reduce((a, b) => a + b, 0) + fixed + n * 28 + 110;
+  let extra = Math.max(0, ($('#grid-wrap')?.clientWidth || 0) - base - 2);
+  const nameAdd = Math.floor(Math.min(110, extra * .3)), siteAdd = Math.floor(Math.min(110, extra * .25)); extra -= nameAdd + siteAdd;
+  const dw = n ? Math.min(42, 28 + Math.floor(extra / n)) : 28; extra -= (dw - 28) * n;
+  const W = [GW[0], GW[1] + nameAdd, GW[2], GW[3], GW[4] + siteAdd], other = 110 + Math.max(0, Math.floor(extra));
+  const left = []; W.reduce((a, w, i) => (left[i] = a, a + w), 0);
+  return { left, W, dw, other, width: W.reduce((a, b) => a + b, 0) + fixed + n * dw + other };
+}
+// re-fit when the pane changes width (window resized, tree shown / hidden)
+let gridFitW = 0;
+const gridFit = new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); if (Math.abs(w - gridFitW) < 8) return; const first = !gridFitW; gridFitW = w; if (!first && curView === 'attendance') { clearTimeout(gridFit.t); gridFit.t = setTimeout(renderGrid, 120); } });
 function renderGrid() {
   computeAttRows();
   const wrap = $('#grid-wrap'); if (!wrap) return;
@@ -160,9 +173,10 @@ function renderGrid() {
   }
   const dh1 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}">${WD[weekday(d)].slice(0, 2)}</th>`).join('');
   const dh2 = AV.dates.map(d => `<th class="${[5, 6].includes(weekday(d)) ? 'we' : ''}" title="${fmtDMY(d)}">${+d.slice(8)}${d.slice(8) === '01' || d === AV.dates[0] ? '<span class="mo">' + MON[+d.slice(5, 7) - 1] + '</span>' : ''}</th>`).join('');
-  const { left: L, width } = gridCols(), det = AV.details;
-  const col = `<colgroup>${GW.map(w => `<col style="width:${w}px">`).join('')}${det ? GD.map(w => `<col style="width:${w}px">`).join('') : ''}${AV.dates.map(() => '<col style="width:28px">').join('')}<col style="width:34px"><col style="width:38px"><col style="width:110px"></colgroup>`;
-  wrap.innerHTML = `<table class="ag" style="width:${width}px">${col}<thead>
+  const { left: L, width, W, dw, other } = gridCols(), det = AV.details;
+  if (!wrap.dataset.fit) { wrap.dataset.fit = 1; gridFitW = 0; gridFit.disconnect(); gridFit.observe(wrap); }
+  const col = `<colgroup>${W.map(w => `<col style="width:${w}px">`).join('')}${det ? GD.map(w => `<col style="width:${w}px">`).join('') : ''}${AV.dates.map(() => `<col style="width:${dw}px">`).join('')}<col style="width:34px"><col style="width:38px"><col style="width:${other}px"></colgroup>`;
+  wrap.innerHTML = `<table class="ag" style="width:${width}px;--dw:${dw}px">${col}<thead>
     <tr><th class="fix" rowspan="2" style="left:${L[0]}px">#</th><th class="fix" rowspan="2" style="left:${L[1]}px;text-align:left">Name</th><th class="fix" rowspan="2" style="left:${L[2]}px">Emp ID</th><th class="fix" rowspan="2" style="left:${L[3]}px" title="Shift D/N">S</th><th class="fix edge" rowspan="2" style="left:${L[4]}px;text-align:left">Site</th>${det ? '<th rowspan="2">Trade</th><th rowspan="2">D.O.J</th>' : ''}${dh1}<th rowspan="2">P</th><th rowspan="2" title="Billable days">Bill</th><th rowspan="2">Other</th></tr>
     <tr>${dh2}</tr></thead>
     <tbody>${AV.rows.slice(0, GRID_FIRST).map((_, i) => rowHTML(i)).join('')}</tbody>
