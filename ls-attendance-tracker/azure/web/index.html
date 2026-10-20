@@ -38,6 +38,10 @@ a:hover{text-decoration:underline}
 
 /* ---- shell ---- */
 .app{display:grid;grid-template-rows:auto auto 1fr auto;height:100%}
+/* display size (Help → Display size): the whole app drawn smaller, like browser zoom; dialogs follow, printing does not */
+.app{zoom:var(--ui,1)}
+#modal{zoom:var(--ui,1)}
+@media print{.app,#modal{zoom:1}}
 .menubar{display:flex;align-items:center;gap:2px;background:var(--navy);color:#fff;padding:0 10px;height:40px}
 .menubar .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;margin-right:16px;letter-spacing:-.01em;color:#fff;white-space:nowrap}
 .menubar .brand .mark{width:24px;height:24px;border-radius:6px;background:#fff;color:#12305E;display:grid;place-items:center;font-size:11px;font-weight:800}
@@ -217,7 +221,7 @@ table.ag tbody tr:hover td{background:inherit}
 #modal{background:var(--surface);border-radius:var(--r2);box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(820px,100%);border:1px solid var(--line2)}
 #modal .mh{padding:10px 14px;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:10px;background:var(--raised);border-radius:var(--r2) var(--r2) 0 0}
 #modal .mh h3{flex:1;font-size:14px}
-#modal .mb{padding:14px;max-height:calc(100vh - 210px);overflow:auto}
+#modal .mb{padding:14px;max-height:calc((100vh - 170px) / var(--ui,1));overflow:auto}
 .mapbox{height:clamp(360px,calc(100vh - 470px),640px);border:1px solid var(--line2);border-radius:5px}
 .mapbox.tall{height:clamp(420px,calc(100vh - 220px),900px)}
 .mapbox.pd{height:clamp(360px,calc(100vh - 320px),640px)}
@@ -3462,12 +3466,17 @@ function renderStatus() {
   $('#status2').textContent = `${S.employees.length} security personnel · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
 }
 
+/* display size: 75 % by default (as the browser at 75 %), remembered in this browser */
+const UI_SIZES = [0.75, 0.9, 1];
+function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : 0.75; } catch (e) { return 0.75; } }
+function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
+document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
 const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  help: () => [['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();

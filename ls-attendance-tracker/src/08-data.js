@@ -149,12 +149,17 @@ function renderStatus() {
   $('#status2').textContent = `${S.employees.length} security personnel · ${S.projects.length} projects · ${S.sites.length} sites${unl ? ` · ${unl} unlinked` : ''}`;
 }
 
+/* display size: 75 % by default (as the browser at 75 %), remembered in this browser */
+const UI_SIZES = [0.75, 0.9, 1];
+function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : 0.75; } catch (e) { return 0.75; } }
+function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
+document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
 const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  help: () => [['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
