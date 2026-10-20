@@ -45,7 +45,7 @@ const Wp = await ctx.newPage(); Wp.on('pageerror', e => errs.push('worker: ' + e
 await Wp.goto(WURL); await Wp.waitForSelector('#code');
 await Wp.fill('#code', 'c52392'); await Wp.click('#b-next'); for (const k of pinsOut[0]) await Wp.click(`.pad [data-k="${k}"]`);
 await Wp.waitForSelector('#b-punch'); await Wp.waitForTimeout(700);
-ok(/In zone · 0 m from INFRA OFFICE/.test(await Wp.textContent('#gps')), 'worker sees in-zone chip');
+ok(/In zone/.test(await Wp.textContent('#gps')) && /0 m from INFRA OFFICE/.test(await Wp.getAttribute('#gps .zchip', 'title')), 'worker sees in-zone chip');
 await Wp.click('#b-punch'); await Wp.waitForSelector('.cam [data-s]'); await Wp.waitForTimeout(500); await Wp.click('.cam [data-s]'); await Wp.click('.cam [data-u]');
 await Wp.waitForSelector('#b-done'); ok(/Attendance marked/.test(await Wp.textContent('.res')), 'check-in accepted');
 // 4. second worker outside the zone → pending; leave request

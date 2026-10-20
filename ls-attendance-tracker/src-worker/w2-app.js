@@ -153,11 +153,12 @@ function zoneInfo() {
 function paintGps() {
   const el = $('#gps'); if (!el) return;
   const g = W.gps, z = zoneInfo(), max = W.prof?.settings?.maxAcc || 50;
-  const conf = (cls, txt, tag) => `<div class="conf ${cls}"><span class="d"></span><span class="grow">${txt}</span>${tag ? `<span class="chip ${cls === 'ok' ? 'pos' : 'warn'} tag">${tag}</span>` : ''}</div>`;
-  if (!g) el.innerHTML = W.gpsErr ? conf('bad', esc(W.gpsErr)) : conf('wait', t('locating'));
-  else if (z?.inZone && g.acc > max) el.innerHTML = conf('warn', `${t('inZone')} · ${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m`, t('willReview'));
-  else if (z?.inZone) el.innerHTML = conf('ok', `${t('inZone')} · ${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m${z.own ? '' : ` · ${t('reliever')} ${esc(z.site.name)}`}`, t('auto'));
-  else el.innerHTML = conf('warn', `${t('outZone')}${z ? ` · ${z.d} m ${t('from')} ${esc(z.site.name)}` : ''} · ±${g.acc} m`, t('willReview'));
+  // one short chip at the top; the full line is in its tooltip
+  const chip = (cls, txt, full) => `<span class="zchip ${cls}" title="${full || txt}"><i></i>${txt}</span>`;
+  if (!g) el.innerHTML = W.gpsErr ? chip('bad', t('noLoc') , esc(W.gpsErr)) : chip('wait', t('locating'));
+  else if (z?.inZone && g.acc > max) el.innerHTML = chip('warn', t('inZone'), `${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m · ${t('willReview')}`);
+  else if (z?.inZone) el.innerHTML = chip('ok', t('inZone'), `${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m${z.own ? '' : ` · ${t('reliever')} ${esc(z.site.name)}`}`);
+  else el.innerHTML = chip('bad', `${t('outZone')}${z ? ` · ${z.d} m` : ''}`, `${z ? `${z.d} m ${t('from')} ${esc(z.site.name)} · ` : ''}±${g.acc} m · ${t('willReview')}`);
   const set = (id, v) => { const x = $('#' + id); if (x) x.innerHTML = v; };
   set('r-d', g && z ? `${z.d}` : '—'); set('r-a', g ? `${g.acc}` : '—');
   if (W.map && W.layers && g) {
@@ -395,11 +396,10 @@ function renderHome() {
   const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
   const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
   const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
-  shell(`<section class="place"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)}</div></section>
+  shell(`<section class="place"><div class="pl1"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><span id="gps"></span></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)} <span id="recst">${recLine()}</span></div></section>
     <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
       <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
-      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
-    <div id="gps"></div>
+      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}${today.length ? (p => `<div class="k-last list">${ic(p.type === 'in' ? 'in' : 'out')}<span class="grow">${p.type === 'in' ? t('in') : t('out')} ${hhmm(p.ts)}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span>${st(p)}</div>`)(today[today.length - 1]) : ''}</section>
     ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
     <div class="mapcard" id="mapcard"><div id="map"></div>
@@ -407,11 +407,7 @@ function renderHome() {
       <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
       <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
       <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
-    <button class="btn wide" id="b-med" style="margin:0 0 12px">${ic('camera')} ${t('medSend')}</button>
-    <div class="card"><div class="lbl"><span>${t('timeline')}</span><span>${new Date().toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
-      ${today.length ? `<ul class="list">${today.map(p => `<li><span class="ev">${ic(p.type === 'in' ? 'in' : 'out')}</span><span class="tm">${hhmm(p.ts)}</span><span class="grow"><span class="what">${p.type === 'in' ? t('in') : t('out')}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span><span class="sub">${esc(p.siteName || '')}</span></span>${st(p)}</li>`).join('')}</ul>`
-        : `<div class="empty">${ic('clock')}<span>${t('noPunch')}</span></div>`}</div>
-    <p class="note"><b id="recst" style="color:var(--sage)">${recLine()}</b> ${t(NT() ? 'locNoteApp' : 'locNote')}</p>${installCard()}`, {
+    <button class="btn wide medb" id="b-med">${ic('camera')} ${t('medSend')}</button>`, {
     tab: 'home', crumb: P.site?.name || t('today'),
     dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span class="bi">${ic(open ? 'out' : 'in')}</span><span class="grow"><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('onShift')} · ${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
@@ -430,9 +426,17 @@ function renderHome() {
   if ($('#b-tour')) $('#b-tour').onclick = tour;
   if ($('#b-scan')) $('#b-scan').onclick = scanCheckpoint;
   $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
-  paintGps(); updateQueueBar(); drawMap();
+  paintGps(); updateQueueBar(); fitMap(); drawMap();
   $('#b-med')?.addEventListener('click', () => scanReport(W.prof.worker, false));
 }
+/** Today fits one screen: the map takes whatever height is left above the medical button and the check-in dock */
+function fitMap() {
+  const m = $('#map'), card = $('#mapcard'); if (!m || card.classList.contains('full')) return;
+  const dock = $('.dock'), bottom = dock ? dock.getBoundingClientRect().top : innerHeight, med = $('#b-med');
+  const h = Math.floor(bottom - m.getBoundingClientRect().top - (med ? med.offsetHeight + 10 : 0) - 10);
+  m.style.height = Math.max(170, h) + 'px'; W.map?.invalidateSize();
+}
+addEventListener('resize', () => { clearTimeout(fitMap.t); fitMap.t = setTimeout(fitMap, 120); });
 async function drawMap() {
   const el = $('#map'); if (!el) return;
   try {
