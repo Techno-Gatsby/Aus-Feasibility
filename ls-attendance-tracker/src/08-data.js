@@ -138,7 +138,7 @@ const TOOLBAR = {
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
   employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Mark as resigned…', f: bulkEnd }, EV.status === 'black' ? { l: 'Remove from blacklist', f: () => bulkBlacklist(false) } : { l: 'Blacklist…', f: () => bulkBlacklist(true) }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
-  projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
+  projects: () => [{ l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, { l: 'Clients…', f: clientsDialog }, 'sep', { l: 'Upload documents in bulk…', f: () => pickFiles('application/pdf', true, fs => bulkDocs(fs).catch(err => toast(err.message, 6000))), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
   live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
   insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
@@ -149,7 +149,7 @@ function renderToolbar() {
   tb.innerHTML = items.map((x, i) => x === 'sep' ? '<span class="sep"></span>' : `<button data-tb="${i}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('')
     + `<span class="spacer"></span><button data-cmd="tree" title="Show / hide the tree">◧ Tree</button>`;
   tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => items[+b.dataset.tb].f?.());
-  tb.querySelector('[data-cmd=tree]').onclick = () => $('#body').classList.toggle('notree');
+  tb.querySelector('[data-cmd=tree]').onclick = toggleTree;
 }
 function renderStatus() {
   const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
@@ -161,7 +161,11 @@ function renderStatus() {
 
 /* display size: 75 % by default (as the browser at 75 %), remembered in this browser */
 const UI_SIZES = [0.75, 0.9, 1];
-function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : 0.75; } catch (e) { return 0.75; } }
+const uiDefault = () => Math.min(screen.width, innerWidth) < 1000 ? 1 : 0.75;      // tablets and phones: full size
+function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : uiDefault(); } catch (e) { return uiDefault(); } }
+/** the Clients · Projects · Sites tree: a column on wide screens, a slide-over panel on tablets and phones */
+const narrow = () => innerWidth <= 900;
+function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else b.classList.toggle('notree'); }
 function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
 document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
@@ -169,7 +173,7 @@ const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', toggleTree], ['Data checks…', openChecks], null, ['Getting started', () => { try { localStorage.removeItem('ls.guide'); } catch (e) { } showView('live'); }], ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
@@ -228,6 +232,7 @@ function renderTree() {
 function clearSel() { SEL.client = SEL.project = SEL.site = ''; $$('#tree .node.sel').forEach(n => n.classList.remove('sel')); applySel(); }
 /** Tree click → filter the open document (click again to clear) */
 function selectNode(k, id) {
+  if (narrow()) $('#body').classList.remove('treeopen');
   const same = (k === 'grp' && SEL.client === id && !SEL.project) || (k === 'proj' && SEL.project === id && !SEL.site) || (k === 'site' && SEL.site === id);
   SEL.client = SEL.project = SEL.site = '';
   if (!same) {
@@ -283,7 +288,7 @@ async function init() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); if ($('#modal-bg').classList.contains('on')) closeModal(); } });
   $('#hdr-import').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importExcel(f).catch(err => toast(err.message, 5000)); };
   $('#tree-q').oninput = e => { TREE.q = e.target.value; clearTimeout(TREE._t); TREE._t = setTimeout(renderTree, 200); };
-  renderSaveState(); renderTree(); showView('attendance'); document.body.dataset.ready = '1';
+  renderSaveState(); renderTree(); showView('attendance'); initMe(); document.body.dataset.ready = '1';
   if (S.employees.some(e => e.app?.on)) setTimeout(() => syncApp(true), 1500);
 }
 init();

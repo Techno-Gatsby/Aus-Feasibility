@@ -69,10 +69,12 @@ async function renderLive() {
   const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
   const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
   v.innerHTML = docHead('Live', `today ${fmtDMY(today)} · from synced punches and shift positions`, `<select id="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`) + `<div class="dc">
+    ${guideHTML()}
     <div class="kpis">${[['On duty now', n('on') + n('pe'), 'var(--pos)'], ['Checked out', n('done')], ['Not checked in', n('no'), n('no') ? 'var(--neg)' : ''], ['Outside zone', out, out ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
     <div class="live"><div class="mapbox" id="lv-map"></div>
     <div class="ppl">${rows.map((r, i) => `<div class="pr" data-lv="${i}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
       <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${lbl[r.st]}${r.st === 'code' ? ' ' + esc(r.code) : ''}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}</div></div>${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`).join('') || '<p class="muted">Nobody on the app is rostered today.</p>'}</div></div></div>`;
+  bindGuide(v);
   bindSecs(v); $('#lv-site').onchange = e => { LV.site = e.target.value; renderLive(); };
   for (const el of v.querySelectorAll('[data-av]')) { const e = IX.emp.get(el.dataset.av); if (e?.photo) photoURL(e).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; }); }
   v.querySelectorAll('[data-lv]').forEach(el => el.ondblclick = () => { const r = rows[+el.dataset.lv]; INS.person = r.e.id; showView('insights'); });

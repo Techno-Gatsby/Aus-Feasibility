@@ -13,7 +13,10 @@ function azureStore(conn, prefix = 'ls') {
   let blobReady = null;
   const pk = (t, o) => t === 'punches' ? String(o.workDate || '0000-00').slice(0, 7) : t;   // punches partitioned by month
   const cols = o => { const c = {}; for (const k of ['wid', 'code', 'workDate', 'serverTs', 'clientId', 'enabled', 'status']) if (o[k] !== undefined) c[k] = o[k]; return c; };
-  const parse = e => JSON.parse(e.j);
+  // a string property holds at most 32K characters: large records (timesheet versions with signatures) are split over j, j1, j2…
+  const CH = 30000;
+  const pack = o => { const s = JSON.stringify(o), r = { j: s.slice(0, CH) }; for (let i = 1; i * CH < s.length; i++) r['j' + i] = s.slice(i * CH, (i + 1) * CH); return r; };
+  const parse = e => { let s = e.j; for (let i = 1; e['j' + i] != null; i++) s += e['j' + i]; return JSON.parse(s); };
   function filter(t, h = {}) {
     const f = [];
     if (h.wid) f.push(odata`wid eq ${h.wid}`);
@@ -36,7 +39,7 @@ function azureStore(conn, prefix = 'ls') {
       await ensure(t);
       const old = t === 'punches' ? await this.get(t, o.id) : null;           // a re-dated punch moves partition
       if (old && pk(t, old) !== pk(t, o)) await tc(t).deleteEntity(pk(t, old), String(o.id)).catch(() => {});
-      await tc(t).upsertEntity({ partitionKey: pk(t, o), rowKey: String(o.id), j: JSON.stringify(o), ...cols(o) }, 'Replace');
+      await tc(t).upsertEntity({ partitionKey: pk(t, o), rowKey: String(o.id), ...pack(o), ...cols(o) }, 'Replace');
     },
     async del(t, id) { const o = await this.get(t, id); if (o) await tc(t).deleteEntity(pk(t, o), String(id)).catch(() => {}); },
     async list(t, fn, hint) {

@@ -11,83 +11,80 @@ const BASES = [
   ['fixed', 'Fixed posts × monthly rate (ignores attendance)'],
   ['lump', 'Fixed monthly amount (enter it as the unit rate)']
 ];
-const PV = { q: '', focus: '' };
+const PV = { q: '', focus: '', panel: null };
+const siteHeadcount = id => { const t = todayISO(); return S.employees.filter(e => employedOn(e, t) && assignOn(e, t)?.site === id).length; };
 
+/** Projects & sites: pick a client, project or site in the tree on the left; it opens here in tabs. Nothing picked: an overview. */
 function renderProjects() {
   const v = $('#v-projects');
-  const q = norm(PV.q);
   const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
-  const today = todayISO(), bySite = new Map();
-  for (const e of S.employees) { if (!employedOn(e, today)) continue; const s = assignOn(e, today)?.site; if (s) bySite.set(s, (bySite.get(s) || 0) + 1); }
-  const headcount = id => bySite.get(id) || 0;
-  const projRows = [...S.projects].filter(p => (!q || norm(p.name).includes(q) || norm(p.code).includes(q) || sitesOfProject(p.id).some(s => norm(s.name).includes(q))) && (!PV.focus || p.id === PV.focus || p.clientId === PV.focus))
-    .sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
-  const projOpts = opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —');
-  const focus = PV.focus ? (IX.proj.get(PV.focus)?.name || IX.client.get(PV.focus)?.name) : '';
-  v.innerHTML = docHead('Projects &amp; sites', 'client → project → sites · SAP code, PO and rates per project', `
-      ${focus ? `<span class="pill">${esc(focus)} <button class="btn sm" id="pv-unfocus" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
-      <input type="search" id="pv-q" placeholder="Project / code / site" value="${esc(PV.q)}" style="width:200px">`)
+  if (SEL.site && !IX.site.has(SEL.site)) SEL.site = ''; if (SEL.project && !IX.proj.has(SEL.project)) SEL.project = ''; if (SEL.client && !SEL.client.startsWith('__') && !IX.client.has(SEL.client)) SEL.client = '';
+  const kind = SEL.site ? 'site' : SEL.project ? 'proj' : SEL.client && !SEL.client.startsWith('__') ? 'client' : '';
+  const pendingLoc = Object.values(S.locProps || {}).filter(x => x.status === 'pending').length;
+  v.innerHTML = docHead('Projects &amp; sites', kind ? '' : 'pick a client, project or site in the tree on the left – or a row below', `
+      ${kind ? '<button class="btn sm" id="pv-back">← All projects</button>' : ''}
+      <button class="btn sm" id="pv-clients">Clients…</button><button class="btn sm" id="pv-zones">Map of all zones</button>`)
   + `<div class="dc">
-  ${sec('clients', 'Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
-    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td>
-      <td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
-    </tbody></table></div>`, `<span class="cnt">${S.clients.length}</span>`)}
-  ${unmapped.length ? sec('unmapped', `Unlinked sites <span class="pill neg">${unmapped.length}</span>`, `
-    <div class="row" style="margin:0 0 8px"><span class="muted small">Their days appear on no client timesheet. Link ticked sites to</span><select id="pv-bulkp">${projOpts}</select><button class="btn sm pri" id="pv-bulk">Link</button></div>
-    <div class="tw" style="max-height:260px"><table><thead><tr><th><input type="checkbox" id="pv-all"></th><th>Site</th><th class="num">Staff now</th><th>Link one by one</th><th></th></tr></thead><tbody>
-    ${unmapped.map(s => `<tr><td><input type="checkbox" data-um="${s.id}"></td><td>${esc(s.name)}</td><td class="num">${headcount(s.id)}</td>
-      <td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td>
-      <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
-    </tbody></table></div>`) : ''}
-  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the personnel app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
-    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><label class="btn sm" style="display:inline-flex;align-items:center">Upload documents in bulk…<input type="file" id="pv-bulkdocs" accept="application/pdf" multiple hidden></label><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
-    ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
-    ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
-    ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
-    ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
-    ${!projPin.length && !withPin.length ? '<p class="muted small" style="margin:0">Nothing set yet – use <b>Edit</b> on a project or a site.</p>' : ''}`, '', ); })()}
-  ${beatsSectionHTML()}
-  ${sec('projects', 'Projects', projRows.map(p => {
-      const c = IX.client.get(p.clientId); const b = p.billing || {};
-      const ss = sitesOfProject(p.id);
-      const bill = (!b.basis || b.basis === 'ratecard') ? 'Rate card · guard ' + money(rateFor(p, 'SECURITY GUARD')) + (Object.keys(b.rates || {}).length ? ' · project rates' : '') : b.basis === 'lump' ? 'Fixed ' + money(b.rate) + ' / month' : esc((BASES.find(x => x[0] === b.basis) || [, ''])[1]) + (b.rate ? ' · ' + money(b.rate) : '');
-      return `<div class="comp">
-        <div class="ch"><b>${esc(p.name)}</b>${p.code ? `<span class="mono muted">${esc(p.code)}</span>` : ''}${p.poNo ? `<span class="mono muted">${esc(p.poNo)}</span>` : ''}
-          <span class="muted">${esc(c?.name || '')}</span>
-          ${!p.clientId ? '<span class="pill neg">no client</span>' : ''}
-          ${!rateFor(p, 'SECURITY GUARD') && !['fixed', 'lump'].includes(b.basis) ? '<span class="pill warn">no rate</span>' : ''}
-          ${p.active === false ? '<span class="pill">inactive</span>' : ''}
-          ${p.pins?.length ? `<span class="pill pos" title="Project-wide worker-app zone">📍 project ${p.pins[0].radius} m</span>` : ''}
-          ${p.docs?.length ? `<span class="pill" title="Documents added to every invoice pack">📄 ${p.docs.map(d => (d.kind === 'woi' ? 'WOI' : d.kind.toUpperCase()) + ' ' + (d.pages || '?') + ' p').join(' · ')}</span>` : ''}
-          <span class="spacer"></span><span class="muted small">${bill} · VAT ${b.vat || 0}%</span>
-          <button class="btn sm" data-addsite="${p.id}">Add site</button><button class="btn sm" data-ep="${p.id}">Edit</button></div>
-        <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has its own worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : p.pins?.length ? ' <span class="pill" title="Uses the project zone">📍 project</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
-      </div>`;
-    }).join('') || '<p class="muted">No projects match.</p>', `<span class="cnt">${projRows.length}</span>`)}
-  </div>`;
-  bindSecs(v);
-  if ($('#pv-zones')) $('#pv-zones').onclick = zonesMap;
-  bindBeatsSection($('#v-projects'));
-  if ($('#pv-bulkdocs')) $('#pv-bulkdocs').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) bulkDocs(fs).catch(err => toast(err.message, 6000)); };
-  if ($('#pv-unfocus')) $('#pv-unfocus').onclick = () => { PV.focus = ''; clearSel(); };
-  if ($('#pv-bulk')) {
-    $('#pv-all').onchange = e => v.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
-    $('#pv-bulk').onclick = () => {
-      const pid = $('#pv-bulkp').value, ids = [...v.querySelectorAll('[data-um]:checked')].map(c => c.dataset.um);
-      if (!pid || !ids.length) return toast('Tick sites and choose a project');
-      ids.forEach(id => IX.site.get(id).projectId = pid); markDirty(); renderAll(); toast(`Linked ${ids.length} site(s)`);
-    };
-  }
-  $('#pv-q').oninput = e => { PV.q = e.target.value; clearTimeout(PV._t); PV._t = setTimeout(() => { renderProjects(); const i = $('#pv-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
-  v.querySelectorAll('[data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
-  v.querySelectorAll('[data-ep]').forEach(b => b.onclick = () => editProject(b.dataset.ep));
-  v.querySelectorAll('[data-es]').forEach(b => b.onclick = () => editSite(b.dataset.es));
-  v.querySelectorAll('[data-addsite]').forEach(b => b.onclick = () => editSite(null, b.dataset.addsite));
-  v.querySelectorAll('[data-map]').forEach(sel => sel.onchange = () => {
+    ${unmapped.length ? `<div class="alert" style="margin-bottom:10px"><div><b>${unmapped.length} site(s) not linked to a project</b> – their days appear on no client timesheet. <button class="btn sm" id="pv-link">Link sites…</button></div></div>` : ''}
+    ${pendingLoc ? `<div class="note" style="margin-bottom:10px">${pendingLoc} site location(s) sent by supervisors wait for approval in <a href="#" id="pv-locrev">Today → Review</a>.</div>` : ''}
+    <div id="pv-panel" class="pv-panel">${kind ? '' : projectsOverviewHTML()}</div></div>`;
+  PV.panel = $('#pv-panel');
+  if (kind === 'site') editSite(SEL.site); else if (kind === 'proj') editProject(SEL.project); else if (kind === 'client') editClient(SEL.client);
+  else v.querySelectorAll('[data-pvp]').forEach(r => r.onclick = () => selectNode('proj', r.dataset.pvp));
+  if ($('#pv-back')) $('#pv-back').onclick = () => clearSel();
+  $('#pv-clients').onclick = clientsDialog;
+  $('#pv-zones').onclick = zonesMap;
+  if ($('#pv-link')) $('#pv-link').onclick = linkSitesDialog;
+  if ($('#pv-locrev')) $('#pv-locrev').onclick = e => { e.preventDefault(); showView('app'); };
+}
+/** All projects at a glance: client, sites, staff, and whether location / documents / rates are set */
+function projectsOverviewHTML() {
+  const ok = (b, t) => b ? `<span class="dot ok" title="${t}">✓</span>` : `<span class="dot no" title="${t} missing">–</span>`;
+  const rows = [...S.projects].sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
+  return `<div class="tw fill"><table><thead><tr><th>Project</th><th>Client</th><th class="num">Sites</th><th class="num">Staff now</th><th>Location</th><th>Documents</th><th>Rate</th><th></th></tr></thead><tbody>
+    ${rows.map(p => { const ss = sitesOfProject(p.id), b = p.billing || {}, rate = ['fixed', 'lump'].includes(b.basis) || !!rateFor(p, 'SECURITY GUARD');
+      return `<tr data-pvp="${p.id}" style="cursor:pointer"><td class="lab">${esc(p.name)}${p.active === false ? ' <span class="pill">inactive</span>' : ''}</td><td class="muted">${esc(IX.client.get(p.clientId)?.name || '')}${p.clientId ? '' : '<span class="pill neg">no client</span>'}</td>
+        <td class="num">${ss.length}</td><td class="num">${ss.reduce((a, s) => a + siteHeadcount(s.id), 0)}</td><td>${ok(p.pins?.length || ss.some(s => s.pins?.length), 'Location')}</td><td>${ok(p.docs?.length, 'Work order / documents')}</td><td>${ok(rate, 'Rate')}</td><td><button class="btn sm">Open</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">No projects yet – Add project in the toolbar.</td></tr>'}
+  </tbody></table></div>`;
+}
+function clientsDialog() {
+  openModal('Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
+    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
+    </tbody></table></div>`, [{ label: 'Add client', onClick: () => { setTimeout(() => editClient(null), 0); } }, { label: 'Close', cls: 'pri' }]);
+  $$('#modal [data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
+}
+function linkSitesDialog() {
+  const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
+  const projOpts = opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —');
+  const m = openModal(`Link ${unmapped.length} site(s) to projects`, `<div class="row" style="margin:0 0 8px"><span class="muted small">Link ticked sites to</span><select id="pv-bulkp">${projOpts}</select><button class="btn sm pri" id="pv-bulk">Link</button></div>
+    <div class="tw" style="max-height:50vh"><table><thead><tr><th><input type="checkbox" id="pv-all"></th><th>Site</th><th class="num">Staff now</th><th>Or link one by one</th></tr></thead><tbody>
+    ${unmapped.map(s => `<tr><td><input type="checkbox" data-um="${s.id}"></td><td>${esc(s.name)}</td><td class="num">${siteHeadcount(s.id)}</td><td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td></tr>`).join('')}
+    </tbody></table></div>`, [{ label: 'Close', cls: 'pri' }]);
+  $('#pv-all', m).onchange = e => m.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
+  $('#pv-bulk', m).onclick = () => {
+    const pid = $('#pv-bulkp', m).value, ids = [...m.querySelectorAll('[data-um]:checked')].map(c => c.dataset.um);
+    if (!pid || !ids.length) return toast('Tick sites and choose a project');
+    ids.forEach(id => IX.site.get(id).projectId = pid); markDirty(); closeModal(); renderAll(); toast(`Linked ${ids.length} site(s)`);
+  };
+  m.querySelectorAll('[data-map]').forEach(sel => sel.onchange = () => {
     const s = IX.site.get(sel.dataset.map);
-    if (sel.value === '__new') { editProject(null, s.name, pid => { s.projectId = pid; }); return; }
-    if (sel.value) { s.projectId = sel.value; markDirty(); renderAll(); }
+    if (sel.value === '__new') { closeModal(); editProject(null, s.name, pid => { s.projectId = pid; }); return; }
+    if (sel.value) { s.projectId = sel.value; markDirty(); sel.closest('tr').remove(); renderAll(); }
   });
+}
+/** Site → Location: supervisors (by email) allowed to send this site's location from the phone; the admin approves each one */
+function locGrantsHTML(siteId) {
+  const g = S.locGrants.filter(x => x.siteId === siteId), pend = Object.values(S.locProps || {}).filter(x => x.siteId === siteId && x.status === 'pending').length;
+  return `<h3 style="margin:16px 0 6px">Supervisor can set this location <span class="muted small">– from the phone, standing on site; you approve it in Today → Review</span></h3>
+    ${g.length ? `<div class="tw" style="max-width:560px"><table><thead><tr><th>Supervisor</th><th>Allowed since</th><th></th></tr></thead><tbody>${g.map(x => `<tr><td>${esc(x.email)}</td><td class="mono">${fmtDMY(String(x.at || '').slice(0, 10))}</td><td style="text-align:right"><button class="btn sm bad" data-lgrev="${esc(x.email)}">Revoke</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small" style="margin:0">Nobody yet.</p>'}
+    <div class="row" style="margin-top:8px"><input type="email" id="lg-e" placeholder="supervisor@company.com" style="width:260px"><button class="btn sm pri" id="lg-add">Allow</button>${pend ? `<span class="pill warn">${pend} waiting for approval</span>` : ''}</div>
+    <p class="muted small" style="margin:4px 0 0">The supervisor signs in to the phone page's Supervisor screen with this email. Changes reach phones after <b>Publish roster</b>.</p>`;
+}
+function bindLocGrants(m, siteId) {
+  const add = $('#lg-add', m); if (!add) return;
+  add.onclick = () => { const e = $('#lg-e', m).value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return toast('Enter the supervisor\'s email');
+    if (!S.locGrants.some(x => x.siteId === siteId && x.email === e)) S.locGrants.push({ siteId, email: e, at: new Date().toISOString() }); markDirty(); toast(`${e} may set this location – Publish roster to send it`); renderProjects(); };
+  m.querySelectorAll('[data-lgrev]').forEach(b => b.onclick = () => { S.locGrants = S.locGrants.filter(x => !(x.siteId === siteId && x.email === b.dataset.lgrev)); markDirty(); toast('Access revoked – Publish roster to send it'); renderProjects(); });
 }
 
 function editClient(id) {
@@ -107,7 +104,7 @@ function editClient(id) {
         if (id) S.clients[S.clients.findIndex(x => x.id === id)] = c; else S.clients.push(c);
         reindex(); markDirty(); renderAll();
       }
-    }]);
+    }], { into: PV.panel, onCancel: () => renderProjects() });
 }
 
 function editProject(id, presetName, onCreated) {
@@ -115,10 +112,15 @@ function editProject(id, presetName, onCreated) {
   p.billing ||= { basis: 'ratecard', rate: 0, vat: 0 };
   p.billing.rates ||= {};
   p.pins ||= [];
-  const m = openModal(id ? 'Edit project' : 'Add project', `<div class="form">
+  const ss0 = id ? sitesOfProject(id) : [];
+  const m = openModal(id ? p.name : 'Add project', `<div data-tab="details"><div class="form">
     <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
-    <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
     <label class="f">Client<select id="ep-client">${opts(S.clients.map(c => [c.id, c.name]), p.clientId, '— choose client —')}</select></label>
+    <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
+    <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
+    <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    </div>
+    <details class="adv"><summary>Invoice &amp; timesheet details <span class="muted small">(entity, SAP names and codes, work order, day-off letter, signature label)</span></summary><div class="form">
     <label class="f">Entity on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
     <label class="f">Name in Tax Invoice Tracker<input type="text" id="ep-tn" value="${esc(p.trackerName || '')}"></label>
     <label class="f">SAP project name<input type="text" id="ep-sapn" value="${esc(p.sapName || '')}" placeholder="SOBHA ELWOOD INFRASTRUCTURE"></label>
@@ -126,11 +128,11 @@ function editProject(id, presetName, onCreated) {
     <label class="f">Work order ref<input type="text" id="ep-wo" value="${esc(p.woNo || '')}" placeholder="LOR-104N135-24-0001"></label>
     <label class="f">Day off on timesheet<select id="ep-off">${opts([['O', 'O (SCL TR sheets)'], ['OFF', 'OFF (Elwood sheets)']], p.tsOff || 'O')}</select></label>
     <label class="f">2nd signature label<select id="ep-ack">${opts([['0', 'ACKNOWLEDGE BY: (SCL TR sheets)'], ['1', 'blank (Elwood sheets)']], p.tsNoAck ? '1' : '0')}</select></label>
-    <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
-    <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    </div></details>
+    ${id ? `<details class="adv"><summary>Merge into another project</summary><div class="form">
     ${id ? `<label class="f">Merge into another project (moves all sites)<select id="ep-merge">${opts(S.projects.filter(x => x.id !== id).map(x => [x.id, x.name]).sort((a, b) => a[1].localeCompare(b[1])), '', "— don't merge —")}</select></label>` : ''}
-    </div>
-    <h3 style="margin:14px 0 6px">Billing</h3>
+    </div></details>` : ""}</div>
+    <div data-tab="billing">    
     <div class="form">
       <label class="f">Basis<select id="ep-basis">${opts(BASES, p.billing.basis)}</select></label>
       <label class="f">Unit rate (other bases)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
@@ -143,11 +145,14 @@ function editProject(id, presetName, onCreated) {
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
     <p class="muted small">Lines group security personnel by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
-    <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
+</div>
+    <div data-tab="docs">    <h3 style="margin:0 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
     <div id="ep-docs"></div>
     <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. Many WOIs at once: Projects &amp; sites → <b>Upload documents in bulk…</b>. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
-    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
-    ${pinEditorHTML('ep')}`,
+</div>
+    <div data-tab="loc">    <h3 style="margin:0 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
+    ${pinEditorHTML('ep')}</div>
+    <div data-tab="sites">${id ? `<div class="row" style="margin-bottom:8px"><button class="btn sm pri" id="ep-addsite">+ Add site</button></div><div class="tw"><table><thead><tr><th>Site</th><th>Location</th><th class="num">Staff now</th><th>Patrol beats</th></tr></thead><tbody>${ss0.map(x => `<tr data-gosite="${x.id}" style="cursor:pointer"><td><a href="#">${esc(x.name)}</a></td><td>${x.pins?.length ? '<span class="pill pos">own pin</span>' : p.pins?.length ? '<span class="pill">project zone</span>' : '<span class="pill warn">none</span>'}</td><td class="num">${siteHeadcount(x.id)}</td><td>${beatsOf(x).length || ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No sites yet.</td></tr>'}</tbody></table></div>` : '<p class="muted">Save the project first, then add its sites.</p>'}</div>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
       if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
@@ -166,11 +171,14 @@ function editProject(id, presetName, onCreated) {
         const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         PE.finish();
-        if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
+        if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else { S.projects.push(p); if (curView === 'projects') { SEL.client = ''; SEL.project = p.id; SEL.site = ''; } }
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
         if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
-    }], { width: 'min(1500px,94vw)' });
+    }], { width: 'min(1500px,94vw)', into: PV.panel, onCancel: () => renderProjects() });
+  editorTabs(m, 'project', [['details', 'Details'], ['billing', 'Billing'], ['loc', 'Location'], ['docs', 'Documents'], ...(id ? [['sites', `Sites (${ss0.length})`]] : [])]);
+  m.querySelectorAll('[data-gosite]').forEach(r => r.onclick = e => { e.preventDefault(); selectNode('site', r.dataset.gosite); });
+  if ($('#ep-addsite', m)) $('#ep-addsite', m).onclick = () => editSite(null, id);
   p.docs ||= [];
   const DOC_KINDS = [['woi', 'Work Order Instruction'], ['lpo', 'LPO / purchase order'], ['agreement', 'Rate agreement'], ['other', 'Other']];
   const docsTable = () => {
@@ -256,14 +264,15 @@ function editSite(id, projectId) {
   s.pins ||= [];
   const refs = id ? countSiteRefs(id) : 0;
   const ghostOf = pid => { const p = pid && IX.proj.get(pid); return p?.pins?.length ? { name: p.name, pins: p.pins } : null; };
-  const m = openModal(id ? 'Edit site' : 'Add site', `<div class="form">
+  const m = openModal(id ? s.name : 'Add site', `<div data-tab="details"><div class="form">
     <label class="f">Site name *<input type="text" id="es-name" value="${esc(s.name)}"></label>
     <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
-    </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
-    <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
+    </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site · ${siteHeadcount(id)} on site today.</p>` : ''}</div>
+    <div data-tab="loc"><h3 style="margin:0 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
     ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}
-    ${id ? `<h3 style="margin:14px 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : ''}`,
+    ${id ? locGrantsHTML(id) : ''}</div>
+    <div data-tab="beats">${id ? `<h3 style="margin:0 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : '<p class="muted">Save the site first.</p>'}</div>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
       S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -274,11 +283,13 @@ function editSite(id, projectId) {
         s.name = $('#es-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase(); if (!s.name) { toast('Name required'); return false; }
         s.projectId = $('#es-proj', m).value || null;
         PE.finish();
-        if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
+        if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else { S.sites.push(s); if (curView === 'projects') { SEL.client = ''; SEL.project = s.projectId || ''; SEL.site = s.id; } }
         reindex(); markDirty(); renderAll();
         if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
-    }], { width: 'min(1500px,94vw)' });
+    }], { width: 'min(1500px,94vw)', into: PV.panel, onCancel: () => renderProjects() });
+  editorTabs(m, 'site', [['details', 'Details'], ['loc', 'Location'], ['beats', `Patrol beats (${beatsOf(s).length})`]]);
+  if (id) bindLocGrants(m, id);
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
   $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
   m.querySelectorAll('[data-esb]').forEach(x => x.onclick = () => { if (!sitePins(IX.site.get(id)).length) return toast('Save a location for the site first'); editBeat(id, x.dataset.esb || null); });

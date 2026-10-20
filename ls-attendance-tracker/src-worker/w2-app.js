@@ -528,10 +528,42 @@ async function openSupervisor() {
   } else W.api = LSClient.make({ base: API_BASE, role: 'supervisor' });
   W.sup = true; startGps(); await loadBoard();
 }
+/** Supervisor allowed by the admin: take the best GPS fix over ~20 s and send it for the admin's approval (queued when offline) */
+async function setSiteLocation(site) {
+  if (!site || !navigator.geolocation) return toast('GPS not available');
+  let best = null, wid = null;
+  const box = document.createElement('div'); box.className = 'sheet-bg';
+  box.innerHTML = `<div class="sheet"><b>${esc(site.name)}</b><p class="note" id="sl-st">${t('gpsWait')}</p>
+    <label class="fl" for="sl-l">${t('locLabel')}</label><input class="f" id="sl-l" autocomplete="off">
+    <label class="fl" for="sl-r" style="margin-top:8px">${t('locRadius')}</label><input class="f" id="sl-r" type="number" min="20" max="1000" value="${site.pins?.[0]?.radius || 100}">
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn" id="sl-x">${t('back')}</button><button class="btn pri grow" id="sl-ok" disabled>${t('sendAdmin')}</button></div></div>`;
+  document.body.appendChild(box);
+  const st = $('#sl-st', box), ok = $('#sl-ok', box), done = () => { if (wid != null) navigator.geolocation.clearWatch(wid); box.remove(); };
+  wid = navigator.geolocation.watchPosition(p => {
+    const c = p.coords; if (!best || c.accuracy < best.acc) best = { lat: c.latitude, lng: c.longitude, acc: Math.round(c.accuracy) };
+    st.textContent = t('gpsBest').replace('{m}', best.acc); ok.disabled = false;
+  }, () => { st.textContent = t('gpsTooWeak').replace('{m}', '?'); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+  setTimeout(() => { if (wid != null) { navigator.geolocation.clearWatch(wid); wid = null; } }, 20000);
+  $('#sl-x', box).onclick = done;
+  ok.onclick = async () => {
+    if (best.acc > 30) return toast(t('gpsTooWeak').replace('{m}', best.acc));
+    const body = { siteId: site.id, ...best, label: $('#sl-l', box).value.trim(), radius: +$('#sl-r', box).value || 100, clientId: 'loc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+    done(); await sendLocation(body);
+  };
+}
+async function sendLocation(body) {
+  const r = await W.api.call('POST', 'supervisor/location', body).catch(() => null);
+  if (r?.status === 200) { haptic(15); toast(t('locSent')); return true; }
+  if (!r) { const q = JSON.parse(localStorage.getItem('ls.locq') || '[]'); q.push(body); localStorage.setItem('ls.locq', JSON.stringify(q)); toast(t('locQueued')); }
+  else toast(r.body?.error || 'Error');
+  return false;
+}
+async function flushLocations() { let q = []; try { q = JSON.parse(localStorage.getItem('ls.locq') || '[]'); } catch (e) { } if (!q.length) return; localStorage.setItem('ls.locq', '[]'); for (const b of q) await sendLocation(b); }
 async function loadBoard(redraw = true) {
   const r = await W.api.call('GET', 'supervisor/board', null, { query: { site: W.supSite || '', date: W.supDate || '' } }).catch(() => null);
   if (r?.status !== 200) { toast(r?.body?.error || 'No connection'); W.sup = false; return render(); }
   W.board = r.body; W.prof ||= { sites: r.body.sites, site: null, punches: [] }; if (redraw) renderSup();
+  flushLocations();
 }
 function renderSup() {
   const B = W.board || { workers: [], sites: [], codes: [] }, isToday = B.date === B.today;
@@ -551,7 +583,9 @@ function renderSup() {
     <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(tc(w.name))}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
       ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
       ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}</li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
+    ${B.sites.some(s => s.canSetLocation) ? `<div class="card"><b>${t('setLocTitle')}</b><p class="note" style="margin:6px 0 10px">${t('setLocHint')}</p>${B.sites.filter(s => s.canSetLocation).map(s => `<button class="btn wide" data-setloc="${esc(s.id)}" style="margin-top:6px">${ic('pin')} ${t('setLocHere')} – ${esc(s.name)}</button>`).join('')}</div>` : ''}
     <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
+  $$('[data-setloc]').forEach(b => b.onclick = () => setSiteLocation(B.sites.find(s => s.id === b.dataset.setloc)));
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
   $$('[data-f]').forEach(b => b.onclick = () => { W.supF = b.dataset.f; renderSup(); });

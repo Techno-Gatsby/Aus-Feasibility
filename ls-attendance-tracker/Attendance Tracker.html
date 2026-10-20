@@ -197,7 +197,7 @@ table.ag th,table.ag td{border-right:1px solid var(--line);border-bottom:1px sol
 table.ag thead th{position:sticky;top:0;background:var(--raised);z-index:3;font:650 9.5px var(--font-body);letter-spacing:.05em;color:var(--mute);text-align:center;text-transform:uppercase;padding:0 5px}
 table.ag thead tr:nth-child(2) th{top:24px;font:600 11px var(--font-mono);color:var(--heading)}
 table.ag thead th.we{background:#EEF2F8}
-table.ag td.d{width:var(--dw,28px);min-width:var(--dw,28px);max-width:var(--dw,28px);text-align:center;cursor:cell;position:relative;font:650 10.5px var(--font-mono);padding:0}
+table.ag td.d{width:var(--dw,32px);min-width:var(--dw,32px);max-width:var(--dw,32px);text-align:center;cursor:cell;position:relative;font:650 10.5px var(--font-mono);padding:0}
 table.ag td.d:hover{box-shadow:inset 0 0 0 1px var(--line3)}
 table.ag td.d.lk{background:repeating-linear-gradient(45deg,#F6F7FA,#F6F7FA 4px,#EDF0F5 4px,#EDF0F5 8px);cursor:not-allowed}
 table.ag td.d.frz{cursor:not-allowed;opacity:.75}
@@ -438,7 +438,8 @@ table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;
 .dot.on{background:var(--pos)}.dot.pe{background:var(--warn)}.dot.no{background:var(--neg)}
 
 /* tour this page (starts only from the ? button / Help menu) */
-.tour-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:transparent;color:inherit;font:700 12px var(--font-body);cursor:pointer;margin-left:10px;display:inline-grid;place-items:center}
+.tour-btn{width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:transparent;color:inherit;font:700 12px/1 var(--font-body);cursor:pointer;margin-left:8px;display:inline-grid;place-items:center;padding:0;flex:none;position:relative;vertical-align:middle}
+.tour-btn.ico svg{display:block}
 .tour-btn:hover{background:rgba(255,255,255,.15)}
 .tour-hole{position:fixed;z-index:9000;border-radius:8px;box-shadow:0 0 0 9999px rgba(10,16,28,.55);outline:2px solid var(--accent);pointer-events:none;transition:top .55s cubic-bezier(.4,0,.2,1),left .55s cubic-bezier(.4,0,.2,1),width .55s cubic-bezier(.4,0,.2,1),height .55s cubic-bezier(.4,0,.2,1)}
 .tour-tip.in>*{animation:tourIn .35s ease .15s backwards}
@@ -528,6 +529,126 @@ table.dir td.p1{font-family:var(--font-mono)}
 .ai-grip{position:absolute;left:0;top:0;width:16px;height:16px;cursor:nwse-resize;z-index:2;touch-action:none;border-top-left-radius:12px;background:linear-gradient(135deg,var(--line2) 0 2px,transparent 2px 5px,var(--line2) 5px 7px,transparent 7px)}
 .ai-panel{max-width:calc(100vw - 40px)}
 
+/* menubar: your email + notifications */
+.me-box{display:inline-flex;align-items:center;gap:0;margin-left:10px}
+.me-chip{border:1px solid rgba(255,255,255,.35);background:transparent;color:rgba(255,255,255,.9);border-radius:12px;padding:3px 10px;font:500 11.5px var(--font-body);cursor:pointer;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me-chip:hover{background:rgba(255,255,255,.12)}
+.bell-n{position:absolute;top:-5px;right:-6px;min-width:15px;height:15px;border-radius:8px;background:#E5484D;color:#fff;font:700 9.5px/15px var(--font-body);padding:0 3px}
+#dropdown button.unread{font-weight:650;background:var(--accent-soft2)}
+#dropdown button>span{white-space:normal;text-align:left}
+/* timesheet: bar, edit mode, signatures */
+.tv-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line2);border-radius:var(--r);background:var(--surface)}
+.tv-bar .spacer{flex:1}
+.ts-sheet.editing td.ed{outline:none;cursor:text;background:#fffbea}
+.ts-sheet.editing td.ed.x{background:#f3f3f3}
+.ts-sheet.editing td.ed:focus{box-shadow:inset 0 0 0 2px #1a73e8;background:#fff}
+.ts-sheet .tot{position:relative}
+.ts-del{position:absolute;right:-22px;top:50%;transform:translateY(-50%);border:0;background:#fde2e1;color:#b42318;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0}
+.ts-sheet.editing{padding-right:30px!important}
+.ts-add td{border:0!important;padding:3px 0!important;text-align:left!important;height:auto!important}
+.ts-sig img{max-height:42px;max-width:90%;display:block;margin:0 auto}
+.ts-sig-t{font:italic 600 16px 'Segoe Script','Brush Script MT',cursive;color:#123}
+.ts-sig-m{font-size:7.5px;font-weight:500;color:#333;margin-bottom:4px}
+.ts-sig-m .stale{color:#b42318}
+.sig-pad{width:100%;border:1px dashed var(--line3,#9aa5b5);border-radius:6px;background:#fff;touch-action:none;cursor:crosshair}
+@media print{.ts-sign-btn,.ts-del,.ts-add{display:none!important}}
+/* Projects & sites: editor in the page, with tabs */
+.pv-panel>.mh{display:flex;align-items:center;gap:10px;padding:0 0 8px;border-bottom:1px solid var(--line2);margin-bottom:10px}
+.pv-panel>.mh h3{font-size:16px;color:var(--heading)}
+.pv-panel>.mb{padding:0}
+.pv-panel>.mf{display:flex;justify-content:flex-end;gap:8px;padding:12px 0 4px;border-top:1px solid var(--line2);margin-top:14px;position:sticky;bottom:0;background:var(--surface)}
+.ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line2);margin:0 0 12px}
+.ptabs button{border:1px solid transparent;border-bottom:0;background:none;padding:7px 14px;border-radius:var(--r) var(--r) 0 0;cursor:pointer;color:var(--text2);font-weight:500;font-size:12.5px;margin-bottom:-1px}
+.ptabs button.on{background:var(--surface);border-color:var(--line2);color:var(--heading);font-weight:650}
+details.adv{margin-top:12px;border:1px solid var(--line);border-radius:var(--r);padding:6px 10px}
+details.adv>summary{cursor:pointer;font-weight:600;color:var(--heading)}
+details.adv[open]>summary{margin-bottom:8px}
+.dot{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:700}
+.dot.ok{background:#dcf5e3;color:#14773a}.dot.no{background:#f1f3f6;color:#9aa5b5}
+
+/* timesheet rows: same height everywhere – text in two lines at most */
+.ts-sheet table.ts tbody tr[data-row]>td{height:calc(var(--tsf,8.5px) * 1.9);padding-top:0;padding-bottom:0}
+.ts-sheet.two table.ts tbody tr[data-row]>td{height:calc(var(--tsf,8.5px) * 2.5)}
+.ts-sheet .c2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.2;overflow-wrap:break-word}
+.ts-sheet td.site .c2{text-align:left}
+/* month picker */
+.mp-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line2);background:var(--surface);border-radius:var(--r);padding:4px 10px;min-height:28px;font:500 12.5px var(--font-body);color:var(--heading);cursor:pointer;white-space:nowrap}
+.mp-btn:hover{border-color:var(--accent-line)}.mp-btn svg{color:var(--mute)}
+.mp-pop{position:fixed;z-index:9000;width:220px;background:var(--surface);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:8px}
+.mp-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.mp-h b{font-size:13px;color:var(--heading)}
+.mp-h button{border:0;background:var(--surface2);border-radius:6px;width:28px;height:24px;cursor:pointer}
+.mp-g{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.mp-g button{border:1px solid transparent;background:none;border-radius:6px;padding:6px 0;cursor:pointer;font-size:12px;color:var(--text)}
+.mp-g button:hover{background:var(--accent-soft2)}.mp-g button.now{border-color:var(--accent-line)}.mp-g button.on{background:var(--accent);color:#fff}
+
+/* Billing → timesheets: project list as tall as the page, wider when it scrolls; the sheet scrolls on its own */
+.tv-split{grid-template-columns:minmax(360px,440px) 1fr;flex:1;min-height:0;align-items:stretch}
+.tv-list{max-height:none;height:100%;min-height:0;overflow:auto}
+.tv-right{min-width:0;display:flex;flex-direction:column;gap:8px;min-height:0}
+#tv-sheets{min-width:0;overflow:auto;flex:1;min-height:0}
+.ts-sheet td.site .c2{-webkit-line-clamp:3!important}
+
+/* every text on the sheet in the sheet's one size (headers a little larger for the titles) */
+.ts-sheet td,.ts-sheet th,.ts-sheet table.ts th.d,.ts-sheet table.ts-legend td,.ts-sheet table.ts-sign td{font-size:var(--tsf,8.5px)}
+.ts-sheet table.ts-top td,.ts-sheet table.ts-mb td{font-size:calc(var(--tsf,8.5px) * 1.15)}
+
+/* ======================= tablets and phones ======================= */
+@media (max-width:1100px){
+  .split,.tv-split{grid-template-columns:1fr!important}
+  .tv-list{height:34vh;max-height:34vh}
+  .tv-right{min-height:75vh}
+  .ins-g{grid-template-columns:1fr}
+  .ins-g>.sec{height:440px}
+}
+@media (max-width:900px){
+  .body,.body.notree{grid-template-columns:1fr}
+  .rail{display:none}
+  .body.treeopen .rail{display:block;position:fixed;z-index:700;left:0;top:0;bottom:0;width:min(320px,86vw);box-shadow:0 0 0 100vmax rgba(15,25,40,.35),8px 0 24px rgba(0,0,0,.2);padding-top:12px}
+  .menubar{gap:0;padding:0 6px;height:44px}
+  .menubar .brand{margin-right:6px}
+  #savestate{display:none}
+  .me-chip{max-width:120px}
+  .toolbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .toolbar>*{flex:none}
+  .dh{padding:8px 10px;gap:8px}
+  .dh h2{font-size:15px}
+  .dh>*{max-width:100%}
+  .dc{padding:10px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #modal-bg{padding:8px}
+  #modal{width:100%!important;max-width:calc(100vw - 16px)}
+  .form{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .ai-panel{left:8px;right:8px;width:auto!important;bottom:84px;height:min(72vh,600px)!important}
+  .ai-grip,#ai-big{display:none}
+  .pv-panel>.mf{flex-wrap:wrap}
+  .ptabs{overflow-x:auto;scrollbar-width:none}.ptabs button{flex:none}
+  .tv-bar{gap:4px}
+}
+@media (max-width:600px){
+  .menubar .brand{font-size:0;gap:0}.menubar .brand .mark{font-size:12px}
+  .menubar .menu{padding:6px 7px}
+  .me-chip{display:none}
+  .tour-btn{margin-left:5px}
+  .doctab{padding:6px 9px;font-size:12px}
+  th,td{padding:5px 7px}
+  .kpis{grid-template-columns:1fr 1fr;gap:6px}
+  .ai-fab{right:14px;bottom:30px;width:48px;height:48px}
+  #status2{display:none}
+  .statusbar{white-space:nowrap;overflow:hidden}
+  .mp-pop{left:8px!important;right:8px;width:auto}
+  input[type=search],#ev-q,#tv-q{width:100%!important}
+}
+
+/* Getting started */
+.guide{border:1px solid var(--accent-line);background:var(--accent-soft2);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.guide-h{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}.guide-h b{color:var(--heading);font-size:13.5px}.guide-h .spacer{flex:1}
+.guide-l{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.guide-l li{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:8px;cursor:pointer}
+.guide-l li:hover{border-color:var(--accent)}
+.guide-l li .n{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:700 11px var(--font-body);background:var(--surface3);color:var(--text2)}
+.guide-l li.ok .n{background:#dcf5e3;color:#14773a}.guide-l li.todo .n{background:#fff1d6;color:#9a6200}
+.guide-l li b{display:block;font-size:12.5px;color:var(--heading)}.guide-l li small{display:block;color:var(--mute);font-size:11px;margin-top:2px}
+
 </style>
 </head>
 <body>
@@ -538,8 +659,9 @@ table.dir td.p1{font-family:var(--font-mono)}
     <button class="menu" data-menu="help">Help</button>
     <span class="spacer"></span>
     <span id="savestate"></span>
+    <span id="me-box" class="me-box"></span>
     <button class="tour-btn" id="tour-btn" title="Tour this page" aria-label="Tour this page">?</button>
-    <button class="tour-btn" id="set-btn" title="Settings" aria-label="Settings">⚙</button>
+    <button class="tour-btn ico" id="set-btn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.5 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
   </div>
   <div class="toolbar" id="toolbar"></div>
   <div class="body" id="body">
@@ -666,6 +788,7 @@ const LSAPI = (() => {
     const isAdmin = req => roles(req).includes('admin');
     const isSup = req => isAdmin(req) || roles(req).includes('supervisor');
     const isViewer = req => isSup(req) || roles(req).includes('viewer');
+    const me = req => String(req.principal?.userDetails || '').toLowerCase();
     const byCode = async code => { const c = String(code || '').trim().toUpperCase(); return (await store.list('workers', w => w.code === c, { code: c }))[0] || null; };
 
     const cleanBeats = bs => (Array.isArray(bs) ? bs : []).slice(0, 50).map(b => ({ id: String(b.id), name: String(b.name || '').slice(0, 60), shift: ['DAY', 'NIGHT'].includes(b.shift) ? b.shift : 'ALL', everyMin: Math.max(10, +b.everyMin || 60), assignees: (b.assignees || []).map(String).slice(0, 500),
@@ -794,7 +917,7 @@ const LSAPI = (() => {
         const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date || '') ? req.query.date : today;
         const ps2 = date === today ? ps : await store.list('punches', p => p.workDate === date && p.status !== 'rejected', { workDate: date });
         const ms = await store.list('marks', m => m.date === date, { workDate: date });
-        return J(200, { today, date, codes: MARK_CODES, sites: (await store.list('sites')).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins })), workers: ws.map(w => ({ id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, punches: ps2.filter(p => p.wid === w.id).map(strip), mark: ms.find(m => m.wid === w.id) || null })) });
+        return J(200, { today, date, codes: MARK_CODES, sites: (await store.list('sites')).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins, canSetLocation: (s.locEditors || []).includes(me(req)) })), me: me(req), workers: ws.map(w => ({ id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, punches: ps2.filter(p => p.wid === w.id).map(strip), mark: ms.find(m => m.wid === w.id) || null })) });
       },
       /** No check-in: the supervisor / admin decides what the day is (A, OFF, SL, AL …). Blank code clears the mark. */
       'POST supervisor/mark': async req => {
@@ -812,7 +935,48 @@ const LSAPI = (() => {
         const w = await byCode(req.body?.code); if (!w || !w.enabled) return err(404, 'Worker not found');
         return doPunch(w, req.body, 'supervisor: ' + (req.principal?.userDetails || '?'));
       },
+      /** A supervisor the admin allowed for this site sends the site's location from the phone; it waits for the admin's approval */
+      'POST supervisor/location': async req => {
+        if (!isSup(req)) return err(403, 'Supervisor role required');
+        const b = req.body || {}, site = await store.get('sites', String(b.siteId || ''));
+        if (!site) return err(404, 'Site not found');
+        if (!isAdmin(req) && !(site.locEditors || []).includes(me(req))) return err(403, 'You are not allowed to set the location of this site – ask the admin', 'NOT_ALLOWED');
+        const lat = +b.lat, lng = +b.lng, acc = Math.round(+b.acc || 0);
+        if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || lat === 0) return err(400, 'Location missing', 'NO_GPS');
+        if (b.clientId) { const dup = (await store.list('locprops', x => x.clientId === b.clientId))[0]; if (dup) return J(200, { prop: dup, repeat: true }); }
+        const t = now(), prop = { id: rid(), siteId: site.id, siteName: site.name, lat, lng, acc, radius: Math.max(10, Math.min(1000, +b.radius || 100)), label: String(b.label || '').slice(0, 60), note: String(b.note || '').slice(0, 200), by: me(req) || 'supervisor', at: t, status: 'pending', serverTs: t, clientId: b.clientId || '' };
+        await store.put('locprops', prop); return J(200, { prop });
+      },
       /* ---------- admin ---------- */
+      'GET admin/locprops': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), props: await store.list('locprops', x => x.serverTs > since, { since }) }); },
+      'POST admin/locprop': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const x = await store.get('locprops', req.body?.id); if (!x) return err(404, 'Not found');
+        x.status = req.body.status === 'approved' ? 'approved' : 'rejected'; x.reason = String(req.body.reason || '').slice(0, 200); x.decidedBy = me(req) || 'admin'; x.serverTs = now();
+        await store.put('locprops', x);
+        if (req.body.revoke) { const s = await store.get('sites', x.siteId); if (s) { s.locEditors = (s.locEditors || []).filter(e => e !== x.by); await store.put('sites', s); } }
+        return J(200, { prop: x });
+      },
+      /* timesheet versions and signatures, shared between PCs */
+      'PUT admin/tsdoc': async req => {
+        const d = req.body?.doc; if (!d?.projectId || !d.from || !d.to) return err(400, 'doc needed');
+        const id = `${d.projectId}|${d.from}|${d.to}`, old = await store.get('tsdocs', id);
+        const c = await cfg(), signers = (c.signers || []).flat().map(String);
+        if (!isAdmin(req)) {           // a signer may only add their own signature to the current version
+          if (!signers.includes(me(req)) || !old || d.version !== old.version || JSON.stringify(d.rows) !== JSON.stringify(old.rows)) return err(403, 'Admin role required');
+          const mine = (d.sigs || []).filter(g => g.email === me(req)), others = (old.sigs || []).filter(g => g.email !== me(req));
+          d.sigs = [...others, ...mine.map(g => ({ ...g, at: new Date(now()).toISOString() }))];
+        }
+        await store.put('tsdocs', { ...d, id, serverTs: now() }); return J(200, { ok: true });
+      },
+      'GET admin/tsdocs': async req => { if (!isViewer(req) && !me(req)) return err(403, 'Sign in required'); const since = +req.query?.since || 0; return J(200, { now: now(), docs: await store.list('tsdocs', x => x.serverTs > since, { since }) }); },
+      'POST admin/notice': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const n = req.body?.notice || {}; if (!n.id || !n.to) return err(400, 'notice needed');
+        await store.put('notices', { id: String(n.id), to: String(n.to).toLowerCase(), text: String(n.text || '').slice(0, 400), key: String(n.key || ''), at: n.at || new Date(now()).toISOString(), read: false, serverTs: now() }); return J(200, { ok: true });
+      },
+      'GET me/notices': async req => { const m = me(req); if (!m) return err(401, 'Sign in required'); return J(200, { notices: await store.list('notices', x => x.to === m || isAdmin(req)) }); },
+      'POST me/notices/read': async req => { const x = await store.get('notices', String(req.body?.id || '')); if (!x || (x.to !== me(req) && !isAdmin(req))) return err(404, 'Not found'); x.read = true; x.serverTs = now(); await store.put('notices', x); return J(200, { ok: true }); },
       'PUT admin/roster': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const b = req.body || {}; const seen = new Set();
@@ -824,7 +988,7 @@ const LSAPI = (() => {
           await store.put('workers', w); seen.add(w.id);
         }
         if (b.full) for (const w of await store.list('workers')) if (!seen.has(w.id) && w.enabled) { w.enabled = false; await store.put('workers', w); }
-        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
+        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats), locEditors: (Array.isArray(s.locEditors) ? s.locEditors : []).map(x => String(x).toLowerCase()).slice(0, 20) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
         if (b.settings) await store.put('config', { id: 'app', v: { ...((await store.get('config', 'app'))?.v || {}), ...b.settings } });
         return J(200, { workers: seen.size, sites: (b.sites || []).length });
       },
@@ -897,6 +1061,8 @@ const LSClient = (() => {
   let chain = Promise.resolve();                       // serialise demo calls (load → handle → save)
 
   /** role: principal used in demo mode ('admin' for the tracker, 'supervisor' for the phone's supervisor screen) */
+  // demo mode: the email typed in the tracker's "Your email" stands in for the signed-in user (same browser)
+  const demoEmail = () => { try { return (localStorage.getItem('ls.me') || '').toLowerCase(); } catch (e) { return ''; } };
   function make({ base = '', role = '' } = {}) {
     base = String(base || '').trim().replace(/\/+$/, '');
     const demo = !base;
@@ -906,7 +1072,7 @@ const LSClient = (() => {
         let dirty = false;
         const store = LSAPI.memoryStore(snap, () => { dirty = true; });
         const api = LSAPI.create({ store, secret: 'ls-demo-secret' });
-        const r = await api.handle({ method, path, body, query: opt.query || {}, headers: opt.token ? { authorization: 'Bearer ' + opt.token } : {}, principal: (opt.role || role) ? { userRoles: [opt.role || role], userDetails: 'demo ' + (opt.role || role) } : null });
+        const r = await api.handle({ method, path, body, query: opt.query || {}, headers: opt.token ? { authorization: 'Bearer ' + opt.token } : {}, principal: (opt.role || role) ? { userRoles: [opt.role || role], userDetails: demoEmail() || 'demo ' + (opt.role || role) } : null });
         if (dirty) await idbSet(KEY, store.dump());
         return r;
       };
@@ -948,7 +1114,9 @@ const LSMap = (() => {
     // Esri street basemap: same provider as the satellite view, works from a local file (OSM's public tiles refuse pages with no referrer)
     // detectRetina: on phones and scaled Windows screens Leaflet fetches tiles one zoom deeper and draws them at half size, so imagery stays sharp.
     // maxNativeZoom: past the deepest imagery the last level is upsampled instead of requesting tiles that do not exist.
-    const T = { detectRetina: true, maxNativeZoom: 19, maxZoom: 20, keepBuffer: 4 };
+    // No detectRetina: on sharp screens it asks one level deeper than maxNativeZoom, and Esri answers missing levels with grey
+    // "Map data not yet available" tiles (not an error Leaflet could skip). Level 18 exists everywhere in the UAE; closer zooms stretch it.
+    const T = { maxNativeZoom: 18, maxZoom: 21, keepBuffer: 4 };
     // dark: Esri Dark Gray Canvas + its labels (the worker app's instrument theme); otherwise World Street Map
     const osm = opts.dark ? L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' }),
@@ -1079,6 +1247,7 @@ const MONTH_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JUL
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const toDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
 const isoOf = dt => `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 86400000);
 const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return isoOf(d); };
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const dim = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
@@ -1294,18 +1463,33 @@ const SEC_CLOSED = new Set();
 const sec = (id, title, body, extra = '') => `<div class="sec ${SEC_CLOSED.has(id) ? 'closed' : ''}" data-sec="${id}"><div class="sh"><span class="car">▾</span>${title}${extra}</div><div class="sb">${body}</div></div>`;
 function bindSecs(root) { root.querySelectorAll('.sec>.sh').forEach(h => h.onclick = e => { if (e.target.closest('button,input,select,a')) return; const s = h.parentElement; s.classList.toggle('closed'); s.classList.contains('closed') ? SEC_CLOSED.add(s.dataset.sec) : SEC_CLOSED.delete(s.dataset.sec); }); }
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms); }
+/** A dialog – or, with opts.into, the same editor drawn inside a page panel (Projects & sites) */
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
   if (typeof TOUR !== "undefined") TOUR.stop();
-  const m = $('#modal');
-  m.style.width = opts.width || '';
-  m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3><button class="btn sm" data-x>✕</button></div>
+  const panel = opts.into?.isConnected && opts.into.offsetParent && !$('#modal-bg').classList.contains('on') ? opts.into : null, m = panel || $('#modal');
+  if (!panel) m.style.width = opts.width || '';
+  m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3>${panel ? '' : '<button class="btn sm" data-x>✕</button>'}</div>
     <div class="mb">${bodyHTML}</div>
     <div class="mf">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-b="${i}">${esc(b.label)}</button>`).join('')}</div>`;
+  if (panel) {
+    buttons.forEach((b, i) => m.querySelector(`[data-b="${i}"]`).onclick = async () => { const r = await b.onClick?.(m); if (r !== false && !b.onClick) opts.onCancel?.(); });
+    return m;
+  }
   $('#modal-bg').classList.add('on');
   m.querySelector('[data-x]').onclick = closeModal;
   buttons.forEach((b, i) => m.querySelector(`[data-b="${i}"]`).onclick = async () => { const r = await b.onClick?.(m); if (r !== false) closeModal(); });
   setTimeout(() => { if (!m.contains(document.activeElement)) m.querySelector('input,select,textarea')?.focus(); }, 30);
   return m;
+}
+/** Tabs inside an editor: blocks marked data-tab="key" are shown one at a time; the choice is remembered per kind */
+const PTAB = {};
+function editorTabs(m, kind, tabs) {
+  const mb = m.querySelector('.mb'); if (!mb) return;
+  const cur = tabs.some(t => t[0] === PTAB[kind]) ? PTAB[kind] : tabs[0][0];
+  mb.insertAdjacentHTML('afterbegin', `<div class="ptabs">${tabs.map(([k, l]) => `<button type="button" data-pt="${k}" class="${k === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`);
+  const show = k => { PTAB[kind] = k; mb.querySelectorAll('[data-pt]').forEach(b => b.classList.toggle('on', b.dataset.pt === k)); mb.querySelectorAll('[data-tab]').forEach(d => d.hidden = d.dataset.tab !== k); window.dispatchEvent(new Event('resize')); };
+  mb.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => show(b.dataset.pt));
+  show(cur);
 }
 function closeModal() { $('#modal-bg').classList.remove('on'); $('#modal').innerHTML = ''; }
 function confirmBox(msg, okLabel = 'OK', cls = 'pri') {
@@ -1534,15 +1718,16 @@ function rowHTML(i) {
 }
 
 /** Column widths (px): identity block stays pinned while the days scroll */
-const GW = [34, 190, 76, 26, 150], GD = [112, 78];
+const GW_WIDE = [34, 190, 76, 26, 150], GW_SMALL = [22, 104, 58, 18, 64], GD = [112, 78];   // frozen columns: narrower on phones
 const GRID_FIRST = 60, GRID_BATCH = 100;
-/** Column widths: the minimum layout, with any spare width of the pane shared out – names and sites first, then the day cells (up to 42 px), the rest to OTHER */
+/** Column widths: the minimum layout (day cells 32 px – room for OFF), with any spare width of the pane shared out:
+ *  the day cells first (up to 44 px), then names and sites, the rest to OTHER */
 function gridCols() {
-  const n = AV.dates.length, det = AV.details, fixed = (det ? GD[0] + GD[1] : 0) + 34 + 38;
-  const base = GW.reduce((a, b) => a + b, 0) + fixed + n * 28 + 110;
+  const n = AV.dates.length, det = AV.details, fixed = (det ? GD[0] + GD[1] : 0) + 34 + 38, GW = innerWidth < 700 ? GW_SMALL : GW_WIDE, D0 = 32;
+  const base = GW.reduce((a, b) => a + b, 0) + fixed + n * D0 + 110;
   let extra = Math.max(0, ($('#grid-wrap')?.clientWidth || 0) - base - 2);
-  const nameAdd = Math.floor(Math.min(110, extra * .3)), siteAdd = Math.floor(Math.min(110, extra * .25)); extra -= nameAdd + siteAdd;
-  const dw = n ? Math.min(42, 28 + Math.floor(extra / n)) : 28; extra -= (dw - 28) * n;
+  const dw = n ? Math.min(44, D0 + Math.floor(extra / n)) : D0; extra -= (dw - D0) * n;
+  const nameAdd = Math.floor(Math.min(110, extra * .5)), siteAdd = Math.floor(Math.min(110, extra * .4)); extra -= nameAdd + siteAdd;
   const W = [GW[0], GW[1] + nameAdd, GW[2], GW[3], GW[4] + siteAdd], other = 110 + Math.max(0, Math.floor(extra));
   const left = []; W.reduce((a, w, i) => (left[i] = a, a + w), 0);
   return { left, W, dw, other, width: W.reduce((a, b) => a + b, 0) + fixed + n * dw + other };
@@ -1984,83 +2169,80 @@ const BASES = [
   ['fixed', 'Fixed posts × monthly rate (ignores attendance)'],
   ['lump', 'Fixed monthly amount (enter it as the unit rate)']
 ];
-const PV = { q: '', focus: '' };
+const PV = { q: '', focus: '', panel: null };
+const siteHeadcount = id => { const t = todayISO(); return S.employees.filter(e => employedOn(e, t) && assignOn(e, t)?.site === id).length; };
 
+/** Projects & sites: pick a client, project or site in the tree on the left; it opens here in tabs. Nothing picked: an overview. */
 function renderProjects() {
   const v = $('#v-projects');
-  const q = norm(PV.q);
   const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
-  const today = todayISO(), bySite = new Map();
-  for (const e of S.employees) { if (!employedOn(e, today)) continue; const s = assignOn(e, today)?.site; if (s) bySite.set(s, (bySite.get(s) || 0) + 1); }
-  const headcount = id => bySite.get(id) || 0;
-  const projRows = [...S.projects].filter(p => (!q || norm(p.name).includes(q) || norm(p.code).includes(q) || sitesOfProject(p.id).some(s => norm(s.name).includes(q))) && (!PV.focus || p.id === PV.focus || p.clientId === PV.focus))
-    .sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
-  const projOpts = opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —');
-  const focus = PV.focus ? (IX.proj.get(PV.focus)?.name || IX.client.get(PV.focus)?.name) : '';
-  v.innerHTML = docHead('Projects &amp; sites', 'client → project → sites · SAP code, PO and rates per project', `
-      ${focus ? `<span class="pill">${esc(focus)} <button class="btn sm" id="pv-unfocus" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
-      <input type="search" id="pv-q" placeholder="Project / code / site" value="${esc(PV.q)}" style="width:200px">`)
+  if (SEL.site && !IX.site.has(SEL.site)) SEL.site = ''; if (SEL.project && !IX.proj.has(SEL.project)) SEL.project = ''; if (SEL.client && !SEL.client.startsWith('__') && !IX.client.has(SEL.client)) SEL.client = '';
+  const kind = SEL.site ? 'site' : SEL.project ? 'proj' : SEL.client && !SEL.client.startsWith('__') ? 'client' : '';
+  const pendingLoc = Object.values(S.locProps || {}).filter(x => x.status === 'pending').length;
+  v.innerHTML = docHead('Projects &amp; sites', kind ? '' : 'pick a client, project or site in the tree on the left – or a row below', `
+      ${kind ? '<button class="btn sm" id="pv-back">← All projects</button>' : ''}
+      <button class="btn sm" id="pv-clients">Clients…</button><button class="btn sm" id="pv-zones">Map of all zones</button>`)
   + `<div class="dc">
-  ${sec('clients', 'Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
-    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td>
-      <td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
-    </tbody></table></div>`, `<span class="cnt">${S.clients.length}</span>`)}
-  ${unmapped.length ? sec('unmapped', `Unlinked sites <span class="pill neg">${unmapped.length}</span>`, `
-    <div class="row" style="margin:0 0 8px"><span class="muted small">Their days appear on no client timesheet. Link ticked sites to</span><select id="pv-bulkp">${projOpts}</select><button class="btn sm pri" id="pv-bulk">Link</button></div>
-    <div class="tw" style="max-height:260px"><table><thead><tr><th><input type="checkbox" id="pv-all"></th><th>Site</th><th class="num">Staff now</th><th>Link one by one</th><th></th></tr></thead><tbody>
-    ${unmapped.map(s => `<tr><td><input type="checkbox" data-um="${s.id}"></td><td>${esc(s.name)}</td><td class="num">${headcount(s.id)}</td>
-      <td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td>
-      <td><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('')}
-    </tbody></table></div>`) : ''}
-  ${(() => { const withPin = S.sites.filter(x => x.pins?.length), projPin = S.projects.filter(x => x.pins?.length), covered = S.sites.filter(x => sitePins(x).length); return sec('locations', `Locations for the personnel app <span class="cnt">${covered.length} of ${S.sites.length} sites have a zone</span>`, `
-    <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pv-zones" ${covered.length ? '' : 'disabled'}>Map of all zones</button><label class="btn sm" style="display:inline-flex;align-items:center">Upload documents in bulk…<input type="file" id="pv-bulkdocs" accept="application/pdf" multiple hidden></label><span class="muted small">A <b>project</b> location covers every site of the project that has no pin of its own; a <b>site</b> pin overrides it. Punches inside a zone are accepted automatically; others wait for review.</span></div>
-    ${projPin.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Sites covered</th><th></th></tr></thead><tbody>
-    ${projPin.map(x => `<tr><td class="lab">${esc(x.name)}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${sitesOfProject(x.id).filter(y => !y.pins?.length).length}</td><td><button class="btn sm" data-ep="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
-    ${withPin.length ? `<div class="tw" style="max-height:240px;margin-top:${projPin.length ? 8 : 0}px"><table><thead><tr><th>Site</th><th>Project</th><th>Pins</th><th class="num">Radius (m)</th><th class="num">Staff now</th><th></th></tr></thead><tbody>
-    ${withPin.map(x => `<tr><td>${esc(x.name)}</td><td class="muted">${esc(projOfSite(x.id)?.name || '—')}</td><td class="mono small">${x.pins.map(p => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`).join(' · ')}</td><td class="num">${x.pins.map(p => p.radius).join(', ')}</td><td class="num">${headcount(x.id) || ''}</td><td><button class="btn sm" data-es="${x.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : ''}
-    ${!projPin.length && !withPin.length ? '<p class="muted small" style="margin:0">Nothing set yet – use <b>Edit</b> on a project or a site.</p>' : ''}`, '', ); })()}
-  ${beatsSectionHTML()}
-  ${sec('projects', 'Projects', projRows.map(p => {
-      const c = IX.client.get(p.clientId); const b = p.billing || {};
-      const ss = sitesOfProject(p.id);
-      const bill = (!b.basis || b.basis === 'ratecard') ? 'Rate card · guard ' + money(rateFor(p, 'SECURITY GUARD')) + (Object.keys(b.rates || {}).length ? ' · project rates' : '') : b.basis === 'lump' ? 'Fixed ' + money(b.rate) + ' / month' : esc((BASES.find(x => x[0] === b.basis) || [, ''])[1]) + (b.rate ? ' · ' + money(b.rate) : '');
-      return `<div class="comp">
-        <div class="ch"><b>${esc(p.name)}</b>${p.code ? `<span class="mono muted">${esc(p.code)}</span>` : ''}${p.poNo ? `<span class="mono muted">${esc(p.poNo)}</span>` : ''}
-          <span class="muted">${esc(c?.name || '')}</span>
-          ${!p.clientId ? '<span class="pill neg">no client</span>' : ''}
-          ${!rateFor(p, 'SECURITY GUARD') && !['fixed', 'lump'].includes(b.basis) ? '<span class="pill warn">no rate</span>' : ''}
-          ${p.active === false ? '<span class="pill">inactive</span>' : ''}
-          ${p.pins?.length ? `<span class="pill pos" title="Project-wide worker-app zone">📍 project ${p.pins[0].radius} m</span>` : ''}
-          ${p.docs?.length ? `<span class="pill" title="Documents added to every invoice pack">📄 ${p.docs.map(d => (d.kind === 'woi' ? 'WOI' : d.kind.toUpperCase()) + ' ' + (d.pages || '?') + ' p').join(' · ')}</span>` : ''}
-          <span class="spacer"></span><span class="muted small">${bill} · VAT ${b.vat || 0}%</span>
-          <button class="btn sm" data-addsite="${p.id}">Add site</button><button class="btn sm" data-ep="${p.id}">Edit</button></div>
-        <div class="cb"><table><tbody>${ss.map(s => `<tr><td style="width:60%">${esc(s.name)}${s.pins?.length ? ' <span class="pill pos" title="Has its own worker-app zone">📍 ' + s.pins[0].radius + ' m</span>' : p.pins?.length ? ' <span class="pill" title="Uses the project zone">📍 project</span>' : ''}</td><td class="num muted">${headcount(s.id) || ''}</td><td style="text-align:right"><button class="btn sm" data-es="${s.id}">Edit</button></td></tr>`).join('') || '<tr><td class="muted">No sites yet</td></tr>'}</tbody></table></div>
-      </div>`;
-    }).join('') || '<p class="muted">No projects match.</p>', `<span class="cnt">${projRows.length}</span>`)}
-  </div>`;
-  bindSecs(v);
-  if ($('#pv-zones')) $('#pv-zones').onclick = zonesMap;
-  bindBeatsSection($('#v-projects'));
-  if ($('#pv-bulkdocs')) $('#pv-bulkdocs').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) bulkDocs(fs).catch(err => toast(err.message, 6000)); };
-  if ($('#pv-unfocus')) $('#pv-unfocus').onclick = () => { PV.focus = ''; clearSel(); };
-  if ($('#pv-bulk')) {
-    $('#pv-all').onchange = e => v.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
-    $('#pv-bulk').onclick = () => {
-      const pid = $('#pv-bulkp').value, ids = [...v.querySelectorAll('[data-um]:checked')].map(c => c.dataset.um);
-      if (!pid || !ids.length) return toast('Tick sites and choose a project');
-      ids.forEach(id => IX.site.get(id).projectId = pid); markDirty(); renderAll(); toast(`Linked ${ids.length} site(s)`);
-    };
-  }
-  $('#pv-q').oninput = e => { PV.q = e.target.value; clearTimeout(PV._t); PV._t = setTimeout(() => { renderProjects(); const i = $('#pv-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
-  v.querySelectorAll('[data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
-  v.querySelectorAll('[data-ep]').forEach(b => b.onclick = () => editProject(b.dataset.ep));
-  v.querySelectorAll('[data-es]').forEach(b => b.onclick = () => editSite(b.dataset.es));
-  v.querySelectorAll('[data-addsite]').forEach(b => b.onclick = () => editSite(null, b.dataset.addsite));
-  v.querySelectorAll('[data-map]').forEach(sel => sel.onchange = () => {
+    ${unmapped.length ? `<div class="alert" style="margin-bottom:10px"><div><b>${unmapped.length} site(s) not linked to a project</b> – their days appear on no client timesheet. <button class="btn sm" id="pv-link">Link sites…</button></div></div>` : ''}
+    ${pendingLoc ? `<div class="note" style="margin-bottom:10px">${pendingLoc} site location(s) sent by supervisors wait for approval in <a href="#" id="pv-locrev">Today → Review</a>.</div>` : ''}
+    <div id="pv-panel" class="pv-panel">${kind ? '' : projectsOverviewHTML()}</div></div>`;
+  PV.panel = $('#pv-panel');
+  if (kind === 'site') editSite(SEL.site); else if (kind === 'proj') editProject(SEL.project); else if (kind === 'client') editClient(SEL.client);
+  else v.querySelectorAll('[data-pvp]').forEach(r => r.onclick = () => selectNode('proj', r.dataset.pvp));
+  if ($('#pv-back')) $('#pv-back').onclick = () => clearSel();
+  $('#pv-clients').onclick = clientsDialog;
+  $('#pv-zones').onclick = zonesMap;
+  if ($('#pv-link')) $('#pv-link').onclick = linkSitesDialog;
+  if ($('#pv-locrev')) $('#pv-locrev').onclick = e => { e.preventDefault(); showView('app'); };
+}
+/** All projects at a glance: client, sites, staff, and whether location / documents / rates are set */
+function projectsOverviewHTML() {
+  const ok = (b, t) => b ? `<span class="dot ok" title="${t}">✓</span>` : `<span class="dot no" title="${t} missing">–</span>`;
+  const rows = [...S.projects].sort((a, b) => (IX.client.get(a.clientId)?.name || 'zz').localeCompare(IX.client.get(b.clientId)?.name || 'zz') || a.name.localeCompare(b.name));
+  return `<div class="tw fill"><table><thead><tr><th>Project</th><th>Client</th><th class="num">Sites</th><th class="num">Staff now</th><th>Location</th><th>Documents</th><th>Rate</th><th></th></tr></thead><tbody>
+    ${rows.map(p => { const ss = sitesOfProject(p.id), b = p.billing || {}, rate = ['fixed', 'lump'].includes(b.basis) || !!rateFor(p, 'SECURITY GUARD');
+      return `<tr data-pvp="${p.id}" style="cursor:pointer"><td class="lab">${esc(p.name)}${p.active === false ? ' <span class="pill">inactive</span>' : ''}</td><td class="muted">${esc(IX.client.get(p.clientId)?.name || '')}${p.clientId ? '' : '<span class="pill neg">no client</span>'}</td>
+        <td class="num">${ss.length}</td><td class="num">${ss.reduce((a, s) => a + siteHeadcount(s.id), 0)}</td><td>${ok(p.pins?.length || ss.some(s => s.pins?.length), 'Location')}</td><td>${ok(p.docs?.length, 'Work order / documents')}</td><td>${ok(rate, 'Rate')}</td><td><button class="btn sm">Open</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">No projects yet – Add project in the toolbar.</td></tr>'}
+  </tbody></table></div>`;
+}
+function clientsDialog() {
+  openModal('Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
+    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
+    </tbody></table></div>`, [{ label: 'Add client', onClick: () => { setTimeout(() => editClient(null), 0); } }, { label: 'Close', cls: 'pri' }]);
+  $$('#modal [data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
+}
+function linkSitesDialog() {
+  const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
+  const projOpts = opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), '', '— choose project —');
+  const m = openModal(`Link ${unmapped.length} site(s) to projects`, `<div class="row" style="margin:0 0 8px"><span class="muted small">Link ticked sites to</span><select id="pv-bulkp">${projOpts}</select><button class="btn sm pri" id="pv-bulk">Link</button></div>
+    <div class="tw" style="max-height:50vh"><table><thead><tr><th><input type="checkbox" id="pv-all"></th><th>Site</th><th class="num">Staff now</th><th>Or link one by one</th></tr></thead><tbody>
+    ${unmapped.map(s => `<tr><td><input type="checkbox" data-um="${s.id}"></td><td>${esc(s.name)}</td><td class="num">${siteHeadcount(s.id)}</td><td><select data-map="${s.id}">${projOpts}<option value="__new">New project with this name…</option></select></td></tr>`).join('')}
+    </tbody></table></div>`, [{ label: 'Close', cls: 'pri' }]);
+  $('#pv-all', m).onchange = e => m.querySelectorAll('[data-um]').forEach(c => c.checked = e.target.checked);
+  $('#pv-bulk', m).onclick = () => {
+    const pid = $('#pv-bulkp', m).value, ids = [...m.querySelectorAll('[data-um]:checked')].map(c => c.dataset.um);
+    if (!pid || !ids.length) return toast('Tick sites and choose a project');
+    ids.forEach(id => IX.site.get(id).projectId = pid); markDirty(); closeModal(); renderAll(); toast(`Linked ${ids.length} site(s)`);
+  };
+  m.querySelectorAll('[data-map]').forEach(sel => sel.onchange = () => {
     const s = IX.site.get(sel.dataset.map);
-    if (sel.value === '__new') { editProject(null, s.name, pid => { s.projectId = pid; }); return; }
-    if (sel.value) { s.projectId = sel.value; markDirty(); renderAll(); }
+    if (sel.value === '__new') { closeModal(); editProject(null, s.name, pid => { s.projectId = pid; }); return; }
+    if (sel.value) { s.projectId = sel.value; markDirty(); sel.closest('tr').remove(); renderAll(); }
   });
+}
+/** Site → Location: supervisors (by email) allowed to send this site's location from the phone; the admin approves each one */
+function locGrantsHTML(siteId) {
+  const g = S.locGrants.filter(x => x.siteId === siteId), pend = Object.values(S.locProps || {}).filter(x => x.siteId === siteId && x.status === 'pending').length;
+  return `<h3 style="margin:16px 0 6px">Supervisor can set this location <span class="muted small">– from the phone, standing on site; you approve it in Today → Review</span></h3>
+    ${g.length ? `<div class="tw" style="max-width:560px"><table><thead><tr><th>Supervisor</th><th>Allowed since</th><th></th></tr></thead><tbody>${g.map(x => `<tr><td>${esc(x.email)}</td><td class="mono">${fmtDMY(String(x.at || '').slice(0, 10))}</td><td style="text-align:right"><button class="btn sm bad" data-lgrev="${esc(x.email)}">Revoke</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small" style="margin:0">Nobody yet.</p>'}
+    <div class="row" style="margin-top:8px"><input type="email" id="lg-e" placeholder="supervisor@company.com" style="width:260px"><button class="btn sm pri" id="lg-add">Allow</button>${pend ? `<span class="pill warn">${pend} waiting for approval</span>` : ''}</div>
+    <p class="muted small" style="margin:4px 0 0">The supervisor signs in to the phone page's Supervisor screen with this email. Changes reach phones after <b>Publish roster</b>.</p>`;
+}
+function bindLocGrants(m, siteId) {
+  const add = $('#lg-add', m); if (!add) return;
+  add.onclick = () => { const e = $('#lg-e', m).value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return toast('Enter the supervisor\'s email');
+    if (!S.locGrants.some(x => x.siteId === siteId && x.email === e)) S.locGrants.push({ siteId, email: e, at: new Date().toISOString() }); markDirty(); toast(`${e} may set this location – Publish roster to send it`); renderProjects(); };
+  m.querySelectorAll('[data-lgrev]').forEach(b => b.onclick = () => { S.locGrants = S.locGrants.filter(x => !(x.siteId === siteId && x.email === b.dataset.lgrev)); markDirty(); toast('Access revoked – Publish roster to send it'); renderProjects(); });
 }
 
 function editClient(id) {
@@ -2080,7 +2262,7 @@ function editClient(id) {
         if (id) S.clients[S.clients.findIndex(x => x.id === id)] = c; else S.clients.push(c);
         reindex(); markDirty(); renderAll();
       }
-    }]);
+    }], { into: PV.panel, onCancel: () => renderProjects() });
 }
 
 function editProject(id, presetName, onCreated) {
@@ -2088,10 +2270,15 @@ function editProject(id, presetName, onCreated) {
   p.billing ||= { basis: 'ratecard', rate: 0, vat: 0 };
   p.billing.rates ||= {};
   p.pins ||= [];
-  const m = openModal(id ? 'Edit project' : 'Add project', `<div class="form">
+  const ss0 = id ? sitesOfProject(id) : [];
+  const m = openModal(id ? p.name : 'Add project', `<div data-tab="details"><div class="form">
     <label class="f">Project name * (as on timesheet)<input type="text" id="ep-name" value="${esc(p.name)}" placeholder="SCL TR - AL QUOZ TR"></label>
-    <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
     <label class="f">Client<select id="ep-client">${opts(S.clients.map(c => [c.id, c.name]), p.clientId, '— choose client —')}</select></label>
+    <label class="f">Project code (SAP)<input type="text" id="ep-code" value="${esc(p.code || '')}" placeholder="104N135"></label>
+    <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
+    <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    </div>
+    <details class="adv"><summary>Invoice &amp; timesheet details <span class="muted small">(entity, SAP names and codes, work order, day-off letter, signature label)</span></summary><div class="form">
     <label class="f">Entity on invoice<input type="text" id="ep-entity" value="${esc(p.entityName || '')}" placeholder="SOBHA CONSTRUCTIONS LLC (ELWOOD INFRASTRUCTURE @ Al Yufrah)"></label>
     <label class="f">Name in Tax Invoice Tracker<input type="text" id="ep-tn" value="${esc(p.trackerName || '')}"></label>
     <label class="f">SAP project name<input type="text" id="ep-sapn" value="${esc(p.sapName || '')}" placeholder="SOBHA ELWOOD INFRASTRUCTURE"></label>
@@ -2099,11 +2286,11 @@ function editProject(id, presetName, onCreated) {
     <label class="f">Work order ref<input type="text" id="ep-wo" value="${esc(p.woNo || '')}" placeholder="LOR-104N135-24-0001"></label>
     <label class="f">Day off on timesheet<select id="ep-off">${opts([['O', 'O (SCL TR sheets)'], ['OFF', 'OFF (Elwood sheets)']], p.tsOff || 'O')}</select></label>
     <label class="f">2nd signature label<select id="ep-ack">${opts([['0', 'ACKNOWLEDGE BY: (SCL TR sheets)'], ['1', 'blank (Elwood sheets)']], p.tsNoAck ? '1' : '0')}</select></label>
-    <label class="f">PO / Work order instruction no.<input type="text" id="ep-po" value="${esc(p.poNo || '')}" placeholder="INS-104N135-26-0002"></label>
-    <label class="f">Active<select id="ep-active">${opts([['1', 'Active'], ['0', 'Inactive']], p.active === false ? '0' : '1')}</select></label>
+    </div></details>
+    ${id ? `<details class="adv"><summary>Merge into another project</summary><div class="form">
     ${id ? `<label class="f">Merge into another project (moves all sites)<select id="ep-merge">${opts(S.projects.filter(x => x.id !== id).map(x => [x.id, x.name]).sort((a, b) => a[1].localeCompare(b[1])), '', "— don't merge —")}</select></label>` : ''}
-    </div>
-    <h3 style="margin:14px 0 6px">Billing</h3>
+    </div></details>` : ""}</div>
+    <div data-tab="billing">    
     <div class="form">
       <label class="f">Basis<select id="ep-basis">${opts(BASES, p.billing.basis)}</select></label>
       <label class="f">Unit rate (other bases)<input type="number" step="0.01" id="ep-rate" value="${p.billing.rate || 0}"></label>
@@ -2116,11 +2303,14 @@ function editProject(id, presetName, onCreated) {
     ${S.settings.rateCard.map(r => `<tr><td>${esc(r.trade)}</td><td class="num">${r.rate ? money(r.rate) : '<span class="pill warn">not set</span>'}</td><td class="num"><input type="number" step="0.01" data-rt="${esc(r.trade)}" value="${p.billing.rates[r.trade] || ''}" placeholder="${r.rate || ''}" style="width:120px"></td></tr>`).join('')}
     </tbody></table>
     <p class="muted small">Lines group security personnel by trade and days: "4 Security @ 31 Days" × 4,100 = 16,400; "1 Security @ 5 Days" = 4,100 × 5 ÷ 31 = 661.29.</p>
-    <h3 style="margin:14px 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
+</div>
+    <div data-tab="docs">    <h3 style="margin:0 0 6px">Documents attached to every invoice pack <span class="muted small">– e.g. the Work Order Instruction: uploaded once, added to each pack of this project unless the invoice uses another file</span></h3>
     <div id="ep-docs"></div>
     <div class="row" style="margin-top:6px"><label class="btn sm" style="display:inline-flex;align-items:center">Upload PDF…<input type="file" id="ep-docfile" accept="application/pdf" hidden></label><span class="muted small">Pages are kept exactly as uploaded. Many WOIs at once: Projects &amp; sites → <b>Upload documents in bulk…</b>. In Invoice → Pack you can also take the WOI pages out of a full invoice PDF.</span></div>
-    <h3 style="margin:14px 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
-    ${pinEditorHTML('ep')}`,
+</div>
+    <div data-tab="loc">    <h3 style="margin:0 0 6px">Project location &amp; coverage <span class="muted small">– for the personnel app: every site of this project without a pin of its own uses this zone</span></h3>
+    ${pinEditorHTML('ep')}</div>
+    <div data-tab="sites">${id ? `<div class="row" style="margin-bottom:8px"><button class="btn sm pri" id="ep-addsite">+ Add site</button></div><div class="tw"><table><thead><tr><th>Site</th><th>Location</th><th class="num">Staff now</th><th>Patrol beats</th></tr></thead><tbody>${ss0.map(x => `<tr data-gosite="${x.id}" style="cursor:pointer"><td><a href="#">${esc(x.name)}</a></td><td>${x.pins?.length ? '<span class="pill pos">own pin</span>' : p.pins?.length ? '<span class="pill">project zone</span>' : '<span class="pill warn">none</span>'}</td><td class="num">${siteHeadcount(x.id)}</td><td>${beatsOf(x).length || ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No sites yet.</td></tr>'}</tbody></table></div>` : '<p class="muted">Save the project first, then add its sites.</p>'}</div>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       const ss = sitesOfProject(id);
       if (!await confirmBox(`Delete project ${p.name}? Its ${ss.length} site(s) become unmapped (attendance is kept).`, 'Delete', 'bad')) return;
@@ -2139,11 +2329,14 @@ function editProject(id, presetName, onCreated) {
         const rates = {}; m.querySelectorAll('[data-rt]').forEach(i => { if (+i.value) rates[i.dataset.rt] = +i.value; });
         p.billing = { basis: $('#ep-basis', m).value, rate: +$('#ep-rate', m).value || 0, vat: +$('#ep-vat', m).value || 0, posts: +$('#ep-posts', m).value || 0, unit: $('#ep-unit', m).value.trim() || 'Security', rates };
         PE.finish();
-        if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else S.projects.push(p);
+        if (id) S.projects[S.projects.findIndex(x => x.id === id)] = p; else { S.projects.push(p); if (curView === 'projects') { SEL.client = ''; SEL.project = p.id; SEL.site = ''; } }
         reindex(); onCreated?.(p.id); reindex(); markDirty(); renderAll(); Files.sweep();
         if (p.pins.length && S.employees.some(e => e.app?.on)) toast('Project location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
-    }], { width: 'min(1500px,94vw)' });
+    }], { width: 'min(1500px,94vw)', into: PV.panel, onCancel: () => renderProjects() });
+  editorTabs(m, 'project', [['details', 'Details'], ['billing', 'Billing'], ['loc', 'Location'], ['docs', 'Documents'], ...(id ? [['sites', `Sites (${ss0.length})`]] : [])]);
+  m.querySelectorAll('[data-gosite]').forEach(r => r.onclick = e => { e.preventDefault(); selectNode('site', r.dataset.gosite); });
+  if ($('#ep-addsite', m)) $('#ep-addsite', m).onclick = () => editSite(null, id);
   p.docs ||= [];
   const DOC_KINDS = [['woi', 'Work Order Instruction'], ['lpo', 'LPO / purchase order'], ['agreement', 'Rate agreement'], ['other', 'Other']];
   const docsTable = () => {
@@ -2229,14 +2422,15 @@ function editSite(id, projectId) {
   s.pins ||= [];
   const refs = id ? countSiteRefs(id) : 0;
   const ghostOf = pid => { const p = pid && IX.proj.get(pid); return p?.pins?.length ? { name: p.name, pins: p.pins } : null; };
-  const m = openModal(id ? 'Edit site' : 'Add site', `<div class="form">
+  const m = openModal(id ? s.name : 'Add site', `<div data-tab="details"><div class="form">
     <label class="f">Site name *<input type="text" id="es-name" value="${esc(s.name)}"></label>
     <label class="f">Project<select id="es-proj">${opts(S.projects.map(p => [p.id, p.name]).sort((a, b) => a[1].localeCompare(b[1])), s.projectId, '— unmapped —')}</select></label>
     ${id ? `<label class="f">Merge into another site (moves all staff & attendance)<select id="es-merge"><option value="">— don't merge —</option>${siteOptions(null, null).replace(`value="${id}"`, `value="${id}" disabled`)}</select></label>` : ''}
-    </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site.</p>` : ''}
-    <h3 style="margin:14px 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
+    </div>${id ? `<p class="muted small">${refs} allocation / attendance reference(s) use this site · ${siteHeadcount(id)} on site today.</p>` : ''}</div>
+    <div data-tab="loc"><h3 style="margin:0 0 6px">Location for the personnel app <span class="muted small">– leave empty to use the project location (dashed circle), or set the site's own pin</span></h3>
     ${pinEditorHTML('es', `<button class="btn sm" id="es-use" ${ghostOf(s.projectId) ? '' : 'hidden'}>Use project location</button>`)}
-    ${id ? `<h3 style="margin:14px 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : ''}`,
+    ${id ? locGrantsHTML(id) : ''}</div>
+    <div data-tab="beats">${id ? `<h3 style="margin:0 0 6px">Patrol beats <span class="muted small">– checkpoints visited in rounds (opens the beat; save site changes first)</span></h3><div class="row">${beatsOf(s).map(b => `<button class="btn sm" data-esb="${b.id}">${esc(b.name)} · ${b.checkpoints?.length || 0} checkpoints</button>`).join('')}<button class="btn sm" data-esb="">Add patrol beat</button></div>` : '<p class="muted">Save the site first.</p>'}</div>`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (refs) { toast('Site is in use – merge it into another site instead'); return false; }
       S.sites = S.sites.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -2247,11 +2441,13 @@ function editSite(id, projectId) {
         s.name = $('#es-name', m).value.trim().replace(/\s+/g, ' ').toUpperCase(); if (!s.name) { toast('Name required'); return false; }
         s.projectId = $('#es-proj', m).value || null;
         PE.finish();
-        if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else S.sites.push(s);
+        if (id) S.sites[S.sites.findIndex(x => x.id === id)] = s; else { S.sites.push(s); if (curView === 'projects') { SEL.client = ''; SEL.project = s.projectId || ''; SEL.site = s.id; } }
         reindex(); markDirty(); renderAll();
         if (sitePins(s).length && S.employees.some(e => e.app?.on)) toast('Location saved – Publish roster in Personnel app to send it to phones', 5000);
       }
-    }], { width: 'min(1500px,94vw)' });
+    }], { width: 'min(1500px,94vw)', into: PV.panel, onCancel: () => renderProjects() });
+  editorTabs(m, 'site', [['details', 'Details'], ['loc', 'Location'], ['beats', `Patrol beats (${beatsOf(s).length})`]]);
+  if (id) bindLocGrants(m, id);
   const PE = pinEditor(m, s, { px: 'es', name: s.name, others: S.sites.filter(o => o.id !== s.id && o.pins?.length).map(o => ({ name: o.name, pins: o.pins })), ghost: ghostOf(s.projectId), empty: ghostOf(s.projectId) ? 'No own pin – this site uses the project location. Search above, click the map or press "Use project location" to give it its own.' : 'No location yet – search above or click the map.' });
   $('#es-proj', m).onchange = e => PE.setGhost(ghostOf(e.target.value));
   m.querySelectorAll('[data-esb]').forEach(x => x.onclick = () => { if (!sitePins(IX.site.get(id)).length) return toast('Save a location for the site first'); editBeat(id, x.dataset.esb || null); });
@@ -2327,41 +2523,46 @@ function mergeSite(from, to) {
 }
 
 /* =====================================================================
-   Client timesheets (calendar month, one sheet per project, LS/DO/F-026)
+   Client timesheets (LS/DO/F-026, one sheet per project) for a calendar
+   month or any period up to 31 days. A sheet is generated from the
+   attendance; once edited or signed it is saved as a version
+   (S.tsDocs) and that version is what is shown, printed and exported.
    ===================================================================== */
 const TS_LEGEND = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
 /** Legend for a project: day-off is "O" on the SCL TR workbook, "OFF" on the Elwood sheets */
 const tsLegend = p => TS_LEGEND.map(([a, b]) => [a === 'O' ? (p?.tsOff || 'O') : a, b]);
-const TV = { ym: null, client: '', picked: new Set(), all: true, preview: null };
+const TV = { mode: 'month', ym: null, from: null, to: null, client: '', q: '', picked: new Set(), all: true, preview: null, edit: null };
 
-/** One pass over the ledger per month: projectId -> Map(rowKey -> row). Cached until data changes. */
-const MONTH_CACHE = new Map();
-function monthRows(ym) {
-  const ck = ym + '|' + DATA_VER; if (MONTH_CACHE.has(ck)) return MONTH_CACHE.get(ck);
-  if (MONTH_CACHE.size > 12) MONTH_CACHE.clear();
-  const days = monthDates(ym), byProj = new Map();
+/** One pass over the ledger per period: projectId -> Map(rowKey -> row); cells keyed by day position 1..N. Cached until data changes. */
+const PERIOD_CACHE = new Map();
+function periodRows(from, to) {
+  const ck = from + '|' + to + '|' + DATA_VER; if (PERIOD_CACHE.has(ck)) return PERIOD_CACHE.get(ck);
+  if (PERIOD_CACHE.size > 12) PERIOD_CACHE.clear();
+  const days = datesBetween(from, to), byProj = new Map();
   S.employees.forEach((emp, ei) => {
     const att = S.att[emp.id]; if (!att) return;
-    for (const d of days) {
-      const v = att[d]; if (!v || !employedOn(emp, d)) continue;
+    days.forEach((d, k) => {
+      const v = att[d]; if (!v || !employedOn(emp, d)) return;
       const c = typeof v === 'string' ? { c: v } : v;
-      const cd = codeDef(c.c); if (!cd.billable && !cd.client) continue;
-      const site = siteOn(emp, d); const pid = IX.site.get(site)?.projectId; if (!pid) continue;
+      const cd = codeDef(c.c); if (!cd.billable && !cd.client) return;
+      const site = siteOn(emp, d); const pid = IX.site.get(site)?.projectId; if (!pid) return;
       const shift = shiftOn(emp, d) || '', section = c.c === 'R' ? '__REL' : site, key = `${section}|${shift}|${emp.id}${section === '__REL' ? '|' + site : ''}`;
       let rows = byProj.get(pid); if (!rows) byProj.set(pid, rows = new Map());
       let row = rows.get(key);
-      if (!row) rows.set(key, row = { section, shift, emp, ei, first: +d.slice(8), name: c.n || '', cells: {}, total: 0, sites: new Set() });
-      row.cells[+d.slice(8)] = c.c; row.sites.add(site);
+      if (!row) rows.set(key, row = { section, shift, emp, ei, first: k + 1, name: c.n || '', cells: {}, total: 0, sites: new Set() });
+      row.cells[k + 1] = c.c; row.sites.add(site);
       if (cd.billable) row.total++;
-    }
+    });
   });
-  MONTH_CACHE.set(ck, byProj); return byProj;
+  PERIOD_CACHE.set(ck, byProj); return byProj;
 }
-/** Build the project-wise breakup for one calendar month from the daily ledger. */
-function buildTimesheet(projectId, ym) {
-  const days = monthDates(ym);
+const monthRows = ym => periodRows(ym + '-01', `${ym}-${pad(dim(ym))}`);
+/** Project-wise sheet for a calendar month (buildTimesheet(pid, 'YYYY-MM')) or a period (buildTimesheet(pid, from, to)). */
+function buildTimesheet(projectId, from, to) {
+  let ym = null; if (!to) { ym = from; from = ym + '-01'; to = `${ym}-${pad(dim(ym))}`; }
+  const dates = datesBetween(from, to);
   const siteOrder = sitesOfProject(projectId).map(s => s.id);
-  const rows = monthRows(ym).get(projectId) || new Map();
+  const rows = periodRows(from, to).get(projectId) || new Map();
   const secIdx = s => s === '__REL' ? 1e6 : siteOrder.indexOf(s);
   // within a site: DAY before NIGHT, then in order of first day worked (as on the LS/DO/F-026 sheets)
   const shIdx = x => x === 'DAY' ? 0 : x === 'NIGHT' ? 1 : 2;
@@ -2373,93 +2574,246 @@ function buildTimesheet(projectId, ym) {
     sec.rows.push(r);
   }
   const total = list.reduce((a, r) => a + r.total, 0);
-  // headcount equivalent per site = billable man-days / days in month
-  return { projectId, ym, days: days.length, sections, total, rows: list };
+  return { projectId, ym, from, to, dates, days: dates.length, sections, total, rows: list };
+}
+const tsLabel = ts => ts.ym ? fmtMonYY(ts.ym) : `${fmtDMY(ts.from)} – ${fmtDMY(ts.to)}`;
+const rowName = r => r.name || r.emp?.name || '';
+const rowCode = r => r.code ?? (r.emp ? empCodeLabel(r.emp) : '');
+const tsKey = ts => `${ts.projectId}|${ts.from}|${ts.to}`;
+const rowTotal = cells => Object.values(cells).filter(c => c && codeDef(c).billable).length;
+/** codes shown in a day cell: the client codes, plus A and day-off typed into an edited sheet */
+const tsShown = (c, edited) => c && (codeDef(c).client || (edited && (c === 'A' || c === 'OFF')));
+
+/* ---------- saved versions ---------- */
+const tsDoc = ts => S.tsDocs?.[tsKey(ts)] || null;
+/** a saved version's rows -> sheet sections (order kept, each row remembers its index for editing) */
+function docSheet(ts, doc) {
+  const sections = []; let sec = null;
+  doc.rows.forEach((r, ri) => { const name = r.section || ''; if (!sec || sec.name !== name) sections.push(sec = { id: name, name, rows: [] }); sec.rows.push({ ...r, ri, total: rowTotal(r.cells) }); });
+  const rows = sections.flatMap(s => s.rows);
+  return { ...ts, sections, rows, total: rows.reduce((a, r) => a + r.total, 0), doc };
+}
+/** rows of a sheet as plain saved rows */
+const docRows = ts => ts.sections.flatMap(s => s.rows.map(r => ({ section: s.name, shift: r.shift || '', name: rowName(r), code: rowCode(r), cells: { ...r.cells } })));
+/** short fingerprint of the generated sheet, to see whether attendance changed after a version was saved */
+function tsBasis(ts) { const s = JSON.stringify(docRows(ts)); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h.toString(36); }
+/** What is shown, printed and exported: the saved version if there is one, narrowed to one person if asked */
+function tsView(ts, q = TV.q) {
+  const doc = tsDoc(ts); let v = doc ? docSheet(ts, doc) : ts;
+  if (q) {
+    const n = norm(q), keep = r => norm(rowName(r)).includes(n) || norm(rowCode(r)).includes(n);
+    const sections = v.sections.map(s => ({ ...s, rows: s.rows.filter(keep) })).filter(s => s.rows.length), rows = sections.flatMap(s => s.rows);
+    v = { ...v, sections, rows, total: rows.reduce((a, r) => a + r.total, 0), filtered: q };
+  }
+  return v;
 }
 
 /** Signature label: the Elwood sheets leave the second box (acknowledge) unlabelled */
 const sigLabel = (p, s, i) => i === 1 && p?.tsNoAck ? '' : s.label;
-/** One text size for the whole sheet: the largest (up to 8.5 px) at which the longest site, shift, name and code fit their columns (names may use two lines) */
-const TS_W = 1096, TS_COL = { site: 8, shift: 4, name: 17, code: 9, total: 5 };
+/** Layout of a sheet: one text size for all of it – the largest (up to 10.5 px) at which every column's content fits the
+ *  page width – and column widths in proportion to what each holds. A site or name far longer than the rest may take two lines. */
+const TS_W = 1096;
 let tsCtx = null;
-function tsFontSize(ts) {
-  tsCtx ||= document.createElement('canvas').getContext('2d');
-  const need = (t, pct, lines = 1, bold = false) => { if (!t) return 9; tsCtx.font = `${bold ? '700 ' : ''}10px Verdana, Tahoma, Arial, sans-serif`; const room = (TS_W * pct / 100 - 6) * lines, w = lines > 1 ? tsCtx.measureText(t).width * 1.1 : Math.max(...t.split(/\s+/).map(x => tsCtx.measureText(x).width)); return 10 * room / w; };
-  let fs = 8.5;
-  for (const sec of ts.sections) { fs = Math.min(fs, need(sec.name, TS_COL.site, 1, true)); for (const r of sec.rows) fs = Math.min(fs, need(r.shift, TS_COL.shift), need(r.name || r.emp.name, TS_COL.name, 2), need(empCodeLabel(r.emp), TS_COL.code, 2)); }
-  return Math.max(6.5, Math.floor(fs * 4) / 4);
-}
-/** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets */
-function tsSheetHTML(ts) {
-  const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days;
-  const dayTh = Array.from({ length: N }, (_, i) => `<th class="d">${i + 1}</th>`).join('');
-  let body = '';
-  for (const sec of ts.sections) {
-    sec.rows.forEach((r, i) => {
-      body += `<tr>${i === 0 ? `<td class="site" rowspan="${sec.rows.length}">${esc(sec.name)}</td>` : ''}
-        <td>${esc(r.shift)}</td><td class="nm">${esc(r.name || r.emp.name)}</td><td>${esc(empCodeLabel(r.emp))}</td>
-        ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1]; return c && codeDef(c).client ? `<td>${esc(c === 'OFF' ? (p?.tsOff || 'O') : c)}</td>` : '<td class="x"></td>'; }).join('')}
-        <td class="tot">${r.total}</td></tr>`;
-    });
+const tsTextW = (t, fs, bold) => { tsCtx ||= document.createElement('canvas').getContext('2d'); tsCtx.font = `${bold ? '700 ' : ''}${fs}px Verdana, Tahoma, Arial, sans-serif`; return tsCtx.measureText(t || '').width; };
+function tsLayout(ts) {
+  const w10 = (list, bold) => Math.max(0, ...list.map(t => tsTextW(t, 10, bold))) / 10;    // widest text per px of font size
+  const words = list => list.flatMap(t => String(t || '').split(/\s+/));
+  // width of a text broken over two lines at the best place (e.g. "SUBCON" / "(HEMAYA SECURITY)")
+  const twoLines = t => { const w = String(t || '').split(/\s+/).filter(Boolean); if (w.length < 2) return tsTextW(w[0] || '', 10); let best = Infinity;
+    for (let k = 1; k < w.length; k++) best = Math.min(best, Math.max(tsTextW(w.slice(0, k).join(' '), 10), tsTextW(w.slice(k).join(' '), 10))); return best; };
+  const pad = 8, dpad = 8, N = ts.days, offTxt = IX.proj.get(ts.projectId)?.tsOff === 'OFF' && ts.rows.some(r => Object.values(r.cells).includes('OFF')) ? 'OFF' : 'O';
+  let site = w10(ts.sections.map(x => x.name), true), name = w10(ts.rows.map(rowName), false);
+  const shift = w10(['NIGHT', 'SHIFT'], true), code = Math.max(0, ...ts.rows.map(r => twoLines(rowCode(r)))) / 10, day = w10([offTxt, '31'], true), total = w10(['TOTAL'], true);
+  const solve = () => (TS_W - pad * 5 - dpad * N) / (site + shift + name + code + N * day + total);
+  let fs = solve(), two = false;
+  // a single outlier that would make everything small: let it take two lines (half the width) instead
+  {
+    // an outlier (the longest site or name) may take two lines – the column then follows the second-longest entry –
+    // but only when the text would otherwise be small (< 8.5 px) and wrapping makes it clearly bigger; otherwise everything stays on one line
+    const tamed = (list, bold) => { const v = list.map(t => tsTextW(t, 10, bold) / 10).sort((x, y) => y - x); return Math.max(v[1] || 0, (v[0] || 0) / 2, w10(words(list), bold)); };
+    const s0 = site, n0 = name; site = tamed(ts.sections.map(x => x.name), true); name = tamed(ts.rows.map(rowName), false);
+    const fs2 = solve();
+    if (fs < 8.5 && fs2 >= fs + 0.75 && (site < s0 || name < n0)) { two = true; fs = fs2; } else { site = s0; name = n0; }
   }
-  if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${fmtMonYY(ts.ym)}.</td></tr>`;
-  const sg = st.signatories;
-  return `<div class="sheet land ts-sheet" style="--tsf:${tsFontSize(ts)}px">
+  fs = Math.max(6.5, Math.min(10.5, Math.floor(fs * 4) / 4));
+  if (typeof window !== 'undefined') window.__tsfs = fs;
+  const cols = { site: site * fs + pad, shift: shift * fs + pad, name: name * fs + pad, code: code * fs + pad, day: day * fs + dpad, total: total * fs + pad };
+  const used = cols.site + cols.shift + cols.name + cols.code + N * cols.day + cols.total, k = TS_W / used;        // spread what is left evenly
+  const pct = x => (x * k / TS_W * 100).toFixed(2) + '%';
+  return { fs, two, w: { site: pct(cols.site), shift: pct(cols.shift), name: pct(cols.name), code: pct(cols.code), day: pct(cols.day), total: pct(cols.total) } };
+}
+/** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets.
+ *  opt.edit: cells editable (preview) */
+function tsSheetHTML(ts, opt = {}) {
+  const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days, ed = !!opt.edit, edited = !!ts.doc || ed, lay = tsLayout(ts), fs = lay.fs;
+  const dayTh = (ts.dates || []).map(d => `<th class="d" style="width:${lay.w.day}">${+d.slice(8)}</th>`).join('');
+  const ce = (attrs, txt, cls = '') => ed ? `<td class="ed ${cls}" contenteditable="true" spellcheck="false" ${attrs}>${esc(txt)}</td>` : `<td${cls ? ` class="${cls}"` : ''}><div class="c2">${esc(txt)}</div></td>`;
+  let body = '';
+  ts.sections.forEach((sec, si) => {
+    sec.rows.forEach((r, i) => {
+      const ri = r.ri ?? -1;
+      body += `<tr data-row="${ri}">${i === 0 ? (ed ? `<td class="site ed" rowspan="${sec.rows.length}" contenteditable="true" spellcheck="false" data-sec="${si}">${esc(sec.name)}</td>` : `<td class="site" rowspan="${sec.rows.length}"><div class="c2" style="-webkit-line-clamp:${sec.rows.length * 2}">${esc(sec.name)}</div></td>`) : ''}
+        ${ce(`data-r="${ri}" data-f="shift"`, r.shift || '')}${ce(`data-r="${ri}" data-f="name"`, rowName(r), 'nm')}${ce(`data-r="${ri}" data-f="code"`, rowCode(r))}
+        ${Array.from({ length: N }, (_, k) => { const c = r.cells[k + 1], show = tsShown(c, edited), txt = show ? (c === 'OFF' ? (p?.tsOff || 'O') : c) : '';
+          return ed ? `<td class="ed d${show ? '' : ' x'}" contenteditable="true" spellcheck="false" data-r="${ri}" data-d="${k + 1}">${esc(txt)}</td>` : show ? `<td>${esc(txt)}</td>` : '<td class="x"></td>'; }).join('')}
+        <td class="tot">${r.total}${ed ? `<button class="ts-del" data-del="${ri}" title="Delete this row">✕</button>` : ''}</td></tr>`;
+    });
+    if (ed) body += `<tr class="ts-add"><td colspan="${N + 5}"><button class="btn sm" data-add="${si}">+ Add row to ${esc(sec.name || 'this section')}</button></td></tr>`;
+  });
+  if (ed) body += `<tr class="ts-add"><td colspan="${N + 5}"><button class="btn sm" data-addsec="1">+ Add a site section</button></td></tr>`;
+  if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${esc(tsLabel(ts))}.</td></tr>`;
+  const sg = st.signatories, sigs = ts.doc?.sigs || [], ver = ts.doc?.version || 0;
+  const sigCell = (s, i) => {
+    const g = sigs.find(x => x.slot === i);
+    const who = [s.name, s.title].filter(Boolean).join(' ');
+    return `<td>${g ? `<div class="ts-sig">${g.image ? `<img src="${g.image}" alt="">` : `<span class="ts-sig-t">${esc(g.name)}</span>`}<div class="ts-sig-m">${esc(g.name)} · ${esc(fmtDMY(g.at.slice(0, 10)))}${g.version < ver ? ` <b class="stale">(signed v${g.version}, sheet now v${ver})</b>` : ''}</div></div>` : ''}${esc(who)}</td>`;
+  };
+  return `<div class="sheet land ts-sheet${ed ? ' editing' : ''}${lay.two ? ' two' : ''}" style="--tsf:${fs}px">
     <table class="ts-top"><tbody>
       <tr><td colspan="3" class="c b">${esc(st.companyShort)}</td><td rowspan="3" class="lg"><img src="${LOGO}" alt=""></td></tr>
       <tr><td colspan="3" class="c b">${esc(st.tsTitle)}</td></tr>
       <tr><td class="c b">Form No: ${esc(st.formNo)}</td><td class="c b" style="width:22%">REV NO: ${esc(st.revNo)}</td><td style="width:22%"></td></tr>
     </tbody></table>
     <div class="ts-mid">
-      <table class="ts-mb"><tr><td class="k">MONTH</td><td class="v">${fmtMonYY(ts.ym)}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
+      <table class="ts-mb"><tr><td class="k">${ts.ym ? 'MONTH' : 'PERIOD'}</td><td class="v">${esc(tsLabel(ts))}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
       <table class="ts-legend">${tsLegend(p).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
     </div>
-    <table class="ts"><thead><tr><th style="width:${TS_COL.site}%">SITE NAME</th><th style="width:${TS_COL.shift}%">SHIFT<br>D/N</th><th style="width:${TS_COL.name}%">NAME</th><th style="width:${TS_COL.code}%">EMP. CODE</th>${dayTh}<th class="tt" style="width:${TS_COL.total}%">TOTAL DAYS</th></tr></thead>
-    <tbody>${body}<tr class="gtr"><td colspan="${N - 6 + 4}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
-    <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(s => `<td>${esc([s.name, s.title].filter(Boolean).join(' '))}</td>`).join('')}</tr></table>
+    <table class="ts"><thead><tr><th style="width:${lay.w.site}">SITE NAME</th><th style="width:${lay.w.shift}">SHIFT<br>D/N</th><th style="width:${lay.w.name}">NAME</th><th style="width:${lay.w.code}">EMP. CODE</th>${dayTh}<th class="tt" style="width:${lay.w.total}">TOTAL DAYS</th></tr></thead>
+    <tbody>${body}<tr class="gtr"><td colspan="${Math.max(1, N - 6 + 4)}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
+    <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(sigCell).join('')}</tr></table>
   </div>`;
 }
 
-function renderTimesheets() {
+/** The period on screen: a calendar month, or From–To (up to 31 days) */
+function tsPeriod() {
   if (!TV.ym) TV.ym = addMonths(ymOf(todayISO()), -1);
-  const v = $('#v-timesheets');
+  if (TV.mode === 'range' && TV.from && TV.to) return [TV.from, TV.to];
+  return [TV.ym];
+}
+function renderTimesheets() {
+  const per = tsPeriod(), v = $('#v-timesheets');
   const projs = S.projects.filter(p => p.active !== false && (!TV.client || p.clientId === TV.client)).sort((a, b) => a.name.localeCompare(b.name));
-  const all = projs.map(p => ({ p, ts: buildTimesheet(p.id, TV.ym) }));
+  let all = projs.map(p => { const base = buildTimesheet(p.id, ...per); return { p, base, ts: tsView(base) }; });
+  if (TV.q) all = all.filter(x => x.ts.rows.length);
   if (TV.all) { TV.picked = new Set(all.filter(x => x.ts.total > 0).map(x => x.p.id)); }
   const chosen = all.filter(x => TV.picked.has(x.p.id));
-  const pv = all.find(x => x.p.id === TV.preview) || chosen[0] || null;
-  TV.chosen = chosen;
-  const D = dim(TV.ym), sumDays = all.reduce((a, x) => a + x.ts.total, 0);
-  // keep the project list where it was (unless the month or client changed)
-  const key = TV.ym + '|' + (TV.client || ''), keep = TV._key === key; TV._key = key;
-  const sTop = keep ? $('#v-timesheets .tw')?.scrollTop || 0 : 0, sLeft = keep ? $('#tv-sheets')?.scrollLeft || 0 : 0;
+  const pv = all.find(x => x.p.id === TV.preview) || chosen[0] || all[0] || null;
+  TV.chosen = chosen; TV.pv = pv;
+  if (TV.edit && (!pv || TV.edit.key !== tsKey(pv.base))) TV.edit = null;
+  const D = all[0]?.base.days || dim(TV.ym), sumDays = all.reduce((a, x) => a + x.ts.total, 0);
+  // keep the project list where it was (unless the period or client changed)
+  const key = per.join('|') + '|' + (TV.client || '') + '|' + TV.q, keep = TV._key === key; TV._key = key;
+  const sTop = keep ? $('#v-timesheets .tw')?.scrollTop || 0 : 0;
   v.innerHTML = docHead('Client timesheets', `one LS/DO/F-026 sheet per project · ${chosen.length} ticked for print / export`, `
+      <input type="search" id="tv-q" placeholder="Name or Emp ID" value="${esc(TV.q)}" style="width:170px" title="Show only this person's rows">
       <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
-      <button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`)
-  + `<div class="dc"><div class="split" style="grid-template-columns:minmax(320px,380px) 1fr">
-    <div class="tw" style="max-height:calc(100vh - 190px)"><table><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
-    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td class="tvn" title="${esc(p.name)} · ${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}</td>
-      <td class="num">${ts.rows.length || ''}</td><td class="num">${ts.total || ''}</td><td class="num">${ts.total ? qtyFmt(ts.total / D) : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No projects yet.</td></tr>'}
+      <span class="seg"><button data-tm="month" class="${TV.mode !== 'range' ? 'on' : ''}">Month</button><button data-tm="range" class="${TV.mode === 'range' ? 'on' : ''}">Custom period</button></span>
+      ${TV.mode === 'range' ? `<input type="date" id="tv-from" value="${TV.from || ''}"><span class="muted">–</span><input type="date" id="tv-to" value="${TV.to || ''}">`
+        : `<button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`}`)
+  + `<div class="dc"><div class="split tv-split">
+    <div class="tw tv-list"><table><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
+    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td class="tvn" title="${esc(p.name)} · ${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}${ts.doc ? ' <span class="pill" title="Edited / signed version">v' + ts.doc.version + '</span>' : ''}</td>
+      <td class="num">${ts.rows.length || ''}</td><td class="num">${ts.total || ''}</td><td class="num">${ts.total ? qtyFmt(ts.total / D) : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${TV.q ? `Nobody matching “${esc(TV.q)}” in this period.` : 'No projects yet.'}</td></tr>`}
     </tbody><tfoot><tr class="total"><td></td><td>${all.length} projects</td><td></td><td class="num">${sumDays}</td><td class="num">${qtyFmt(sumDays / D)}</td></tr></tfoot></table></div>
-    <div id="tv-sheets" style="min-width:0;overflow:auto">${pv ? tsSheetHTML(pv.ts) : '<div class="empty"><b>No attendance this month</b>Pick another month, or import / enter attendance first.</div>'}</div>
+    <div class="tv-right"><div id="tv-bar" class="tv-bar"></div><div id="tv-sheets">${pv ? '' : `<div class="empty"><b>No attendance in this period</b>Pick another period, or import / enter attendance first.</div>`}</div></div>
   </div></div>`;
-  tsScale();
-  const tw = $('.tw', v); if (tw) tw.scrollTop = sTop; if ($('#tv-sheets')) $('#tv-sheets').scrollLeft = sLeft;
-  const rer = () => { renderTimesheets(); renderStatus(); };
-  $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; TV.all = true; rer(); } };
-  $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); TV.all = true; rer(); };
-  $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); TV.all = true; rer(); };
-  $('#tv-client').onchange = e => { TV.client = e.target.value; TV.all = true; rer(); };
-  $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); rer(); };
+  tsShowPreview();
+  const tw = $('.tw', v); if (tw) tw.scrollTop = sTop;
+  const rer = () => { TV.all = true; renderTimesheets(); renderStatus(); };
+  v.querySelectorAll('[data-tm]').forEach(b => b.onclick = () => { TV.mode = b.dataset.tm; if (TV.mode === 'range' && !TV.from) { TV.from = TV.ym + '-01'; TV.to = addDays(TV.from, 14); } rer(); });
+  if ($('#tv-ym')) $('#tv-ym').onchange = e => { if (e.target.value) { TV.ym = e.target.value; rer(); } };
+  if ($('#tv-prev')) $('#tv-prev').onclick = () => { TV.ym = addMonths(TV.ym, -1); rer(); };
+  if ($('#tv-next')) $('#tv-next').onclick = () => { TV.ym = addMonths(TV.ym, 1); rer(); };
+  for (const k of ['from', 'to']) if ($('#tv-' + k)) $('#tv-' + k).onchange = e => {
+    const val = e.target.value; if (!val) return;
+    let f = k === 'from' ? val : TV.from, t = k === 'to' ? val : TV.to;
+    if (t < f) [f, t] = [t, f];
+    if (daysBetween(f, t) > 30) { toast('A period can be at most 31 days'); t = addDays(f, 30); }
+    TV.from = f; TV.to = t; rer();
+  };
+  $('#tv-q').oninput = e => { clearTimeout(TV._qt); TV._qt = setTimeout(() => { TV.q = e.target.value.trim(); rer(); const i = $('#tv-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 300); };
+  $('#tv-client').onchange = e => { TV.client = e.target.value; rer(); };
+  $('#tv-all').onchange = e => { TV.all = false; TV.picked = new Set(e.target.checked ? all.map(x => x.p.id) : []); renderTimesheets(); };
   // clicking a project only swaps the preview, so the list stays where it is
   v.querySelectorAll('[data-pv]').forEach(tr => tr.onclick = e => {
     if (e.target.matches('input')) return;
     const x = all.find(a => a.p.id === tr.dataset.pv); if (!x) return;
-    TV.preview = x.p.id; v.querySelectorAll('[data-pv].on').forEach(r => r.classList.remove('on')); tr.classList.add('on');
-    const box = $('#tv-sheets'); box.innerHTML = tsSheetHTML(x.ts); box.scrollLeft = 0; tsScale();
+    if (TV.edit && !confirm('Leave without saving your edits?')) return;
+    TV.edit = null; TV.preview = x.p.id; TV.pv = x; v.querySelectorAll('[data-pv].on').forEach(r => r.classList.remove('on')); tr.classList.add('on');
+    tsShowPreview();
   });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
 }
+/** Preview of the selected sheet + its bar (edit / Excel / versions / signatures) */
+function tsShowPreview() {
+  const box = $('#tv-sheets'), bar = $('#tv-bar'), pv = TV.pv; if (!box || !bar || !pv) { if (bar) bar.innerHTML = ''; return; }
+  const ts = tsView(pv.base), doc = ts.doc, ed = TV.edit;
+  const changed = doc && doc.basis && doc.basis !== tsBasis(pv.base);
+  const signed = (doc?.sigs || []).length;
+  bar.innerHTML = ed
+    ? `<b>Editing</b><span class="muted small">Click a cell and type: P, A, ${esc(IX.proj.get(ts.projectId)?.tsOff || 'O')}, R… · names, codes and sites are editable · ✕ deletes a row</span><span class="spacer"></span><button class="btn sm" id="te-cancel">Cancel</button><button class="btn sm pri" id="te-save">Save version</button>`
+    : `<button class="btn sm" id="te-edit">✎ Edit sheet</button><button class="btn sm" id="te-xlsx">Download Excel</button><label class="btn sm">Upload edited Excel…<input type="file" id="te-up" accept=".xlsx,.xls" hidden></label>
+       ${doc ? `<span class="pill">v${doc.version} · ${esc(fmtDMY(doc.savedAt.slice(0, 10)))}${doc.savedBy ? ' · ' + esc(doc.savedBy) : ''}</span>${doc.edited ? '<span class="pill warn">edited</span>' : ''}` : '<span class="muted small">Generated from attendance</span>'}
+       ${signed ? `<span class="pill pos">${signed} signature(s)</span>` : ''}${!ts.filtered ? '<button class="btn sm pri" id="te-sign">✍ Sign…</button>' : ''}
+       ${changed ? `<span class="pill warn" title="Attendance was changed after this version was saved">attendance changed</span><button class="btn sm" id="te-upd">Update from attendance</button>` : ''}
+       ${ts.filtered ? `<span class="pill">only “${esc(ts.filtered)}”</span>` : ''}
+       <span class="spacer"></span>${doc ? '<button class="btn sm bad" id="te-reset">Reset to attendance</button>' : ''}`;
+  box.innerHTML = tsSheetHTML(ed ? docSheet(pv.base, { ...(doc || {}), rows: ed.rows }) : ts, { edit: !!ed });
+  box.scrollLeft = 0; tsScale();
+  const q = s => bar.querySelector(s);
+  if (ed) {
+    q('#te-cancel').onclick = () => { TV.edit = null; tsShowPreview(); };
+    q('#te-save').onclick = () => { tsSaveVersion(pv.base, TV.edit.rows, true); TV.edit = null; renderTimesheets(); toast('Saved – the PDF and Excel now use this version'); };
+    tsBindEdit(box);
+    return;
+  }
+  q('#te-edit').onclick = () => { if (ts.filtered) return toast('Clear the Name / Emp ID filter to edit the whole sheet'); TV.edit = { key: tsKey(pv.base), rows: JSON.parse(JSON.stringify(doc ? doc.rows : docRows(pv.base))) }; tsShowPreview(); };
+  q('#te-xlsx').onclick = () => exportTimesheetsXlsx([ts]).catch(e => toast(e.message));
+  q('#te-up').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const rows = await readTimesheetXlsx(f, pv.base); tsSaveVersion(pv.base, rows, true); renderTimesheets(); toast(`Read ${rows.length} row(s) from ${f.name} – saved as a new version`); } catch (err) { toast(err.message, 6000); } };
+  if (q('#te-upd')) q('#te-upd').onclick = async () => { if (!await confirmBox('Replace the saved version with the current attendance? Your edits on this sheet are replaced, and anyone who signed is notified.', 'Update')) return; tsSaveVersion(pv.base, docRows(pv.base), false); renderTimesheets(); };
+  if (q('#te-reset')) q('#te-reset').onclick = async () => { if (!await confirmBox(`Drop the saved version${signed ? ' and its signatures' : ''} and show the sheet from attendance again?`, 'Reset', 'bad')) return; tsDropVersion(pv.base); renderTimesheets(); };
+  if (q('#te-sign')) q('#te-sign').onclick = () => {
+    if (!whoAmI()) return askMe(() => q('#te-sign')?.click());
+    const slots = S.settings.signatories.map((sg, i) => [i, sg]).filter(([i]) => canSign(i));
+    if (!slots.length) { const m = openModal('Not allowed to sign yet', `<p style="margin-top:0"><b>${esc(whoAmI())}</b> is not on the list of people who may sign timesheets.</p><p class="muted">An admin adds signers in <b>Settings → Timesheet signatories → Emails allowed to sign</b> (one list per box: Prepared, Acknowledged, Verified, Approved, Accepted).</p>`, [{ label: 'Change my email', onClick: () => { setTimeout(() => askMe(), 0); } }, { label: 'Open Settings', cls: 'pri', onClick: () => { showView('data'); setTimeout(() => $('[data-sec="sign"]')?.scrollIntoView({ block: 'start' }), 100); } }]); return; }
+    if (slots.length === 1) return signTimesheet(pv.base, slots[0][0]);
+    const m = openModal('Sign as', `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">${slots.map(([i, sg]) => `<button class="btn" data-sl="${i}">${esc(sg.label || 'Box ' + (i + 1))}</button>`).join('')}</div>`, [{ label: 'Cancel' }]);
+    m.querySelectorAll('[data-sl]').forEach(b => b.onclick = () => { closeModal(); signTimesheet(pv.base, +b.dataset.sl); });
+  };
+}
+/** Edit mode: cells write into TV.edit.rows; totals follow as you type */
+function tsBindEdit(box) {
+  const rows = TV.edit.rows, valid = new Set(S.codes.map(c => c.code));
+  const redrawTotals = () => { let g = 0; box.querySelectorAll('tr[data-row]').forEach(tr => { const r = rows[+tr.dataset.row]; if (!r) return; const t = rowTotal(r.cells); g += t; const td = tr.querySelector('.tot'); if (td) td.firstChild.nodeValue = t; }); const gt = box.querySelector('.gt'); if (gt) gt.textContent = g; };
+  box.oninput = e => {
+    const td = e.target.closest('td.ed'); if (!td) return;
+    if (td.dataset.sec != null) { const sec = tsSections(rows)[+td.dataset.sec]; for (const i of sec) rows[i].section = td.textContent.trim().toUpperCase(); return; }
+    const r = rows[+td.dataset.r]; if (!r) return;
+    if (td.dataset.d) { let c = td.textContent.trim().toUpperCase(); if (c === 'O') c = 'OFF'; if (c) r.cells[td.dataset.d] = c; else delete r.cells[td.dataset.d]; td.classList.toggle('x', !c); redrawTotals(); }
+    else r[td.dataset.f] = td.textContent.trim().replace(/\s+/g, ' ').toUpperCase();
+  };
+  box.onfocusout = e => {
+    const td = e.target.closest('td.ed'); if (!td?.dataset.d) return;
+    const r = rows[+td.dataset.r], c = r?.cells[td.dataset.d];
+    if (c && !valid.has(c)) { toast(`“${c}” is not an attendance code`); delete r.cells[td.dataset.d]; td.textContent = ''; td.classList.add('x'); redrawTotals(); }
+    else if (c) td.textContent = c === 'OFF' ? (IX.proj.get(TV.pv.p.id)?.tsOff || 'O') : c;
+  };
+  box.onkeydown = e => {
+    const td = e.target.closest('td.ed'); if (!td?.dataset.d) return;
+    const mv = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0], Enter: [1, 0] }[e.key]; if (!mv) return;
+    const trs = [...box.querySelectorAll('tr[data-row]')], ti = trs.indexOf(td.closest('tr')), d = +td.dataset.d + mv[1];
+    const nx = trs[ti + mv[0]]?.querySelector(`td[data-d="${d}"]`); if (nx) { e.preventDefault(); nx.focus(); const s = getSelection(); s.selectAllChildren(nx); }
+  };
+  box.onclick = e => {
+    const del = e.target.closest('[data-del]'), add = e.target.closest('[data-add]'), sec = e.target.closest('[data-addsec]');
+    if (del) { rows.splice(+del.dataset.del, 1); tsShowPreview(); }
+    else if (add) { const idx = tsSections(rows)[+add.dataset.add], last = idx[idx.length - 1]; rows.splice(last + 1, 0, { section: rows[last].section, shift: rows[last].shift, name: '', code: '', cells: {} }); tsShowPreview(); box.querySelector(`td[data-r="${last + 1}"][data-f="name"]`)?.focus(); }
+    else if (sec) { rows.push({ section: 'NEW SITE', shift: 'DAY', name: '', code: '', cells: {} }); tsShowPreview(); box.querySelector(`td[data-r="${rows.length - 1}"][data-f="name"]`)?.focus(); }
+  };
+}
+/** row indexes per section, in the order shown */
+function tsSections(rows) { const out = []; let cur = null; rows.forEach((r, i) => { if (!out.length || rows[i - 1].section !== r.section) out.push(cur = []); cur.push(i); }); return out; }
+
 /** The preview shows the whole A4 sheet scaled to the pane width (same layout as the print) */
 function tsScale() {
   const box = $('#tv-sheets'), sh = box?.querySelector('.ts-sheet'); if (!sh) return;
@@ -2628,7 +2982,7 @@ function packPages(dr) {
   const pages = [];
   if (dr.withSap !== false) pages.push({ t: 'Tax invoice (SAP fields)', html: sapInvoiceHTML(dr) });
   pages.push({ t: 'Tax invoice amount break-up', html: invoiceHTML(dr) });
-  if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(buildTimesheet(pid, m)) });
+  if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
   return pages;
 }
 
@@ -2642,7 +2996,7 @@ function packSlots(dr) {
   out.push({ t: 'Tax invoice amount break-up', kind: 'breakup', src: 'generated', html: invoiceHTML(dr) });
   docs('afterInvoice').forEach(d => out.push(docSlot(d)));
   if (dr.signedTs?.length) dr.signedTs.forEach(f => out.push({ t: `Signed timesheets · ${f.name} (${f.pages || '?'} p)`, kind: 'ts', src: 'uploaded', fileId: f.id, pages: f.pages }));
-  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(buildTimesheet(pid, m)) });
+  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
   docs('end').forEach(d => out.push(docSlot(d)));
   return out;
 }
@@ -3273,11 +3627,12 @@ async function exportTimesheetsXlsx(list) {
     ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
     ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`;
     tsLegend(p).forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
-    const [yy, mm] = ts.ym.split('-').map(Number);
-    ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
+    if (ts.ym) { const [yy, mm] = ts.ym.split('-').map(Number); ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; }
+    else { ws.getCell('B8').value = 'PERIOD'; ws.getCell('C8').value = tsLabel(ts); }
+    ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
     ws.getCell('B10').value = 'PROJECT NAME'; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
     const HR = 13;
-    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...Array.from({ length: N }, (_, i) => i + 1), 'TOTAL DAYS'];
+    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...ts.dates.map(d => +d.slice(8)), 'TOTAL DAYS'];
     head.forEach((v, i) => { const c = ws.getCell(HR, 2 + i); c.value = v; c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; });
     const pCodes = S.codes.filter(c => c.billable && c.code !== 'R').map(c => c.code);
     let r = HR + 1;
@@ -3285,11 +3640,11 @@ async function exportTimesheetsXlsx(list) {
       const r0 = r;
       for (const row of sec.rows) {
         ws.getCell(r, 2).value = r === r0 ? sec.name : null;
-        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.name || row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
-        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? (p?.tsOff || 'O') : code) : null; c.alignment = { horizontal: 'center' }; }
+        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = rowName(row); ws.getCell(r, 5).value = rowCode(row);
+        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = tsShown(code, !!ts.doc) ? (code === 'OFF' ? (p?.tsOff || 'O') : code) : null; c.alignment = { horizontal: 'center' }; }
         const rg = `${colL(C0)}${r}:${colL(C0 + N - 1)}${r}`;
         // template: =COUNTIF(F14:AI14,"P") for site rows, "R" for reliever rows
-        const f = (sec.id === '__REL' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';
+        const f = (sec.id === '__REL' || sec.name === 'RELIEVER' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';
         ws.getCell(r, CT + 1).value = { formula: f, result: row.total };
         for (let c = 2; c <= CT + 1; c++) ws.getCell(r, c).border = thin;
         ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
@@ -3310,7 +3665,33 @@ async function exportTimesheetsXlsx(list) {
   }
   const buf = await wb.xlsx.writeBuffer();
   const c = TV.client ? IX.client.get(TV.client)?.name + ' ' : '';
-  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${c}TIME SHEET - ${fmtMonthName(list[0].ym).replace('-', ' ')}.xlsx`);
+  const one = list.length === 1 ? (IX.proj.get(list[0].projectId)?.name || '') + ' ' : c;
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${one}TIME SHEET - ${(list[0].ym ? fmtMonthName(list[0].ym).replace('-', ' ') : tsLabel(list[0]).replace(/\//g, '-'))}.xlsx`);
+}
+/** Read a timesheet downloaded from here (and edited in Excel) back into rows: header row SITE NAME … NAME · EMP. CODE · day numbers · TOTAL DAYS */
+async function readTimesheetXlsx(file, base) {
+  await loadScript(LIB.xlsx);
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  const want = norm(IX.proj.get(base.projectId)?.name || '');
+  const names = wb.SheetNames.slice().sort((a, b) => (want.includes(norm(b).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0) - (want.includes(norm(a).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0));
+  for (const sn of names) {
+    const g = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
+    const hr = g.findIndex(r => r && r.some(v => norm(v) === 'NAME') && r.some(v => /EMP/.test(norm(v)))); if (hr < 0) continue;
+    const h = g[hr].map(norm), ci = k => h.findIndex(v => v.replace(/\s+/g, ' ').startsWith(k));
+    const cSite = ci('SITE'), cShift = ci('SHIFT'), cName = h.indexOf('NAME'), cCode = h.findIndex(v => /EMP/.test(v));
+    const dayCols = h.map((v, i) => [v, i]).filter(([v, i]) => i > cCode && /^\d{1,2}$/.test(v)).map(([, i]) => i);
+    if (dayCols.length !== base.days) throw new Error(`The sheet “${sn}” has ${dayCols.length} day columns, this period has ${base.days}. Download the Excel for the same period, edit it, and upload that file.`);
+    const rows = []; let site = '';
+    for (let r = hr + 1; r < g.length; r++) {
+      const row = g[r] || []; if (row.some(v => /GRAND TOTAL/.test(norm(v)))) break;
+      if (row[cSite] != null && String(row[cSite]).trim()) site = norm(row[cSite]);
+      const name = norm(row[cName]); if (!name) continue;
+      const cells = {}; dayCols.forEach((c, k) => { let v = norm(row[c]); if (v === 'O') v = 'OFF'; if (v) cells[k + 1] = v; });
+      rows.push({ section: site, shift: norm(row[cShift]), name, code: norm(row[cCode]), cells });
+    }
+    if (rows.length) return rows;
+  }
+  throw new Error('No timesheet rows found – use a file downloaded with “Download Excel”.');
 }
 
 async function exportMasterXlsx() {
@@ -3490,7 +3871,7 @@ const TOOLBAR = {
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
   employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Mark as resigned…', f: bulkEnd }, EV.status === 'black' ? { l: 'Remove from blacklist', f: () => bulkBlacklist(false) } : { l: 'Blacklist…', f: () => bulkBlacklist(true) }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
-  projects: () => [{ l: 'Add client', f: () => editClient(null) }, { l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, 'sep', { l: 'Upload documents in bulk…', f: () => $('#pv-bulkdocs')?.click(), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
+  projects: () => [{ l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, { l: 'Clients…', f: clientsDialog }, 'sep', { l: 'Upload documents in bulk…', f: () => pickFiles('application/pdf', true, fs => bulkDocs(fs).catch(err => toast(err.message, 6000))), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
   live: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Refresh', f: renderLive }],
   insights: () => [{ l: 'Sync now', f: () => syncApp(), strong: true }, { l: 'Run face check', f: () => faceCheckPunches(false), t: 'Compare new check-in photos with the reference photos' }, { l: 'Export Excel', f: () => exportInsights().catch(e => toast(e.message)) }],
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
@@ -3501,7 +3882,7 @@ function renderToolbar() {
   tb.innerHTML = items.map((x, i) => x === 'sep' ? '<span class="sep"></span>' : `<button data-tb="${i}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('')
     + `<span class="spacer"></span><button data-cmd="tree" title="Show / hide the tree">◧ Tree</button>`;
   tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => items[+b.dataset.tb].f?.());
-  tb.querySelector('[data-cmd=tree]').onclick = () => $('#body').classList.toggle('notree');
+  tb.querySelector('[data-cmd=tree]').onclick = toggleTree;
 }
 function renderStatus() {
   const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
@@ -3513,7 +3894,11 @@ function renderStatus() {
 
 /* display size: 75 % by default (as the browser at 75 %), remembered in this browser */
 const UI_SIZES = [0.75, 0.9, 1];
-function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : 0.75; } catch (e) { return 0.75; } }
+const uiDefault = () => Math.min(screen.width, innerWidth) < 1000 ? 1 : 0.75;      // tablets and phones: full size
+function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : uiDefault(); } catch (e) { return uiDefault(); } }
+/** the Clients · Projects · Sites tree: a column on wide screens, a slide-over panel on tablets and phones */
+const narrow = () => innerWidth <= 900;
+function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else b.classList.toggle('notree'); }
 function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
 document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
@@ -3521,7 +3906,7 @@ const MENUS = {
   file: () => [['Import Excel…', () => $('#hdr-import').click()], ['Sync app punches', () => syncApp()], ['Publish roster to personnel app', () => publishRoster().then(ok => ok && renderAll())], ['Download backup', downloadBackup], ['Restore backup…', () => { showView('data'); $('#dv-rs').click(); }], null,
     ['Export attendance (Excel)', () => exportMasterXlsx().catch(e => toast(e.message))], ['Export client timesheets (Excel)', () => tsCmd('xlsx')], ['Print client timesheets', () => tsCmd('print')], null,
     ['Reload shipped data…', () => { showView('data'); $('#dv-seed').click(); }], ['Restore data from before update…', restorePrev], ['Delete all data…', () => { showView('data'); $('#dv-reset').click(); }]],
-  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', () => $('#body').classList.toggle('notree')], ['Data checks…', openChecks], null, ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
+  help: () => [...UI_SIZES.map(z => [`Display size ${z * 100}%${uiSize() === z ? '  ✓' : ''}`, () => setUiSize(z)]), null, ['Settings', () => showView('data')], ['Show / hide tree', toggleTree], ['Data checks…', openChecks], null, ['Getting started', () => { try { localStorage.removeItem('ls.guide'); } catch (e) { } showView('live'); }], ['Tour this page', () => TOUR.start(curView)], ['How it all works (full walkthrough)', () => TOUR.start('full')], ['Keys & codes', helpKeys], ['How the numbers are made', helpCalc], ['About', () => openModal('About', `<p>Attendance Tracker for Latinem Securities.<br>Attendance → client timesheets (LS/DO/F-026) → tax invoice break-up. Data is saved in this browser; keep backups in LS_Documents.</p><p class="muted small">Excel and PDF features load SheetJS, ExcelJS and pdf-lib from cdn.jsdelivr.net.</p>`, [{ label: 'Close', cls: 'pri' }])]]
 };
 function openMenu(btn) {
   const dd = $('#dropdown'); const items = MENUS[btn.dataset.menu]();
@@ -3580,6 +3965,7 @@ function renderTree() {
 function clearSel() { SEL.client = SEL.project = SEL.site = ''; $$('#tree .node.sel').forEach(n => n.classList.remove('sel')); applySel(); }
 /** Tree click → filter the open document (click again to clear) */
 function selectNode(k, id) {
+  if (narrow()) $('#body').classList.remove('treeopen');
   const same = (k === 'grp' && SEL.client === id && !SEL.project) || (k === 'proj' && SEL.project === id && !SEL.site) || (k === 'site' && SEL.site === id);
   SEL.client = SEL.project = SEL.site = '';
   if (!same) {
@@ -3635,7 +4021,7 @@ async function init() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); if ($('#modal-bg').classList.contains('on')) closeModal(); } });
   $('#hdr-import').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importExcel(f).catch(err => toast(err.message, 5000)); };
   $('#tree-q').oninput = e => { TREE.q = e.target.value; clearTimeout(TREE._t); TREE._t = setTimeout(renderTree, 200); };
-  renderSaveState(); renderTree(); showView('attendance'); document.body.dataset.ready = '1';
+  renderSaveState(); renderTree(); showView('attendance'); initMe(); document.body.dataset.ready = '1';
   if (S.employees.some(e => e.app?.on)) setTimeout(() => syncApp(true), 1500);
 }
 init();
@@ -3686,8 +4072,8 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today) && !isBlack(e), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length) }));
-  const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id) || S.locGrants.some(g => g.siteId === s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length), locEditors: S.locGrants.filter(g => g.siteId === s.id).map(g => g.email) }));
+  const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12, signers: S.settings.signatories.map((_, i) => signerEmails(i)) };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
   for (const e of S.employees) if (e.app) { delete e.app.pinNew; delete e.app.resetDevice; }
@@ -3729,13 +4115,38 @@ async function syncApp(quiet) {
     if (sc.status === 200) { S.scans ||= {}; for (const x of sc.body.scans) S.scans[x.id] = x; c.lastScanSync = sc.body.now; }
     const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
     if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
+    const lp = await cl.call('GET', 'admin/locprops', null, { query: { since: c.lastLocSync || 0 } });
+    if (lp.status === 200) { for (const x of lp.body.props) { if (!S.locProps[x.id] && x.status === 'pending') stats.locs = (stats.locs || 0) + 1; S.locProps[x.id] = x; } c.lastLocSync = lp.body.now; }
+    const td = await cl.call('GET', 'admin/tsdocs', null, { query: { since: c.lastDocSync || 0 } });
+    if (td.status === 200) { for (const d of td.body.docs) mergeTsDoc(d); c.lastDocSync = td.body.now; }
+    if (whoAmI()) { const nt = await cl.call('GET', 'me/notices'); if (nt.status === 200) for (const n of nt.body.notices) if (n.to === whoAmI() || !S.notices[n.id]) S.notices[n.id] = { ...(S.notices[n.id] || {}), ...n, read: S.notices[n.id]?.read || n.read }; renderMe(); }
     reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
     if (!quiet || stats.new) { renderAll(); if (!quiet) toast(`Synced · ${stats.new} new punch(es) · ${stats.applied} day(s) marked${stats.marks ? ` · ${stats.marks} supervisor mark(s)` : ''}${stats.conflicts.length ? ` · ${stats.conflicts.length} kept (leave/other code)` : ''}${stats.locked ? ` · ${stats.locked} in locked month` : ''}`, 5000); }
     S.issues ||= {}; if (stats.conflicts.length) S.issues.app = stats.conflicts.slice(0, 500);
   } catch (e) { if (!quiet) toast('Sync failed – ' + e.message, 6000); }
   finally { SYNCING = false; }
 }
-setInterval(() => { if (S && Object.values(S.employees || []).some(appOn)) syncApp(true); }, 5 * 60000);
+setInterval(() => { if (S && (Object.values(S.employees || []).some(appOn) || Object.keys(S.tsDocs || {}).length)) syncApp(true); }, 5 * 60000);
+/** a timesheet version from the server: the newer version (or the same version with more signatures) wins */
+function mergeTsDoc(d) {
+  const key = `${d.projectId}|${d.from}|${d.to}`, l = S.tsDocs[key], { id, serverTs, ...doc } = d;
+  if (doc.deleted) { if (l && l.savedAt <= doc.savedAt) delete S.tsDocs[key]; return; }
+  if (!l || doc.version > l.version || (doc.version === l.version && (doc.sigs || []).length > (l.sigs || []).length)) S.tsDocs[key] = doc;
+}
+/* timesheet versions, signatures and notices go to the server too, so other PCs and the signers see them */
+function apiPushTsDoc(doc) { appClient().call('PUT', 'admin/tsdoc', { doc }).then(r => { if (r.status !== 200 && !appClient().demo) toast('Could not share the timesheet version: ' + (r.body?.error || r.status), 5000); }).catch(() => {}); }
+function apiPushNotice(n) { appClient().call('POST', 'admin/notice', { notice: n }).catch(() => {}); }
+/** Location sent by a supervisor: approve (sets the site pin, and by default takes the supervisor's access away) or reject */
+async function decideLocation(id, ok, revoke, reason) {
+  const x = S.locProps[id]; if (!x) return;
+  const r = await appClient().call('POST', 'admin/locprop', { id, status: ok ? 'approved' : 'rejected', revoke: ok && revoke, reason: reason || '' });
+  if (r.status !== 200) return toast('Could not save: ' + (r.body?.error || r.status), 5000);
+  S.locProps[id] = r.body.prop;
+  const s = IX.site.get(x.siteId);
+  if (ok && s) { s.pins = [{ lat: +x.lat.toFixed(6), lng: +x.lng.toFixed(6), radius: x.radius || 100, label: x.label || 'Set on site by ' + x.by }]; }
+  if (ok && revoke) S.locGrants = S.locGrants.filter(g => !(g.siteId === x.siteId && g.email === x.by));
+  markDirty(); renderAll(); toast(ok ? `Location of ${x.siteName} updated${revoke ? ' and access revoked' : ''} – Publish roster to send it to phones` : 'Rejected');
+}
 
 async function reviewPunch(id, status, note, reason) {
   const r = await appClient().call('POST', 'admin/review', { id, status, note: note || '', reason });
@@ -3848,6 +4259,10 @@ function renderApp() {
     ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Personnel</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th>Face</th><th></th></tr></thead><tbody>
       ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td><td>${FACE.badge(p.face) || (p.hasPhoto && !IX.emp.get(p.wid)?.face ? '<span class="muted small">no reference photo</span>' : '')}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}
+    ${(() => { const lp = Object.values(S.locProps || {}).filter(x => x.status === 'pending').sort((a, b) => b.at - a.at); return lp.length ? sec('ap-loc', `Location proposals <span class="pill warn">${lp.length}</span>`, `<p class="muted small" style="margin-top:0">Sent from the phone by supervisors you allowed to set a site's location. Approving replaces the site's pin.</p><div class="tw"><table><thead><tr><th>Site</th><th>Sent by</th><th>When</th><th class="num">GPS ±</th><th class="num">From current pin</th><th>Map</th><th></th></tr></thead><tbody>
+      ${lp.map(x => { const s = IX.site.get(x.siteId), pin = s && sitePins(s)[0], d = pin ? Math.round(LSAPI.distance(pin, x)) : null; return `<tr><td><b>${esc(x.siteName || siteName(x.siteId))}</b>${x.label ? ` <span class="muted small">${esc(x.label)}</span>` : ''}</td><td>${esc(x.by)}</td><td class="mono">${esc(new Date(x.at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}</td><td class="num">${x.acc} m</td><td class="num">${d == null ? 'no pin yet' : d + ' m'}</td>
+        <td><a href="https://www.google.com/maps?q=${x.lat},${x.lng}" target="_blank" rel="noopener">${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}</a></td>
+        <td style="white-space:nowrap"><label class="chk small"><input type="checkbox" data-lrv="${x.id}" checked> revoke access</label> <button class="btn sm pri" data-lok="${x.id}">Approve</button> <button class="btn sm bad" data-lno="${x.id}">Reject</button></td></tr>`; }).join('')}</tbody></table></div>`) : ''; })()}
     ${sec('ap-today', `Today on site <span class="cnt">${fmtDMY(today)}</span>`, bySite.size ? `<div class="tw"><table><thead><tr><th>Site</th><th class="num">Checked in</th><th class="num">Checked out</th><th class="num">On site now</th></tr></thead><tbody>${[...bySite].map(([k, x]) => `<tr><td>${esc(k)}</td><td class="num">${x.in.size}</td><td class="num">${x.out.size}</td><td class="num"><b>${[...x.in].filter(w => !x.out.has(w)).length}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No punches synced for today yet.</p>')}
     ${sec('ap-miss', `No check-in <span class="pill ${miss.length ? 'warn' : ''}">${miss.length}</span>`, `
       <div class="row" style="margin-bottom:8px"><label class="f" style="flex-direction:row;align-items:center;gap:6px">Date <input type="date" id="ap-date" value="${AP.date}" max="${todayISO()}"></label>
@@ -3876,6 +4291,8 @@ function renderApp() {
   bindSecs(v);
   v.querySelectorAll('[data-pd]').forEach(b => b.onclick = e => { e.preventDefault(); const p = S.punches[b.dataset.pd]; const emp = IX.emp.get(p.wid); if (emp) punchDetails(emp, p.workDate); });
   v.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { await reviewPunch(b.dataset.ok, 'accepted'); renderAll(); });
+  v.querySelectorAll('[data-lok]').forEach(b => b.onclick = () => decideLocation(b.dataset.lok, true, v.querySelector(`[data-lrv="${b.dataset.lok}"]`)?.checked));
+  v.querySelectorAll('[data-lno]').forEach(b => b.onclick = () => { const n = prompt('Reason for rejecting:'); if (n !== null) decideLocation(b.dataset.lno, false, false, n); });
   v.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { const n = prompt('Reason for rejecting:'); if (n === null) return; await reviewPunch(b.dataset.no, 'rejected', n); renderAll(); });
   if ($('#ap-date')) $('#ap-date').onchange = e => { AP.date = e.target.value || AP.date; renderApp(); };
   if ($('#ap-all')) $('#ap-all').onchange = e => v.querySelectorAll('[data-mc]').forEach(c => c.checked = e.target.checked);
@@ -4059,10 +4476,12 @@ async function renderLive() {
   const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
   const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
   v.innerHTML = docHead('Live', `today ${fmtDMY(today)} · from synced punches and shift positions`, `<select id="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`) + `<div class="dc">
+    ${guideHTML()}
     <div class="kpis">${[['On duty now', n('on') + n('pe'), 'var(--pos)'], ['Checked out', n('done')], ['Not checked in', n('no'), n('no') ? 'var(--neg)' : ''], ['Outside zone', out, out ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
     <div class="live"><div class="mapbox" id="lv-map"></div>
     <div class="ppl">${rows.map((r, i) => `<div class="pr" data-lv="${i}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
       <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${lbl[r.st]}${r.st === 'code' ? ' ' + esc(r.code) : ''}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}</div></div>${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`).join('') || '<p class="muted">Nobody on the app is rostered today.</p>'}</div></div></div>`;
+  bindGuide(v);
   bindSecs(v); $('#lv-site').onchange = e => { LV.site = e.target.value; renderLive(); };
   for (const el of v.querySelectorAll('[data-av]')) { const e = IX.emp.get(el.dataset.av); if (e?.photo) photoURL(e).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; }); }
   v.querySelectorAll('[data-lv]').forEach(el => el.ondblclick = () => { const r = rows[+el.dataset.lv]; INS.person = r.e.id; showView('insights'); });
@@ -5149,6 +5568,156 @@ async function printBeatQR(siteId, beatId) {
   await loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js');
   const qr = t => { const q = qrcode(0, 'M'); q.addData(t); q.make(); return q.createDataURL(6, 3); };
   printHTML(`<div class="sheet port cpsheet">${b.checkpoints.map((c, i) => `<div class="cpst"><img src="${qr(beatQRText(siteId, c.id))}" alt=""><div><b>${esc(c.name)}</b><span>${esc(site.name)} · ${esc(b.name)} · checkpoint ${i + 1} of ${b.checkpoints.length}</span><small>Latinem Securities – scan with “Scan checkpoint” in the LS Attendance app</small></div></div>`).join('')}</div>`);
+}
+
+/* =====================================================================
+   Who is using the tracker, signing client timesheets, and notices.
+   - whoAmI(): the signed-in email. On Azure it comes from the built-in
+     login (/.auth/me); until SSO is set up, the email typed once in
+     "Your email" (kept in this browser). Only this function changes
+     when SSO is added.
+   - Signing: Settings → Timesheet signatories lists the emails allowed
+     to sign each box. A signature is stored on the sheet's saved
+     version; saving a new version later notifies everyone who signed.
+   - Notices: shown under the bell for the email they are addressed to;
+     shared through the API when it is connected.
+   ===================================================================== */
+const ME = { email: '', verified: false };
+const whoAmI = () => ME.email;
+async function initMe() {
+  try { ME.email = (localStorage.getItem('ls.me') || '').toLowerCase(); } catch (e) { }
+  if (location.protocol.startsWith('http')) try {
+    const r = await fetch('/.auth/me', { cache: 'no-store' });
+    const u = r.ok ? (await r.json()).clientPrincipal : null;
+    if (u?.userDetails?.includes('@')) { ME.email = u.userDetails.toLowerCase(); ME.verified = true; }
+  } catch (e) { }
+  renderMe();
+}
+function askMe(then) {
+  openModal('Sign in', `<label class="f">Your work email (used for signing timesheets and notifications)<input type="email" id="me-e" value="${esc(ME.email)}" placeholder="name@company.com"></label>
+    <p class="muted small">Until company sign-in (SSO) is switched on, this is remembered in this browser. Signing is allowed only for emails listed in Settings → Timesheet signatories.</p>`,
+    [{ label: 'Cancel' }, { label: 'Save', cls: 'pri', onClick: m => {
+      const v = $('#me-e', m).value.trim().toLowerCase(); if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast('Enter a valid email'); return false; }
+      ME.email = v; try { v ? localStorage.setItem('ls.me', v) : localStorage.removeItem('ls.me'); } catch (e) { } renderMe(); if (curView === 'timesheets') renderTimesheets(); then?.();
+    } }]);
+}
+/** menubar: your email + the bell with unread notices */
+function renderMe() {
+  const box = $('#me-box'); if (!box) return;
+  const mine = myNotices(), unread = mine.filter(n => !n.read).length;
+  box.innerHTML = `<button class="me-chip" id="me-chip" title="${ME.verified ? 'Signed in' : ME.email ? 'Your email (not verified until company sign-in is set up) – click to change' : 'Sign in with your email to sign timesheets and get notifications'}">${ME.email ? esc(ME.email) : 'Sign in'}</button>
+    <button class="tour-btn ico" id="bell-btn" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 22a2.2 2.2 0 0 0 2.2-2.2H9.8A2.2 2.2 0 0 0 12 22Zm6.5-6.3V11a6.5 6.5 0 0 0-5.1-6.4V4a1.4 1.4 0 0 0-2.8 0v.6A6.5 6.5 0 0 0 5.5 11v4.7L3.6 17.6v1h16.8v-1Z"/></svg>${unread ? `<span class="bell-n">${unread}</span>` : ''}</button>`;
+  $('#me-chip').onclick = () => askMe();
+  $('#bell-btn').onclick = e => openBell(e.currentTarget);
+}
+const myNotices = () => Object.values(S?.notices || {}).filter(n => ME.email && n.to === ME.email).sort((a, b) => b.at < a.at ? -1 : 1);
+function openBell(btn) {
+  const dd = $('#dropdown'), list = myNotices();
+  dd.innerHTML = list.length ? list.slice(0, 30).map(n => `<button data-nt="${n.id}" class="${n.read ? '' : 'unread'}"><span>${esc(n.text)}<br><span class="muted small">${esc(new Date(n.at).toLocaleString())}</span></span></button>`).join('')
+    : `<div class="muted small" style="padding:10px 12px;max-width:260px">${ME.email ? 'No notifications.' : 'Set your email (left of the bell) to see notifications meant for you.'}</div>`;
+  const r = btn.getBoundingClientRect(); dd.style.left = Math.max(8, r.right - 340) + 'px'; dd.style.top = r.bottom + 4 + 'px'; dd.style.width = '340px'; dd.hidden = false;
+  dd.querySelectorAll('[data-nt]').forEach(b => b.onclick = () => {
+    const n = S.notices[b.dataset.nt]; n.read = true; markDirty(); closeMenu(); dd.style.width = ''; renderMe();
+    if (n.key) { const [pid, from, to] = n.key.split('|'); if (from.endsWith('-01') && to === `${from.slice(0, 7)}-${pad(dim(from.slice(0, 7)))}`) { TV.mode = 'month'; TV.ym = from.slice(0, 7); } else { TV.mode = 'range'; TV.from = from; TV.to = to; } TV.preview = pid; TV.q = ''; TV.all = true; showView('timesheets'); }
+  });
+}
+/** a notice to one email; email delivery can be added here together with SSO */
+function notify(to, text, key) {
+  const id = uid('n'); S.notices[id] = { id, to, text, key, at: new Date().toISOString(), read: false };
+  apiPushNotice?.(S.notices[id]);
+}
+
+/* ---------- signing ---------- */
+const signerEmails = i => String(S.settings.signatories[i]?.emails || '').split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+const canSign = i => !!ME.email && signerEmails(i).includes(ME.email);
+/** Save the sheet as a new version; signers of earlier versions are told it changed */
+function tsSaveVersion(base, rows, edited) {
+  const key = tsKey(base), prev = S.tsDocs[key], p = IX.proj.get(base.projectId);
+  const doc = { projectId: base.projectId, from: base.from, to: base.to, rows, version: (prev?.version || 0) + 1, savedAt: new Date().toISOString(), savedBy: ME.email || '', edited: edited || !!prev?.edited, basis: tsBasis(base), sigs: prev?.sigs || [] };
+  S.tsDocs[key] = doc;
+  for (const email of new Set(doc.sigs.map(g => g.email))) {
+    const g = doc.sigs.filter(x => x.email === email).sort((a, b) => b.version - a.version)[0];
+    notify(email, `Timesheet ${p?.name || ''} ${tsLabel(base)} was changed after you signed it (v${g.version} → v${doc.version})${ME.email ? ' by ' + ME.email : ''}. Please review and sign again.`, key);
+  }
+  apiPushTsDoc?.(doc); markDirty(); renderMe();
+  return doc;
+}
+function tsDropVersion(base) {
+  const key = tsKey(base), prev = S.tsDocs[key], p = IX.proj.get(base.projectId); if (!prev) return;
+  for (const email of new Set((prev.sigs || []).map(g => g.email))) notify(email, `Timesheet ${p?.name || ''} ${tsLabel(base)} you signed was reset to the attendance${ME.email ? ' by ' + ME.email : ''}; your signature was removed.`, key);
+  delete S.tsDocs[key]; apiPushTsDoc?.({ projectId: base.projectId, from: base.from, to: base.to, deleted: true, savedAt: new Date().toISOString() }); markDirty(); renderMe();
+}
+/** Sign one box: draw or type, stored on the current version (a version is saved first if the sheet was only generated) */
+function signTimesheet(base, slot) {
+  if (!ME.email) return askMe(() => signTimesheet(base, slot));
+  if (!canSign(slot)) return toast(`${ME.email} is not allowed to sign “${S.settings.signatories[slot].label}”. An admin can add it in Settings → Timesheet signatories.`, 6000);
+  const s = S.settings.signatories[slot];
+  const m = openModal(`Sign – ${s.label}`, `<p class="muted small" style="margin-top:0">Signing as <b>${esc(ME.email)}</b>${ME.verified ? '' : ' (not verified until company sign-in is set up)'}.</p>
+    <label class="f">Name<input type="text" id="sg-n" value="${esc(s.name || '')}"></label>
+    <div class="muted small" style="margin:8px 0 4px">Signature – draw below (or leave empty to use your typed name)</div>
+    <canvas id="sg-c" width="520" height="150" class="sig-pad"></canvas>
+    <div class="row" style="margin-top:6px"><button class="btn sm" id="sg-clr">Clear</button></div>`,
+    [{ label: 'Cancel' }, { label: 'Sign', cls: 'pri', onClick: mm => {
+      const name = $('#sg-n', mm).value.trim(); if (!name) { toast('Type your name'); return false; }
+      let doc = S.tsDocs[tsKey(base)]; if (!doc) doc = tsSaveVersion(base, docRows(base), false);
+      doc.sigs = doc.sigs.filter(g => g.slot !== slot);
+      doc.sigs.push({ slot, email: ME.email, name, at: new Date().toISOString(), version: doc.version, image: drawn ? cv.toDataURL('image/png') : '' });
+      apiPushTsDoc?.(doc); markDirty(); renderTimesheets(); toast('Signed');
+    } }]);
+  const cv = $('#sg-c', m), cx = cv.getContext('2d'); let drawn = false, down = false;
+  cx.lineWidth = 2.2; cx.lineCap = 'round'; cx.strokeStyle = '#123';
+  const pt = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  cv.onpointerdown = e => { down = true; cv.setPointerCapture(e.pointerId); cx.beginPath(); cx.moveTo(...pt(e)); };
+  cv.onpointermove = e => { if (!down) return; cx.lineTo(...pt(e)); cx.stroke(); drawn = true; };
+  cv.onpointerup = () => { down = false; };
+  $('#sg-clr', m).onclick = () => { cx.clearRect(0, 0, cv.width, cv.height); drawn = false; };
+}
+
+/* ---------- month picker: every <input type="month"> shows "July 2026" and opens a small month grid ----------
+   The native input stays (hidden) and gets the value + a change event, so existing handlers keep working. */
+function enhanceMonthInput(inp) {
+  if (inp.dataset.mp) return; inp.dataset.mp = '1';
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'mp-btn';
+  const paint = () => { const v = inp.value; btn.innerHTML = `${v ? `${MONTH_FULL[+v.slice(5, 7) - 1][0]}${MONTH_FULL[+v.slice(5, 7) - 1].slice(1).toLowerCase()} ${v.slice(0, 4)}` : 'Pick month'}<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2Zm-2 7h14v10H5Z"/></svg>`; };
+  paint(); inp.hidden = true; inp.after(btn);
+  btn.onclick = e => {
+    e.stopPropagation(); document.querySelector('.mp-pop')?.remove();
+    let y = +(inp.value || todayISO()).slice(0, 4);
+    const pop = document.createElement('div'); pop.className = 'mp-pop';
+    const draw = () => { pop.innerHTML = `<div class="mp-h"><button type="button" data-y="-1">◀</button><b>${y}</b><button type="button" data-y="1">▶</button></div><div class="mp-g">${MON.map((m, i) => { const v = `${y}-${pad(i + 1)}`; return `<button type="button" data-m="${v}" class="${v === inp.value ? 'on' : ''}${v === todayISO().slice(0, 7) ? ' now' : ''}">${m}</button>`; }).join('')}</div>`;
+      pop.querySelectorAll('[data-y]').forEach(b => b.onclick = ev => { ev.stopPropagation(); y += +b.dataset.y; draw(); });
+      pop.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { inp.value = b.dataset.m; paint(); pop.remove(); inp.dispatchEvent(new Event('change', { bubbles: true })); }); };
+    draw(); document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect(); pop.style.left = Math.min(r.left, innerWidth - 230) + 'px'; pop.style.top = r.bottom + 4 + 'px';
+    setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
+  };
+}
+new MutationObserver(() => document.querySelectorAll('input[type="month"]:not([data-mp])').forEach(enhanceMonthInput)).observe(document.documentElement, { childList: true, subtree: true });
+
+/* ---------- Getting started: the steps in the order they are done, with what is already set up ---------- */
+function guideSteps() {
+  const sites = S.sites.length, located = S.sites.filter(x => sitePins(x).length).length, onApp = S.employees.filter(e => e.app?.on).length, c = appCfg();
+  const ym = addMonths(ymOf(todayISO()), -1), docs = Object.values(S.tsDocs || {}), signed = docs.filter(d => d.from.startsWith(ym) && d.sigs?.length).length;
+  return [
+    ['Projects & sites', `${S.projects.length} projects · ${sites} sites`, S.projects.length > 0, 'Add clients, projects and their sites (or import the attendance Excel – it creates them).', () => showView('projects')],
+    ['Site locations', `${located} of ${sites} sites have a location`, located > 0, 'Pin each site on the map (or let a supervisor send it from the phone) – check-ins inside the zone are accepted automatically.', () => showView('projects')],
+    ['Security personnel', `${S.employees.filter(e => !hasLeft(e)).length} current`, S.employees.length > 0, 'Import the Employee List Excel or add people; allocate each to a site and shift.', () => showView('employees')],
+    ['Phone app access', `${onApp} on the app`, onApp > 0, 'Security Personnel → tick people → App access… gives each a PIN and prints a slip with the phone link.', () => showView('employees')],
+    ['Publish roster', c.lastPublish ? 'last ' + new Date(c.lastPublish).toLocaleDateString() : 'not yet', !!c.lastPublish, 'Sends people, PINs, sites and zones to the phones. Do it again after changes.', () => showView('app')],
+    ['Every day', 'check-ins, review, attendance', null, 'Today shows who is on site; Review lists exceptions to approve; Attendance is filled in from the phones.', () => showView('attendance')],
+    ['Month end', `${signed} timesheet(s) signed for ${fmtMonYY(ym)}`, null, 'Billing → Client timesheets: check, edit if needed, sign, print / PDF; then 2 Invoice builds the invoice pack.', () => showView('timesheets')]
+  ];
+}
+const guideHidden = () => { try { return localStorage.getItem('ls.guide') === 'off'; } catch (e) { return false; } };
+function guideHTML() {
+  if (guideHidden()) return '';
+  return `<div class="guide"><div class="guide-h"><b>Getting started</b><span class="muted small">the order to set up and use the tracker – click a step to go there</span><span class="spacer"></span><button class="btn sm" data-guide-off>Hide</button></div>
+    <ol class="guide-l">${guideSteps().map(([t, st, ok, tip], i) => `<li data-gs="${i}" title="${esc(tip)}" class="${ok === true ? 'ok' : ok === false ? 'todo' : ''}"><span class="n">${ok === true ? '✓' : i + 1}</span><span><b>${esc(t)}</b><small>${esc(st)}</small></span></li>`).join('')}</ol></div>`;
+}
+function bindGuide(v) {
+  const steps = guideSteps();
+  v.querySelectorAll('[data-gs]').forEach(li => li.onclick = () => steps[+li.dataset.gs][4]());
+  v.querySelector('[data-guide-off]')?.addEventListener('click', () => { try { localStorage.setItem('ls.guide', 'off'); } catch (e) { } toast('Hidden – Help → Getting started shows it again'); renderAll(); });
 }
 
 </script>

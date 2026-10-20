@@ -11,6 +11,8 @@ const LSClient = (() => {
   let chain = Promise.resolve();                       // serialise demo calls (load → handle → save)
 
   /** role: principal used in demo mode ('admin' for the tracker, 'supervisor' for the phone's supervisor screen) */
+  // demo mode: the email typed in the tracker's "Your email" stands in for the signed-in user (same browser)
+  const demoEmail = () => { try { return (localStorage.getItem('ls.me') || '').toLowerCase(); } catch (e) { return ''; } };
   function make({ base = '', role = '' } = {}) {
     base = String(base || '').trim().replace(/\/+$/, '');
     const demo = !base;
@@ -20,7 +22,7 @@ const LSClient = (() => {
         let dirty = false;
         const store = LSAPI.memoryStore(snap, () => { dirty = true; });
         const api = LSAPI.create({ store, secret: 'ls-demo-secret' });
-        const r = await api.handle({ method, path, body, query: opt.query || {}, headers: opt.token ? { authorization: 'Bearer ' + opt.token } : {}, principal: (opt.role || role) ? { userRoles: [opt.role || role], userDetails: 'demo ' + (opt.role || role) } : null });
+        const r = await api.handle({ method, path, body, query: opt.query || {}, headers: opt.token ? { authorization: 'Bearer ' + opt.token } : {}, principal: (opt.role || role) ? { userRoles: [opt.role || role], userDetails: demoEmail() || 'demo ' + (opt.role || role) } : null });
         if (dirty) await idbSet(KEY, store.dump());
         return r;
       };

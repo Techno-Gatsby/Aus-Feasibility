@@ -44,8 +44,8 @@ async function publishRoster(quiet) {
     ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today) && !isBlack(e), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
-  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length) }));
-  const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12 };
+  const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id) || S.locGrants.some(g => g.siteId === s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length), locEditors: S.locGrants.filter(g => g.siteId === s.id).map(g => g.email) }));
+  const settings = { radius: c.radius, maxAcc: c.maxAcc, windowMin: c.windowMin, lateMin: c.lateMin, photo: c.photo, bindDevice: c.bindDevice, starts: c.starts, shiftHours: +S.settings.shiftHours || 12, signers: S.settings.signatories.map((_, i) => signerEmails(i)) };
   const r = await appClient().call('PUT', 'admin/roster', { workers: ws, sites, settings, full: true });
   if (r.status !== 200) { toast('Publish failed: ' + (r.body?.error || r.status), 6000); return false; }
   for (const e of S.employees) if (e.app) { delete e.app.pinNew; delete e.app.resetDevice; }
@@ -87,13 +87,38 @@ async function syncApp(quiet) {
     if (sc.status === 200) { S.scans ||= {}; for (const x of sc.body.scans) S.scans[x.id] = x; c.lastScanSync = sc.body.now; }
     const pg = await cl.call('GET', 'admin/pings', null, { query: { since: c.lastPingSync || 0 } });
     if (pg.status === 200) { await PINGS.add(pg.body.pings); c.lastPingSync = pg.body.now; }
+    const lp = await cl.call('GET', 'admin/locprops', null, { query: { since: c.lastLocSync || 0 } });
+    if (lp.status === 200) { for (const x of lp.body.props) { if (!S.locProps[x.id] && x.status === 'pending') stats.locs = (stats.locs || 0) + 1; S.locProps[x.id] = x; } c.lastLocSync = lp.body.now; }
+    const td = await cl.call('GET', 'admin/tsdocs', null, { query: { since: c.lastDocSync || 0 } });
+    if (td.status === 200) { for (const d of td.body.docs) mergeTsDoc(d); c.lastDocSync = td.body.now; }
+    if (whoAmI()) { const nt = await cl.call('GET', 'me/notices'); if (nt.status === 200) for (const n of nt.body.notices) if (n.to === whoAmI() || !S.notices[n.id]) S.notices[n.id] = { ...(S.notices[n.id] || {}), ...n, read: S.notices[n.id]?.read || n.read }; renderMe(); }
     reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
     if (!quiet || stats.new) { renderAll(); if (!quiet) toast(`Synced · ${stats.new} new punch(es) · ${stats.applied} day(s) marked${stats.marks ? ` · ${stats.marks} supervisor mark(s)` : ''}${stats.conflicts.length ? ` · ${stats.conflicts.length} kept (leave/other code)` : ''}${stats.locked ? ` · ${stats.locked} in locked month` : ''}`, 5000); }
     S.issues ||= {}; if (stats.conflicts.length) S.issues.app = stats.conflicts.slice(0, 500);
   } catch (e) { if (!quiet) toast('Sync failed – ' + e.message, 6000); }
   finally { SYNCING = false; }
 }
-setInterval(() => { if (S && Object.values(S.employees || []).some(appOn)) syncApp(true); }, 5 * 60000);
+setInterval(() => { if (S && (Object.values(S.employees || []).some(appOn) || Object.keys(S.tsDocs || {}).length)) syncApp(true); }, 5 * 60000);
+/** a timesheet version from the server: the newer version (or the same version with more signatures) wins */
+function mergeTsDoc(d) {
+  const key = `${d.projectId}|${d.from}|${d.to}`, l = S.tsDocs[key], { id, serverTs, ...doc } = d;
+  if (doc.deleted) { if (l && l.savedAt <= doc.savedAt) delete S.tsDocs[key]; return; }
+  if (!l || doc.version > l.version || (doc.version === l.version && (doc.sigs || []).length > (l.sigs || []).length)) S.tsDocs[key] = doc;
+}
+/* timesheet versions, signatures and notices go to the server too, so other PCs and the signers see them */
+function apiPushTsDoc(doc) { appClient().call('PUT', 'admin/tsdoc', { doc }).then(r => { if (r.status !== 200 && !appClient().demo) toast('Could not share the timesheet version: ' + (r.body?.error || r.status), 5000); }).catch(() => {}); }
+function apiPushNotice(n) { appClient().call('POST', 'admin/notice', { notice: n }).catch(() => {}); }
+/** Location sent by a supervisor: approve (sets the site pin, and by default takes the supervisor's access away) or reject */
+async function decideLocation(id, ok, revoke, reason) {
+  const x = S.locProps[id]; if (!x) return;
+  const r = await appClient().call('POST', 'admin/locprop', { id, status: ok ? 'approved' : 'rejected', revoke: ok && revoke, reason: reason || '' });
+  if (r.status !== 200) return toast('Could not save: ' + (r.body?.error || r.status), 5000);
+  S.locProps[id] = r.body.prop;
+  const s = IX.site.get(x.siteId);
+  if (ok && s) { s.pins = [{ lat: +x.lat.toFixed(6), lng: +x.lng.toFixed(6), radius: x.radius || 100, label: x.label || 'Set on site by ' + x.by }]; }
+  if (ok && revoke) S.locGrants = S.locGrants.filter(g => !(g.siteId === x.siteId && g.email === x.by));
+  markDirty(); renderAll(); toast(ok ? `Location of ${x.siteName} updated${revoke ? ' and access revoked' : ''} – Publish roster to send it to phones` : 'Rejected');
+}
 
 async function reviewPunch(id, status, note, reason) {
   const r = await appClient().call('POST', 'admin/review', { id, status, note: note || '', reason });
@@ -206,6 +231,10 @@ function renderApp() {
     ${sec('ap-rev', `Punches to review <span class="pill ${pend.length ? 'warn' : ''}">${pend.length}</span>`, pend.length ? `<div class="tw" style="max-height:420px"><table><thead><tr><th>Personnel</th><th>Date</th><th>Time</th><th>Type</th><th>Site</th><th>Why</th><th>Face</th><th></th></tr></thead><tbody>
       ${pend.map(p => `<tr><td><a href="#" data-pd="${p.id}">${esc(p.name)}</a> <span class="mono muted">${esc(p.code)}</span></td><td class="mono">${fmtDMY(p.workDate)}</td><td class="mono">${new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${p.type}</td><td>${esc(p.siteName || '—')}</td><td style="white-space:normal;color:var(--warn)">${esc(p.reasons.join(' · '))}</td><td>${FACE.badge(p.face) || (p.hasPhoto && !IX.emp.get(p.wid)?.face ? '<span class="muted small">no reference photo</span>' : '')}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-pd="${p.id}">Details</button> <button class="btn sm pri" data-ok="${p.id}">Approve</button> <button class="btn sm bad" data-no="${p.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing to review.</p>')}
+    ${(() => { const lp = Object.values(S.locProps || {}).filter(x => x.status === 'pending').sort((a, b) => b.at - a.at); return lp.length ? sec('ap-loc', `Location proposals <span class="pill warn">${lp.length}</span>`, `<p class="muted small" style="margin-top:0">Sent from the phone by supervisors you allowed to set a site's location. Approving replaces the site's pin.</p><div class="tw"><table><thead><tr><th>Site</th><th>Sent by</th><th>When</th><th class="num">GPS ±</th><th class="num">From current pin</th><th>Map</th><th></th></tr></thead><tbody>
+      ${lp.map(x => { const s = IX.site.get(x.siteId), pin = s && sitePins(s)[0], d = pin ? Math.round(LSAPI.distance(pin, x)) : null; return `<tr><td><b>${esc(x.siteName || siteName(x.siteId))}</b>${x.label ? ` <span class="muted small">${esc(x.label)}</span>` : ''}</td><td>${esc(x.by)}</td><td class="mono">${esc(new Date(x.at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}</td><td class="num">${x.acc} m</td><td class="num">${d == null ? 'no pin yet' : d + ' m'}</td>
+        <td><a href="https://www.google.com/maps?q=${x.lat},${x.lng}" target="_blank" rel="noopener">${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}</a></td>
+        <td style="white-space:nowrap"><label class="chk small"><input type="checkbox" data-lrv="${x.id}" checked> revoke access</label> <button class="btn sm pri" data-lok="${x.id}">Approve</button> <button class="btn sm bad" data-lno="${x.id}">Reject</button></td></tr>`; }).join('')}</tbody></table></div>`) : ''; })()}
     ${sec('ap-today', `Today on site <span class="cnt">${fmtDMY(today)}</span>`, bySite.size ? `<div class="tw"><table><thead><tr><th>Site</th><th class="num">Checked in</th><th class="num">Checked out</th><th class="num">On site now</th></tr></thead><tbody>${[...bySite].map(([k, x]) => `<tr><td>${esc(k)}</td><td class="num">${x.in.size}</td><td class="num">${x.out.size}</td><td class="num"><b>${[...x.in].filter(w => !x.out.has(w)).length}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No punches synced for today yet.</p>')}
     ${sec('ap-miss', `No check-in <span class="pill ${miss.length ? 'warn' : ''}">${miss.length}</span>`, `
       <div class="row" style="margin-bottom:8px"><label class="f" style="flex-direction:row;align-items:center;gap:6px">Date <input type="date" id="ap-date" value="${AP.date}" max="${todayISO()}"></label>
@@ -234,6 +263,8 @@ function renderApp() {
   bindSecs(v);
   v.querySelectorAll('[data-pd]').forEach(b => b.onclick = e => { e.preventDefault(); const p = S.punches[b.dataset.pd]; const emp = IX.emp.get(p.wid); if (emp) punchDetails(emp, p.workDate); });
   v.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { await reviewPunch(b.dataset.ok, 'accepted'); renderAll(); });
+  v.querySelectorAll('[data-lok]').forEach(b => b.onclick = () => decideLocation(b.dataset.lok, true, v.querySelector(`[data-lrv="${b.dataset.lok}"]`)?.checked));
+  v.querySelectorAll('[data-lno]').forEach(b => b.onclick = () => { const n = prompt('Reason for rejecting:'); if (n !== null) decideLocation(b.dataset.lno, false, false, n); });
   v.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { const n = prompt('Reason for rejecting:'); if (n === null) return; await reviewPunch(b.dataset.no, 'rejected', n); renderAll(); });
   if ($('#ap-date')) $('#ap-date').onchange = e => { AP.date = e.target.value || AP.date; renderApp(); };
   if ($('#ap-all')) $('#ap-all').onchange = e => v.querySelectorAll('[data-mc]').forEach(c => c.checked = e.target.checked);

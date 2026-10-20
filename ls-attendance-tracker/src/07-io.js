@@ -370,11 +370,12 @@ async function exportTimesheetsXlsx(list) {
     ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
     ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`;
     tsLegend(p).forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
-    const [yy, mm] = ts.ym.split('-').map(Number);
-    ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
+    if (ts.ym) { const [yy, mm] = ts.ym.split('-').map(Number); ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; }
+    else { ws.getCell('B8').value = 'PERIOD'; ws.getCell('C8').value = tsLabel(ts); }
+    ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
     ws.getCell('B10').value = 'PROJECT NAME'; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
     const HR = 13;
-    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...Array.from({ length: N }, (_, i) => i + 1), 'TOTAL DAYS'];
+    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...ts.dates.map(d => +d.slice(8)), 'TOTAL DAYS'];
     head.forEach((v, i) => { const c = ws.getCell(HR, 2 + i); c.value = v; c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; });
     const pCodes = S.codes.filter(c => c.billable && c.code !== 'R').map(c => c.code);
     let r = HR + 1;
@@ -382,11 +383,11 @@ async function exportTimesheetsXlsx(list) {
       const r0 = r;
       for (const row of sec.rows) {
         ws.getCell(r, 2).value = r === r0 ? sec.name : null;
-        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = row.name || row.emp.name; ws.getCell(r, 5).value = empCodeLabel(row.emp);
-        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = code && codeDef(code).client ? (code === 'OFF' ? (p?.tsOff || 'O') : code) : null; c.alignment = { horizontal: 'center' }; }
+        ws.getCell(r, 3).value = row.shift; ws.getCell(r, 4).value = rowName(row); ws.getCell(r, 5).value = rowCode(row);
+        for (let d = 1; d <= N; d++) { const code = row.cells[d]; const c = ws.getCell(r, C0 + d); c.value = tsShown(code, !!ts.doc) ? (code === 'OFF' ? (p?.tsOff || 'O') : code) : null; c.alignment = { horizontal: 'center' }; }
         const rg = `${colL(C0)}${r}:${colL(C0 + N - 1)}${r}`;
         // template: =COUNTIF(F14:AI14,"P") for site rows, "R" for reliever rows
-        const f = (sec.id === '__REL' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';
+        const f = (sec.id === '__REL' || sec.name === 'RELIEVER' ? ['R'] : pCodes).map(k => `COUNTIF(${rg},"${k}")`).join('+') || '0';
         ws.getCell(r, CT + 1).value = { formula: f, result: row.total };
         for (let c = 2; c <= CT + 1; c++) ws.getCell(r, c).border = thin;
         ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
@@ -407,7 +408,33 @@ async function exportTimesheetsXlsx(list) {
   }
   const buf = await wb.xlsx.writeBuffer();
   const c = TV.client ? IX.client.get(TV.client)?.name + ' ' : '';
-  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${c}TIME SHEET - ${fmtMonthName(list[0].ym).replace('-', ' ')}.xlsx`);
+  const one = list.length === 1 ? (IX.proj.get(list[0].projectId)?.name || '') + ' ' : c;
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${one}TIME SHEET - ${(list[0].ym ? fmtMonthName(list[0].ym).replace('-', ' ') : tsLabel(list[0]).replace(/\//g, '-'))}.xlsx`);
+}
+/** Read a timesheet downloaded from here (and edited in Excel) back into rows: header row SITE NAME … NAME · EMP. CODE · day numbers · TOTAL DAYS */
+async function readTimesheetXlsx(file, base) {
+  await loadScript(LIB.xlsx);
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  const want = norm(IX.proj.get(base.projectId)?.name || '');
+  const names = wb.SheetNames.slice().sort((a, b) => (want.includes(norm(b).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0) - (want.includes(norm(a).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0));
+  for (const sn of names) {
+    const g = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
+    const hr = g.findIndex(r => r && r.some(v => norm(v) === 'NAME') && r.some(v => /EMP/.test(norm(v)))); if (hr < 0) continue;
+    const h = g[hr].map(norm), ci = k => h.findIndex(v => v.replace(/\s+/g, ' ').startsWith(k));
+    const cSite = ci('SITE'), cShift = ci('SHIFT'), cName = h.indexOf('NAME'), cCode = h.findIndex(v => /EMP/.test(v));
+    const dayCols = h.map((v, i) => [v, i]).filter(([v, i]) => i > cCode && /^\d{1,2}$/.test(v)).map(([, i]) => i);
+    if (dayCols.length !== base.days) throw new Error(`The sheet “${sn}” has ${dayCols.length} day columns, this period has ${base.days}. Download the Excel for the same period, edit it, and upload that file.`);
+    const rows = []; let site = '';
+    for (let r = hr + 1; r < g.length; r++) {
+      const row = g[r] || []; if (row.some(v => /GRAND TOTAL/.test(norm(v)))) break;
+      if (row[cSite] != null && String(row[cSite]).trim()) site = norm(row[cSite]);
+      const name = norm(row[cName]); if (!name) continue;
+      const cells = {}; dayCols.forEach((c, k) => { let v = norm(row[c]); if (v === 'O') v = 'OFF'; if (v) cells[k + 1] = v; });
+      rows.push({ section: site, shift: norm(row[cShift]), name, code: norm(row[cCode]), cells });
+    }
+    if (rows.length) return rows;
+  }
+  throw new Error('No timesheet rows found – use a file downloaded with “Download Excel”.');
 }
 
 async function exportMasterXlsx() {

@@ -21,7 +21,9 @@ const LSMap = (() => {
     // Esri street basemap: same provider as the satellite view, works from a local file (OSM's public tiles refuse pages with no referrer)
     // detectRetina: on phones and scaled Windows screens Leaflet fetches tiles one zoom deeper and draws them at half size, so imagery stays sharp.
     // maxNativeZoom: past the deepest imagery the last level is upsampled instead of requesting tiles that do not exist.
-    const T = { detectRetina: true, maxNativeZoom: 19, maxZoom: 20, keepBuffer: 4 };
+    // No detectRetina: on sharp screens it asks one level deeper than maxNativeZoom, and Esri answers missing levels with grey
+    // "Map data not yet available" tiles (not an error Leaflet could skip). Level 18 exists everywhere in the UAE; closer zooms stretch it.
+    const T = { maxNativeZoom: 18, maxZoom: 21, keepBuffer: 4 };
     // dark: Esri Dark Gray Canvas + its labels (the worker app's instrument theme); otherwise World Street Map
     const osm = opts.dark ? L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { ...T, maxNativeZoom: 16, attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors' }),

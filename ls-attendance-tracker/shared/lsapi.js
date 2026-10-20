@@ -81,6 +81,7 @@ const LSAPI = (() => {
     const isAdmin = req => roles(req).includes('admin');
     const isSup = req => isAdmin(req) || roles(req).includes('supervisor');
     const isViewer = req => isSup(req) || roles(req).includes('viewer');
+    const me = req => String(req.principal?.userDetails || '').toLowerCase();
     const byCode = async code => { const c = String(code || '').trim().toUpperCase(); return (await store.list('workers', w => w.code === c, { code: c }))[0] || null; };
 
     const cleanBeats = bs => (Array.isArray(bs) ? bs : []).slice(0, 50).map(b => ({ id: String(b.id), name: String(b.name || '').slice(0, 60), shift: ['DAY', 'NIGHT'].includes(b.shift) ? b.shift : 'ALL', everyMin: Math.max(10, +b.everyMin || 60), assignees: (b.assignees || []).map(String).slice(0, 500),
@@ -209,7 +210,7 @@ const LSAPI = (() => {
         const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date || '') ? req.query.date : today;
         const ps2 = date === today ? ps : await store.list('punches', p => p.workDate === date && p.status !== 'rejected', { workDate: date });
         const ms = await store.list('marks', m => m.date === date, { workDate: date });
-        return J(200, { today, date, codes: MARK_CODES, sites: (await store.list('sites')).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins })), workers: ws.map(w => ({ id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, punches: ps2.filter(p => p.wid === w.id).map(strip), mark: ms.find(m => m.wid === w.id) || null })) });
+        return J(200, { today, date, codes: MARK_CODES, sites: (await store.list('sites')).map(s => ({ id: s.id, name: s.name, project: s.project, pins: s.pins, canSetLocation: (s.locEditors || []).includes(me(req)) })), me: me(req), workers: ws.map(w => ({ id: w.id, code: w.code, name: w.name, shift: w.shift, siteId: w.siteId, punches: ps2.filter(p => p.wid === w.id).map(strip), mark: ms.find(m => m.wid === w.id) || null })) });
       },
       /** No check-in: the supervisor / admin decides what the day is (A, OFF, SL, AL …). Blank code clears the mark. */
       'POST supervisor/mark': async req => {
@@ -227,7 +228,48 @@ const LSAPI = (() => {
         const w = await byCode(req.body?.code); if (!w || !w.enabled) return err(404, 'Worker not found');
         return doPunch(w, req.body, 'supervisor: ' + (req.principal?.userDetails || '?'));
       },
+      /** A supervisor the admin allowed for this site sends the site's location from the phone; it waits for the admin's approval */
+      'POST supervisor/location': async req => {
+        if (!isSup(req)) return err(403, 'Supervisor role required');
+        const b = req.body || {}, site = await store.get('sites', String(b.siteId || ''));
+        if (!site) return err(404, 'Site not found');
+        if (!isAdmin(req) && !(site.locEditors || []).includes(me(req))) return err(403, 'You are not allowed to set the location of this site – ask the admin', 'NOT_ALLOWED');
+        const lat = +b.lat, lng = +b.lng, acc = Math.round(+b.acc || 0);
+        if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || lat === 0) return err(400, 'Location missing', 'NO_GPS');
+        if (b.clientId) { const dup = (await store.list('locprops', x => x.clientId === b.clientId))[0]; if (dup) return J(200, { prop: dup, repeat: true }); }
+        const t = now(), prop = { id: rid(), siteId: site.id, siteName: site.name, lat, lng, acc, radius: Math.max(10, Math.min(1000, +b.radius || 100)), label: String(b.label || '').slice(0, 60), note: String(b.note || '').slice(0, 200), by: me(req) || 'supervisor', at: t, status: 'pending', serverTs: t, clientId: b.clientId || '' };
+        await store.put('locprops', prop); return J(200, { prop });
+      },
       /* ---------- admin ---------- */
+      'GET admin/locprops': async req => { if (!isViewer(req)) return err(403, 'Role required'); const since = +req.query?.since || 0; return J(200, { now: now(), props: await store.list('locprops', x => x.serverTs > since, { since }) }); },
+      'POST admin/locprop': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const x = await store.get('locprops', req.body?.id); if (!x) return err(404, 'Not found');
+        x.status = req.body.status === 'approved' ? 'approved' : 'rejected'; x.reason = String(req.body.reason || '').slice(0, 200); x.decidedBy = me(req) || 'admin'; x.serverTs = now();
+        await store.put('locprops', x);
+        if (req.body.revoke) { const s = await store.get('sites', x.siteId); if (s) { s.locEditors = (s.locEditors || []).filter(e => e !== x.by); await store.put('sites', s); } }
+        return J(200, { prop: x });
+      },
+      /* timesheet versions and signatures, shared between PCs */
+      'PUT admin/tsdoc': async req => {
+        const d = req.body?.doc; if (!d?.projectId || !d.from || !d.to) return err(400, 'doc needed');
+        const id = `${d.projectId}|${d.from}|${d.to}`, old = await store.get('tsdocs', id);
+        const c = await cfg(), signers = (c.signers || []).flat().map(String);
+        if (!isAdmin(req)) {           // a signer may only add their own signature to the current version
+          if (!signers.includes(me(req)) || !old || d.version !== old.version || JSON.stringify(d.rows) !== JSON.stringify(old.rows)) return err(403, 'Admin role required');
+          const mine = (d.sigs || []).filter(g => g.email === me(req)), others = (old.sigs || []).filter(g => g.email !== me(req));
+          d.sigs = [...others, ...mine.map(g => ({ ...g, at: new Date(now()).toISOString() }))];
+        }
+        await store.put('tsdocs', { ...d, id, serverTs: now() }); return J(200, { ok: true });
+      },
+      'GET admin/tsdocs': async req => { if (!isViewer(req) && !me(req)) return err(403, 'Sign in required'); const since = +req.query?.since || 0; return J(200, { now: now(), docs: await store.list('tsdocs', x => x.serverTs > since, { since }) }); },
+      'POST admin/notice': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const n = req.body?.notice || {}; if (!n.id || !n.to) return err(400, 'notice needed');
+        await store.put('notices', { id: String(n.id), to: String(n.to).toLowerCase(), text: String(n.text || '').slice(0, 400), key: String(n.key || ''), at: n.at || new Date(now()).toISOString(), read: false, serverTs: now() }); return J(200, { ok: true });
+      },
+      'GET me/notices': async req => { const m = me(req); if (!m) return err(401, 'Sign in required'); return J(200, { notices: await store.list('notices', x => x.to === m || isAdmin(req)) }); },
+      'POST me/notices/read': async req => { const x = await store.get('notices', String(req.body?.id || '')); if (!x || (x.to !== me(req) && !isAdmin(req))) return err(404, 'Not found'); x.read = true; x.serverTs = now(); await store.put('notices', x); return J(200, { ok: true }); },
       'PUT admin/roster': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const b = req.body || {}; const seen = new Set();
@@ -239,7 +281,7 @@ const LSAPI = (() => {
           await store.put('workers', w); seen.add(w.id);
         }
         if (b.full) for (const w of await store.list('workers')) if (!seen.has(w.id) && w.enabled) { w.enabled = false; await store.put('workers', w); }
-        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
+        if (b.sites) { const keep = new Set(b.sites.map(s => s.id)); for (const s of b.sites) await store.put('sites', { id: s.id, name: s.name, project: s.project || '', pins: (s.pins || []).map(p => ({ lat: +p.lat, lng: +p.lng, radius: Math.max(10, +p.radius || 100), label: p.label || '' })), beats: cleanBeats(s.beats), locEditors: (Array.isArray(s.locEditors) ? s.locEditors : []).map(x => String(x).toLowerCase()).slice(0, 20) }); for (const s of await store.list('sites')) if (!keep.has(s.id)) await store.del('sites', s.id); }
         if (b.settings) await store.put('config', { id: 'app', v: { ...((await store.get('config', 'app'))?.v || {}), ...b.settings } });
         return J(200, { workers: seen.size, sites: (b.sites || []).length });
       },

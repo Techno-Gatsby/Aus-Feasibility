@@ -18,6 +18,7 @@ const MONTH_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JUL
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const toDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
 const isoOf = dt => `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 86400000);
 const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return isoOf(d); };
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const dim = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
@@ -233,18 +234,33 @@ const SEC_CLOSED = new Set();
 const sec = (id, title, body, extra = '') => `<div class="sec ${SEC_CLOSED.has(id) ? 'closed' : ''}" data-sec="${id}"><div class="sh"><span class="car">▾</span>${title}${extra}</div><div class="sb">${body}</div></div>`;
 function bindSecs(root) { root.querySelectorAll('.sec>.sh').forEach(h => h.onclick = e => { if (e.target.closest('button,input,select,a')) return; const s = h.parentElement; s.classList.toggle('closed'); s.classList.contains('closed') ? SEC_CLOSED.add(s.dataset.sec) : SEC_CLOSED.delete(s.dataset.sec); }); }
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms); }
+/** A dialog – or, with opts.into, the same editor drawn inside a page panel (Projects & sites) */
 function openModal(title, bodyHTML, buttons = [], opts = {}) {
   if (typeof TOUR !== "undefined") TOUR.stop();
-  const m = $('#modal');
-  m.style.width = opts.width || '';
-  m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3><button class="btn sm" data-x>✕</button></div>
+  const panel = opts.into?.isConnected && opts.into.offsetParent && !$('#modal-bg').classList.contains('on') ? opts.into : null, m = panel || $('#modal');
+  if (!panel) m.style.width = opts.width || '';
+  m.innerHTML = `<div class="mh"><h3>${esc(title)}</h3>${panel ? '' : '<button class="btn sm" data-x>✕</button>'}</div>
     <div class="mb">${bodyHTML}</div>
     <div class="mf">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-b="${i}">${esc(b.label)}</button>`).join('')}</div>`;
+  if (panel) {
+    buttons.forEach((b, i) => m.querySelector(`[data-b="${i}"]`).onclick = async () => { const r = await b.onClick?.(m); if (r !== false && !b.onClick) opts.onCancel?.(); });
+    return m;
+  }
   $('#modal-bg').classList.add('on');
   m.querySelector('[data-x]').onclick = closeModal;
   buttons.forEach((b, i) => m.querySelector(`[data-b="${i}"]`).onclick = async () => { const r = await b.onClick?.(m); if (r !== false) closeModal(); });
   setTimeout(() => { if (!m.contains(document.activeElement)) m.querySelector('input,select,textarea')?.focus(); }, 30);
   return m;
+}
+/** Tabs inside an editor: blocks marked data-tab="key" are shown one at a time; the choice is remembered per kind */
+const PTAB = {};
+function editorTabs(m, kind, tabs) {
+  const mb = m.querySelector('.mb'); if (!mb) return;
+  const cur = tabs.some(t => t[0] === PTAB[kind]) ? PTAB[kind] : tabs[0][0];
+  mb.insertAdjacentHTML('afterbegin', `<div class="ptabs">${tabs.map(([k, l]) => `<button type="button" data-pt="${k}" class="${k === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`);
+  const show = k => { PTAB[kind] = k; mb.querySelectorAll('[data-pt]').forEach(b => b.classList.toggle('on', b.dataset.pt === k)); mb.querySelectorAll('[data-tab]').forEach(d => d.hidden = d.dataset.tab !== k); window.dispatchEvent(new Event('resize')); };
+  mb.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => show(b.dataset.pt));
+  show(cur);
 }
 function closeModal() { $('#modal-bg').classList.remove('on'); $('#modal').innerHTML = ''; }
 function confirmBox(msg, okLabel = 'OK', cls = 'pri') {

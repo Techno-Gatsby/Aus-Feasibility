@@ -146,15 +146,16 @@ function rowHTML(i) {
 }
 
 /** Column widths (px): identity block stays pinned while the days scroll */
-const GW = [34, 190, 76, 26, 150], GD = [112, 78];
+const GW_WIDE = [34, 190, 76, 26, 150], GW_SMALL = [22, 104, 58, 18, 64], GD = [112, 78];   // frozen columns: narrower on phones
 const GRID_FIRST = 60, GRID_BATCH = 100;
-/** Column widths: the minimum layout, with any spare width of the pane shared out – names and sites first, then the day cells (up to 42 px), the rest to OTHER */
+/** Column widths: the minimum layout (day cells 32 px – room for OFF), with any spare width of the pane shared out:
+ *  the day cells first (up to 44 px), then names and sites, the rest to OTHER */
 function gridCols() {
-  const n = AV.dates.length, det = AV.details, fixed = (det ? GD[0] + GD[1] : 0) + 34 + 38;
-  const base = GW.reduce((a, b) => a + b, 0) + fixed + n * 28 + 110;
+  const n = AV.dates.length, det = AV.details, fixed = (det ? GD[0] + GD[1] : 0) + 34 + 38, GW = innerWidth < 700 ? GW_SMALL : GW_WIDE, D0 = 32;
+  const base = GW.reduce((a, b) => a + b, 0) + fixed + n * D0 + 110;
   let extra = Math.max(0, ($('#grid-wrap')?.clientWidth || 0) - base - 2);
-  const nameAdd = Math.floor(Math.min(110, extra * .3)), siteAdd = Math.floor(Math.min(110, extra * .25)); extra -= nameAdd + siteAdd;
-  const dw = n ? Math.min(42, 28 + Math.floor(extra / n)) : 28; extra -= (dw - 28) * n;
+  const dw = n ? Math.min(44, D0 + Math.floor(extra / n)) : D0; extra -= (dw - D0) * n;
+  const nameAdd = Math.floor(Math.min(110, extra * .5)), siteAdd = Math.floor(Math.min(110, extra * .4)); extra -= nameAdd + siteAdd;
   const W = [GW[0], GW[1] + nameAdd, GW[2], GW[3], GW[4] + siteAdd], other = 110 + Math.max(0, Math.floor(extra));
   const left = []; W.reduce((a, w, i) => (left[i] = a, a + w), 0);
   return { left, W, dw, other, width: W.reduce((a, b) => a + b, 0) + fixed + n * dw + other };
