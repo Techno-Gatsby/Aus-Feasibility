@@ -49,7 +49,7 @@ function projectsOverviewHTML() {
 }
 function clientsDialog() {
   openModal('Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
-    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td style="white-space:nowrap"><button class="btn sm" data-ec="${c.id}">Edit</button> <button class="btn sm" data-em="${c.id}" title="Timesheet, reminder or custom email to this client">✉ Email…</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
+    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td style="white-space:nowrap"><button class="btn sm" data-ec="${c.id}">Edit</button> <button class="btn sm" data-em="${c.id}" title="Timesheet, reminder or custom email to this client">Email…</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
     </tbody></table></div>`, [{ label: 'Add client', onClick: () => { setTimeout(() => editClient(null), 0); } }, { label: 'Close', cls: 'pri' }]);
   $$('#modal [data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
   $$('#modal [data-em]').forEach(b => b.onclick = () => { closeModal(); emailClient({ clientId: b.dataset.em }); });

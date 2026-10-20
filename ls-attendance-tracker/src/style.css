@@ -710,3 +710,9 @@ tr.warnrow td{background:#fff8e6}
 .sp-pg img{width:100%;display:block;border:1px solid var(--line2);background:#fff}
 .sp-pg .row{gap:6px;margin-top:4px}.sp-pg input{flex:1;min-width:0}
 .ml-att{border:1px solid var(--line2);border-radius:var(--r);padding:8px;margin:8px 0}.ml-att>.row{gap:8px;margin-bottom:6px;flex-wrap:wrap}
+/* timesheet layout mode: every printed text editable, logo tools */
+.ts-sheet .tl{outline:1px dashed #6a8fd8;outline-offset:1px;border-radius:2px;min-width:12px;display:inline-block;cursor:text}
+.ts-sheet .tl:focus{outline:2px solid var(--accent);background:#eef4ff}
+.ts-sheet .tl-logo{position:relative;min-height:40px;display:flex;align-items:center;justify-content:center}
+.ts-sheet .tl-tools{position:absolute;inset:auto 0 0 0;display:flex;gap:4px;justify-content:center;opacity:0;transition:opacity .15s}
+.ts-sheet .tl-logo:hover .tl-tools{opacity:1}

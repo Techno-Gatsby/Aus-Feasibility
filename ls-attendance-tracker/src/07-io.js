@@ -366,16 +366,18 @@ async function exportTimesheetsXlsx(list) {
     ws.getColumn(1).width = 2; ws.getColumn(2).width = 26; ws.getColumn(3).width = 8; ws.getColumn(4).width = 34; ws.getColumn(5).width = 16;
     for (let i = 0; i < N; i++) ws.getColumn(C0 + 1 + i).width = 3.6; ws.getColumn(CT + 1).width = 9;
     // Same cell positions as the LS/DO/F-026 workbook: header rows 2-4, legend AI6:AJ9, MONTH row 8, PROJECT row 10, table from row 13
-    ws.getCell('B2').value = st.companyShort; ws.getCell('B2').font = { bold: true, size: 14 };
-    ws.getCell('B3').value = st.tsTitle; ws.getCell('B3').font = { bold: true, size: 11 };
-    ws.getCell('B4').value = `Form No: ${st.formNo}`; ws.getCell('I4').value = `REV NO: ${st.revNo}`;
-    tsLegend(p).forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
-    if (ts.ym) { const [yy, mm] = ts.ym.split('-').map(Number); ws.getCell('B8').value = 'MONTH'; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; }
-    else { ws.getCell('B8').value = 'PERIOD'; ws.getCell('C8').value = tsLabel(ts); }
+    const lk = tsLook(p);
+    ws.getCell('B2').value = lk.company; ws.getCell('B2').font = { bold: true, size: 14 };
+    ws.getCell('B3').value = lk.title; ws.getCell('B3').font = { bold: true, size: 11 };
+    ws.getCell('B4').value = `${lk.formLabel} ${lk.formNo}`.trim(); ws.getCell('I4').value = `${lk.revLabel} ${lk.revNo}`.trim(); if (lk.extra) ws.getCell('R4').value = lk.extra;
+    if (lk.logo && lk.logo !== 'none' && /^data:image\/(png|jpe?g)/.test(lk.logo)) { const img = wb.addImage({ base64: lk.logo, extension: /png/.test(lk.logo.slice(0, 20)) ? 'png' : 'jpeg' }); ws.addImage(img, { tl: { col: CT - 4, row: 1 }, ext: { width: 120, height: 48 } }); }
+    lk.legend.forEach(([a, b], i) => { const c1 = ws.getCell(6 + i, CT), c2 = ws.getCell(6 + i, CT + 1); c1.value = a; c2.value = b; c1.border = c2.border = thin; c1.font = { bold: true }; });
+    if (ts.ym) { const [yy, mm] = ts.ym.split('-').map(Number); ws.getCell('B8').value = lk.monthLabel; ws.getCell('C8').value = new Date(Date.UTC(yy, mm - 1, 1)); ws.getCell('C8').numFmt = 'mmm-yy'; }
+    else { ws.getCell('B8').value = lk.periodLabel; ws.getCell('C8').value = tsLabel(ts); }
     ws.getCell('C8').alignment = { horizontal: 'left' }; ws.getCell('B8').font = { bold: true };
-    ws.getCell('B10').value = 'PROJECT NAME'; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
+    ws.getCell('B10').value = lk.projectLabel; ws.getCell('C10').value = p?.name || ''; ws.getCell('B10').font = { bold: true };
     const HR = 13;
-    const head = ['SITE NAME', 'SHIFT D/N', 'NAME', 'EMP. CODE', ...ts.dates.map(d => +d.slice(8)), 'TOTAL DAYS'];
+    const head = [lk.cols.site, lk.cols.shift, lk.cols.name, lk.cols.code, ...ts.dates.map(d => +d.slice(8)), lk.cols.total];
     head.forEach((v, i) => { const c = ws.getCell(HR, 2 + i); c.value = v; c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; });
     const pCodes = S.codes.filter(c => c.billable && c.code !== 'R').map(c => c.code);
     let r = HR + 1;
@@ -396,13 +398,13 @@ async function exportTimesheetsXlsx(list) {
       if (r - 1 > r0) ws.mergeCells(r0, 2, r - 1, 2);
       const sc = ws.getCell(r0, 2); sc.font = { bold: true }; sc.alignment = { vertical: 'middle', wrapText: true };
     }
-    ws.getCell(r, CT - 3).value = 'GRAND TOTAL'; ws.getCell(r, CT - 3).font = { bold: true };
+    ws.getCell(r, CT - 3).value = lk.grand; ws.getCell(r, CT - 3).font = { bold: true };
     ws.getCell(r, CT + 1).value = { formula: `SUM(${colL(CT)}${HR + 1}:${colL(CT)}${Math.max(HR + 1, r - 1)})`, result: ts.total };
     ws.getCell(r, CT + 1).font = { bold: true }; ws.getCell(r, CT + 1).border = thin; ws.getCell(r, CT + 1).alignment = { horizontal: 'center' };
     r++;
     // signatories: labels B, D, I, R, AC; "name title" in one cell below
     const spots = [2, 4, 9, 18, 29];
-    st.signatories.forEach((s, i) => { const c = Math.min(spots[i] || 2 + i * 6, CT); ws.getCell(r, c).value = sigLabel(p, s, i); ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 1, c).value = ' ' + [s.name, s.title].filter(Boolean).join(' ') + ' '; ws.getCell(r + 1, c).alignment = { wrapText: true, vertical: 'top' }; });
+    lk.sig.forEach((s, i) => { const c = Math.min(spots[i] || 2 + i * 6, CT); ws.getCell(r, c).value = s.label; ws.getCell(r, c).font = { bold: true }; ws.getCell(r + 1, c).value = ' ' + [s.name, s.title].filter(Boolean).join(' ') + ' '; ws.getCell(r + 1, c).alignment = { wrapText: true, vertical: 'top' }; });
     ws.getRow(r + 1).height = 45;
     ws.views = [{ state: 'frozen', ySplit: HR }];
   }

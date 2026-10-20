@@ -7,6 +7,27 @@
 const TS_LEGEND = [['P', 'PRESENT'], ['A', 'ABSENT'], ['O', 'DAY OFF'], ['R', 'RELIEVER']];
 /** Legend for a project: day-off is "O" on the SCL TR workbook, "OFF" on the Elwood sheets */
 const tsLegend = p => TS_LEGEND.map(([a, b]) => [a === 'O' ? (p?.tsOff || 'O') : a, b]);
+/* Look of the sheet: logo and every printed text, per client with a default (S.tsLayout = { def, clients: { id: {…} } });
+   what is not set falls back to Settings and the LS/DO/F-026 wording */
+const TS_COLS = { site: 'SITE NAME', shift: 'SHIFT D/N', name: 'NAME', code: 'EMP. CODE', total: 'TOTAL DAYS' };
+function tsLook(p, { noClient = false, noDef = false } = {}) {
+  const st = S.settings, L = S.tsLayout || {}, d = noDef ? {} : L.def || {}, c = noClient || !p ? {} : L.clients?.[p.clientId] || {};
+  const g = (k, f) => c[k] ?? d[k] ?? f;
+  return { logo: g('logo', LOGO), company: g('company', st.companyShort), title: g('title', st.tsTitle), formLabel: g('formLabel', 'Form No:'), formNo: g('formNo', st.formNo), revLabel: g('revLabel', 'REV NO:'), revNo: g('revNo', st.revNo), extra: g('extra', ''),
+    monthLabel: g('monthLabel', 'MONTH'), periodLabel: g('periodLabel', 'PERIOD'), projectLabel: g('projectLabel', 'PROJECT NAME'),
+    legend: g('legend', TS_LEGEND).map(([a, b]) => [a === 'O' ? (p?.tsOff || 'O') : a, b]), cols: { ...TS_COLS, ...d.cols, ...c.cols }, grand: g('grand', 'GRAND TOTAL'),
+    sig: st.signatories.map((s, i) => ({ label: c.sig?.[i]?.label ?? d.sig?.[i]?.label ?? sigLabel(p, s, i), name: c.sig?.[i]?.name ?? d.sig?.[i]?.name ?? s.name ?? '', title: c.sig?.[i]?.title ?? d.sig?.[i]?.title ?? s.title ?? '' })) };
+}
+/** what differs from the level below → stored for a client (or as the default) */
+function tsLookDiff(look, base, p) {
+  const out = {};
+  for (const k of ['logo', 'company', 'title', 'formLabel', 'formNo', 'revLabel', 'revNo', 'extra', 'monthLabel', 'periodLabel', 'projectLabel', 'grand']) if (look[k] !== base[k]) out[k] = look[k];
+  const back = l => l.map(([a, b]) => [a === (p?.tsOff || 'O') ? 'O' : a, b]);
+  if (JSON.stringify(look.legend) !== JSON.stringify(base.legend)) out.legend = back(look.legend);
+  const cols = {}; for (const k in TS_COLS) if (look.cols[k] !== base.cols[k]) cols[k] = look.cols[k]; if (Object.keys(cols).length) out.cols = cols;
+  if (JSON.stringify(look.sig) !== JSON.stringify(base.sig)) out.sig = look.sig.map((x, i) => { const y = {}; for (const k of ['label', 'name', 'title']) if (x[k] !== base.sig[i]?.[k]) y[k] = x[k]; return y; });
+  return out;
+}
 const TV = { mode: 'month', ym: null, from: null, to: null, client: '', q: '', picked: new Set(), all: true, preview: null, edit: null };
 
 /** One pass over the ledger per period: projectId -> Map(rowKey -> row); cells keyed by day position 1..N. Cached until data changes. */
@@ -91,7 +112,7 @@ const sigLabel = (p, s, i) => i === 1 && p?.tsNoAck ? '' : s.label;
 const TS_W = 1096;
 let tsCtx = null;
 const tsTextW = (t, fs, bold) => { tsCtx ||= document.createElement('canvas').getContext('2d'); tsCtx.font = `${bold ? '700 ' : ''}${fs}px Verdana, Tahoma, Arial, sans-serif`; return tsCtx.measureText(t || '').width; };
-function tsLayout(ts) {
+function tsLayout(ts, lk) {
   const w10 = (list, bold) => Math.max(0, ...list.map(t => tsTextW(t, 10, bold))) / 10;    // widest text per px of font size
   const words = list => list.flatMap(t => String(t || '').split(/\s+/));
   // width of a text broken over two lines at the best place (e.g. "SUBCON" / "(HEMAYA SECURITY)")
@@ -99,7 +120,8 @@ function tsLayout(ts) {
     for (let k = 1; k < w.length; k++) best = Math.min(best, Math.max(tsTextW(w.slice(0, k).join(' '), 10), tsTextW(w.slice(k).join(' '), 10))); return best; };
   const pad = 8, dpad = 8, N = ts.days, offTxt = IX.proj.get(ts.projectId)?.tsOff === 'OFF' && ts.rows.some(r => Object.values(r.cells).includes('OFF')) ? 'OFF' : 'O';
   let site = w10(ts.sections.map(x => x.name), true), name = w10(ts.rows.map(rowName), false);
-  const shift = w10(['NIGHT', 'SHIFT'], true), code = Math.max(0, ...ts.rows.map(r => twoLines(rowCode(r)))) / 10, day = w10([offTxt, '31'], true), total = w10(['TOTAL'], true);
+  const C = lk?.cols || TS_COLS, longest = t => String(t || '').split(/\s+/).reduce((a, w) => a.length >= w.length ? a : w, '');
+  const shift = w10(['NIGHT', longest(C.shift)], true), code = Math.max(w10([longest(C.code)], true) * 10, ...ts.rows.map(r => twoLines(rowCode(r)))) / 10, day = w10([offTxt, '31'], true), total = w10([longest(C.total)], true);
   const solve = () => (TS_W - pad * 5 - dpad * N) / (site + shift + name + code + N * day + total);
   let fs = solve(), two = false;
   // a single outlier that would make everything small: let it take two lines (half the width) instead
@@ -121,7 +143,8 @@ function tsLayout(ts) {
 /** LS/DO/F-026 – same blocks as the SCL TR workbook and the signed Elwood sheets.
  *  opt.edit: cells editable (preview) */
 function tsSheetHTML(ts, opt = {}) {
-  const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days, ed = !!opt.edit, edited = !!ts.doc || ed, lay = tsLayout(ts), fs = lay.fs;
+  const st = S.settings, p = IX.proj.get(ts.projectId), N = ts.days, ed = !!opt.edit, edited = !!ts.doc || ed, lk = opt.look || tsLook(p), lay = tsLayout(ts, lk), fs = lay.fs, LM = !!opt.layout;
+  const E = (k, t, br) => LM ? `<span class="tl" contenteditable="true" spellcheck="false" data-lk="${k}">${esc(t)}</span>` : br ? esc(t).replace(' ', '<br>') : esc(t);
   const dayTh = (ts.dates || []).map(d => `<th class="d" style="width:${lay.w.day}">${+d.slice(8)}</th>`).join('');
   const ce = (attrs, txt, cls = '') => ed ? `<td class="ed ${cls}" contenteditable="true" spellcheck="false" ${attrs}>${esc(txt)}</td>` : `<td${cls ? ` class="${cls}"` : ''}><div class="c2">${esc(txt)}</div></td>`;
   let body = '';
@@ -138,25 +161,25 @@ function tsSheetHTML(ts, opt = {}) {
   });
   if (ed) body += `<tr class="ts-add"><td colspan="${N + 5}"><button class="btn sm" data-addsec="1">+ Add a site section</button></td></tr>`;
   if (!body) body = `<tr><td colspan="${N + 5}" style="padding:10px">No attendance for this project in ${esc(tsLabel(ts))}.</td></tr>`;
-  const sg = st.signatories, sigs = ts.doc?.sigs || [], ver = ts.doc?.version || 0;
+  const sg = lk.sig, sigs = ts.doc?.sigs || [], ver = ts.doc?.version || 0;
   const sigCell = (s, i) => {
     const g = sigs.find(x => x.slot === i);
-    const who = [s.name, s.title].filter(Boolean).join(' ');
-    return `<td>${g ? `<div class="ts-sig">${g.image ? `<img src="${g.image}" alt="">` : `<span class="ts-sig-t">${esc(g.name)}</span>`}<div class="ts-sig-m">${esc(g.name)} · ${esc(fmtDMY(g.at.slice(0, 10)))}${g.version < ver ? ` <b class="stale">(signed v${g.version}, sheet now v${ver})</b>` : ''}</div></div>` : ''}${esc(who)}</td>`;
+    const who = LM ? `${E(`sig.${i}.name`, s.name)} ${E(`sig.${i}.title`, s.title)}` : esc([s.name, s.title].filter(Boolean).join(' '));
+    return `<td>${g ? `<div class="ts-sig">${g.image ? `<img src="${g.image}" alt="">` : `<span class="ts-sig-t">${esc(g.name)}</span>`}<div class="ts-sig-m">${esc(g.name)} · ${esc(fmtDMY(g.at.slice(0, 10)))}${g.version < ver ? ` <b class="stale">(signed v${g.version}, sheet now v${ver})</b>` : ''}</div></div>` : ''}${who}</td>`;
   };
   return `<div class="sheet land ts-sheet${ed ? ' editing' : ''}${lay.two ? ' two' : ''}" style="--tsf:${fs}px">
     <table class="ts-top"><tbody>
-      <tr><td colspan="3" class="c b">${esc(st.companyShort)}</td><td rowspan="3" class="lg"><img src="${LOGO}" alt=""></td></tr>
-      <tr><td colspan="3" class="c b">${esc(st.tsTitle)}</td></tr>
-      <tr><td class="c b">Form No: ${esc(st.formNo)}</td><td class="c b" style="width:22%">REV NO: ${esc(st.revNo)}</td><td style="width:22%"></td></tr>
+      <tr><td colspan="3" class="c b">${E('company', lk.company)}</td><td rowspan="3" class="lg">${LM ? `<div class="tl-logo">${lk.logo !== 'none' ? `<img src="${lk.logo}" alt="">` : '<span class="muted small">No logo</span>'}<div class="tl-tools"><button type="button" class="btn sm" data-logo="up">${lk.logo !== 'none' ? 'Replace' : 'Add'} logo</button>${lk.logo !== 'none' ? '<button type="button" class="btn sm" data-logo="rm">Remove</button>' : ''}</div></div>` : lk.logo !== 'none' ? `<img src="${lk.logo}" alt="">` : ''}</td></tr>
+      <tr><td colspan="3" class="c b">${E('title', lk.title)}</td></tr>
+      <tr><td class="c b">${E('formLabel', lk.formLabel)} ${E('formNo', lk.formNo)}</td><td class="c b" style="width:22%">${E('revLabel', lk.revLabel)} ${E('revNo', lk.revNo)}</td><td style="width:22%" class="c b">${E('extra', lk.extra)}</td></tr>
     </tbody></table>
     <div class="ts-mid">
-      <table class="ts-mb"><tr><td class="k">${ts.ym ? 'MONTH' : 'PERIOD'}</td><td class="v">${esc(tsLabel(ts))}</td></tr><tr><td class="k">PROJECT NAME</td><td class="v">${esc(p?.name || '')}</td></tr></table>
-      <table class="ts-legend">${tsLegend(p).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+      <table class="ts-mb"><tr><td class="k">${ts.ym ? E('monthLabel', lk.monthLabel) : E('periodLabel', lk.periodLabel)}</td><td class="v">${esc(tsLabel(ts))}</td></tr><tr><td class="k">${E('projectLabel', lk.projectLabel)}</td><td class="v">${esc(p?.name || '')}</td></tr></table>
+      <table class="ts-legend">${lk.legend.map(([a, b], i) => `<tr><td>${E(`legend.${i}.0`, a)}</td><td>${E(`legend.${i}.1`, b)}${LM ? `<button type="button" class="ts-del" data-lgdel="${i}" title="Remove this line">✕</button>` : ''}</td></tr>`).join('')}${LM ? '<tr><td colspan="2"><button type="button" class="btn sm" data-lgadd="1">+ Line</button></td></tr>' : ''}</table>
     </div>
-    <table class="ts"><thead><tr><th style="width:${lay.w.site}">SITE NAME</th><th style="width:${lay.w.shift}">SHIFT<br>D/N</th><th style="width:${lay.w.name}">NAME</th><th style="width:${lay.w.code}">EMP. CODE</th>${dayTh}<th class="tt" style="width:${lay.w.total}">TOTAL DAYS</th></tr></thead>
-    <tbody>${body}<tr class="gtr"><td colspan="${Math.max(1, N - 6 + 4)}" class="nb"></td><td colspan="6" class="gl">GRAND TOTAL</td><td class="gt">${ts.total}</td></tr></tbody></table>
-    <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${esc(sigLabel(p, s, i))}</td>`).join('')}</tr><tr class="nm">${sg.map(sigCell).join('')}</tr></table>
+    <table class="ts"><thead><tr><th style="width:${lay.w.site}">${E('cols.site', lk.cols.site)}</th><th style="width:${lay.w.shift}">${E('cols.shift', lk.cols.shift, true)}</th><th style="width:${lay.w.name}">${E('cols.name', lk.cols.name)}</th><th style="width:${lay.w.code}">${E('cols.code', lk.cols.code)}</th>${dayTh}<th class="tt" style="width:${lay.w.total}">${E('cols.total', lk.cols.total)}</th></tr></thead>
+    <tbody>${body}<tr class="gtr"><td colspan="${Math.max(1, N - 6 + 4)}" class="nb"></td><td colspan="6" class="gl">${E('grand', lk.grand)}</td><td class="gt">${ts.total}</td></tr></tbody></table>
+    <table class="ts-sign"><tr>${sg.map((s, i) => `<td>${E(`sig.${i}.label`, s.label)}</td>`).join('')}</tr><tr class="nm">${sg.map(sigCell).join('')}</tr></table>
   </div>`;
 }
 
@@ -224,13 +247,14 @@ function renderTimesheets() {
 function tsShowPreview() {
   const box = $('#tv-sheets'), bar = $('#tv-bar'), pv = TV.pv; if (!box || !bar || !pv) { if (bar) bar.innerHTML = ''; return; }
   const ts = tsView(pv.base), doc = ts.doc, ed = TV.edit;
+  if (TV.lay) return tsShowLayout(box, bar, ts);
   const changed = doc && doc.basis && doc.basis !== tsBasis(pv.base);
   const signed = (doc?.sigs || []).length;
   bar.innerHTML = ed
     ? `<b>Editing</b><span class="muted small">Click a cell and type: P, A, ${esc(IX.proj.get(ts.projectId)?.tsOff || 'O')}, R… · names, codes and sites are editable · ✕ deletes a row</span><span class="spacer"></span><button class="btn sm" id="te-cancel">Cancel</button><button class="btn sm pri" id="te-save">Save version</button>`
-    : `<button class="btn sm" id="te-edit">✎ Edit sheet</button><button class="btn sm" id="te-xlsx">Download Excel</button><label class="btn sm">Upload edited Excel…<input type="file" id="te-up" accept=".xlsx,.xls" hidden></label>
+    : `<button class="btn sm" id="te-edit">Edit sheet</button><button class="btn sm" id="te-lay" title="Logo and every printed text – for this client or for all">Edit layout</button><button class="btn sm" id="te-xlsx">Download Excel</button><label class="btn sm">Upload edited Excel…<input type="file" id="te-up" accept=".xlsx,.xls" hidden></label>
        ${doc ? `<span class="pill">v${doc.version} · ${esc(fmtDMY(doc.savedAt.slice(0, 10)))}${doc.savedBy ? ' · ' + esc(doc.savedBy) : ''}</span>${doc.edited ? '<span class="pill warn">edited</span>' : ''}` : '<span class="muted small">Generated from attendance</span>'}
-       ${signed ? `<span class="pill pos">${signed} signature(s)</span>` : ''}${!ts.filtered ? '<button class="btn sm pri" id="te-sign">✍ Sign…</button>' : ''}<button class="btn sm" id="te-mail" title="Email this timesheet, a reminder or a custom email to the client">✉ Email…</button>
+       ${signed ? `<span class="pill pos">${signed} signature(s)</span>` : ''}${!ts.filtered ? '<button class="btn sm pri" id="te-sign">Sign…</button>' : ''}<button class="btn sm" id="te-mail" title="Email this timesheet (and invoice packs) to the client">Email…</button>
        ${changed ? `<span class="pill warn" title="Attendance was changed after this version was saved">attendance changed</span><button class="btn sm" id="te-upd">Update from attendance</button>` : ''}
        ${ts.filtered ? `<span class="pill">only “${esc(ts.filtered)}”</span>` : ''}
        <span class="spacer"></span>${doc ? '<button class="btn sm bad" id="te-reset">Reset to attendance</button>' : ''}`;
@@ -244,6 +268,7 @@ function tsShowPreview() {
     return;
   }
   q('#te-edit').onclick = () => { if (ts.filtered) return toast('Clear the Name / Emp ID filter to edit the whole sheet'); TV.edit = { key: tsKey(pv.base), rows: JSON.parse(JSON.stringify(doc ? doc.rows : docRows(pv.base))) }; tsShowPreview(); };
+  q('#te-lay').onclick = () => { const p = IX.proj.get(ts.projectId); TV.lay = { look: JSON.parse(JSON.stringify(tsLook(p))), scope: p?.clientId ? 'client' : 'def', p }; tsShowPreview(); };
   q('#te-xlsx').onclick = () => exportTimesheetsXlsx([ts]).catch(e => toast(e.message));
   q('#te-up').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const rows = await readTimesheetXlsx(f, pv.base); tsSaveVersion(pv.base, rows, true); renderTimesheets(); toast(`Read ${rows.length} row(s) from ${f.name} – saved as a new version`); } catch (err) { toast(err.message, 6000); } };
   if (q('#te-upd')) q('#te-upd').onclick = async () => { if (!await confirmBox('Replace the saved version with the current attendance? Your edits on this sheet are replaced, and anyone who signed is notified.', 'Update')) return; tsSaveVersion(pv.base, docRows(pv.base), false); renderTimesheets(); };
@@ -257,6 +282,39 @@ function tsShowPreview() {
     const m = openModal('Sign as', `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">${slots.map(([i, sg]) => `<button class="btn" data-sl="${i}">${esc(sg.label || 'Box ' + (i + 1))}</button>`).join('')}</div>`, [{ label: 'Cancel' }]);
     m.querySelectorAll('[data-sl]').forEach(b => b.onclick = () => { closeModal(); signTimesheet(pv.base, +b.dataset.sl); });
   };
+}
+/** Layout mode: logo and every printed text editable on the sheet; saved for this client or as the default for all */
+function tsShowLayout(box, bar, ts) {
+  const L = TV.lay, p = L.p, c = IX.client.get(p?.clientId), has = !!S.tsLayout?.clients?.[p?.clientId];
+  bar.innerHTML = `<b>Layout</b><span class="muted small">Click any text on the sheet and type; the logo has Replace / Remove.</span>
+    <label class="small">Apply to <select id="tl-scope">${c ? `<option value="client"${L.scope === 'client' ? ' selected' : ''}>this client – ${esc(c.name)}</option>` : ''}<option value="def"${L.scope === 'def' ? ' selected' : ''}>all clients (default)</option></select></label>
+    <span class="spacer"></span>${has ? '<button class="btn sm bad" id="tl-reset">Reset this client to default</button>' : ''}<button class="btn sm" id="tl-x">Cancel</button><button class="btn sm pri" id="tl-save">Save layout</button>`;
+  box.innerHTML = tsSheetHTML(ts, { look: L.look, layout: true }); box.scrollLeft = 0; tsScale();
+  const q = s => bar.querySelector(s);
+  const read = () => box.querySelectorAll('[data-lk]').forEach(el => { const path = el.dataset.lk.split('.'), v = el.textContent.replace(/\s+/g, ' ').trim(); let o = L.look; for (const k of path.slice(0, -1)) o = o[k]; o[path.at(-1)] = v; });
+  box.oninput = read;
+  box.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return; read();
+    if (b.dataset.logo === 'rm') { L.look.logo = 'none'; tsShowPreview(); }
+    else if (b.dataset.logo === 'up') pickFiles('image/*', false, async fs => { try { L.look.logo = await tsLogoPng(fs[0]); tsShowPreview(); } catch (er) { toast('Could not read that image', 5000); } });
+    else if (b.dataset.lgdel) { L.look.legend.splice(+b.dataset.lgdel, 1); tsShowPreview(); }
+    else if (b.dataset.lgadd) { L.look.legend.push(['X', 'MEANING']); tsShowPreview(); }
+  };
+  q('#tl-scope').onchange = e => { read(); L.scope = e.target.value; };
+  q('#tl-x').onclick = () => { TV.lay = null; tsShowPreview(); };
+  q('#tl-save').onclick = () => {
+    read(); const T = S.tsLayout ||= { def: {}, clients: {} };
+    if (L.scope === 'client' && p?.clientId) { const d = tsLookDiff(L.look, tsLook(p, { noClient: true }), p); if (Object.keys(d).length) T.clients[p.clientId] = d; else delete T.clients[p.clientId]; }
+    else T.def = tsLookDiff(L.look, tsLook(p, { noClient: true, noDef: true }), p);
+    TV.lay = null; markDirty(); tsShowPreview(); toast(L.scope === 'client' ? `Layout saved for ${c?.name}` : 'Layout saved for all clients');
+  };
+  q('#tl-reset')?.addEventListener('click', async () => { if (!await confirmBox(`Use the default layout for ${c.name} again?`, 'Reset', 'bad')) return; delete S.tsLayout.clients[p.clientId]; TV.lay = null; markDirty(); tsShowPreview(); });
+}
+/** a logo image → PNG data URL, at most 400 px wide (PNG so the Excel export can use it too) */
+async function tsLogoPng(f) {
+  const url = URL.createObjectURL(f);
+  try { const im = await sigLoadImg(url), w = im.naturalWidth || 400, h = im.naturalHeight || 160, k = Math.min(1, 400 / w), c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); return c.toDataURL('image/png'); }
+  finally { URL.revokeObjectURL(url); }
 }
 /** Edit mode: cells write into TV.edit.rows; totals follow as you type */
 function tsBindEdit(box) {

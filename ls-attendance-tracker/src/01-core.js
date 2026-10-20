@@ -159,7 +159,7 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.sigPresets = st.sigPresets || {}; st.billTrack = st.billTrack || {}; st.empDocs = st.empDocs || {}; st.payroll = st.payroll || {}; if (!st.trkLayout && typeof TRK0 !== 'undefined') trkBuild(st, TRK0); /* Billing → Tracker: the workbook's rows */ st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
+  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.sigPresets = st.sigPresets || {}; st.billTrack = st.billTrack || {}; st.empDocs = st.empDocs || {}; st.tsLayout = st.tsLayout || { def: {}, clients: {} }; st.payroll = st.payroll || {}; if (!st.trkLayout && typeof TRK0 !== 'undefined') trkBuild(st, TRK0); /* Billing → Tracker: the workbook's rows */ st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
   st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {}; st.app = st.app || {}; st.punches = st.punches || {}; st.marks = st.marks || {}; delete st.leaves;
   st.settings.rateCard ||= d.settings.rateCard;
   st.settings.bank = Object.assign({}, d.settings.bank, st.settings.bank || {});

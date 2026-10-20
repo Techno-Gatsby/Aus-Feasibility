@@ -119,7 +119,7 @@ function renderReports() {
 function docsDialog(ds) {
   const e = IX.emp.get(ds[0].empId);
   const m = openModal(`${docTypeName(ds[0].type)} – ${e?.empCode || ''} ${e?.name || ''}`, `${empOpts()}<div class="tw"><table><thead><tr><th>File</th><th class="num">Pages</th><th>Added</th><th></th></tr></thead><tbody>
-    ${ds.map(d => `<tr><td>${esc(d.name)}<div class="muted small">${d.src === 'phone' ? '📱 scanned on the phone' : d.src === 'split' ? 'split from a merged PDF' : 'uploaded'}${d.by ? ' · ' + esc(d.by) : ''}</div></td><td class="num">${d.pages}</td><td class="mono small">${fmtDMY(d.addedAt.slice(0, 10))}</td>
+    ${ds.map(d => `<tr><td>${esc(d.name)}<div class="muted small">${d.src === 'phone' ? 'scanned on the phone' : d.src === 'split' ? 'split from a merged PDF' : 'uploaded'}${d.by ? ' · ' + esc(d.by) : ''}</div></td><td class="num">${d.pages}</td><td class="mono small">${fmtDMY(d.addedAt.slice(0, 10))}</td>
       <td style="white-space:nowrap"><button class="btn sm" data-do="${d.id}">Open</button> <button class="btn sm" data-dm="${d.id}">Move…</button> <button class="btn sm bad" data-dx="${d.id}">✕</button></td></tr>`).join('')}</tbody></table></div>`, [{ label: 'Close', cls: 'pri' }]);
   m.querySelectorAll('[data-do]').forEach(b => b.onclick = () => PDFX.open(S.empDocs[b.dataset.do].fileId));
   m.querySelectorAll('[data-dx]').forEach(b => b.onclick = async () => { const d = S.empDocs[b.dataset.dx]; if (!await confirmBox(`Delete ${d.name}?`, 'Delete', 'bad')) return; await Files.del(d.fileId); delete S.empDocs[d.id]; markDirty(); renderReports(); });
