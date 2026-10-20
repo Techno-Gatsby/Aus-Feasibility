@@ -2,14 +2,22 @@
    Employees: list, add / edit / delete, assignments, bulk actions
    ===================================================================== */
 const EV = { q: '', status: 'active', type: '', site: '', project: '', view: 'list', checked: new Set() };
+/* blacklist: a person (e.blacklist) or their whole subcontractor agency (S.blacklist.agencies) */
+const agencyBlack = a => a ? (S.blacklist?.agencies || []).find(x => x.name === String(a).trim().toUpperCase()) : null;
+const isBlack = e => !!(e.blacklist || agencyBlack(e.agency));
+function blackBadge(e) {
+  const a = agencyBlack(e.agency);
+  return e.blacklist ? ` <span class="pill neg" title="${esc(e.blacklist.reason || '')} · ${fmtDMY(e.blacklist.date)}">BLACKLISTED</span>`
+    : a ? ` <span class="pill neg" title="Subcontractor ${esc(a.name)} blacklisted${a.reason ? ': ' + esc(a.reason) : ''}">AGENCY BLACKLISTED</span>` : '';
+}
+const EV_TABS = [['active', 'Current', e => !hasLeft(e) && !e.blacklist], ['left', 'Resigned / left', e => hasLeft(e)], ['black', 'Blacklisted', e => isBlack(e)], ['all', 'All', () => true]];
 
 function renderEmployees() {
   const v = $('#v-employees');
   const today = todayISO(), q = norm(EV.q);
   const list = S.employees.filter(e => {
     const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
-    if (EV.status === 'active' && hasLeft(e)) return false;
-    if (EV.status === 'left' && !hasLeft(e)) return false;
+    if (!(EV_TABS.find(t => t[0] === EV.status) || EV_TABS[0])[2](e)) return false;
     if (EV.type === 'ls' && e.agency) return false;
     if (EV.type === 'sub' && !e.agency) return false;
     if (EV.site && cur?.site !== EV.site) return false;
@@ -21,25 +29,26 @@ function renderEmployees() {
   v.innerHTML = docHead('Security Personnel', `${list.length} shown · ${S.employees.length} total`, `
       ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="ev-unscope" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
       <input type="search" id="ev-q" placeholder="Name / ID / agency" value="${esc(EV.q)}" style="width:200px">
-      <select id="ev-status">${opts([['active', 'Current'], ['left', 'Left'], ['all', 'Everyone']], EV.status)}</select>
+      <span class="seg" id="ev-status">${EV_TABS.map(([k, l, f]) => `<button data-st="${k}" class="${EV.status === k ? 'on' : ''}">${l} <b>${S.employees.filter(f).length}</b></button>`).join('')}</span>
       <select id="ev-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>
       <span class="seg" id="ev-view"><button data-vw="list" class="${EV.view === 'list' ? 'on' : ''}">List</button><button data-vw="dir" class="${EV.view === 'dir' ? 'on' : ''}">Directory</button></span>`)
   + (EV.view === 'dir' ? `<div class="dc"><div class="tw fill dirwrap">${EV.status !== 'left' ? directoryHTML(list.filter(e => !hasLeft(e)), false) : ''}${EV.status !== 'active' ? directoryHTML(list.filter(hasLeft), true) : ''}</div></div>` : '')
   + (EV.view === 'dir' ? '' : `<div class="dc"><div class="tw fill"><table><thead><tr>
-    <th><input type="checkbox" id="ev-all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>End date</th><th></th></tr></thead>
+    <th><input type="checkbox" id="ev-all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>${EV.status === 'left' ? 'Last working day · reason' : EV.status === 'black' ? 'Blacklisted' : 'End date'}</th><th></th></tr></thead>
     <tbody>${list.map(e => {
       const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
       const p = projOfSite(cur?.site);
       return `<tr><td><input type="checkbox" data-chk="${e.id}" ${EV.checked.has(e.id) ? 'checked' : ''}></td>
-        <td class="mono">${esc(e.empCode)}</td><td><a href="#" data-edit="${e.id}">${esc(e.name)}</a></td><td>${esc(e.agency || '')}</td><td>${esc(e.trade || '')}</td>
+        <td class="mono">${esc(e.empCode)}</td><td><a href="#" data-edit="${e.id}">${esc(e.name)}</a>${blackBadge(e)}</td><td>${esc(e.agency || '')}</td><td>${esc(e.trade || '')}</td>
         <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="muted">${esc(p?.name || '')}</td>
-        <td class="mono">${fmtDMY(e.doj)}</td><td>${e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : hasLeft(e) ? `<span class="pill neg">${esc(hrStatus(e))} – no date</span>` : ''}</td>
+        <td class="mono">${fmtDMY(e.doj)}</td><td>${EV.status === 'black' ? (e.blacklist ? `<span class="mono">${fmtDMY(e.blacklist.date)}</span> <span class="muted small">${esc(e.blacklist.reason || '')}</span>` : `<span class="muted small">via subcontractor ${esc(e.agency)}</span>`) : e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : hasLeft(e) ? `<span class="pill neg">${esc(hrStatus(e))} – no date</span>` : ''}${EV.status === 'left' && e.hr?.remarks ? ` <span class="muted small">${esc(e.hr.remarks)}</span>` : ''}</td>
         <td><button class="btn sm" data-edit="${e.id}">Edit</button></td></tr>`;
     }).join('') || '<tr><td colspan="11" class="muted">No security personnel match.</td></tr>'}</tbody></table></div></div>`);
   v.querySelectorAll('[data-vw]').forEach(b => b.onclick = () => { EV.view = b.dataset.vw; renderEmployees(); });
   if ($('#ev-unscope')) $('#ev-unscope').onclick = clearSel;
   $('#ev-q').oninput = e => { EV.q = e.target.value; clearTimeout(EV._t); EV._t = setTimeout(() => { renderEmployees(); const i = $('#ev-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
-  for (const k of ['status', 'type']) $('#ev-' + k).onchange = e => { EV[k] = e.target.value; renderEmployees(); };
+  $('#ev-type').onchange = e => { EV.type = e.target.value; renderEmployees(); };
+  v.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { EV.status = b.dataset.st; EV.checked.clear(); renderEmployees(); renderToolbar(); });
   v.querySelectorAll('[data-edit]').forEach(b => b.onclick = ev => { ev.preventDefault(); editEmployee(b.dataset.edit); });
   v.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { c.checked ? EV.checked.add(c.dataset.chk) : EV.checked.delete(c.dataset.chk); renderToolbar(); });
   if ($('#ev-all')) $('#ev-all').onchange = e => { list.forEach(x => e.target.checked ? EV.checked.add(x.id) : EV.checked.delete(x.id)); renderEmployees(); renderToolbar(); };
@@ -47,7 +56,9 @@ function renderEmployees() {
 
 function selectedEmps() { const l = [...EV.checked].map(id => IX.emp.get(id)).filter(Boolean); if (!l.length) toast('Tick one or more security personnel first'); return l; }
 function bulkAssign(kind) {
-  const l = selectedEmps(); if (!l.length) return;
+  let l = selectedEmps(); if (!l.length) return;
+  const nb = l.filter(isBlack).length; l = l.filter(e => !isBlack(e));
+  if (nb) toast(`${nb} blacklisted – left out`); if (!l.length) return;
   openModal(kind === 'site' ? `Assign ${l.length} employee(s) to a site` : `Change shift for ${l.length} employee(s)`, `
     <div class="form">
       <label class="f">Effective from<input type="date" id="ba-from" value="${todayISO()}"></label>
@@ -70,10 +81,21 @@ function bulkAssign(kind) {
 }
 function bulkEnd() {
   const l = selectedEmps(); if (!l.length) return;
-  openModal(`Set end date for ${l.length} employee(s)`, `<div class="form">
+  openModal(`Mark ${l.length} as resigned / left`, `<div class="form">
     <label class="f">Last working day<input type="date" id="be-d" value="${todayISO()}"></label>
-    <label class="f">Reason<select id="be-r">${opts(['RESIGNED', 'TERMINATED', 'ABSCONDED', 'TRANSFERRED', 'CONTRACT END', 'OTHER'], 'RESIGNED')}</select></label></div>`,
-    [{ label: 'Cancel' }, { label: 'Apply', cls: 'pri', onClick: m => { for (const e of l) { e.end = $('#be-d', m).value || null; e.endReason = $('#be-r', m).value; } markDirty(); renderAll(); } }]);
+    <label class="f">Reason<select id="be-r">${opts(['RESIGNED', 'TERMINATED', 'ABSCONDED', 'TRANSFERRED', 'CONTRACT END', 'OTHER'], 'RESIGNED')}</select></label>
+    <label class="f wide">Remarks<input type="text" id="be-n" placeholder="optional"></label></div>
+    <p class="muted small">They stay in Security Personnel under <b>Resigned / left</b> with their history; attendance after this date is not expected.</p>`,
+    [{ label: 'Cancel' }, { label: 'Apply', cls: 'pri', onClick: m => { const d = $('#be-d', m).value; if (!d) { toast('Pick the last working day'); return false; } const n = $('#be-n', m).value.trim();
+      for (const e of l) { e.end = d; e.endReason = $('#be-r', m).value; if (n) (e.hr ||= {}).remarks = n; } markDirty(); renderAll(); toast(`${l.length} marked as ${$('#be-r', m).value.toLowerCase()}`); } }]);
+}
+/** Blacklist ticked personnel (app access is switched off) or take them off the list */
+function bulkBlacklist(on) {
+  const l = selectedEmps(); if (!l.length) return;
+  if (!on) { for (const e of l) delete e.blacklist; markDirty(); renderAll(); toast(`${l.length} removed from the blacklist`); return; }
+  openModal(`Blacklist ${l.length} personnel`, `<label class="f">Reason<input type="text" id="bl-r" placeholder="e.g. misconduct at site, absconded"></label>
+    <p class="muted small">Blacklisted personnel keep their history, lose personnel app access, and cannot be allocated to sites. Adding or importing the same person again shows a warning.</p>`,
+    [{ label: 'Cancel' }, { label: 'Blacklist', cls: 'bad', onClick: m => { const r = $('#bl-r', m).value.trim(); for (const e of l) { e.blacklist = { reason: r, date: todayISO() }; if (e.app) e.app.on = false; } markDirty(); renderAll(); toast(`${l.length} blacklisted`); } }]);
 }
 async function bulkDelete() {
   const l = selectedEmps(); if (!l.length) return;
@@ -106,7 +128,10 @@ function editEmployee(id) {
       <label class="f">Joining date (D.O.J)<input type="date" id="ee-doj" value="${e.doj || ''}"></label>
       <label class="f">End date (last working day)<input type="date" id="ee-end" value="${e.end || ''}"></label>
       <label class="f">End reason<select id="ee-endr">${opts(['RESIGNED', 'TERMINATED', 'ABSCONDED', 'TRANSFERRED', 'CONTRACT END', 'OTHER'], e.endReason, '')}</select></label>
+      <label class="f">Blacklisted<select id="ee-bl">${opts([['', 'No'], ['1', 'Yes']], e.blacklist ? '1' : '')}</select></label>
+      <label class="f">Blacklist reason<input type="text" id="ee-blr" value="${esc(e.blacklist?.reason || '')}"></label>
     </div>
+    <div class="note neg" id="ee-warn" hidden></div>
     <datalist id="ee-trades">${S.settings.trades.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
     <datalist id="ee-agencies">${[...new Set(S.employees.map(x => x.agency).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
     <h3>Site allocation history</h3>
@@ -133,6 +158,11 @@ function editEmployee(id) {
           const dup = e.empCode && S.employees.find(x => x.id !== e.id && x.empCode === e.empCode);
           if (dup) { toast(`Emp ID ${e.empCode} already belongs to ${dup.name}`); return false; }
           e.agency = $('#ee-agency', m).value.trim().toUpperCase();
+          // blacklisted person or subcontractor: warn once, the second Save goes ahead
+          const twin = isNew && S.employees.find(x => x.blacklist && x.name === e.name && (!e.hr?.dob || !x.hr?.dob || x.hr.dob === e.hr.dob));
+          const ab = agencyBlack(e.agency), warn = twin ? `${twin.name} (${twin.empCode || 'no ID'}) is blacklisted${twin.blacklist.reason ? ': ' + twin.blacklist.reason : ''}.` : ab && isNew ? `Subcontractor ${ab.name} is blacklisted${ab.reason ? ': ' + ab.reason : ''}.` : '';
+          if (warn && !m._warned) { m._warned = true; const w = $('#ee-warn', m); w.hidden = false; w.textContent = warn + ' Press Save again to add anyway.'; w.scrollIntoView({ block: 'nearest' }); return false; }
+          if ($('#ee-bl', m).value) { e.blacklist = { reason: $('#ee-blr', m).value.trim(), date: e.blacklist?.date || todayISO() }; if (e.app) e.app.on = false; } else delete e.blacklist;
           e.trade = $('#ee-trade', m).value.trim().toUpperCase();
           e.shift = $('#ee-shift', m).value;
           e.doj = $('#ee-doj', m).value || null;

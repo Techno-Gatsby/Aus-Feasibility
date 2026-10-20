@@ -41,7 +41,7 @@ async function publishRoster(quiet) {
     if (!appOn(e)) continue;
     const a = assignOn(e, today);
     const months = {}; for (const ym of [prev, cur]) months[ym] = monthDates(ym).map(d => employedOn(e, d) ? (getCell(e.id, d)?.c || '') : '');
-    ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
+    ws.push({ id: e.id, code: appCode(e), name: e.name, trade: e.trade || '', shift: a?.shift || e.shift || 'DAY', siteId: a?.site || '', enabled: employedOn(e, today) && !isBlack(e), pinHash: e.app.pinNew ? e.app.pinHash : '', pinSalt: e.app.pinNew ? e.app.pinSalt : '', resetDevice: !!e.app.resetDevice, months });
   }
   const used = new Set(ws.map(w => w.siteId));
   const sites = S.sites.filter(s => sitePins(s).length || used.has(s.id)).map(s => ({ id: s.id, name: s.name, project: projOfSite(s.id)?.name || '', pins: sitePins(s), beats: beatsOf(s).filter(b => b.checkpoints?.length) }));
@@ -141,6 +141,7 @@ async function printSlips(slips) {
     ${url ? `<div class="u">${qr ? `<img src="${qr}" alt="">` : ''}<span>${esc(url)}</span></div>` : ''}<p>Keep your PIN private. Mark check-in and check-out at your site with a photo.</p></div>`).join('')}</div>`);
 }
 async function appAccessBulk(emps) {
+  if (emps.some(isBlack)) { toast(`${emps.filter(isBlack).length} blacklisted – no app access`); emps = emps.filter(e => !isBlack(e)); if (!emps.length) return; }
   if (!emps.length) return toast('Tick security personnel first');
   openModal(`App access for ${emps.length} worker(s)`, `<p style="margin-top:0">Enable the personnel app, generate a new 4-digit PIN for each and print PIN slips. Old PINs stop working after <b>Publish roster</b>.</p>
     <label class="chk"><input type="checkbox" id="aa-dev"> Also reset the registered phone</label>`,

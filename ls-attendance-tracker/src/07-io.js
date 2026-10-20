@@ -112,7 +112,7 @@ function applyMasterImport(parsed, overwrite) {
     let e = findEmployee(empCode, r.name, agency);
     if (!e) {
       e = { id: uid('e'), empCode, name: r.name, agency, trade: r.trade || 'SECURITY GUARD', shift: r.shift || 'DAY', doj: r.doj, end: null, endReason: '', assign: [] };
-      S.employees.push(e); IX.emp.set(e.id, e); st.created++;
+      S.employees.push(e); IX.emp.set(e.id, e); st.created++; IMP_TOUCH.add(e.id);
     } else {
       st.updated++;
       if (r.trade) e.trade = r.trade; if (r.doj) e.doj = r.doj; if (r.shift) e.shift = r.shift;
@@ -254,7 +254,7 @@ function applyClientImport(parsed, overwrite, ymOverride, shared) {
     if (!e) {
       const trade = /CCTV/.test(r.site) ? 'CCTV OPERATOR' : /TEAM LEADER/.test(r.site) ? 'TEAM LEADER' : /SUPERVISOR/.test(r.site) ? 'SECURITY SUPERVISOR' : 'SECURITY GUARD';
       e = { id: uid('e'), empCode, name: r.name, agency, trade, shift: shift || 'DAY', doj: null, end: null, endReason: '', assign: [] };
-      S.employees.push(e); IX.emp.set(e.id, e); st.created++;
+      S.employees.push(e); IX.emp.set(e.id, e); st.created++; IMP_TOUCH.add(e.id);
     }
     if (!rel && assignOn(e, ym + '-01')?.site !== siteId && !seen.has(e.id)) setAssignment(e, ym + '-01', siteId, shift || e.shift);
     if (!rel) seen.add(e.id);
@@ -297,7 +297,10 @@ function detectSheets(wb) {
   return found;
 }
 /** Import the picked sheets. picks = [{ k: index in found, ym?: 'YYYY-MM' }] */
+/** personnel created or updated by the running import (for the blacklist warning) */
+const IMP_TOUCH = new Set();
 function runImport(found, picks, ow) {
+  IMP_TOUCH.clear();
   const t = { created: 0, cells: 0, ended: 0, newSites: 0, newProjects: 0, conflicts: 0 }; const dbl = []; const people = { updated: 0, created: 0, resigned: 0, noDate: [] }; const shared = { touched: new Map(), seen: new Set() }; const codes = new Set(); let lastMaster = null, anyClient = false;
   for (const { k, ym } of picks) {
     const f = found[k]; if (!f) continue;
@@ -333,6 +336,7 @@ async function importExcel(file) {
         openModal('Import complete', `<div class="kpis">${[['Security personnel added', r.t.created], ['Days written', r.t.cells], ['End dates set', r.t.ended], ['New sites', r.t.newSites], ['New projects', r.t.newProjects]].map(([k, v]) => `<div class="kpi"><div class="l">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
           ${r.people.updated + r.people.created ? `<div class="note"><b>Employee details:</b> ${r.people.updated} updated · ${r.people.created} added${r.people.resigned ? ` · ${r.people.resigned} marked resigned` : ''}. Spellings and formats were tidied (nationality, blood group, dates, #REF!).</div>` : ''}
           ${r.people.noDate.length ? `<div class="alert"><div><b>${r.people.noDate.length} resigned without a last working day</b> – set the end date in Security Personnel so they stop appearing in attendance:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.people.noDate.map(esc).join('<br>')}</div></div></div>` : ''}
+          ${(() => { const bl = [...IMP_TOUCH].map(id => IX.emp.get(id)).filter(e => e && (isBlack(e) || S.employees.some(x => x !== e && x.blacklist && x.name === e.name))); return bl.length ? `<div class="alert"><div><b>${bl.length} blacklisted personnel (or from a blacklisted subcontractor) are in this file</b> – they were kept flagged and get no app access:<div style="max-height:120px;overflow:auto;margin-top:4px">${bl.map(e => esc(`${e.name} ${e.empCode || ''} ${e.agency ? '· ' + e.agency : ''}`)).join('<br>')}</div></div></div>` : ''; })()}
           ${r.dbl.length ? `<div class="alert"><div><b>${r.dbl.length} person-day(s) appear on two rows for the same day</b> – the later row was kept. Check in the source sheet:<div style="max-height:120px;overflow:auto;margin-top:4px">${r.dbl.slice(0, 200).map(esc).join('<br>')}</div></div></div>` : ''}
           ${r.t.conflicts ? `<div class="note">${r.t.conflicts} day(s) differed between payroll and client sheet – the client sheet was used.</div>` : ''}
           ${r.autoMapped ? `<p>${r.autoMapped} payroll site label(s) linked automatically to their project.</p>` : ''}

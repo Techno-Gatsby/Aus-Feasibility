@@ -187,6 +187,7 @@ function applyEmployeeListImport(p) {
       e = { id: uid('e'), empCode: r.code, name: r.name, agency: r.agency || '', trade: normTrade(r.hr.designation || 'SECURITY GUARD'), shift: r.shift || 'DAY', doj: r.doj || null, end: null, endReason: '', assign: [] };
       S.employees.push(e); IX.emp.set(e.id, e); st.created++;
     } else st.updated++;
+    if (typeof IMP_TOUCH !== 'undefined') IMP_TOUCH.add(e.id);
     e.hr = { ...(e.hr || {}), ...r.hr };
     if (r.doj && !e.doj) e.doj = r.doj;
     if (r.agency && !e.agency) e.agency = r.agency;
