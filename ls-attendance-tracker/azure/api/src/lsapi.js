@@ -86,6 +86,21 @@ const LSAPI = (() => {
 
     const cleanBeats = bs => (Array.isArray(bs) ? bs : []).slice(0, 50).map(b => ({ id: String(b.id), name: String(b.name || '').slice(0, 60), shift: ['DAY', 'NIGHT'].includes(b.shift) ? b.shift : 'ALL', everyMin: Math.max(10, +b.everyMin || 60), assignees: (b.assignees || []).map(String).slice(0, 500),
       checkpoints: (b.checkpoints || []).slice(0, 100).map(c => ({ id: String(c.id), name: String(c.name || '').slice(0, 60), lat: +c.lat, lng: +c.lng, radius: Math.max(5, +c.radius || 25) })) }));
+    const DOC_TYPES = ['ATT', 'VEH', 'SVR', 'MPR', 'MED'];
+    async function saveDoc(w, b, by) {
+      const type = String(b.type || '').toUpperCase(), pages = Array.isArray(b.pages) ? b.pages : [];
+      if (!DOC_TYPES.includes(type)) return err(400, 'Unknown report type');
+      if (!pages.length || pages.length > 80) return err(400, 'Send 1 to 80 pages');
+      const ym = /^\d{4}-\d\d$/.test(b.ym || '') ? b.ym : dxbDate(now()).slice(0, 7);
+      if (b.clientId) { const old = (await store.list('docs', x => x.clientId === String(b.clientId) && x.code === w.code, { clientId: String(b.clientId) }))[0]; if (old) return J(200, { doc: old, repeat: true }); }
+      const id = rid();
+      for (let i = 0; i < pages.length; i++) {
+        const m2 = String(pages[i]).match(/^data:(image\/(?:jpeg|png));base64,(.*)$/); if (!m2 || m2[2].length > 2.8e6) return err(400, `Page ${i + 1} is not a photo (or is too large)`);
+        await store.putBlob(`docs/${ym}/${id}_${i}.jpg`, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]);
+      }
+      const doc = { id, code: w.code, wid: w.id, name: w.name, type, ym, pages: pages.length, by: String(by || '').slice(0, 120), at: new Date(now()).toISOString(), serverTs: now(), clientId: String(b.clientId || '') };
+      await store.put('docs', doc); return J(200, { doc });
+    }
     async function profile(w) {
       const c = await cfg(), t = now(), today = dxbDate(t);
       const sites = await store.list('sites');
@@ -270,6 +285,17 @@ const LSAPI = (() => {
       },
       'GET me/notices': async req => { const m = me(req); if (!m) return err(401, 'Sign in required'); return J(200, { notices: await store.list('notices', x => x.to === m || isAdmin(req)) }); },
       'POST me/notices/read': async req => { const x = await store.get('notices', String(req.body?.id || '')); if (!x || (x.to !== me(req) && !isAdmin(req))) return err(404, 'Not found'); x.read = true; x.serverTs = now(); await store.put('notices', x); return J(200, { ok: true }); },
+      /* report scans (attendance sheet, vehicle trip sheets, violation, mispunch, medical): pages as JPEG, named <code>_<type>_<ym>_<n>;
+         supervisors scan any type for anyone, personnel send only their own medical report */
+      'POST supervisor/doc': async req => { if (!isSup(req)) return err(403, 'Supervisor role required'); const w = await byCode(req.body?.code); if (!w) return err(404, 'Unknown Emp ID'); return saveDoc(w, req.body || {}, me(req) || 'supervisor'); },
+      'POST worker/doc': async req => { const w = await worker(req); if (!w) return err(401, 'Please sign in again', 'AUTH'); return saveDoc(w, { ...(req.body || {}), type: 'MED' }, w.code); },
+      'GET admin/docs': async req => { if (!isAdmin(req)) return err(403, 'Admin role required'); const since = +req.query?.since || 0; return J(200, { now: now(), docs: await store.list('docs', x => x.serverTs > since, { since }) }); },
+      'GET admin/doc': async req => {
+        if (!isAdmin(req)) return err(403, 'Admin role required');
+        const d = await store.get('docs', String(req.query?.id || '')), i = +req.query?.page || 0; if (!d || i < 0 || i >= d.pages) return err(404, 'Not found');
+        const b = await store.getBlob(`docs/${d.ym}/${d.id}_${i}.jpg`); if (!b) return err(404, 'Not found');
+        return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
+      },
       /* a person's saved signature (transparent PNG), the same on every PC; only that email or an admin changes it */
       'GET me/signature': async req => { const m = String(req.query?.email || me(req)).toLowerCase(); if (!me(req)) return err(401, 'Sign in required'); if (m !== me(req) && !isAdmin(req)) return err(403, 'Not allowed'); const x = await store.get('sigpresets', m); return J(200, { preset: x ? { email: x.id, image: x.image, updatedAt: x.updatedAt } : null }); },
       'PUT me/signature': async req => {

@@ -46,6 +46,7 @@ function renderData() {
     <div class="tw"><table><thead><tr><th>Label</th><th>Name / code</th><th>Title</th><th>Emails allowed to sign <span class="muted" style="text-transform:none;letter-spacing:0">(comma separated)</span></th></tr></thead><tbody>
       ${st.signatories.map((s, i) => `<tr><td><input type="text" data-sg="${i}" data-sk="label" value="${esc(s.label)}"></td><td><input type="text" data-sg="${i}" data-sk="name" value="${esc(s.name)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="title" value="${esc(s.title)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="emails" value="${esc(s.emails || '')}" placeholder="name@company.com" style="width:100%"></td></tr>`).join('')}
     </tbody></table></div><p class="muted small" style="margin:6px 0 0">Only these emails can sign that box on a client timesheet. If a signed timesheet is changed later, everyone who signed it gets a notification.</p>`)}
+  ${sec('payset', 'Payroll', paySettingsHTML())}
   ${sec('mailtpl', 'Email templates', mailTplHTML())}
   ${sec('black', `Blacklisted subcontractors <span class="cnt">${S.blacklist.agencies.length}</span>`, `
     <div class="tw"><table><thead><tr><th>Subcontractor</th><th>Reason</th><th>Since</th><th class="num">Personnel</th><th></th></tr></thead><tbody>
@@ -56,7 +57,7 @@ function renderData() {
     <p class="muted small" style="margin:6px 0 0">Their personnel are flagged, cannot be allocated or given app access, and adding new personnel from them shows a warning. Past attendance and invoices are kept.</p>`)}
   ${sec('reset', 'Reset', `<div class="row"><button class="btn" id="dv-seed">Reload shipped data…</button><button class="btn bad" id="dv-reset">Delete all data…</button><span class="muted small">Download a backup first.</span></div>`)}
   </div>`;
-  bindSecs(v); bindMailTpl(v);
+  bindSecs(v); bindMailTpl(v); bindPaySettings(v);
   $('#dv-dl').onclick = downloadBackup;
   v.querySelectorAll('[data-rc]').forEach(i => i.onchange = () => { const r = S.settings.rateCard[+i.dataset.rc]; r[i.dataset.rk] = i.dataset.rk === 'rate' ? +i.value || 0 : i.dataset.rk === 'trade' ? norm(i.value) : i.value.trim(); markDirty(); });
   v.querySelectorAll('[data-rcdel]').forEach(b => b.onclick = () => { S.settings.rateCard.splice(+b.dataset.rcdel, 1); markDirty(); renderData(); });
@@ -111,7 +112,7 @@ async function restorePrev() {
 function codeUsage(code) { let n = 0; for (const k in S.att) for (const d in S.att[k]) { const x = S.att[k][d]; if ((typeof x === 'string' ? x : x.c) === code) n++; } return n; }
 
 /* ---------- shell: views, toolbar, menus, tree, status ---------- */
-const VIEWS = { app: renderApp, live: renderLive, insights: renderInsights, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, tracker: renderTracker, employees: renderEmployees, projects: renderProjects, data: renderData };
+const VIEWS = { app: renderApp, live: renderLive, insights: renderInsights, attendance: renderAttendance, timesheets: renderTimesheets, invoices: renderInvoices, tracker: renderTracker, payroll: renderPayroll, reports: renderReports, employees: renderEmployees, projects: renderProjects, data: renderData };
 let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
@@ -124,6 +125,7 @@ function showView(v) {
 // Today and Billing hold several pages, switched just under the tabs
 const SUBTABS = { live: [['live', 'Live map'], ['app', 'Review & phone app <span class="n" id="sub-badge"></span>']], timesheets: [['timesheets', '1 Client timesheets'], ['invoices', '2 Invoice'], ['tracker', '3 Tracker']] };
 SUBTABS.app = SUBTABS.live; SUBTABS.invoices = SUBTABS.tracker = SUBTABS.timesheets;
+SUBTABS.payroll = SUBTABS.reports = [['payroll', '1 Payroll sheet'], ['reports', '2 Reports']];
 function renderSubtabs() {
   const st = $('#subtabs'), it = SUBTABS[curView];
   st.innerHTML = it ? `<span class="seg">${it.map(([k, l]) => `<button data-sub="${k}" class="${k === curView ? 'on' : ''}">${l}</button>`).join('')}</span>` : '';
@@ -138,6 +140,8 @@ const TOOLBAR = {
     { l: 'Export Excel', f: () => exportMasterXlsx().catch(e => toast(e.message)), t: 'Master attendance sheet for this period' }],
   timesheets: () => [{ l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
+  payroll: () => [{ l: 'Download Excel', f: () => exportPayrollXlsx(PV_.ym).catch(e => toast(e.message, 6000)), strong: true, t: 'The payroll attendance sheet with its formulas and the Abstract sheet' }, { l: 'Open Attendance', f: () => { AV.ym = PV_.ym; AV.mode = 'payroll'; showView('attendance'); }, t: 'Day values are edited in Attendance' }],
+  reports: () => [{ l: 'Upload named files…', f: () => pickFiles('application/pdf,image/*', true, uploadReports) }, { l: 'Split a merged PDF…', f: () => pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000))) }, 'sep', { l: 'Download merged PDF', f: () => $('#rp-merge')?.click(), strong: true }],
   tracker: () => [{ l: 'Download Excel', f: () => exportTrackerXlsx().catch(e => toast(e.message, 6000)), strong: true, t: 'Tax Invoice Tracker for the year, laid out like the workbook' }],
   employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Mark as resigned…', f: bulkEnd }, EV.status === 'black' ? { l: 'Remove from blacklist', f: () => bulkBlacklist(false) } : { l: 'Blacklist…', f: () => bulkBlacklist(true) }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
   projects: () => [{ l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, { l: 'Clients…', f: clientsDialog }, 'sep', { l: 'Upload documents in bulk…', f: () => pickFiles('application/pdf', true, fs => bulkDocs(fs).catch(err => toast(err.message, 6000))), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
@@ -250,6 +254,8 @@ function applySel() {
   else if (curView === 'timesheets') { TV.client = SEL.client; if (SEL.project) TV.preview = SEL.project; TV.all = true; renderTimesheets(); }
   else if (curView === 'invoices') { const dr = IV.draft ||= newInvoiceDraft(); if (SEL.project) { if (!dr.projectIds.includes(SEL.project)) dr.projectIds.push(SEL.project); const p = IX.proj.get(SEL.project); if (!dr.clientId) dr.clientId = p.clientId || ''; } else dr.clientId = SEL.client; renderInvoices(); }
   else if (curView === 'tracker') renderTracker();
+  else if (curView === 'payroll') renderPayroll();
+  else if (curView === 'reports') renderReports();
   else if (curView === 'employees') { EV.project = SEL.project; EV.site = SEL.site; renderEmployees(); }
   else if (curView === 'projects') { PV.focus = SEL.project || SEL.client; renderProjects(); }
   renderStatus();

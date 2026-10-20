@@ -84,4 +84,17 @@ ok((await call('GET', 'me/signature', null, { principal: amy })).body.preset?.im
 ok((await call('GET', 'me/signature', null, { query: { email: 'amy@x.com' }, principal: bob })).status === 403, 'another email cannot read it');
 ok((await call('PUT', 'me/signature', { image: 'data:image/jpeg;base64,xx' }, { principal: amy })).status === 400, 'only PNG accepted');
 ok((await call('PUT', 'me/signature', { image: '' }, { principal: amy })).status === 200 && !(await call('GET', 'me/signature', null, { principal: amy })).body.preset, 'saved signature deleted');
+// report scans: supervisors any type, personnel only their own medical report
+const JPG = 'data:image/jpeg;base64,' + Buffer.from('fakejpegpage').toString('base64'), sup = { userRoles: ['supervisor'], userDetails: 'sup@x.com' };
+r = await call('POST', 'supervisor/doc', { code: 'C52392', type: 'MPR', ym: '2026-09', pages: [JPG, JPG], clientId: 'd1' }, { principal: sup });
+ok(r.status === 200 && r.body.doc.pages === 2 && r.body.doc.type === 'MPR', 'supervisor scans a 2-page mispunch report');
+ok((await call('POST', 'supervisor/doc', { code: 'C52392', type: 'MPR', ym: '2026-09', pages: [JPG, JPG], clientId: 'd1' }, { principal: sup })).body.repeat === true, 'same scan resent is not stored twice');
+ok((await call('POST', 'supervisor/doc', { code: 'C52392', type: 'MPR', pages: [JPG] })).status === 403, 'scan needs the supervisor role');
+await relog(); r = await call('POST', 'worker/doc', { type: 'ATT', ym: '2026-09', pages: [JPG] }, { headers: H });
+ok(r.status === 200 && r.body.doc.type === 'MED' && r.body.doc.code === 'C52392', 'personnel can send only a medical report');
+r = await call('GET', 'admin/docs', null, { query: { since: 0 }, principal: admin });
+ok(r.body.docs.length === 2, 'admin lists the scans');
+const d0 = r.body.docs.find(x => x.type === 'MPR');
+ok(Buffer.from((await call('GET', 'admin/doc', null, { query: { id: d0.id, page: 1 }, principal: admin })).bytes).toString() === 'fakejpegpage', 'page 2 streamed back');
+ok((await call('GET', 'admin/doc', null, { query: { id: d0.id, page: 0 }, principal: sup })).status === 403, 'pages need the admin role');
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

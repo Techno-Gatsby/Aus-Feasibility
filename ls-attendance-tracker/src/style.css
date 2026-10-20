@@ -689,3 +689,23 @@ details.adv[open]>summary{margin-bottom:8px}
 .mail-types button{padding:5px 14px}
 .mail-people{max-height:220px;margin-top:8px}.mail-people td.c,.mail-people th.c{text-align:center;width:44px}
 .mtpl{border:1px solid var(--line2);border-radius:var(--r);padding:8px;margin-bottom:8px}
+/* Payroll sheet */
+.tk.py th,.tk.py td{padding:0 4px;height:20px;font-size:10.5px}
+.tk.py thead tr:first-child th{top:0;height:20px}.tk.py thead tr:nth-child(2) th{top:20px;height:44px;white-space:normal;line-height:1.1;min-width:34px}
+.tk.py .py-title{text-align:left;font-size:11.5px;white-space:nowrap;position:sticky;left:0;z-index:5}
+.tk.py .py-n{position:sticky;left:0;z-index:1;background:var(--surface);min-width:34px}
+.tk.py .py-c{position:sticky;left:34px;z-index:1;background:var(--surface);min-width:62px}
+.tk.py .py-nm{position:sticky;left:96px;z-index:1;background:var(--surface);min-width:170px;text-align:left;box-shadow:2px 0 0 #b8c2d0}
+.tk.py thead .py-n,.tk.py thead .py-c,.tk.py thead .py-nm{z-index:4;background:#d9e1f2}
+.tk.py th.sun,.tk.py td.sun{background:#f3f4f8}.tk.py th.hd,.tk.py td.hd{background:#fff4d6}
+.tk.py td.pa{background:#ffd9d4;color:#8a1c12}.tk.py td.po{color:var(--text3)}.tk.py td.pl{background:#fff1c2}.tk.py td.px{background:#eef2ff}
+.tk.py td.ed{cursor:cell}.tk.py td.ed:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.tk.py td.so{font-weight:700;color:var(--accent)}.tk.py td.sa{color:#11753d;font-weight:600}
+.tk.py td.py-hd{font-weight:700;color:var(--accent)}.tk.py td.py-t{background:#fafbfd}
+/* Reports */
+.rp td.c,.rp th.c{text-align:center}.rp .rp-has{min-width:58px}
+tr.warnrow td{background:#fff8e6}
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:60vh;overflow:auto;padding:2px}
+.sp-pg{border:1px solid var(--line2);border-radius:6px;padding:6px;background:var(--raised)}
+.sp-pg img{width:100%;display:block;border:1px solid var(--line2);background:#fff}
+.sp-pg .row{gap:6px;margin-top:4px}.sp-pg input{flex:1;min-width:0}

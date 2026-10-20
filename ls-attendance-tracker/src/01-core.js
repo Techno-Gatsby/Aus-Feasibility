@@ -159,7 +159,7 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.sigPresets = st.sigPresets || {}; st.billTrack = st.billTrack || {}; if (!st.trkLayout && typeof TRK0 !== 'undefined') trkBuild(st, TRK0); /* Billing → Tracker: the workbook's rows */ st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
+  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.sigPresets = st.sigPresets || {}; st.billTrack = st.billTrack || {}; st.empDocs = st.empDocs || {}; st.payroll = st.payroll || {}; if (!st.trkLayout && typeof TRK0 !== 'undefined') trkBuild(st, TRK0); /* Billing → Tracker: the workbook's rows */ st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
   st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {}; st.app = st.app || {}; st.punches = st.punches || {}; st.marks = st.marks || {}; delete st.leaves;
   st.settings.rateCard ||= d.settings.rateCard;
   st.settings.bank = Object.assign({}, d.settings.bank, st.settings.bank || {});
@@ -313,8 +313,8 @@ const Files = {
   async del(id) { const o = await this.tx('readwrite'); return new Promise((res, rej) => { const q = o.delete(id); q.onsuccess = res; q.onerror = () => rej(q.error); }); },
   async keys() { const o = await this.tx('readonly'); return new Promise((res, rej) => { const q = o.getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); },
   /** ids referenced anywhere in the state */
-  referenced(st = S) { const ids = new Set(); for (const p of st.projects) for (const d of p.docs || []) ids.add(d.id); const all = [...st.invoices, ...(typeof IV !== 'undefined' && IV.draft ? [IV.draft] : [])]; for (const i of all) { if (i.sapPdf?.id) ids.add(i.sapPdf.id); for (const x of i.signedTs || []) ids.add(x.id); for (const x of Object.values(i.docOverride || {})) ids.add(x.id); } return ids; },
-  async sweep() { try { const ref = this.referenced(); for (const k of await this.keys()) if (!ref.has(k)) await this.del(k); } catch (e) { } }
+  referenced(st = S) { const ids = new Set(); for (const p of st.projects) for (const d of p.docs || []) ids.add(d.id); for (const e of st.employees) if (e.photo?.id) ids.add(e.photo.id); for (const d of Object.values(st.empDocs || {})) ids.add(d.fileId); const all = [...st.invoices, ...(typeof IV !== 'undefined' && IV.draft ? [IV.draft] : [])]; for (const i of all) { if (i.sapPdf?.id) ids.add(i.sapPdf.id); for (const x of i.signedTs || []) ids.add(x.id); for (const x of Object.values(i.docOverride || {})) ids.add(x.id); } return ids; },
+  async sweep() { try { const ref = this.referenced(); for (const k of await this.keys()) if (!ref.has(k) && !k.startsWith('ph-')) await this.del(k); /* ph-… = personnel reference photos */ } catch (e) { } }
 };
 const b64 = { enc: async blob => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, dec: (s, type) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type }); } };
 const store = { dirty: false, saving: false, last: null, error: null, timer: null };

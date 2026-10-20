@@ -12,6 +12,7 @@ const hhmm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pa
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 /* inline icons (Lucide-style strokes) */
 const ICON = {
+  camera: '<path d="M4 8h3l2-2.5h6L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13.5" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/>',
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/>',
   cal: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
@@ -51,6 +52,7 @@ const qDel = async id => { const db = await QDB(); return new Promise(res => { c
 async function flushQueue() {
   if (!W.token) return; const items = await qAll(); let sent = 0;
   for (const x of items) {
+    if (x.doc) { if (!x.sup) await flushDocs(false); continue; }
     try {
       const r = x.scan ? await W.api.call('POST', 'worker/scan', x.body, { token: W.token }) : x.sup ? await W.api.call('POST', 'supervisor/punch', x.body) : await W.api.call('POST', 'worker/punch', x.body, { token: W.token });
       if (r.status === 401) break;
@@ -399,6 +401,7 @@ function renderHome() {
     <div id="gps"></div>
     ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
+    <button class="btn wide" id="b-med" style="margin:10px 0">${ic('camera')} ${t('medSend')}</button>
     <div class="mapcard" id="mapcard"><div id="map"></div>
       <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
       <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
@@ -427,6 +430,7 @@ function renderHome() {
   if ($('#b-scan')) $('#b-scan').onclick = scanCheckpoint;
   $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); drawMap();
+  $('#b-med')?.addEventListener('click', () => scanReport(W.prof.worker, false));
 }
 async function drawMap() {
   const el = $('#map'); if (!el) return;
@@ -558,12 +562,46 @@ async function sendLocation(body) {
   else toast(r.body?.error || 'Error');
   return false;
 }
+/* ---------- report scans: supervisors any report for a person, personnel their own medical report ---------- */
+const DOC_T = ['ATT', 'VEH', 'SVR', 'MPR', 'MED'];
+function scanReport(who, sup) {
+  const pages = [], box = document.createElement('div'); box.className = 'sheet-bg';
+  const ym = new Date().toISOString().slice(0, 7);
+  box.innerHTML = `<div class="sheet"><b>${t('scanTitle')}</b><p class="note">${esc(tc(who.name))} · ${esc(who.code)}</p>
+    ${sup ? `<label class="fl" for="sr-t">${t('scanType')}</label><select class="f" id="sr-t">${DOC_T.map(k => `<option value="${k}">${t('doc' + k)}</option>`).join('')}</select>` : `<p class="note">${t('docMED')}</p>`}
+    <div class="scan-pages" id="sr-p"></div><p class="note" id="sr-n">${t('scanHint')}</p>
+    <label class="btn wide" style="margin-top:8px">${ic('camera')} ${t('scanAdd')}<input type="file" id="sr-f" accept="image/*" capture="environment" multiple hidden></label>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn" id="sr-x">${t('back')}</button><button class="btn pri grow" id="sr-ok" disabled>${t('scanSend')}</button></div></div>`;
+  document.body.appendChild(box);
+  const draw = () => { $('#sr-p', box).innerHTML = pages.map((p, i) => `<span><img src="${p}" alt=""><button data-del="${i}" aria-label="remove">✕</button><b>${i + 1}</b></span>`).join(''); $('#sr-ok', box).disabled = !pages.length; $('#sr-n', box).textContent = pages.length ? `${pages.length} ${t('scanPages')}` : t('scanHint');
+    box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { pages.splice(+b.dataset.del, 1); draw(); }); };
+  $('#sr-f', box).onchange = async e => { for (const f of e.target.files) { try { pages.push(await shrinkPage(f)); } catch (x) { toast('?'); } } e.target.value = ''; draw(); };
+  $('#sr-x', box).onclick = () => box.remove();
+  $('#sr-ok', box).onclick = async () => {
+    const body = { code: who.code, type: sup ? $('#sr-t', box).value : 'MED', ym, pages: pages.slice(), clientId: 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+    box.remove(); await sendDoc(body, sup);
+  };
+}
+/** a photo of a page → JPEG data URL, longest side 1600 px */
+async function shrinkPage(f) {
+  const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.72);
+}
+async function sendDoc(body, sup) {
+  const r = await W.api.call('POST', sup ? 'supervisor/doc' : 'worker/doc', body, sup ? {} : { token: W.token }).catch(() => null);
+  if (r?.status === 200) { haptic(15); toast(t('scanSent')); return true; }
+  if (!r) { await qPut({ clientId: body.clientId, doc: true, sup, body }); toast(t('scanQueued')); updateQueueBar?.(); }
+  else toast(r.body?.error || 'Error');
+  return false;
+}
+async function flushDocs(sup) { for (const x of await qAll()) if (x.doc && !!x.sup === !!sup) { const r = await W.api.call('POST', sup ? 'supervisor/doc' : 'worker/doc', x.body, sup ? {} : { token: W.token }).catch(() => null); if (!r) break; await qDel(x.clientId); if (r.status === 200) toast(t('scanSent')); } }
 async function flushLocations() { let q = []; try { q = JSON.parse(localStorage.getItem('ls.locq') || '[]'); } catch (e) { } if (!q.length) return; localStorage.setItem('ls.locq', '[]'); for (const b of q) await sendLocation(b); }
 async function loadBoard(redraw = true) {
   const r = await W.api.call('GET', 'supervisor/board', null, { query: { site: W.supSite || '', date: W.supDate || '' } }).catch(() => null);
   if (r?.status !== 200) { toast(r?.body?.error || 'No connection'); W.sup = false; return render(); }
   W.board = r.body; W.prof ||= { sites: r.body.sites, site: null, punches: [] }; if (redraw) renderSup();
-  flushLocations();
+  flushLocations(); flushDocs(true);
 }
 function renderSup() {
   const B = W.board || { workers: [], sites: [], codes: [] }, isToday = B.date === B.today;
@@ -582,9 +620,10 @@ function renderSup() {
     ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
     <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(tc(w.name))}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
       ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
-      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}</li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
+      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}<button class="ib scanb" data-scan="${esc(w.code)}" aria-label="${t('scanTitle')}" title="${t('scanTitle')}">${ic('camera')}</button></li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
     ${B.sites.some(s => s.canSetLocation) ? `<div class="card"><b>${t('setLocTitle')}</b><p class="note" style="margin:6px 0 10px">${t('setLocHint')}</p>${B.sites.filter(s => s.canSetLocation).map(s => `<button class="btn wide" data-setloc="${esc(s.id)}" style="margin-top:6px">${ic('pin')} ${t('setLocHere')} – ${esc(s.name)}</button>`).join('')}</div>` : ''}
     <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
+  $$('[data-scan]').forEach(b => b.onclick = () => scanReport(B.workers.find(x => x.code === b.dataset.scan), true));
   $$('[data-setloc]').forEach(b => b.onclick = () => setSiteLocation(B.sites.find(s => s.id === b.dataset.setloc)));
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };

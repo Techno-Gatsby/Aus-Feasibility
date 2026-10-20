@@ -76,6 +76,11 @@ const PDFX = (() => {
         const src = await PDFLib.PDFDocument.load(await part.pdf.arrayBuffer(), { ignoreEncryption: true });
         const idx = part.pages?.length ? part.pages : src.getPageIndices();
         (await out.copyPages(src, idx)).forEach(p => out.addPage(p));
+      } else if (part.img) {                         // a photo / scan (JPEG or PNG blob) on an A4 page, fitted with a small margin
+        const bytes = new Uint8Array(await part.img.arrayBuffer()), png = bytes[0] === 0x89;
+        const pic = png ? await out.embedPng(bytes) : await out.embedJpg(bytes), land = pic.width > pic.height * 1.15;
+        const A4 = land ? [841.89, 595.28] : [595.28, 841.89], pg = out.addPage(A4), M = 14, k = Math.min((A4[0] - 2 * M) / pic.width, (A4[1] - 2 * M) / pic.height);
+        pg.drawImage(pic, { x: (A4[0] - pic.width * k) / 2, y: (A4[1] - pic.height * k) / 2, width: pic.width * k, height: pic.height * k });
       } else if (part.html) {
         const land = part.land ?? /class="sheet[^"]*\bland\b/.test(part.html);
         const img = await htmlToPng(part.html, land);

@@ -505,3 +505,9 @@ a.getapp{border-color:var(--bronze)}
 .sheet-bg{position:fixed;inset:0;background:rgba(5,6,6,.6);z-index:2100;display:flex;align-items:flex-end;animation:fade .15s}
 .sheet-bg .sheet{background:var(--s1);border-top:1px solid var(--line2);width:100%;border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0))}
 .sheet-bg .sheet .row{display:flex}.sheet-bg .grow{flex:1}
+
+.scan-pages{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0;max-height:40vh;overflow:auto}
+.scan-pages span{position:relative;width:72px}.scan-pages img{width:72px;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--line2);display:block}
+.scan-pages button{position:absolute;top:2px;right:2px;border:0;border-radius:50%;width:22px;height:22px;background:rgba(0,0,0,.6);color:#fff}
+.scan-pages b{position:absolute;left:4px;bottom:3px;font-size:11px;color:#fff;text-shadow:0 0 3px #000}
+.list.sup li .scanb{margin-left:6px;align-self:center}
