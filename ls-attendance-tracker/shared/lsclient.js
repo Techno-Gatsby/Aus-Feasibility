@@ -32,7 +32,7 @@ const LSClient = (() => {
       if (demo) { const r = await demoCall(method, path, body, opt); if (r.bytes) return { status: r.status, blob: new Blob([r.bytes], { type: r.type }) }; return r; }
       const q = opt.query ? '?' + new URLSearchParams(opt.query) : '';
       const res = await fetch(`${base}/${path}${q}`, { method, credentials: 'include', headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(opt.token ? { Authorization: 'Bearer ' + opt.token } : {}) }, body: body ? JSON.stringify(body) : undefined });
-      if ((res.headers.get('content-type') || '').startsWith('image/')) return { status: res.status, blob: await res.blob() };
+      if (/^(image\/|application\/pdf)/.test(res.headers.get('content-type') || '')) return { status: res.status, blob: await res.blob() };
       let j = null; try { j = await res.json(); } catch (e) { j = { error: res.statusText }; }
       return { status: res.status, body: j };
     }

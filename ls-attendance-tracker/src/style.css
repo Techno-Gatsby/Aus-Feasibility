@@ -406,7 +406,8 @@ table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;
 .avatar.lg{width:76px;height:76px;font-size:22px}
 /* live / insights */
 .ins-f{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px}
-.ins-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px}
+.ins-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kpis.ins-k{grid-template-columns:repeat(4,minmax(0,1fr))}
 /* every card the same fixed height; maps and tables fill it and scroll inside */
 .ins-g>.sec{min-width:0;margin-bottom:0;height:500px;display:flex;flex-direction:column}
 .ins-g>.sec.closed{height:auto}
@@ -736,3 +737,41 @@ tr.warnrow td{background:#fff8e6}
 .rp-chips button b{margin-left:4px;font-weight:700;opacity:.75}
 .rp-chip{border:1px solid var(--line2);background:var(--accent-soft2);color:var(--heading);border-radius:12px;padding:2px 10px;margin:2px 6px 2px 0;font:inherit;font-size:12px;cursor:pointer}.rp-chip:hover{border-color:var(--accent)}
 .rp-empty{border:1px dashed var(--line2);border-radius:var(--r);padding:16px 20px;max-width:760px;line-height:1.55}.rp-empty ol{margin:6px 0 0;padding-left:20px}
+/* Tracker and Payroll tables in the Attendance grid style: light lines, grey header with small capitals, mono figures */
+.tk-w{border-color:var(--line2)}
+.tk{font-size:11.5px;font-family:var(--font-body)}
+.tk th,.tk td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);height:24px}
+.tk thead th{background:var(--raised);font:650 9.5px var(--font-body);letter-spacing:.05em;color:var(--mute);text-transform:uppercase;border-top:0}
+.tk tr.h1 th{font:700 11px var(--font-body);color:var(--heading);letter-spacing:.03em}
+.tk tr.h3 th{font-size:9px;letter-spacing:.03em}
+.tk .tk-sl,.tk .tk-d,.tk.py .py-n,.tk.py .py-c,.tk.py .py-nm{background:var(--surface)}
+.tk thead .tk-sl,.tk thead .tk-d,.tk thead .tk-ga,.tk.py thead .py-n,.tk.py thead .py-c,.tk.py thead .py-nm{background:var(--raised)}
+.tk .tk-sl{border-left:1px solid var(--line);font:600 10.5px var(--font-mono);color:var(--faint)}
+.tk .tk-d,.tk.py .py-nm{box-shadow:inset -2px 0 0 var(--line2);color:var(--heading);font-weight:600}
+.tk .tk-sp,.tk thead .tk-sp{background:var(--line2);border-right:0;width:3px;min-width:3px}
+.tk tr.tk-g td{background:var(--surface2);color:var(--heading);font-weight:700;letter-spacing:.02em}
+.tk tr.tk-g td.tk-sp{background:var(--line2)}
+.tk td.tk-c{font:600 11px var(--font-mono);color:var(--heading)}
+.tk tbody tr:hover td.tk-c,.tk tbody tr:hover td.tk-d{background:var(--accent-soft2)}
+.tk td.pd{background:#E6F4EA}.tk td.od{background:#FDF3DC}
+.tk-tag{font-family:var(--font-body)}
+.tk.py td.py-d{font:650 10.5px var(--font-mono);text-align:center;color:var(--heading)}
+.tk.py th.sun{background:#EEF2F8}.tk.py th.hd{background:#FFF4D6}
+.tk.py td.py-t{font:600 10.5px var(--font-mono);background:var(--surface);text-align:right}
+.tk.py td.so{color:var(--accent)}.tk.py td.sa{color:#11753d}
+
+/* dd/mm/yyyy date field */
+.dp{position:relative;display:inline-flex;align-items:center;width:100%;max-width:170px}
+.f .dp{max-width:none}
+.dp .dp-t{width:100%;padding-right:28px;font-variant-numeric:tabular-nums}
+.dp .dp-b{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--text2);cursor:pointer;padding:4px;display:flex}
+.dp .dp-b:hover{color:var(--accent)}
+.dp input[type=date]{position:absolute;left:0;bottom:0;width:100%;height:0;opacity:0;pointer-events:none;border:0;padding:0}
+
+/* Tracker / Payroll: the table fills the page edge to edge, like the Attendance grid */
+.tk-full{flex:1;min-height:0;overflow:auto;background:var(--surface);border-top:1px solid var(--line2)}
+.tk-full .tk{min-width:0}
+.tk-full .tk thead th{border-top:0}
+.tk-full .tk .tk-sl,.tk-full .tk.py .py-n{border-left:0}
+.tk-more{padding:8px 12px;gap:8px}
+.tk-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line3,#9aa5b5);color:var(--text2);font-size:10.5px;font-weight:700;cursor:help;margin-left:6px;vertical-align:2px}

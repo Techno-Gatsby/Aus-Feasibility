@@ -93,12 +93,13 @@ const LSAPI = (() => {
       if (!pages.length || pages.length > 80) return err(400, 'Send 1 to 80 pages');
       const ym = /^\d{4}-\d\d$/.test(b.ym || '') ? b.ym : dxbDate(now()).slice(0, 7);
       if (b.clientId) { const old = (await store.list('docs', x => x.clientId === String(b.clientId) && x.code === w.code, { clientId: String(b.clientId) }))[0]; if (old) return J(200, { doc: old, repeat: true }); }
-      const id = rid();
-      for (let i = 0; i < pages.length; i++) {
-        const m2 = String(pages[i]).match(/^data:(image\/(?:jpeg|png));base64,(.*)$/); if (!m2 || m2[2].length > 2.8e6) return err(400, `Page ${i + 1} is not a photo (or is too large)`);
-        await store.putBlob(`docs/${ym}/${id}_${i}.jpg`, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]);
+      const id = rid(), kinds = [];
+      for (let i = 0; i < pages.length; i++) {          // a photo of a page, or a whole PDF (up to ~15 MB)
+        const m2 = String(pages[i]).match(/^data:(image\/(?:jpeg|png)|application\/pdf);base64,(.*)$/), pdf = m2?.[1] === 'application/pdf';
+        if (!m2 || m2[2].length > (pdf ? 2e7 : 2.8e6)) return err(400, `Part ${i + 1} is not a photo or PDF (or is too large)`);
+        await store.putBlob(`docs/${ym}/${id}_${i}.${pdf ? 'pdf' : 'jpg'}`, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]); kinds.push(pdf ? 'pdf' : 'jpg');
       }
-      const doc = { id, code: w.code, wid: w.id, name: w.name, type, ym, pages: pages.length, by: String(by || '').slice(0, 120), at: new Date(now()).toISOString(), serverTs: now(), clientId: String(b.clientId || '') };
+      const doc = { id, code: w.code, wid: w.id, name: w.name, type, ym, pages: pages.length, kinds, by: String(by || '').slice(0, 120), at: new Date(now()).toISOString(), serverTs: now(), clientId: String(b.clientId || '') };
       await store.put('docs', doc); return J(200, { doc });
     }
     async function profile(w) {
@@ -293,8 +294,8 @@ const LSAPI = (() => {
       'GET admin/doc': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const d = await store.get('docs', String(req.query?.id || '')), i = +req.query?.page || 0; if (!d || i < 0 || i >= d.pages) return err(404, 'Not found');
-        const b = await store.getBlob(`docs/${d.ym}/${d.id}_${i}.jpg`); if (!b) return err(404, 'Not found');
-        return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
+        const ext = d.kinds?.[i] || 'jpg', b = await store.getBlob(`docs/${d.ym}/${d.id}_${i}.${ext}`); if (!b) return err(404, 'Not found');
+        return { status: 200, bytes: b.bytes, type: b.type || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg') };
       },
       /* a person's saved signature (transparent PNG), the same on every PC; only that email or an admin changes it */
       'GET me/signature': async req => { const m = String(req.query?.email || me(req)).toLowerCase(); if (!me(req)) return err(401, 'Sign in required'); if (m !== me(req) && !isAdmin(req)) return err(403, 'Not allowed'); const x = await store.get('sigpresets', m); return J(200, { preset: x ? { email: x.id, image: x.image, updatedAt: x.updatedAt } : null }); },

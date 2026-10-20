@@ -570,12 +570,18 @@ function scanReport(who, sup) {
   box.innerHTML = `<div class="sheet"><b>${t('scanTitle')}</b><p class="note">${esc(tc(who.name))} · ${esc(who.code)}</p>
     ${sup ? `<label class="fl" for="sr-t">${t('scanType')}</label><select class="f" id="sr-t">${DOC_T.map(k => `<option value="${k}">${t('doc' + k)}</option>`).join('')}</select>` : `<p class="note">${t('docMED')}</p>`}
     <div class="scan-pages" id="sr-p"></div><p class="note" id="sr-n">${t('scanHint')}</p>
-    <label class="btn wide" style="margin-top:8px">${ic('camera')} ${t('scanAdd')}<input type="file" id="sr-f" accept="image/*" capture="environment" multiple hidden></label>
+    <div class="row" style="gap:8px;margin-top:8px"><label class="btn grow">${ic('camera')} ${t('scanAdd')}<input type="file" id="sr-f" accept="image/*" capture="environment" multiple hidden></label>
+      <label class="btn grow">${ic('inbox')} ${t('scanFile')}<input type="file" id="sr-g" accept="image/*,application/pdf,.pdf" multiple hidden></label></div>
     <div class="row" style="margin-top:12px;gap:8px"><button class="btn" id="sr-x">${t('back')}</button><button class="btn pri grow" id="sr-ok" disabled>${t('scanSend')}</button></div></div>`;
   document.body.appendChild(box);
-  const draw = () => { $('#sr-p', box).innerHTML = pages.map((p, i) => `<span><img src="${p}" alt=""><button data-del="${i}" aria-label="remove">✕</button><b>${i + 1}</b></span>`).join(''); $('#sr-ok', box).disabled = !pages.length; $('#sr-n', box).textContent = pages.length ? `${pages.length} ${t('scanPages')}` : t('scanHint');
-    box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { pages.splice(+b.dataset.del, 1); draw(); }); };
-  $('#sr-f', box).onchange = async e => { for (const f of e.target.files) { try { pages.push(await shrinkPage(f)); } catch (x) { toast('?'); } } e.target.value = ''; draw(); };
+  const draw = () => { $('#sr-p', box).innerHTML = pages.map((p, i) => `<span>${p.startsWith('data:application/pdf') ? `<i class="pdf">PDF<small>${esc(names[i] || '')}</small></i>` : `<img src="${p}" alt="">`}<button data-del="${i}" aria-label="remove">✕</button><b>${i + 1}</b></span>`).join(''); $('#sr-ok', box).disabled = !pages.length; $('#sr-n', box).textContent = pages.length ? `${pages.length} ${t('scanPages')}` : t('scanHint');
+    box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { pages.splice(+b.dataset.del, 1); names.splice(+b.dataset.del, 1); draw(); }); };
+  const names = [];
+  const add = async e => { for (const f of e.target.files) { try {
+      if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) { if (f.size > 15e6) { toast(t('scanBig')); continue; } pages.push(await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).replace(/^data:[^;]*;/, 'data:application/pdf;')); r.onerror = rej; r.readAsDataURL(f); })); names.push(f.name); }
+      else { pages.push(await shrinkPage(f)); names.push(''); }
+    } catch (x) { toast('?'); } } e.target.value = ''; draw(); };
+  $('#sr-f', box).onchange = add; $('#sr-g', box).onchange = add;
   $('#sr-x', box).onclick = () => box.remove();
   $('#sr-ok', box).onclick = async () => {
     const body = { code: who.code, type: sup ? $('#sr-t', box).value : 'MED', ym, pages: pages.slice(), clientId: 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };

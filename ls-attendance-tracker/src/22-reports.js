@@ -152,7 +152,7 @@ async function pullPhoneDocs(cl, since) {
   for (const x of r.body.docs) {
     if (Object.values(S.empDocs).some(d => d.remote === x.id)) continue;
     const e = empByCode(x.code); if (!e) continue;
-    const imgs = []; for (let i = 0; i < x.pages; i++) { const b = await cl.call('GET', 'admin/doc', null, { query: { id: x.id, page: i } }); if (b.status === 200 && (b.blob || b.bytes)) imgs.push({ img: b.blob || new Blob([b.bytes], { type: b.type || 'image/jpeg' }) }); }
+    const imgs = []; for (let i = 0; i < x.pages; i++) { const b = await cl.call('GET', 'admin/doc', null, { query: { id: x.id, page: i } }); if (b.status === 200 && (b.blob || b.bytes)) { const bl = b.blob || new Blob([b.bytes], { type: b.type || 'image/jpeg' }); imgs.push((x.kinds?.[i] === 'pdf' || /pdf/.test(bl.type)) ? { pdf: bl } : { img: bl }); } }
     if (!imgs.length) continue;
     await addEmpDoc(e.id, x.type, x.ym, await PDFX.build(imgs), { src: 'phone', remote: x.id, by: x.by, name: `${x.code}_${x.type}_${x.ym}_${x.id.slice(-4)}.pdf` }); n++;
   }

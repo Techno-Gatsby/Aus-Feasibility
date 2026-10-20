@@ -130,7 +130,22 @@ function enhanceMonthInput(inp) {
     setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
   };
 }
-new MutationObserver(() => document.querySelectorAll('input[type="month"]:not([data-mp])').forEach(enhanceMonthInput)).observe(document.documentElement, { childList: true, subtree: true });
+/* ---------- date fields: always dd/mm/yyyy, typed or picked from the calendar ----------
+   The native <input type="date"> stays (out of sight) and keeps the value + change event, so existing handlers keep working. */
+function enhanceDateInput(inp) {
+  if (inp.dataset.dp || inp.closest('.ts-sheet')) return; inp.dataset.dp = '1';
+  const box = document.createElement('span'); box.className = 'dp';
+  const t = document.createElement('input'); t.type = 'text'; t.className = 'dp-t'; t.placeholder = 'dd/mm/yyyy'; t.inputMode = 'numeric'; t.autocomplete = 'off';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'dp-b'; b.title = 'Pick a date'; b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2Zm-2 7h14v10H5Z"/></svg>';
+  if (inp.id) t.dataset.for = inp.id;
+  const paint = () => { t.value = inp.value ? fmtDMY(inp.value) : ''; };
+  inp.before(box); box.append(t, b, inp); paint();
+  const commit = () => { const v = t.value.trim(), d = v ? trkParseDate(v) : ''; if (d === null || (d && ((inp.min && d < inp.min) || (inp.max && d > inp.max)))) { toast('Type the date as dd/mm/yyyy' + (inp.max && d > inp.max ? ' (not after ' + fmtDMY(inp.max) + ')' : '')); paint(); return; } if (d !== inp.value) { inp.value = d; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } paint(); };
+  t.onchange = commit; t.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } };
+  b.onclick = () => { try { inp.showPicker(); } catch (e) { inp.focus(); } };
+  inp.addEventListener('change', paint); inp.addEventListener('input', paint);
+}
+new MutationObserver(() => { document.querySelectorAll('input[type="month"]:not([data-mp])').forEach(enhanceMonthInput); document.querySelectorAll('input[type="date"]:not([data-dp])').forEach(enhanceDateInput); }).observe(document.documentElement, { childList: true, subtree: true });
 
 /* ---------- Getting started: the steps in the order they are done, with what is already set up ---------- */
 function guideSteps() {

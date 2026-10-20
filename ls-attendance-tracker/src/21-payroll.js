@@ -83,25 +83,23 @@ const payTotVals = (t, man) => [t.hours, t.present, ...t.weeks, t.sl, t.al, t.ph
 function renderPayroll() {
   const v = $('#v-payroll'); PV_.ym ||= AV.ym || cycleOfDate(todayISO());
   const ym = PV_.ym, days = payDays(ym), rows = payRows(ym), man = S.payroll[ym] || {}, { start, end } = payrollCycle(ym);
-  const cls = x => x === '' ? '' : typeof x === 'number' ? '' : x === 'A' ? ' pa' : x === 'OFF' ? ' po' : /^(AL|SL|EL|HD)$/.test(x) ? ' pl' : ' px';
+  const cls = () => '', col = x => x === '' ? '' : typeof x === 'number' ? codeDef('P').color : x === 'HD' ? codeDef('PH').color : IX.code.has(x) ? codeDef(x).color : '#EEF1F6';   // the attendance colours
   const LIM = 150, shown = rows.slice(0, PV_.all ? rows.length : LIM);
   const body = shown.map((r, i) => {
     const m = man[r.e.id] || {}, t = payTotals(r.v, days, m), tv = payTotVals(t, m);
     return `<tr><td class="py-n">${i + 1}</td><td class="py-c">${esc(r.e.empCode || '')}</td><td class="py-nm">${esc(r.e.name)}</td><td>${r.e.doj ? fmtDMY(r.e.doj) : ''}</td><td>${esc(r.e.trade || '')}</td><td>${esc(r.site)}</td><td>LS</td><td>${esc(S.settings.companyShort || '')}</td><td>${esc(r.shift)}</td><td>${esc(r.cost)}</td><td class="py-hd ed" data-hd="${r.e.id}" title="Hours a worked (P) day counts for ${esc(r.e.name)} – click to change">${r.H}</td>`
-      + r.v.map((x, j) => `<td class="py-d${cls(x)}${days[j].dn === 'SUN' ? ' sun' : days[j].dn === 'HD' ? ' hd' : ''}${r.src[j] ? ' ed s' + r.src[j] : ''}"${r.src[j] ? ` data-ph="${r.e.id}|${days[j].d}" title="${r.src[j] === 'o' ? 'Typed in Payroll' : r.src[j] === 'a' ? 'From the phone app check-in / check-out' : 'Hrs/day of this person'} – click to change"` : ''}>${esc(x)}</td>`).join('')
+      + r.v.map((x, j) => `<td style="${x === '' ? '' : `background:${col(x)}`}" class="py-d${cls(x)}${days[j].dn === 'SUN' ? ' sun' : days[j].dn === 'HD' ? ' hd' : ''}${r.src[j] ? ' ed s' + r.src[j] : ''}"${r.src[j] ? ` data-ph="${r.e.id}|${days[j].d}" title="${r.src[j] === 'o' ? 'Typed in Payroll' : r.src[j] === 'a' ? 'From the phone app check-in / check-out' : 'Hrs/day of this person'} – click to change"` : ''}>${esc(x)}</td>`).join('')
       + tv.map((x, j) => { const k = j - 19; const ed = k >= 0 && k < 4 ? PAY_MAN[k][0] : j === tv.length - 2 ? 'remarks' : null; return `<td class="py-t${ed ? ' ed' : ''}"${ed ? ` data-pm="${r.e.id}|${ed}"` : ''}>${typeof x === 'number' ? (Number.isInteger(x) ? x : x.toFixed(2)) : esc(x)}</td>`; }).join('') + '</tr>';
   }).join('');
-  v.innerHTML = docHead('Payroll attendance', `${fmtDMY(start)} – ${fmtDMY(end)} · ${rows.length} personnel`, `
+  v.innerHTML = docHead('Payroll attendance <span class="tk-help" title="Days come from Attendance (change them there). Worked (P) days show each person\'s hours – drivers 16, others 12 by default; click Hrs/day to change a person, or a day to change that day (never 0). Codes and public holidays are in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here.">?</span>', `${fmtDMY(start)} – ${fmtDMY(end)} · ${rows.length} personnel`, `
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
       <input type="search" id="py-q" placeholder="Find name / code" value="${esc(PV_.q)}" style="width:150px">
       <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
       <button class="btn sm pri" id="py-xl">Download Excel</button>`)
-    + `<div class="dc tk-dc"><div class="tw tk-w"><table class="tk py"><thead>
+    + `<div class="tk-full"><table class="tk py"><thead>
       <tr><th colspan="11" class="py-title">${esc(payTitle(ym))}</th>${days.map(x => `<th class="${x.dn === 'HD' ? 'hd' : x.dn === 'SUN' ? 'sun' : ''}">${x.dn}</th>`).join('')}<th colspan="${PAY_TOT_H.length}"></th></tr>
       <tr>${['S.No', 'Employee Code', 'Employee Name', 'DOJ', 'Designation', 'Department/Sub-Department', 'Division', 'Business Unit', 'Shift', 'COST CODE', 'Hrs/day'].map((h, i) => `<th class="${['py-n', 'py-c', 'py-nm'][i] || ''}">${h}</th>`).join('')}${days.map(x => `<th class="py-d">${x.d.slice(8)}/${x.d.slice(5, 7)}</th>`).join('')}${PAY_TOT_H.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
-    </thead><tbody>${body || `<tr><td colspan="40" class="muted" style="padding:20px">No personnel in this payroll month.</td></tr>`}</tbody></table></div>
-    ${rows.length > shown.length ? `<div class="row" style="margin-top:6px"><span class="muted small">Showing ${shown.length} of ${rows.length} – the Excel has everyone.</span><button class="btn sm" id="py-all">Show all</button></div>` : ''}
-    <div class="muted small" style="margin-top:6px">Days come from Attendance (change them there). Worked (P) days show each person's hours – drivers ${+S.settings.driverHours || 16}, others ${+S.settings.shiftHours || 12}; click Hrs/day to change a person, or a day to change that day (never 0). Codes and public holidays are set in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here.</div></div>`;
+    </thead><tbody>${body || `<tr><td colspan="40" class="muted" style="padding:20px">No personnel in this payroll month.</td></tr>`}</tbody></table>${rows.length > shown.length ? `<div class="row tk-more"><span class="muted small">Showing ${shown.length} of ${rows.length} – the Excel has everyone.</span><button class="btn sm" id="py-all">Show all</button></div>` : ''}</div>`;
   $('#py-ym', v).onchange = e => { PV_.ym = e.target.value; renderPayroll(); };
   let qt; $('#py-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { PV_.q = e.target.value; renderPayroll(); const q = $('#py-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
   $('#py-app', v).onchange = e => { PV_.app = e.target.checked; renderPayroll(); };

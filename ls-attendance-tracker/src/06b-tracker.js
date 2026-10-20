@@ -142,7 +142,7 @@ function renderTracker() {
   const rowHTML = x => `<tr class="${x.isNew ? 'tk-new' : ''}${x.hidden ? ' tk-hid' : ''}"><td class="tk-sl">${++n}</td><td class="tk-d" data-trow="${esc(x.key)}" title="${x.p ? esc(x.p.name) + (x.p.code ? ' · ' + esc(x.p.code) : '') : 'Not linked to a project'} – click for options">${esc(x.desc)}${x.isNew ? ' <span class="tk-tag">new</span>' : ''}${x.hidden ? ' <span class="tk-tag">hidden</span>' : ''}</td>${cells(x)}</tr>`;
   const g0 = groups[0];
   const body = groups.map((g, gi) => (gi ? `<tr class="tk-g"><td class="tk-sl">${g.letter}</td><td class="tk-d" data-tgrp="${g.id}">${esc(g.name)}</td>${months.map(() => `<td class="tk-sp"></td><td colspan="8"></td>`).join('')}</tr>` : '') + g.rows.map(rowHTML).join('')).join('');
-  v.innerHTML = docHead('Tax Invoice Tracker', `${nR} rows${nNew ? ` · ${nNew} new project(s)` : ''} · ${TR.y} invoiced ${money(inv)} · paid ${money(paid)}`, `
+  v.innerHTML = docHead('Tax Invoice Tracker <span class="tk-help" title="Rows follow Projects &amp; sites: a new project is added at the end of its client\'s group (marked new), a deleted one is removed. Click a description for options (rename, link to a project, add or remove a row). Click a cell to fill it in – dates as 01.10.2026.">?</span>', `${nR} rows${nNew ? ` · ${nNew} new project(s)` : ''} · ${TR.y} invoiced ${money(inv)} · paid ${money(paid)}`, `
       <span class="seg"><button id="tk-prev" title="Previous year">◀</button><button class="on" disabled>${TR.y}</button><button id="tk-next" title="Next year">▶</button></span>
       <label class="small">Months <select id="tk-m0">${mOpt(TR.m0)}</select> – <select id="tk-m1">${mOpt(TR.m1)}</select></label>
       <input type="search" id="tk-q" placeholder="Find" value="${esc(TR.q)}" style="width:130px">
@@ -151,12 +151,11 @@ function renderTracker() {
       <label class="small" title="Green: payment received · amber: invoice sent more than ${terms} days ago and not paid"><input type="checkbox" id="tk-hint"${TR.hint ? ' checked' : ''}> Colours</label>
       <button class="btn sm" id="tk-imp" title="Load rows, groups and entries from a Trackers workbook (sheet “Tax Invoice Tracker”)">Import tracker Excel…</button>
       <button class="btn sm pri" id="tk-xl">Download Excel</button>`)
-    + `<div class="dc tk-dc"><div class="tw tk-w"><table class="tk"><thead>
+    + `<div class="tk-full"><table class="tk"><thead>
       <tr class="h1"><th class="tk-sl">Sl.No</th><th class="tk-d">Description</th>${months.map(ym => `<th class="tk-sp" rowspan="3"></th><th colspan="8">${fmtMonYY(ym)}</th>`).join('')}</tr>
       <tr class="h2"><th class="tk-sl tk-ga" rowspan="2">${g0 ? g0.letter : ''}</th><th class="tk-d tk-ga" rowspan="2"${g0 ? ` data-tgrp="${g0.id}"` : ''}>${g0 ? esc(g0.name) : ''}</th>${months.map(() => TRK_SECT.map(([l, c]) => `<th colspan="${c}">${l}</th>`).join('')).join('')}</tr>
       <tr class="h3">${months.map(() => TRK_F.map(([, l]) => `<th>${l}</th>`).join('')).join('')}</tr>
-    </thead><tbody>${body || `<tr><td colspan="${2 + months.length * 9}" class="muted" style="padding:20px">Nothing matches.</td></tr>`}</tbody></table></div>
-    <div class="muted small" style="margin-top:6px">Rows follow Projects &amp; sites: a new project is added at the end of its client's group (marked <i>new</i>), a deleted one is removed. Click a description for options (rename, link to a project, add or remove a row); click a cell to fill it in – dates as 01.10.2026.</div></div>`;
+    </thead><tbody>${body || `<tr><td colspan="${2 + months.length * 9}" class="muted" style="padding:20px">Nothing matches.</td></tr>`}</tbody></table></div>`;
   $('#tk-prev', v).onclick = () => { TR.y--; renderTracker(); };
   $('#tk-next', v).onclick = () => { TR.y++; renderTracker(); };
   $('#tk-m0', v).onchange = e => { TR.m0 = +e.target.value; if (TR.m1 < TR.m0) TR.m1 = TR.m0; renderTracker(); };

@@ -413,7 +413,8 @@ table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;
 .avatar.lg{width:76px;height:76px;font-size:22px}
 /* live / insights */
 .ins-f{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px}
-.ins-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px}
+.ins-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kpis.ins-k{grid-template-columns:repeat(4,minmax(0,1fr))}
 /* every card the same fixed height; maps and tables fill it and scroll inside */
 .ins-g>.sec{min-width:0;margin-bottom:0;height:500px;display:flex;flex-direction:column}
 .ins-g>.sec.closed{height:auto}
@@ -743,6 +744,44 @@ tr.warnrow td{background:#fff8e6}
 .rp-chips button b{margin-left:4px;font-weight:700;opacity:.75}
 .rp-chip{border:1px solid var(--line2);background:var(--accent-soft2);color:var(--heading);border-radius:12px;padding:2px 10px;margin:2px 6px 2px 0;font:inherit;font-size:12px;cursor:pointer}.rp-chip:hover{border-color:var(--accent)}
 .rp-empty{border:1px dashed var(--line2);border-radius:var(--r);padding:16px 20px;max-width:760px;line-height:1.55}.rp-empty ol{margin:6px 0 0;padding-left:20px}
+/* Tracker and Payroll tables in the Attendance grid style: light lines, grey header with small capitals, mono figures */
+.tk-w{border-color:var(--line2)}
+.tk{font-size:11.5px;font-family:var(--font-body)}
+.tk th,.tk td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);height:24px}
+.tk thead th{background:var(--raised);font:650 9.5px var(--font-body);letter-spacing:.05em;color:var(--mute);text-transform:uppercase;border-top:0}
+.tk tr.h1 th{font:700 11px var(--font-body);color:var(--heading);letter-spacing:.03em}
+.tk tr.h3 th{font-size:9px;letter-spacing:.03em}
+.tk .tk-sl,.tk .tk-d,.tk.py .py-n,.tk.py .py-c,.tk.py .py-nm{background:var(--surface)}
+.tk thead .tk-sl,.tk thead .tk-d,.tk thead .tk-ga,.tk.py thead .py-n,.tk.py thead .py-c,.tk.py thead .py-nm{background:var(--raised)}
+.tk .tk-sl{border-left:1px solid var(--line);font:600 10.5px var(--font-mono);color:var(--faint)}
+.tk .tk-d,.tk.py .py-nm{box-shadow:inset -2px 0 0 var(--line2);color:var(--heading);font-weight:600}
+.tk .tk-sp,.tk thead .tk-sp{background:var(--line2);border-right:0;width:3px;min-width:3px}
+.tk tr.tk-g td{background:var(--surface2);color:var(--heading);font-weight:700;letter-spacing:.02em}
+.tk tr.tk-g td.tk-sp{background:var(--line2)}
+.tk td.tk-c{font:600 11px var(--font-mono);color:var(--heading)}
+.tk tbody tr:hover td.tk-c,.tk tbody tr:hover td.tk-d{background:var(--accent-soft2)}
+.tk td.pd{background:#E6F4EA}.tk td.od{background:#FDF3DC}
+.tk-tag{font-family:var(--font-body)}
+.tk.py td.py-d{font:650 10.5px var(--font-mono);text-align:center;color:var(--heading)}
+.tk.py th.sun{background:#EEF2F8}.tk.py th.hd{background:#FFF4D6}
+.tk.py td.py-t{font:600 10.5px var(--font-mono);background:var(--surface);text-align:right}
+.tk.py td.so{color:var(--accent)}.tk.py td.sa{color:#11753d}
+
+/* dd/mm/yyyy date field */
+.dp{position:relative;display:inline-flex;align-items:center;width:100%;max-width:170px}
+.f .dp{max-width:none}
+.dp .dp-t{width:100%;padding-right:28px;font-variant-numeric:tabular-nums}
+.dp .dp-b{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--text2);cursor:pointer;padding:4px;display:flex}
+.dp .dp-b:hover{color:var(--accent)}
+.dp input[type=date]{position:absolute;left:0;bottom:0;width:100%;height:0;opacity:0;pointer-events:none;border:0;padding:0}
+
+/* Tracker / Payroll: the table fills the page edge to edge, like the Attendance grid */
+.tk-full{flex:1;min-height:0;overflow:auto;background:var(--surface);border-top:1px solid var(--line2)}
+.tk-full .tk{min-width:0}
+.tk-full .tk thead th{border-top:0}
+.tk-full .tk .tk-sl,.tk-full .tk.py .py-n{border-left:0}
+.tk-more{padding:8px 12px;gap:8px}
+.tk-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line3,#9aa5b5);color:var(--text2);font-size:10.5px;font-weight:700;cursor:help;margin-left:6px;vertical-align:2px}
 
 </style>
 </head>
@@ -899,12 +938,13 @@ const LSAPI = (() => {
       if (!pages.length || pages.length > 80) return err(400, 'Send 1 to 80 pages');
       const ym = /^\d{4}-\d\d$/.test(b.ym || '') ? b.ym : dxbDate(now()).slice(0, 7);
       if (b.clientId) { const old = (await store.list('docs', x => x.clientId === String(b.clientId) && x.code === w.code, { clientId: String(b.clientId) }))[0]; if (old) return J(200, { doc: old, repeat: true }); }
-      const id = rid();
-      for (let i = 0; i < pages.length; i++) {
-        const m2 = String(pages[i]).match(/^data:(image\/(?:jpeg|png));base64,(.*)$/); if (!m2 || m2[2].length > 2.8e6) return err(400, `Page ${i + 1} is not a photo (or is too large)`);
-        await store.putBlob(`docs/${ym}/${id}_${i}.jpg`, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]);
+      const id = rid(), kinds = [];
+      for (let i = 0; i < pages.length; i++) {          // a photo of a page, or a whole PDF (up to ~15 MB)
+        const m2 = String(pages[i]).match(/^data:(image\/(?:jpeg|png)|application\/pdf);base64,(.*)$/), pdf = m2?.[1] === 'application/pdf';
+        if (!m2 || m2[2].length > (pdf ? 2e7 : 2.8e6)) return err(400, `Part ${i + 1} is not a photo or PDF (or is too large)`);
+        await store.putBlob(`docs/${ym}/${id}_${i}.${pdf ? 'pdf' : 'jpg'}`, unb64u(m2[2].replace(/\+/g, '-').replace(/\//g, '_')), m2[1]); kinds.push(pdf ? 'pdf' : 'jpg');
       }
-      const doc = { id, code: w.code, wid: w.id, name: w.name, type, ym, pages: pages.length, by: String(by || '').slice(0, 120), at: new Date(now()).toISOString(), serverTs: now(), clientId: String(b.clientId || '') };
+      const doc = { id, code: w.code, wid: w.id, name: w.name, type, ym, pages: pages.length, kinds, by: String(by || '').slice(0, 120), at: new Date(now()).toISOString(), serverTs: now(), clientId: String(b.clientId || '') };
       await store.put('docs', doc); return J(200, { doc });
     }
     async function profile(w) {
@@ -1099,8 +1139,8 @@ const LSAPI = (() => {
       'GET admin/doc': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const d = await store.get('docs', String(req.query?.id || '')), i = +req.query?.page || 0; if (!d || i < 0 || i >= d.pages) return err(404, 'Not found');
-        const b = await store.getBlob(`docs/${d.ym}/${d.id}_${i}.jpg`); if (!b) return err(404, 'Not found');
-        return { status: 200, bytes: b.bytes, type: b.type || 'image/jpeg' };
+        const ext = d.kinds?.[i] || 'jpg', b = await store.getBlob(`docs/${d.ym}/${d.id}_${i}.${ext}`); if (!b) return err(404, 'Not found');
+        return { status: 200, bytes: b.bytes, type: b.type || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg') };
       },
       /* a person's saved signature (transparent PNG), the same on every PC; only that email or an admin changes it */
       'GET me/signature': async req => { const m = String(req.query?.email || me(req)).toLowerCase(); if (!me(req)) return err(401, 'Sign in required'); if (m !== me(req) && !isAdmin(req)) return err(403, 'Not allowed'); const x = await store.get('sigpresets', m); return J(200, { preset: x ? { email: x.id, image: x.image, updatedAt: x.updatedAt } : null }); },
@@ -1216,7 +1256,7 @@ const LSClient = (() => {
       if (demo) { const r = await demoCall(method, path, body, opt); if (r.bytes) return { status: r.status, blob: new Blob([r.bytes], { type: r.type }) }; return r; }
       const q = opt.query ? '?' + new URLSearchParams(opt.query) : '';
       const res = await fetch(`${base}/${path}${q}`, { method, credentials: 'include', headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(opt.token ? { Authorization: 'Bearer ' + opt.token } : {}) }, body: body ? JSON.stringify(body) : undefined });
-      if ((res.headers.get('content-type') || '').startsWith('image/')) return { status: res.status, blob: await res.blob() };
+      if (/^(image\/|application\/pdf)/.test(res.headers.get('content-type') || '')) return { status: res.status, blob: await res.blob() };
       let j = null; try { j = await res.json(); } catch (e) { j = { error: res.statusText }; }
       return { status: res.status, body: j };
     }
@@ -3048,14 +3088,24 @@ function newInvoiceDraft() {
   return { id: uid('i'), no: '', date: todayISO(), clientId: '', projectIds: [], from: m, to: m, entity: '', trn: '', customerCode: '', poNo: '', sapProject: '', orderCode: '', custAddress: '', payTerms: S.settings.payTerms, advance: 0, retention: 0, lines: [], withSap: true, attachTs: true, notes: '' };
 }
 
+/** the invoice period as dates (any span, e.g. 15 days); older drafts only have from/to months */
+const invD1 = dr => dr.d1 || dr.from + '-01', invD2 = dr => dr.d2 || `${dr.to}-${pad(dim(dr.to))}`;
+/** each month the period touches: { m, a, b, full } – a…b is the part of the month inside the period */
+function invSegs(dr) {
+  const d1 = invD1(dr), d2 = invD2(dr);
+  return monthsBetween(ymOf(d1), ymOf(d2)).map(m => { const a = d1 > m + '-01' ? d1 : m + '-01', e = `${m}-${pad(dim(m))}`, b = d2 < e ? d2 : e; return { m, a, b, full: a === m + '-01' && b === e }; });
+}
+const segLabel = s => s.full ? fmtMonYY(s.m) : `${fmtDMY(s.a)}–${fmtDMY(s.b)}`;
+const segTs = (pid, s) => s.full ? buildTimesheet(pid, s.m) : buildTimesheet(pid, s.a, s.b);
 function invoiceLines(dr) {
   const lines = [];
   const multi = dr.projectIds.length > 1;
-  for (const m of monthsBetween(dr.from, dr.to)) {
+  for (const sg of invSegs(dr)) {
+    const m = sg.m, lb = segLabel(sg), nd = daysBetween(sg.a, sg.b) + 1;
     for (const pid of dr.projectIds) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
-      const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
+      const ts = segTs(pid, sg), md = ts.total, D = dim(m);
       if (!md && !['fixed', 'lump'].includes(b.basis)) continue;           // nothing worked on this project that month
       if (!b.basis || b.basis === 'ratecard') {
         // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
@@ -3065,18 +3115,18 @@ function invoiceLines(dr) {
         for (const { emp, d } of perEmp.values()) { if (!d) continue; const k = `${emp.trade || 'SECURITY GUARD'}|${d}`; groups.set(k, (groups.get(k) || 0) + 1); }
         [...groups.entries()].sort((x, y) => x[0].split('|')[0].localeCompare(y[0].split('|')[0]) || +y[0].split('|')[1] - +x[0].split('|')[1]).forEach(([k, n]) => {
           const [trade, d] = k.split('|'); const rt = rateFor(p, trade);
-          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${fmtMonYY(m)}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
+          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${lb}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
         });
         continue;
       }
       let amt = 0, desc = '';
       switch (b.basis) {
-        case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
-        case 'daily': amt = md * rate; desc = `${fmtMonYY(m)}  ${md} man-days (${unit})`; break;
-        case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${fmtMonYY(m)}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
-        case 'lump': amt = rate; desc = `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}`; break;
-        case 'fixed': { const q = +b.posts || 0; amt = q * rate; desc = `${fmtMonYY(m)}  ${q} ${unit} @ ${D} Days`; break; }
-        default: { const q = md / D; amt = md * rate / D; desc = `${fmtMonYY(m)}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
+        case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${lb}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
+        case 'daily': amt = md * rate; desc = `${lb}  ${md} man-days (${unit})`; break;
+        case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${lb}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
+        case 'lump': amt = rate * nd / D; desc = sg.full ? `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}` : `Security services ${lb} (${nd} of ${D} days)`; break;
+        case 'fixed': { const q = +b.posts || 0; amt = q * rate * nd / D; desc = `${lb}  ${q} ${unit} @ ${nd} Days`; break; }
+        default: { const q = md / D; amt = md * rate / D; desc = `${lb}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
       }
       lines.push({ desc: (multi ? p.name + ' – ' : '') + desc, rate, amount: round2(amt), vat: +b.vat || 0, src: { pid, m, md } });
     }
@@ -3182,7 +3232,7 @@ function packPages(dr) {
   const pages = [];
   if (dr.withSap !== false) pages.push({ t: 'Tax invoice (SAP fields)', html: sapInvoiceHTML(dr) });
   pages.push({ t: 'Tax invoice amount break-up', html: invoiceHTML(dr) });
-  if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
+  if (dr.attachTs) for (const sg of invSegs(dr)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${segLabel(sg)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(tsView(segTs(pid, sg), '')) });
   return pages;
 }
 
@@ -3196,7 +3246,7 @@ function packSlots(dr) {
   out.push({ t: 'Tax invoice amount break-up', kind: 'breakup', src: 'generated', html: invoiceHTML(dr) });
   docs('afterInvoice').forEach(d => out.push(docSlot(d)));
   if (dr.signedTs?.length) dr.signedTs.forEach(f => out.push({ t: `Signed timesheets · ${f.name} (${f.pages || '?'} p)`, kind: 'ts', src: 'uploaded', fileId: f.id, pages: f.pages }));
-  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
+  else if (dr.attachTs) for (const sg of invSegs(dr)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${segLabel(sg)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(tsView(segTs(pid, sg), '')) });
   docs('end').forEach(d => out.push(docSlot(d)));
   return out;
 }
@@ -3228,11 +3278,11 @@ function renderInvoices() {
   const tot = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
   v.innerHTML = docHead(saved ? 'Invoice ' + esc(dr.no || '(no number)') : 'New invoice', 'choose what to bill → SAP details → lines → save & print', saved ? statusTag(dr) : '') + `<div class="dc"><div class="split">
   <div>
-    ${sec('iv1', '1 · Client, projects &amp; months', `
+    ${sec('iv1', '1 · Client, projects &amp; period', `
       <div class="form">
         <label class="f">Client<select id="iv-client">${opts(S.clients.map(c => [c.id, c.name]), dr.clientId, '— all clients —')}</select></label>
-        <label class="f">From month<input type="month" id="iv-from" value="${dr.from}"></label>
-        <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
+        <label class="f">From<input type="date" id="iv-from" value="${invD1(dr)}"></label>
+        <label class="f">To<input type="date" id="iv-to" value="${invD2(dr)}"></label>
       </div>
       <div class="listbox" style="margin-top:8px">
         ${projs.map(p => `<label><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')}${p.billing?.basis === 'lump' ? ' · fixed ' + money(p.billing.rate) : rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="pill warn">no rate</span>'}</span></label>`).join('') || '<div class="muted" style="padding:8px">No projects.</div>'}
@@ -3306,8 +3356,9 @@ function renderInvoices() {
     const c = IX.client.get(dr.clientId); if (c) { dr.customerCode ||= c.customerCode || ''; dr.trn ||= c.trn || ''; }
     rer();
   };
-  $('#iv-from').onchange = e => { dr.from = e.target.value; if (dr.to < dr.from) dr.to = dr.from; rer(); };
-  $('#iv-to').onchange = e => { dr.to = e.target.value; if (dr.to < dr.from) dr.from = dr.to; rer(); };
+  const setP = (a, b) => { if (!a || !b) return; if (b < a) [a, b] = [b, a]; dr.d1 = a; dr.d2 = b; dr.from = ymOf(a); dr.to = ymOf(b); rer(); };
+  $('#iv-from').onchange = e => setP(e.target.value, invD2(dr));
+  $('#iv-to').onchange = e => setP(invD1(dr), e.target.value);
   v.querySelectorAll('[data-ip]').forEach(c => c.onchange = () => {
     const id = c.dataset.ip;
     dr.projectIds = c.checked ? [...dr.projectIds, id] : dr.projectIds.filter(x => x !== id);
@@ -3431,7 +3482,8 @@ function defaultPackName(dr) {
   const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;
   const who = (p?.name || c?.name || 'Client').replace(/[\\/:*?"<>|]/g, '');
   const mn = ym => MONTH_FULL[+ym.slice(5) - 1].charAt(0) + MONTH_FULL[+ym.slice(5) - 1].slice(1).toLowerCase();
-  const per = dr.from === dr.to ? `${mn(dr.from)} ${dr.from.slice(0, 4)}`
+  const d1 = invD1(dr), d2 = invD2(dr), whole = d1 === dr.from + '-01' && d2 === `${dr.to}-${pad(dim(dr.to))}`;
+  const per = !whole ? `${fmtDMY(d1).replace(/\//g, '.')} to ${fmtDMY(d2).replace(/\//g, '.')}` : dr.from === dr.to ? `${mn(dr.from)} ${dr.from.slice(0, 4)}`
     : dr.from.slice(0, 4) === dr.to.slice(0, 4) ? `${mn(dr.from)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`
     : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
   return `Tax Invoice_${who}-${per}.pdf`;
@@ -3605,7 +3657,7 @@ function renderTracker() {
   const rowHTML = x => `<tr class="${x.isNew ? 'tk-new' : ''}${x.hidden ? ' tk-hid' : ''}"><td class="tk-sl">${++n}</td><td class="tk-d" data-trow="${esc(x.key)}" title="${x.p ? esc(x.p.name) + (x.p.code ? ' · ' + esc(x.p.code) : '') : 'Not linked to a project'} – click for options">${esc(x.desc)}${x.isNew ? ' <span class="tk-tag">new</span>' : ''}${x.hidden ? ' <span class="tk-tag">hidden</span>' : ''}</td>${cells(x)}</tr>`;
   const g0 = groups[0];
   const body = groups.map((g, gi) => (gi ? `<tr class="tk-g"><td class="tk-sl">${g.letter}</td><td class="tk-d" data-tgrp="${g.id}">${esc(g.name)}</td>${months.map(() => `<td class="tk-sp"></td><td colspan="8"></td>`).join('')}</tr>` : '') + g.rows.map(rowHTML).join('')).join('');
-  v.innerHTML = docHead('Tax Invoice Tracker', `${nR} rows${nNew ? ` · ${nNew} new project(s)` : ''} · ${TR.y} invoiced ${money(inv)} · paid ${money(paid)}`, `
+  v.innerHTML = docHead('Tax Invoice Tracker <span class="tk-help" title="Rows follow Projects &amp; sites: a new project is added at the end of its client\'s group (marked new), a deleted one is removed. Click a description for options (rename, link to a project, add or remove a row). Click a cell to fill it in – dates as 01.10.2026.">?</span>', `${nR} rows${nNew ? ` · ${nNew} new project(s)` : ''} · ${TR.y} invoiced ${money(inv)} · paid ${money(paid)}`, `
       <span class="seg"><button id="tk-prev" title="Previous year">◀</button><button class="on" disabled>${TR.y}</button><button id="tk-next" title="Next year">▶</button></span>
       <label class="small">Months <select id="tk-m0">${mOpt(TR.m0)}</select> – <select id="tk-m1">${mOpt(TR.m1)}</select></label>
       <input type="search" id="tk-q" placeholder="Find" value="${esc(TR.q)}" style="width:130px">
@@ -3614,12 +3666,11 @@ function renderTracker() {
       <label class="small" title="Green: payment received · amber: invoice sent more than ${terms} days ago and not paid"><input type="checkbox" id="tk-hint"${TR.hint ? ' checked' : ''}> Colours</label>
       <button class="btn sm" id="tk-imp" title="Load rows, groups and entries from a Trackers workbook (sheet “Tax Invoice Tracker”)">Import tracker Excel…</button>
       <button class="btn sm pri" id="tk-xl">Download Excel</button>`)
-    + `<div class="dc tk-dc"><div class="tw tk-w"><table class="tk"><thead>
+    + `<div class="tk-full"><table class="tk"><thead>
       <tr class="h1"><th class="tk-sl">Sl.No</th><th class="tk-d">Description</th>${months.map(ym => `<th class="tk-sp" rowspan="3"></th><th colspan="8">${fmtMonYY(ym)}</th>`).join('')}</tr>
       <tr class="h2"><th class="tk-sl tk-ga" rowspan="2">${g0 ? g0.letter : ''}</th><th class="tk-d tk-ga" rowspan="2"${g0 ? ` data-tgrp="${g0.id}"` : ''}>${g0 ? esc(g0.name) : ''}</th>${months.map(() => TRK_SECT.map(([l, c]) => `<th colspan="${c}">${l}</th>`).join('')).join('')}</tr>
       <tr class="h3">${months.map(() => TRK_F.map(([, l]) => `<th>${l}</th>`).join('')).join('')}</tr>
-    </thead><tbody>${body || `<tr><td colspan="${2 + months.length * 9}" class="muted" style="padding:20px">Nothing matches.</td></tr>`}</tbody></table></div>
-    <div class="muted small" style="margin-top:6px">Rows follow Projects &amp; sites: a new project is added at the end of its client's group (marked <i>new</i>), a deleted one is removed. Click a description for options (rename, link to a project, add or remove a row); click a cell to fill it in – dates as 01.10.2026.</div></div>`;
+    </thead><tbody>${body || `<tr><td colspan="${2 + months.length * 9}" class="muted" style="padding:20px">Nothing matches.</td></tr>`}</tbody></table></div>`;
   $('#tk-prev', v).onclick = () => { TR.y--; renderTracker(); };
   $('#tk-next', v).onclick = () => { TR.y++; renderTracker(); };
   $('#tk-m0', v).onchange = e => { TR.m0 = +e.target.value; if (TR.m1 < TR.m0) TR.m1 = TR.m0; renderTracker(); };
@@ -5037,6 +5088,7 @@ async function renderLive() {
 
 /* ====================== Insights ====================== */
 const INS = { from: '', to: '', project: '', site: '', person: '', shift: '', day: '' };
+for (const k of ['in-zone', 'in-pin', 'in-beats']) SEC_CLOSED.add(k);   // details – opened when needed
 async function renderInsights() {
   const v = $('#v-insights'), today = todayISO();
   INS.to ||= today; INS.from ||= addDays(today, -29);
@@ -5117,18 +5169,17 @@ async function renderInsights() {
   v.innerHTML = docHead('Insights', `${fmtDMY(INS.from)} – ${fmtDMY(INS.to)} · ${P.length} punches · ${nPings} shift positions`) + `<div class="dc">
     <div class="ins-f">
       <label class="f">From<input type="date" data-i="from" value="${INS.from}"></label><label class="f">To<input type="date" data-i="to" value="${INS.to}" max="${today}"></label>
-      <label class="f">Project<select data-i="project">${opts(projs, INS.project, 'All projects')}</select></label>
-      <label class="f">Site<select data-i="site">${opts(sites, INS.site, 'All sites')}</select></label>
-      <label class="f">Shift<select data-i="shift">${opts(S.settings.shifts, INS.shift, 'All')}</select></label>
+      <label class="f">Site<select data-i="site">${siteOptions(INS.site, 'All sites')}</select></label>
       <label class="f">Security personnel<select data-i="person">${opts(ppl, INS.person, 'Everyone')}</select></label>
       <button class="btn sm" data-q="7">7 days</button><button class="btn sm" data-q="30">30 days</button><button class="btn sm" data-q="90">90 days</button></div>
-    <div class="kpis">${kpi('Coverage', covAll[1] ? pct(...covAll) + '%' : '—', 'var(--pos)')}${kpi('On time', ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—')}${kpi('Avg late', late.length ? Math.round(late.reduce((a, p) => a + lateMin(p), 0) / late.length) + ' min' : '—', late.length ? 'var(--warn)' : '')}${kpi('Inside zone', ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—')}${kpi('Face verified', faced.length ? `${pct(fOk.length, faced.length)}%<small> of ${faced.length}</small>` : '—')}${kpi('Sent late (offline)', offl)}${kpi('Unusual', odd.length, odd.length ? 'var(--neg)' : '')}</div>
+    <div class="kpis ins-k">${kpi('Coverage', covAll[1] ? pct(...covAll) + '%' : '—', 'var(--pos)')}${kpi('On time', ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—')}${kpi('Inside zone', ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—')}${kpi('Unusual activity', odd.length, odd.length ? 'var(--neg)' : '')}</div>
     ${pe ? `<div class="sec"><div class="sh"><b>${esc(pe.name)}</b> <span class="mono muted">${esc(empCodeLabel(pe))}</span></div><div class="sb"><div class="row" style="gap:14px;align-items:flex-start">
       <span class="avatar lg" data-av="${pe.id}">${esc(initials(pe.name))}</span>
       <table class="kvt"><tbody><tr><td>Check-ins</td><td>${ins.length}</td></tr><tr><td>On time</td><td>${ins.length ? pct(ins.length - late.length, ins.length) + '%' : '—'}</td></tr><tr><td>Inside zone</td><td>${ins.length ? pct(ins.filter(p => p.inZone).length, ins.length) + '%' : '—'}</td></tr>
       <tr><td>Sites</td><td>${[...new Set(ins.map(p => p.siteName))].map(esc).join(', ') || '—'}</td></tr><tr><td>Relieved</td><td>${ins.filter(p => p.reliever).length} day(s)</td></tr><tr><td>Face</td><td>${faceRefs(pe).length ? (faced.length ? `${fOk.length}/${faced.length} matched` : 'reference photo set') : 'no reference photo – add one in Security Personnel'}</td></tr></tbody></table>
       <div style="flex:1"><label class="f" style="max-width:220px">Route on<select id="in-day">${opts(pDays.map(d => [d, fmtDMY(d)]), INS.day)}</select></label><div class="muted small" id="in-routeinfo"></div></div></div></div></div>` : ''}
     <div class="ins-g">
+      ${sec('in-odd', `Unusual activity <span class="pill ${odd.length ? 'neg' : ''}">${odd.length}</span>`, odd.length ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>What</th><th>Details</th><th></th></tr></thead><tbody>${odd.map(([a, b, id]) => `<tr><td><b>${esc(a)}</b></td><td style="white-space:normal">${esc(b)}</td><td>${id ? `<button class="btn sm" data-pd="${id}">Details</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing unusual: no shared phones, face mismatches, impossible travel or wrong phone clocks.</p>')}
       ${sec('in-map', pe ? 'Route and hotspots' : 'Hotspots – where personnel spend most time', `<div class="mapbox" id="in-map" style="height:420px"></div><p class="muted small" style="margin:6px 0 0">${pe ? 'Line = route that day (check-in → positions every 10 min → check-out). ' : ''}Circles = time spent on shift in each ~35 m square${pe ? '' : '; pick a person to see their route'}. Positions are recorded only while the app is open on shift.</p>`)}
       ${sec('in-cov', 'Coverage by site <span class="cnt">present ÷ planned (allocated, not OFF)</span>', covRows.length ? `<div class="tw" style="max-height:360px"><table><thead><tr><th>Site</th><th class="num">Planned</th><th class="num">Present</th><th>Coverage</th><th class="num" title="days with fewer present than planned">Short days</th></tr></thead><tbody>${covRows.map(r => `<tr><td>${esc(siteName(r.s))}</td><td class="num">${r.plan}</td><td class="num">${r.pres}</td><td>${pbar(r.pc, r.pc < 85 ? 'n' : r.pc < 95 ? 'w' : 'p')}</td><td class="num">${r.short || ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">No allocations in this range.</p>')}
       ${sec('in-pun', 'Punctuality', `${weeks.length ? `<div class="muted small">On-time check-ins per week</div><div class="spark" style="margin:6px 0 22px">${weeks.map(([k, [a, b]]) => `<i style="height:${Math.max(3, pct(b, a))}%" title="Week of ${fmtDMY(k)}: ${pct(b, a)}% on time (${a})"><b>${k.slice(8)}/${k.slice(5, 7)}</b></i>`).join('')}</div>` : ''}
@@ -5138,7 +5189,7 @@ async function renderInsights() {
       ${sec('in-beats', `Beat compliance <span class="cnt">${allBeats().length} beat(s)</span>`, BR.length ? `<div class="tw" style="max-height:200px"><table><thead><tr><th>Beat</th><th>Site</th><th class="num">Shifts</th><th class="num">Rounds done</th><th>Completion</th><th>Most missed</th></tr></thead><tbody>${[...byBeat.values()].map(x => { const pc = pct(x.done, x.exp), mm = Object.entries(x.missed).sort((a, b) => b[1] - a[1])[0]; return `<tr><td><b>${esc(x.beat.name)}</b></td><td>${esc(x.site.name)}</td><td class="num">${x.shifts}</td><td class="num">${x.done} / ${x.exp}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="small">${mm ? `${esc(cpName(x.beat, mm[0]))} (${mm[1]}×)` : '—'}</td></tr>`; }).join('')}</tbody></table></div>
         <div class="tw" style="max-height:260px;margin-top:8px"><table><thead><tr><th>Security personnel</th><th>Beat</th><th class="num">Shifts</th><th>Rounds completed</th><th class="num">Checkpoints missed</th><th class="num">Scans / GPS</th></tr></thead><tbody>${[...byGuard.values()].sort((a, b) => pct(a.done, a.exp) - pct(b.done, b.exp)).map(g => { const pc = pct(g.done, g.exp); return `<tr data-pp="${g.emp.id}" style="cursor:pointer"><td>${esc(g.emp.name)} <span class="mono muted">${esc(g.emp.empCode || '')}</span></td><td class="small">${esc([...g.beats].join(', '))}</td><td class="num">${g.shifts}</td><td>${pbar(pc, pc < 60 ? 'n' : pc < 90 ? 'w' : 'p')}</td><td class="num">${g.miss || ''}</td><td class="num">${g.scans} / ${g.gps}</td></tr>`; }).join('')}</tbody></table></div>`
         : `<p class="muted" style="margin:0">${allBeats().length ? 'No shifts at sites with a patrol beat in this range.' : 'No patrol beats yet – add them in Projects &amp; sites → Patrol beats.'}</p>`)}
-      ${sec('in-odd', `Unusual activity <span class="pill ${odd.length ? 'neg' : ''}">${odd.length}</span>`, odd.length ? `<div class="tw" style="max-height:330px"><table><thead><tr><th>What</th><th>Details</th><th></th></tr></thead><tbody>${odd.map(([a, b, id]) => `<tr><td><b>${esc(a)}</b></td><td style="white-space:normal">${esc(b)}</td><td>${id ? `<button class="btn sm" data-pd="${id}">Details</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nothing unusual: no shared phones, face mismatches, impossible travel or wrong phone clocks.</p>')}
+
     </div></div>`;
   // events
   bindSecs(v);
@@ -6239,7 +6290,22 @@ function enhanceMonthInput(inp) {
     setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
   };
 }
-new MutationObserver(() => document.querySelectorAll('input[type="month"]:not([data-mp])').forEach(enhanceMonthInput)).observe(document.documentElement, { childList: true, subtree: true });
+/* ---------- date fields: always dd/mm/yyyy, typed or picked from the calendar ----------
+   The native <input type="date"> stays (out of sight) and keeps the value + change event, so existing handlers keep working. */
+function enhanceDateInput(inp) {
+  if (inp.dataset.dp || inp.closest('.ts-sheet')) return; inp.dataset.dp = '1';
+  const box = document.createElement('span'); box.className = 'dp';
+  const t = document.createElement('input'); t.type = 'text'; t.className = 'dp-t'; t.placeholder = 'dd/mm/yyyy'; t.inputMode = 'numeric'; t.autocomplete = 'off';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'dp-b'; b.title = 'Pick a date'; b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2Zm-2 7h14v10H5Z"/></svg>';
+  if (inp.id) t.dataset.for = inp.id;
+  const paint = () => { t.value = inp.value ? fmtDMY(inp.value) : ''; };
+  inp.before(box); box.append(t, b, inp); paint();
+  const commit = () => { const v = t.value.trim(), d = v ? trkParseDate(v) : ''; if (d === null || (d && ((inp.min && d < inp.min) || (inp.max && d > inp.max)))) { toast('Type the date as dd/mm/yyyy' + (inp.max && d > inp.max ? ' (not after ' + fmtDMY(inp.max) + ')' : '')); paint(); return; } if (d !== inp.value) { inp.value = d; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } paint(); };
+  t.onchange = commit; t.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } };
+  b.onclick = () => { try { inp.showPicker(); } catch (e) { inp.focus(); } };
+  inp.addEventListener('change', paint); inp.addEventListener('input', paint);
+}
+new MutationObserver(() => { document.querySelectorAll('input[type="month"]:not([data-mp])').forEach(enhanceMonthInput); document.querySelectorAll('input[type="date"]:not([data-dp])').forEach(enhanceDateInput); }).observe(document.documentElement, { childList: true, subtree: true });
 
 /* ---------- Getting started: the steps in the order they are done, with what is already set up ---------- */
 function guideSteps() {
@@ -6721,25 +6787,23 @@ const payTotVals = (t, man) => [t.hours, t.present, ...t.weeks, t.sl, t.al, t.ph
 function renderPayroll() {
   const v = $('#v-payroll'); PV_.ym ||= AV.ym || cycleOfDate(todayISO());
   const ym = PV_.ym, days = payDays(ym), rows = payRows(ym), man = S.payroll[ym] || {}, { start, end } = payrollCycle(ym);
-  const cls = x => x === '' ? '' : typeof x === 'number' ? '' : x === 'A' ? ' pa' : x === 'OFF' ? ' po' : /^(AL|SL|EL|HD)$/.test(x) ? ' pl' : ' px';
+  const cls = () => '', col = x => x === '' ? '' : typeof x === 'number' ? codeDef('P').color : x === 'HD' ? codeDef('PH').color : IX.code.has(x) ? codeDef(x).color : '#EEF1F6';   // the attendance colours
   const LIM = 150, shown = rows.slice(0, PV_.all ? rows.length : LIM);
   const body = shown.map((r, i) => {
     const m = man[r.e.id] || {}, t = payTotals(r.v, days, m), tv = payTotVals(t, m);
     return `<tr><td class="py-n">${i + 1}</td><td class="py-c">${esc(r.e.empCode || '')}</td><td class="py-nm">${esc(r.e.name)}</td><td>${r.e.doj ? fmtDMY(r.e.doj) : ''}</td><td>${esc(r.e.trade || '')}</td><td>${esc(r.site)}</td><td>LS</td><td>${esc(S.settings.companyShort || '')}</td><td>${esc(r.shift)}</td><td>${esc(r.cost)}</td><td class="py-hd ed" data-hd="${r.e.id}" title="Hours a worked (P) day counts for ${esc(r.e.name)} – click to change">${r.H}</td>`
-      + r.v.map((x, j) => `<td class="py-d${cls(x)}${days[j].dn === 'SUN' ? ' sun' : days[j].dn === 'HD' ? ' hd' : ''}${r.src[j] ? ' ed s' + r.src[j] : ''}"${r.src[j] ? ` data-ph="${r.e.id}|${days[j].d}" title="${r.src[j] === 'o' ? 'Typed in Payroll' : r.src[j] === 'a' ? 'From the phone app check-in / check-out' : 'Hrs/day of this person'} – click to change"` : ''}>${esc(x)}</td>`).join('')
+      + r.v.map((x, j) => `<td style="${x === '' ? '' : `background:${col(x)}`}" class="py-d${cls(x)}${days[j].dn === 'SUN' ? ' sun' : days[j].dn === 'HD' ? ' hd' : ''}${r.src[j] ? ' ed s' + r.src[j] : ''}"${r.src[j] ? ` data-ph="${r.e.id}|${days[j].d}" title="${r.src[j] === 'o' ? 'Typed in Payroll' : r.src[j] === 'a' ? 'From the phone app check-in / check-out' : 'Hrs/day of this person'} – click to change"` : ''}>${esc(x)}</td>`).join('')
       + tv.map((x, j) => { const k = j - 19; const ed = k >= 0 && k < 4 ? PAY_MAN[k][0] : j === tv.length - 2 ? 'remarks' : null; return `<td class="py-t${ed ? ' ed' : ''}"${ed ? ` data-pm="${r.e.id}|${ed}"` : ''}>${typeof x === 'number' ? (Number.isInteger(x) ? x : x.toFixed(2)) : esc(x)}</td>`; }).join('') + '</tr>';
   }).join('');
-  v.innerHTML = docHead('Payroll attendance', `${fmtDMY(start)} – ${fmtDMY(end)} · ${rows.length} personnel`, `
+  v.innerHTML = docHead('Payroll attendance <span class="tk-help" title="Days come from Attendance (change them there). Worked (P) days show each person\'s hours – drivers 16, others 12 by default; click Hrs/day to change a person, or a day to change that day (never 0). Codes and public holidays are in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here.">?</span>', `${fmtDMY(start)} – ${fmtDMY(end)} · ${rows.length} personnel`, `
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
       <input type="search" id="py-q" placeholder="Find name / code" value="${esc(PV_.q)}" style="width:150px">
       <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
       <button class="btn sm pri" id="py-xl">Download Excel</button>`)
-    + `<div class="dc tk-dc"><div class="tw tk-w"><table class="tk py"><thead>
+    + `<div class="tk-full"><table class="tk py"><thead>
       <tr><th colspan="11" class="py-title">${esc(payTitle(ym))}</th>${days.map(x => `<th class="${x.dn === 'HD' ? 'hd' : x.dn === 'SUN' ? 'sun' : ''}">${x.dn}</th>`).join('')}<th colspan="${PAY_TOT_H.length}"></th></tr>
       <tr>${['S.No', 'Employee Code', 'Employee Name', 'DOJ', 'Designation', 'Department/Sub-Department', 'Division', 'Business Unit', 'Shift', 'COST CODE', 'Hrs/day'].map((h, i) => `<th class="${['py-n', 'py-c', 'py-nm'][i] || ''}">${h}</th>`).join('')}${days.map(x => `<th class="py-d">${x.d.slice(8)}/${x.d.slice(5, 7)}</th>`).join('')}${PAY_TOT_H.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
-    </thead><tbody>${body || `<tr><td colspan="40" class="muted" style="padding:20px">No personnel in this payroll month.</td></tr>`}</tbody></table></div>
-    ${rows.length > shown.length ? `<div class="row" style="margin-top:6px"><span class="muted small">Showing ${shown.length} of ${rows.length} – the Excel has everyone.</span><button class="btn sm" id="py-all">Show all</button></div>` : ''}
-    <div class="muted small" style="margin-top:6px">Days come from Attendance (change them there). Worked (P) days show each person's hours – drivers ${+S.settings.driverHours || 16}, others ${+S.settings.shiftHours || 12}; click Hrs/day to change a person, or a day to change that day (never 0). Codes and public holidays are set in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here.</div></div>`;
+    </thead><tbody>${body || `<tr><td colspan="40" class="muted" style="padding:20px">No personnel in this payroll month.</td></tr>`}</tbody></table>${rows.length > shown.length ? `<div class="row tk-more"><span class="muted small">Showing ${shown.length} of ${rows.length} – the Excel has everyone.</span><button class="btn sm" id="py-all">Show all</button></div>` : ''}</div>`;
   $('#py-ym', v).onchange = e => { PV_.ym = e.target.value; renderPayroll(); };
   let qt; $('#py-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { PV_.q = e.target.value; renderPayroll(); const q = $('#py-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
   $('#py-app', v).onchange = e => { PV_.app = e.target.checked; renderPayroll(); };
@@ -6993,7 +7057,7 @@ async function pullPhoneDocs(cl, since) {
   for (const x of r.body.docs) {
     if (Object.values(S.empDocs).some(d => d.remote === x.id)) continue;
     const e = empByCode(x.code); if (!e) continue;
-    const imgs = []; for (let i = 0; i < x.pages; i++) { const b = await cl.call('GET', 'admin/doc', null, { query: { id: x.id, page: i } }); if (b.status === 200 && (b.blob || b.bytes)) imgs.push({ img: b.blob || new Blob([b.bytes], { type: b.type || 'image/jpeg' }) }); }
+    const imgs = []; for (let i = 0; i < x.pages; i++) { const b = await cl.call('GET', 'admin/doc', null, { query: { id: x.id, page: i } }); if (b.status === 200 && (b.blob || b.bytes)) { const bl = b.blob || new Blob([b.bytes], { type: b.type || 'image/jpeg' }); imgs.push((x.kinds?.[i] === 'pdf' || /pdf/.test(bl.type)) ? { pdf: bl } : { img: bl }); } }
     if (!imgs.length) continue;
     await addEmpDoc(e.id, x.type, x.ym, await PDFX.build(imgs), { src: 'phone', remote: x.id, by: x.by, name: `${x.code}_${x.type}_${x.ym}_${x.id.slice(-4)}.pdf` }); n++;
   }

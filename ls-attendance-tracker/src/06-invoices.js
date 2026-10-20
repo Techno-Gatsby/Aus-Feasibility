@@ -9,14 +9,24 @@ function newInvoiceDraft() {
   return { id: uid('i'), no: '', date: todayISO(), clientId: '', projectIds: [], from: m, to: m, entity: '', trn: '', customerCode: '', poNo: '', sapProject: '', orderCode: '', custAddress: '', payTerms: S.settings.payTerms, advance: 0, retention: 0, lines: [], withSap: true, attachTs: true, notes: '' };
 }
 
+/** the invoice period as dates (any span, e.g. 15 days); older drafts only have from/to months */
+const invD1 = dr => dr.d1 || dr.from + '-01', invD2 = dr => dr.d2 || `${dr.to}-${pad(dim(dr.to))}`;
+/** each month the period touches: { m, a, b, full } – a…b is the part of the month inside the period */
+function invSegs(dr) {
+  const d1 = invD1(dr), d2 = invD2(dr);
+  return monthsBetween(ymOf(d1), ymOf(d2)).map(m => { const a = d1 > m + '-01' ? d1 : m + '-01', e = `${m}-${pad(dim(m))}`, b = d2 < e ? d2 : e; return { m, a, b, full: a === m + '-01' && b === e }; });
+}
+const segLabel = s => s.full ? fmtMonYY(s.m) : `${fmtDMY(s.a)}–${fmtDMY(s.b)}`;
+const segTs = (pid, s) => s.full ? buildTimesheet(pid, s.m) : buildTimesheet(pid, s.a, s.b);
 function invoiceLines(dr) {
   const lines = [];
   const multi = dr.projectIds.length > 1;
-  for (const m of monthsBetween(dr.from, dr.to)) {
+  for (const sg of invSegs(dr)) {
+    const m = sg.m, lb = segLabel(sg), nd = daysBetween(sg.a, sg.b) + 1;
     for (const pid of dr.projectIds) {
       const p = IX.proj.get(pid); if (!p) continue;
       const b = p.billing || {}; const rate = +b.rate || 0; const unit = b.unit || 'Security';
-      const ts = buildTimesheet(pid, m), md = ts.total, D = dim(m);
+      const ts = segTs(pid, sg), md = ts.total, D = dim(m);
       if (!md && !['fixed', 'lump'].includes(b.basis)) continue;           // nothing worked on this project that month
       if (!b.basis || b.basis === 'ratecard') {
         // Same shape as Latinem invoices: "22 Security @ 31 Days", "1 Security @ 5 Days" – rate × days ÷ days in month
@@ -26,18 +36,18 @@ function invoiceLines(dr) {
         for (const { emp, d } of perEmp.values()) { if (!d) continue; const k = `${emp.trade || 'SECURITY GUARD'}|${d}`; groups.set(k, (groups.get(k) || 0) + 1); }
         [...groups.entries()].sort((x, y) => x[0].split('|')[0].localeCompare(y[0].split('|')[0]) || +y[0].split('|')[1] - +x[0].split('|')[1]).forEach(([k, n]) => {
           const [trade, d] = k.split('|'); const rt = rateFor(p, trade);
-          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${fmtMonYY(m)}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
+          lines.push({ desc: (multi ? p.name + ' – ' : '') + `${lb}  ${n} ${unitFor(trade)} @ ${d} Days`, rate: rt, amount: round2(n * rt * +d / D), vat: +b.vat || 0, src: { pid, m, md: n * +d }, noRate: !rt });
         });
         continue;
       }
       let amt = 0, desc = '';
       switch (b.basis) {
-        case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${fmtMonYY(m)}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
-        case 'daily': amt = md * rate; desc = `${fmtMonYY(m)}  ${md} man-days (${unit})`; break;
-        case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${fmtMonYY(m)}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
-        case 'lump': amt = rate; desc = `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}`; break;
-        case 'fixed': { const q = +b.posts || 0; amt = q * rate; desc = `${fmtMonYY(m)}  ${q} ${unit} @ ${D} Days`; break; }
-        default: { const q = md / D; amt = md * rate / D; desc = `${fmtMonYY(m)}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
+        case 'monthly_26': case 'monthly_30': { const div = b.basis === 'monthly_26' ? 26 : 30; amt = md * rate / div; desc = `${lb}  ${md} man-days (${unit}) @ ${money(rate)} / ${div}`; break; }
+        case 'daily': amt = md * rate; desc = `${lb}  ${md} man-days (${unit})`; break;
+        case 'hourly': { const h = +S.settings.shiftHours || 12; amt = md * h * rate; desc = `${lb}  ${md} shifts × ${h} hrs = ${md * h} hrs (${unit})`; break; }
+        case 'lump': amt = rate * nd / D; desc = sg.full ? `Security services for the month of ${MONTH_FULL[+m.slice(5) - 1][0] + MONTH_FULL[+m.slice(5) - 1].slice(1).toLowerCase()} ${m.slice(0, 4)}` : `Security services ${lb} (${nd} of ${D} days)`; break;
+        case 'fixed': { const q = +b.posts || 0; amt = q * rate * nd / D; desc = `${lb}  ${q} ${unit} @ ${nd} Days`; break; }
+        default: { const q = md / D; amt = md * rate / D; desc = `${lb}  ${qtyFmt(q)} ${unit} @ ${D} Days`; }
       }
       lines.push({ desc: (multi ? p.name + ' – ' : '') + desc, rate, amount: round2(amt), vat: +b.vat || 0, src: { pid, m, md } });
     }
@@ -143,7 +153,7 @@ function packPages(dr) {
   const pages = [];
   if (dr.withSap !== false) pages.push({ t: 'Tax invoice (SAP fields)', html: sapInvoiceHTML(dr) });
   pages.push({ t: 'Tax invoice amount break-up', html: invoiceHTML(dr) });
-  if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
+  if (dr.attachTs) for (const sg of invSegs(dr)) for (const pid of dr.projectIds) pages.push({ t: `Timesheet ${segLabel(sg)} · ${IX.proj.get(pid)?.name || ''}`, html: tsSheetHTML(tsView(segTs(pid, sg), '')) });
   return pages;
 }
 
@@ -157,7 +167,7 @@ function packSlots(dr) {
   out.push({ t: 'Tax invoice amount break-up', kind: 'breakup', src: 'generated', html: invoiceHTML(dr) });
   docs('afterInvoice').forEach(d => out.push(docSlot(d)));
   if (dr.signedTs?.length) dr.signedTs.forEach(f => out.push({ t: `Signed timesheets · ${f.name} (${f.pages || '?'} p)`, kind: 'ts', src: 'uploaded', fileId: f.id, pages: f.pages }));
-  else if (dr.attachTs) for (const m of monthsBetween(dr.from, dr.to)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${fmtMonYY(m)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(tsView(buildTimesheet(pid, m), '')) });
+  else if (dr.attachTs) for (const sg of invSegs(dr)) for (const pid of dr.projectIds) out.push({ t: `Timesheet ${segLabel(sg)} · ${IX.proj.get(pid)?.name || ''}`, kind: 'ts', src: 'generated', html: tsSheetHTML(tsView(segTs(pid, sg), '')) });
   docs('end').forEach(d => out.push(docSlot(d)));
   return out;
 }
@@ -189,11 +199,11 @@ function renderInvoices() {
   const tot = S.invoices.reduce((a, x) => { const inc = invTotals(x).inc, paid = +x.track?.paidAmt || (x.track?.paidOn ? inc : 0); a.i += inc; a.p += paid; return a; }, { i: 0, p: 0 });
   v.innerHTML = docHead(saved ? 'Invoice ' + esc(dr.no || '(no number)') : 'New invoice', 'choose what to bill → SAP details → lines → save & print', saved ? statusTag(dr) : '') + `<div class="dc"><div class="split">
   <div>
-    ${sec('iv1', '1 · Client, projects &amp; months', `
+    ${sec('iv1', '1 · Client, projects &amp; period', `
       <div class="form">
         <label class="f">Client<select id="iv-client">${opts(S.clients.map(c => [c.id, c.name]), dr.clientId, '— all clients —')}</select></label>
-        <label class="f">From month<input type="month" id="iv-from" value="${dr.from}"></label>
-        <label class="f">To month<input type="month" id="iv-to" value="${dr.to}"></label>
+        <label class="f">From<input type="date" id="iv-from" value="${invD1(dr)}"></label>
+        <label class="f">To<input type="date" id="iv-to" value="${invD2(dr)}"></label>
       </div>
       <div class="listbox" style="margin-top:8px">
         ${projs.map(p => `<label><input type="checkbox" data-ip="${p.id}" ${dr.projectIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)} <span class="muted small">${esc(p.code || '')}${p.billing?.basis === 'lump' ? ' · fixed ' + money(p.billing.rate) : rateFor(p, 'SECURITY GUARD') ? ' · guard ' + money(rateFor(p, 'SECURITY GUARD')) : ' · <span class="pill warn">no rate</span>'}</span></label>`).join('') || '<div class="muted" style="padding:8px">No projects.</div>'}
@@ -267,8 +277,9 @@ function renderInvoices() {
     const c = IX.client.get(dr.clientId); if (c) { dr.customerCode ||= c.customerCode || ''; dr.trn ||= c.trn || ''; }
     rer();
   };
-  $('#iv-from').onchange = e => { dr.from = e.target.value; if (dr.to < dr.from) dr.to = dr.from; rer(); };
-  $('#iv-to').onchange = e => { dr.to = e.target.value; if (dr.to < dr.from) dr.from = dr.to; rer(); };
+  const setP = (a, b) => { if (!a || !b) return; if (b < a) [a, b] = [b, a]; dr.d1 = a; dr.d2 = b; dr.from = ymOf(a); dr.to = ymOf(b); rer(); };
+  $('#iv-from').onchange = e => setP(e.target.value, invD2(dr));
+  $('#iv-to').onchange = e => setP(invD1(dr), e.target.value);
   v.querySelectorAll('[data-ip]').forEach(c => c.onchange = () => {
     const id = c.dataset.ip;
     dr.projectIds = c.checked ? [...dr.projectIds, id] : dr.projectIds.filter(x => x !== id);
@@ -392,7 +403,8 @@ function defaultPackName(dr) {
   const c = IX.client.get(dr.clientId); const p = dr.projectIds.length === 1 ? IX.proj.get(dr.projectIds[0]) : null;
   const who = (p?.name || c?.name || 'Client').replace(/[\\/:*?"<>|]/g, '');
   const mn = ym => MONTH_FULL[+ym.slice(5) - 1].charAt(0) + MONTH_FULL[+ym.slice(5) - 1].slice(1).toLowerCase();
-  const per = dr.from === dr.to ? `${mn(dr.from)} ${dr.from.slice(0, 4)}`
+  const d1 = invD1(dr), d2 = invD2(dr), whole = d1 === dr.from + '-01' && d2 === `${dr.to}-${pad(dim(dr.to))}`;
+  const per = !whole ? `${fmtDMY(d1).replace(/\//g, '.')} to ${fmtDMY(d2).replace(/\//g, '.')}` : dr.from === dr.to ? `${mn(dr.from)} ${dr.from.slice(0, 4)}`
     : dr.from.slice(0, 4) === dr.to.slice(0, 4) ? `${mn(dr.from)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`
     : `${mn(dr.from)} ${dr.from.slice(0, 4)} to ${mn(dr.to)} ${dr.to.slice(0, 4)}`;
   return `Tax Invoice_${who}-${per}.pdf`;
