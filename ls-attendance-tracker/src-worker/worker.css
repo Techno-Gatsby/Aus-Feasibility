@@ -659,17 +659,47 @@ body:has(#b-med) main{padding-bottom:calc(var(--tab) + var(--dock) + 8px + env(s
 .sup .acts select.f{flex:1 1 100%;min-height:44px;padding-inline-end:34px;white-space:nowrap;text-overflow:ellipsis}
 .sup .acts .btn{flex:1 1 0;white-space:nowrap}
 
-/* short screens (laptop window, small phone): Today gives the room to the map */
-body.tight main{padding-top:8px}
-body.tight .synthetic{display:none}
-body.tight .place{margin-bottom:6px}
-body.tight .place .n{font-size:18px}
-body.tight .place .z{margin-top:0;font-size:12px}
-body.tight .clockw{padding:7px 12px;margin-bottom:8px}
-body.tight .k-stack,body.tight .k-ends{display:none}
-body.tight .k-time{font-size:24px}
-body.tight .k-rule{margin-top:6px}
-body.tight .btn.medb{min-height:36px}
-body.tight .big{min-height:50px}
-body.tight .big .bi{width:32px;height:32px}
-body.tight .big small{display:none}
+
+/* =========================================================================
+   Today: full-screen map with a bottom sheet (maps / ride-app pattern) –
+   the map owns the screen, the sheet holds who, time, status and the action.
+   ========================================================================= */
+body main:has(.tview){max-width:none;padding:0!important}
+.tview{position:relative;overflow:hidden}
+.tmap{position:absolute;inset:0;margin:0;border:0;border-radius:0;box-shadow:none}
+.tmap #map{height:100%!important}
+.tmap-top{position:absolute;z-index:5;top:12px;left:12px;right:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;pointer-events:none}
+.tmap-top>*{pointer-events:auto}
+.tmap .modechip{position:static;box-shadow:var(--sh2)}
+:root[data-theme=light] .tmap .modechip{background:#fff;border-color:var(--line)}
+:root[data-theme=light] .tmap .modechip button.on{background:var(--s3);box-shadow:none}
+.tmap .zchip{box-shadow:var(--sh2);padding:7px 12px}
+:root[data-theme=light] .tmap .zchip{background:#fff}
+.tmap .tools{bottom:auto;inset-inline-end:12px}
+.tmap .tools button{width:44px;height:44px;border-radius:12px}
+.tmap .leaflet-control-attribution{margin-bottom:0}
+
+.tsheet{position:absolute;z-index:6;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;background:var(--s1);border-radius:22px 22px 0 0;box-shadow:0 -10px 30px rgba(16,24,40,.14),0 -1px 0 var(--line);padding:6px 16px 14px}
+@media (min-width:600px){.tsheet{bottom:14px;border-radius:22px;box-shadow:var(--sh3)}}
+.tsheet .grab{display:block;width:38px;height:4px;border-radius:2px;background:var(--line3);margin:2px auto 10px}
+.ts-row{display:flex;align-items:flex-start;gap:12px}
+.tsheet .place{margin:0;min-width:0}
+.tsheet .place .n{font-size:19px;line-height:1.2;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tsheet .place .z{margin-top:2px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts-clock{flex:none;display:flex;align-items:baseline;gap:4px;font-variant-numeric:tabular-nums}
+.ts-clock .k-time{font-size:26px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.k-mer{font:600 11px var(--sans);color:var(--mute)}.k-mer span:not(.on){display:none}
+.tsheet .clockw{display:block;background:none;border:0;box-shadow:none;border-radius:0;padding:0;margin:12px 0 0}
+.ts-st{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:26px}
+.ts-st b{font:650 15px var(--sans)}.ts-st b.on{color:var(--sage);font-variant-numeric:tabular-nums}
+.ts-st .k-last{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute);white-space:nowrap;border:0;margin:0;padding:0}
+.ts-st .k-last svg.i{width:14px;height:14px}
+.ts-st .k-last .chip{padding:2px 7px;font-size:11px}
+.tsheet .k-rule{margin-top:8px}
+.tsheet .k-ends{margin-top:4px}.tsheet .k-ends .k{font-size:11px}
+.tsheet .patrol{margin:12px 0 0;box-shadow:none}
+.tsheet .q{margin:12px 0 0}
+.tsheet .big{margin-top:14px;min-height:60px}
+.medlink{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:6px;min-height:40px;border:0;background:none;color:var(--bronze);font:600 14px var(--sans);cursor:pointer;border-radius:10px}
+.medlink:active{background:var(--bronze-bg)}
+.medlink svg.i{width:17px;height:17px}

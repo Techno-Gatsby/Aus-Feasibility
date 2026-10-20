@@ -165,7 +165,7 @@ function paintGps() {
     const L = window.L; W.layers.me?.remove(); W.layers.acc?.remove();
     W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: cssv('--cyan'), weight: 1, fillOpacity: .08, dashArray: '3 4' }).addTo(W.map);
     W.layers.me = L.circleMarker([g.lat, g.lng], { radius: 7, color: cssv('--bg') || '#050606', weight: 2.5, fillColor: cssv('--cyan'), fillOpacity: 1 }).addTo(W.map);
-    if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend([p.lat, p.lng])); W.map.fitBounds(b.pad(0.6), { maxZoom: 17 }); }
+    if (!W.layers.fitted) { W.layers.fitted = true; const b = L.latLngBounds([[g.lat, g.lng]]); (W.prof.site?.pins || []).forEach(p => b.extend(L.latLng(p.lat, p.lng).toBounds(2 * (p.radius || 100)))); W.map.fitBounds(b.pad(0.15), { maxZoom: 17, paddingTopLeft: [0, 56], paddingBottomRight: [0, W.sheetH || 0] }); }
   }
 }
 // The position watch only reports when the phone moves, so a phone standing still keeps an older reading: one under
@@ -286,7 +286,7 @@ async function scanCheckpoint() {
 
 /* ---------- tour of the Today screen (only when ? is tapped) ---------- */
 function tour() {
-  const steps = [['.place', 'tour1'], ['.clockw', 'tour2'], ['#mapcard', 'tour3'], ['.patrol', 'tour6'], ['#b-punch', 'tour4'], ['.tabs-b', 'tour5']].filter(([q]) => { const e = $(q); return e && e.getBoundingClientRect().height > 4; });
+  const steps = [['.place', 'tour1'], ['.clockw', 'tour2'], ['#map', 'tour3'], ['.patrol', 'tour6'], ['#b-punch', 'tour4'], ['.tabs-b', 'tour5']].filter(([q]) => { const e = $(q); return e && e.getBoundingClientRect().height > 4; });
   let i = 0; const hole = document.createElement('div'), tip = document.createElement('div'); hole.className = 'tour-hole'; tip.className = 'tour-tip';
   document.body.append(hole, tip);
   const end = () => { hole.remove(); tip.remove(); removeEventListener('resize', place); };
@@ -397,20 +397,23 @@ function renderHome() {
   const win = () => { if (!start) return null; const [h, m] = start.split(':').map(Number), n = new Date(), a = new Date(n); a.setHours(h, m, 0, 0); if (a - n > 6 * 3600e3) a.setDate(a.getDate() - 1); const e = new Date(+a + hrsLen * 3600e3); return { a, e, p: Math.min(1, Math.max(0, (n - a) / (e - a))) }; };
   const W0 = win(), endT = W0 ? `${pad(W0.e.getHours())}:${pad(W0.e.getMinutes())}` : '';
   const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
-  shell(`<section class="place"><div class="pl1"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><span id="gps"></span></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)} <span id="recst">${recLine()}</span></div></section>
-    <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
-      <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b>${today.length ? (p => `<span class="k-last list">${ic(p.type === 'in' ? 'in' : 'out')}<span class="grow">${p.type === 'in' ? t('in') : t('out')} ${hhmm(p.ts)}${p.hours ? ` · ${p.hours} h` : ''}</span>${st(p)}</span>`)(today[today.length - 1]) : ''}</div>
-      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
-    ${patrolCard()}
-    <div id="qbar" class="q" hidden></div>
-    <div class="mapcard" id="mapcard"><div id="map"></div>
-      <div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div>
-      <div class="tools"><button id="b-exp" aria-label="${t('expand')}" hidden>${ic('expand')}</button><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div>
-      <div class="cap"><span class="d"></span><span>${t('live')} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')}</span></div>
-      <button class="ib x" id="b-mapx">${ic('x')} ${t('close')}</button></div>
-    <button class="btn wide medb" id="b-med">${ic('camera')} ${t('medSend')}</button>`, {
-    tab: 'home', crumb: P.site?.name || t('today'),
-    dock: `<button class="big ${open ? 'out' : 'in'}" id="b-punch"><span class="bi">${ic(open ? 'out' : 'in')}</span><span class="grow"><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('onShift')} · ${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>` });
+  // map full screen, everything else in a bottom sheet (the ride-app / maps pattern)
+  shell(`<div class="tview" id="tview">
+    <div class="mapcard tmap" id="mapcard"><div id="map"></div>
+      <div class="tmap-top"><div class="modechip" id="basechip"><button data-b="map">${t('mapL')}</button><button data-b="sat">${t('satL')}</button></div><span id="gps"></span></div>
+      <div class="tools" id="maptools"><button id="b-loc" aria-label="my location" hidden>${ic('locate')}</button></div></div>
+    <section class="tsheet" id="tsheet"><span class="grab" aria-hidden="true"></span>
+      <div class="ts-row">
+        <div class="place grow"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${radius} m ${t('zoneR').replace(/^m\s*/, '')} <span id="recst">${recLine()}</span></div></div>
+        <div class="ts-clock"><span class="k-time" id="k-time"></span><span class="k-mer"><span id="k-am">AM</span><span id="k-pm">PM</span></span><span id="k-day" hidden></span></div></div>
+      <div class="clockw">
+        <div class="ts-st"><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b>${today.length ? (p => `<span class="k-last list">${ic(p.type === 'in' ? 'in' : 'out')}<span>${p.type === 'in' ? t('in') : t('out')} ${hhmm(p.ts)}${p.hours ? ` · ${p.hours} h` : ''}</span>${st(p)}</span>`)(today[today.length - 1]) : ''}</div>
+        ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</div>
+      ${patrolCard()}
+      <div id="qbar" class="q" hidden></div>
+      <button class="big ${open ? 'out' : 'in'}" id="b-punch"><span class="bi">${ic(open ? 'out' : 'in')}</span><span class="grow"><span class="lab">${open ? t('checkOut') : t('checkIn')}</span><small>${open ? `${t('onShift')} · ${t('since')} ${hhmm(open.ts)}` : t('recNote')}</small></span>${ic('arrow')}</button>
+      <button class="medlink" id="b-med">${ic('camera')}<span>${t('medSend')}</span></button>
+    </section></div>`, { tab: 'home', crumb: P.site?.name || t('today') });
   $('#b-punch').onclick = () => { haptic(12); punch(open ? 'out' : 'in'); };
   const tick = () => {
     const n = new Date(), h = n.getHours(), el = $('#k-time'); if (!el) return clearInterval(W.tick);
@@ -421,23 +424,19 @@ function renderHome() {
     const w2 = win(); if (w2 && $('#k-fill')) { $('#k-fill').style.transform = `scaleX(${w2.p.toFixed(3)})`; $('#k-now').style.left = `calc(${(w2.p * 100).toFixed(1)}% - 1px)`; }
   };
   tick(); W.tick = setInterval(tick, 1000);
-  const card = $('#mapcard');
-  $('#b-exp').onclick = () => { card.classList.add('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
-  $('#b-mapx').onclick = () => { card.classList.remove('full'); setTimeout(() => W.map?.invalidateSize(), 60); };
   if ($('#b-tour')) $('#b-tour').onclick = tour;
   if ($('#b-scan')) $('#b-scan').onclick = scanCheckpoint;
   $$('#basechip [data-b]').forEach(b => b.onclick = () => { if (!W.map) return; LSMap.setBase(W.map, b.dataset.b); $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x === b)); });
   paintGps(); updateQueueBar(); fitMap(); drawMap();
   $('#b-med')?.addEventListener('click', () => scanReport(W.prof.worker, false));
 }
-/** Today fits one screen: the map takes whatever height is left above the medical button and the check-in dock */
+/** Today fills the screen between the header and the tabs; the map tools sit just above the sheet */
 function fitMap() {
-  const m = $('#map'), card = $('#mapcard'); if (!m || card.classList.contains('full')) return;
-  const dock = $('.dock'), med = $('#b-med');
-  const avail = () => Math.floor((dock ? dock.getBoundingClientRect().top : innerHeight) - m.getBoundingClientRect().top - (med ? med.offsetHeight + 10 : 0) - 10);
-  document.body.classList.remove('tight'); let h = avail();
-  if (h < innerHeight * 0.45) { document.body.classList.add('tight'); h = avail(); }   // short screen: slimmer header and clock so the map keeps its room
-  m.style.height = Math.max(240, h) + 'px'; W.map?.invalidateSize();
+  const v = $('#tview'); if (!v) return;
+  const tabs = $('.tabs-b'), bottom = tabs ? tabs.getBoundingClientRect().top : innerHeight;
+  v.style.height = Math.max(360, Math.floor(bottom - v.getBoundingClientRect().top)) + 'px';
+  W.sheetH = $('#tsheet').offsetHeight; $('#maptools').style.bottom = W.sheetH + 14 + 'px';
+  W.map?.invalidateSize();
 }
 addEventListener('resize', () => { clearTimeout(fitMap.t); fitMap.t = setTimeout(fitMap, 120); });
 async function drawMap() {
@@ -445,10 +444,10 @@ async function drawMap() {
   try {
     const map = await LSMap.create(el, { zoom: 15, center: W.prof.site?.pins?.[0] ? [W.prof.site.pins[0].lat, W.prof.site.pins[0].lng] : undefined, zoomControl: false, animate: false, control: false, dark: isDark() });
     if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
-    W.map = map;
+    W.map = map; if (W.sheetH) map.panBy([0, Math.round(W.sheetH / 2) - 28], { animate: false });
     $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === LSMap.base(map)));
     if ($('#b-exp')) $('#b-exp').hidden = false;
-    const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17)); else toast(W.gpsErr || t('locating')); }; }
+    const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) { map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17), { animate: false }); if (W.sheetH) map.panBy([0, Math.round(W.sheetH / 2) - 28], { animate: false }); } else toast(W.gpsErr || t('locating')); }; }
     W.layers = {};
     const own = cssv('--bronze') || '#B08D57', oth = cssv('--mute') || '#8C908A';
     for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? own : oth, label: s.name, fill: s.id === W.prof.site?.id ? .14 : .05 });
