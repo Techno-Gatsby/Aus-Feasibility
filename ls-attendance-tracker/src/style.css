@@ -667,7 +667,12 @@ details.adv[open]>summary{margin-bottom:8px}
 .tk thead .tk-sl,.tk thead .tk-d{z-index:4;background:#d9e1f2;top:0;text-align:center}
 .tk .tk-sp{width:5px;min-width:5px;padding:0;background:var(--surface);border-bottom-color:transparent}
 .tk thead .tk-sp{background:var(--surface);border-right:1px solid #b8c2d0}
-.tk tr.tk-g td{background:#d9e1f2;font-weight:700}.tk tr.tk-g td.tk-sp{background:var(--surface)}
+.tk tr.tk-g td{background:#d9e1f2;font-weight:700}
+.tk thead .tk-ga{top:24px;background:#d9e1f2}
+.tk td.tk-d[data-trow],.tk [data-tgrp]{cursor:pointer}.tk td.tk-d[data-trow]:hover{text-decoration:underline}
+.tk-tag{font-size:9.5px;font-weight:600;color:var(--accent);border:1px solid currentColor;border-radius:8px;padding:0 5px;margin-left:4px}
+.tk tr.tk-hid td{opacity:.55}
+.tk{font-family:Tahoma,var(--font-body)}.tk tr.tk-g td.tk-sp{background:var(--surface)}
 .tk td.tk-c{cursor:cell;min-width:74px}.tk td.tk-c.n{text-align:right}
 .tk td.tk-c:hover{outline:2px solid var(--accent);outline-offset:-2px}
 .tk td.tk-c.ro{color:var(--accent);cursor:pointer}
