@@ -561,7 +561,7 @@ a.getapp{border-color:var(--bronze)}
 :root[data-theme=light] .btn{background:var(--s1);border-color:var(--line2);box-shadow:var(--sh1)}
 :root[data-theme=light] .btn.pri{background:var(--bronze);border-color:var(--bronze);color:#fff;box-shadow:0 4px 12px rgba(12,104,233,.28)}
 :root[data-theme=light] .btn.ghost{background:transparent;box-shadow:none;border-color:transparent}
-:root[data-theme=light] input.f,:root[data-theme=light] select.f,:root[data-theme=light] textarea.f{background:#fff;box-shadow:var(--sh1)}
+:root[data-theme=light] input.f,:root[data-theme=light] select.f,:root[data-theme=light] textarea.f{background-color:#fff;box-shadow:var(--sh1)}
 .btn,.big,.pad button,.chips button,.tabs-b button,.menu-list button{transition:transform .12s var(--ease),box-shadow .2s,background .2s}
 .btn:active{transform:scale(.98)}
 
@@ -624,3 +624,37 @@ main>*:nth-child(2){animation-delay:.03s}main>*:nth-child(3){animation-delay:.06
 body:has(#b-med) main{padding-bottom:calc(var(--tab) + var(--dock) + 8px + env(safe-area-inset-bottom,0))}
 .k-last{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-size:13px;color:var(--ink2)}
 .k-last svg.i{width:16px;height:16px;color:var(--mute)}
+
+/* compact clock: time · status (+ last punch) on one line, a thin shift bar under it */
+.clockw{padding:10px 14px 9px;gap:0 10px;margin-bottom:10px}
+.k-stack{font-size:9.5px;line-height:1.15}
+.k-time{font-size:28px}
+.k-side .k{display:none}
+.k-side b{font-size:15px;margin-top:0}
+.k-side .k-last{grid-column:auto;display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:4px 0 0;padding:0;border:0;font-size:12px;color:var(--mute);white-space:nowrap}
+.k-side .k-last .grow{flex:none}
+.k-side .k-last svg.i{width:14px;height:14px}
+.k-side .k-last .chip{padding:2px 7px;font-size:11px}
+.k-rule{margin-top:8px}
+.k-ends{margin-top:3px}.k-ends .k{font-size:10.5px}
+/* a slimmer check-in button leaves more room for the map */
+:root{--dock:76px}
+.big{min-height:58px;border-radius:14px}
+.big .bi{width:38px;height:38px;border-radius:10px}
+.big .lab{font-size:17px}
+.big small{font-size:12px}
+
+/* supervisor: report upload is a labelled button */
+.btn.upall{justify-content:flex-start;gap:12px;min-height:58px;margin:0 0 12px;text-align:start}
+.btn.upall small{display:block;font:400 12px/1.3 var(--sans);opacity:.85;margin-top:2px}
+.btn.upall svg.i{width:20px;height:20px}
+.sup .acts{flex-wrap:wrap}
+.btn.upb{min-height:40px;padding:0 12px;font-size:13px;color:var(--bronze);border-color:color-mix(in srgb,var(--bronze) 35%,transparent)}
+.btn.upb svg.i{width:16px;height:16px}
+.sup .acts .btn.upb{min-height:40px}
+.menu-list.pick{max-height:52vh;overflow:auto;margin-top:8px}
+.menu-list.pick button{min-height:48px}
+/* supervisor row: "Mark as…" gets its own full line, the buttons share the next */
+.sup .acts{padding-inline-start:0;margin-top:8px}
+.sup .acts select.f{flex:1 1 100%;min-height:44px;padding-inline-end:34px;white-space:nowrap;text-overflow:ellipsis}
+.sup .acts .btn{flex:1 1 0;white-space:nowrap}

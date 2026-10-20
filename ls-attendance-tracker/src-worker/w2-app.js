@@ -398,8 +398,8 @@ function renderHome() {
   const radius = P.site?.pins?.[0]?.radius || S0.radius || 100;
   shell(`<section class="place"><div class="pl1"><div class="n">${esc(first)} <em>${esc(rest.join(' '))}</em></div><span id="gps"></span></div><div class="z"><b>${esc(P.site?.name || '—')}</b> · ${esc(w.shift)}${start ? ' ' + start : ''} · ${esc(w.code)} <span id="recst">${recLine()}</span></div></section>
     <section class="clockw"><div class="k-stack" aria-hidden="true"><span class="k-day" id="k-day"></span><span id="k-am">AM</span><span id="k-pm">PM</span></div><div class="k-time" id="k-time"></div>
-      <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b></div>
-      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}${today.length ? (p => `<div class="k-last list">${ic(p.type === 'in' ? 'in' : 'out')}<span class="grow">${p.type === 'in' ? t('in') : t('out')} ${hhmm(p.ts)}${p.hours ? ` · ${p.hours} ${t('hours')}` : ''}</span>${st(p)}</div>`)(today[today.length - 1]) : ''}</section>
+      <div class="k-side"><span class="k">${open ? t('elapsed') : t('status')}</span><b id="timer" class="${open ? 'on' : ''}">${open ? dur(Date.now() - open.ts) : esc(done ? t('finished') : t('notStarted'))}</b>${today.length ? (p => `<span class="k-last list">${ic(p.type === 'in' ? 'in' : 'out')}<span class="grow">${p.type === 'in' ? t('in') : t('out')} ${hhmm(p.ts)}${p.hours ? ` · ${p.hours} h` : ''}</span>${st(p)}</span>`)(today[today.length - 1]) : ''}</div>
+      ${W0 ? `<div class="k-rule"><div class="k-bar"><i id="k-fill" style="transform:scaleX(${W0.p.toFixed(3)})"></i><u id="k-now" style="left:calc(${(W0.p * 100).toFixed(1)}% - 1px)"></u></div><div class="k-ends"><span class="k">${start}</span><span class="k">${esc(w.shift)} · ${hrsLen} h</span><span class="k">${endT}</span></div></div>` : ''}</section>
     ${patrolCard()}
     <div id="qbar" class="q" hidden></div>
     <div class="mapcard" id="mapcard"><div id="map"></div>
@@ -569,6 +569,16 @@ async function sendLocation(body) {
 }
 /* ---------- report scans: supervisors any report for a person, personnel their own medical report ---------- */
 const DOC_T = ['ATT', 'VEH', 'SVR', 'MPR', 'MED'];
+/** choose whose report it is: search by name or ID */
+function pickWorker(list, done) {
+  const box = document.createElement('div'); box.className = 'sheet-bg';
+  box.innerHTML = `<div class="sheet"><b>${t('upWho')}</b><div class="srch">${ic('search')}<input class="f" id="pk-q" placeholder="${t('search')}" autocomplete="off"></div><ul class="menu-list pick" id="pk-l"></ul><button class="btn wide" id="pk-x" style="margin-top:8px">${t('back')}</button></div>`;
+  document.body.appendChild(box);
+  const draw = () => { const q = $('#pk-q', box).value.trim().toUpperCase(); $('#pk-l', box).innerHTML = list.filter(w => !q || w.name.toUpperCase().includes(q) || w.code.toUpperCase().includes(q)).slice(0, 60).map(w => `<li><button data-c="${esc(w.code)}"><span class="grow">${esc(tc(w.name))}</span><span class="val">${esc(w.code)}</span></button></li>`).join(''); };
+  $('#pk-q', box).oninput = draw; draw();
+  $('#pk-l', box).onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; box.remove(); done(list.find(w => w.code === b.dataset.c)); };
+  $('#pk-x', box).onclick = () => box.remove(); box.onclick = e => { if (e.target === box) box.remove(); };
+}
 function scanReport(who, sup) {
   const pages = [], box = document.createElement('div'); box.className = 'sheet-bg';
   const ym = new Date().toISOString().slice(0, 7);
@@ -628,13 +638,15 @@ function renderSup() {
     <div class="chips">${[['all', t('all'), base.length], ['none', t('notIn'), n('none') + n('marked')], ['in', t('inNow'), n('in')], ['done', t('doneLbl'), n('done')]].map(([k, l, c]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${l} <b>${c}</b></button>`).join('')}</div>
     <p class="note" style="margin:10px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
     <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div></div>
+    <button class="btn wide pri upall" id="b-upall">${ic('camera')}<span class="grow" style="text-align:start">${t('upRep')}<small>${t('upHint')}</small></span>${ic('arrow')}</button>
     ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
     <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(tc(w.name))}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
-      ${(s === 'none' || s === 'marked') || (isToday && s !== 'done') ? `<div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
-      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}</div>` : ''}<button class="ib scanb" data-scan="${esc(w.code)}" aria-label="${t('scanTitle')}" title="${t('scanTitle')}">${ic('camera')}</button></li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
+      <div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
+      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}<button class="btn upb" data-scan="${esc(w.code)}">${ic('camera')} ${t('upRep')}</button></div></li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
     ${B.sites.some(s => s.canSetLocation) ? `<div class="card"><b>${t('setLocTitle')}</b><p class="note" style="margin:6px 0 10px">${t('setLocHint')}</p>${B.sites.filter(s => s.canSetLocation).map(s => `<button class="btn wide" data-setloc="${esc(s.id)}" style="margin-top:6px">${ic('pin')} ${t('setLocHere')} – ${esc(s.name)}</button>`).join('')}</div>` : ''}
     <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
   $$('[data-scan]').forEach(b => b.onclick = () => scanReport(B.workers.find(x => x.code === b.dataset.scan), true));
+  $('#b-upall').onclick = () => pickWorker(base, w => scanReport(w, true));
   $$('[data-setloc]').forEach(b => b.onclick = () => setSiteLocation(B.sites.find(s => s.id === b.dataset.setloc)));
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
