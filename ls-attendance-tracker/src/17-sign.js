@@ -143,7 +143,7 @@ function guideSteps() {
     ['Phone app access', `${onApp} on the app`, onApp > 0, 'Security Personnel → tick people → App access… gives each a PIN and prints a slip with the phone link.', () => showView('employees')],
     ['Publish roster', c.lastPublish ? 'last ' + new Date(c.lastPublish).toLocaleDateString() : 'not yet', !!c.lastPublish, 'Sends people, PINs, sites and zones to the phones. Do it again after changes.', () => showView('app')],
     ['Every day', 'check-ins, review, attendance', null, 'Today shows who is on site; Review lists exceptions to approve; Attendance is filled in from the phones.', () => showView('attendance')],
-    ['Month end', `${signed} timesheet(s) signed for ${fmtMonYY(ym)}`, null, 'Billing → Client timesheets: check, edit if needed, sign, print / PDF; then 2 Invoice builds the invoice pack.', () => showView('timesheets')]
+    ['Month end', `${signed} timesheet(s) signed for ${fmtMonYY(ym)}`, null, 'Billing → Client timesheets: check, edit if needed, sign, print / PDF; then 2 Invoice builds the invoice pack; 3 Tracker follows submission, approval and payment.', () => showView('timesheets')]
   ];
 }
 const guideHidden = () => { try { return localStorage.getItem('ls.guide') === 'off'; } catch (e) { return false; } };

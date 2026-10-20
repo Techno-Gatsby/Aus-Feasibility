@@ -85,6 +85,7 @@ const TOUR = (() => {
     { view: 'timesheets', sel: '#toolbar', t: 'Month end 3 · Print and sign', d: '<b>Print / PDF</b> for signatures, or Excel. The signed scans go into the invoice pack.' },
     { view: 'invoices', sel: '#v-invoices .dh', t: 'Month end 4 · Invoice', d: 'The tax invoice break-up: billable days × rate card, per project and period.' },
     { view: 'invoices', sel: '[data-sec="ivp"]', t: 'Month end 5 · Invoice pack', d: 'Upload the SAP invoice page and the signed timesheets; the project\'s WOI is added automatically. <b>Download pack PDF</b> gives the file to send.' },
+    { view: 'tracker', sel: '#v-tracker .tk-w', t: 'Month end 6 · Tracker', d: 'The Tax Invoice Tracker: per project and month – timesheet submitted and approved, invoice submitted, processed, number, SPC no, amount and payment received. Click a cell to fill it in; <b>Download Excel</b> gives the same sheet.' },
     { view: 'insights', sel: '#v-insights .kpis', t: 'Any time · Insights', d: 'Coverage, punctuality, zone compliance, face check and unusual activity for any period, site or person.' },
     { view: 'insights', sel: '[data-sec="in-map"]', t: 'Any time · Routes and hotspots', d: 'Where personnel spent their shift; pick a person to see the route of a day.' },
     { view: 'data', sel: '[data-sec="data"]', t: 'Keep it safe · Backup', d: 'Data lives in this browser. <b>Download backup</b> regularly into LS_Documents; <b>Restore</b> on any PC.' },

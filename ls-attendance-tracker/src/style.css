@@ -654,3 +654,22 @@ details.adv[open]>summary{margin-bottom:8px}
 .guide-l li.ok .n{background:#dcf5e3;color:#14773a}.guide-l li.todo .n{background:#fff1d6;color:#9a6200}
 .guide-l li b{display:block;font-size:12.5px;color:var(--heading)}.guide-l li small{display:block;color:var(--mute);font-size:11px;margin-top:2px}
 @media (max-width:900px){.live{grid-template-columns:1fr;flex:none}.live .mapbox{height:55vh;min-height:300px}.ppl{height:auto;max-height:60vh}}
+
+/* Billing → 3 Tracker: the Tax Invoice Tracker sheet (light-blue headers and client rows, as in the workbook) */
+.tk-dc{padding-bottom:8px}
+.tk-w{flex:1;min-height:0}
+.tk{border-collapse:separate;border-spacing:0;font-size:11px;min-width:100%}
+.tk th,.tk td{border-right:1px solid #b8c2d0;border-bottom:1px solid #b8c2d0;padding:0 5px;white-space:nowrap;height:22px;text-align:center}
+.tk thead th{background:#d9e1f2;color:#1b2533;font-weight:700;position:sticky;z-index:2;border-top:0}
+.tk tr.h1 th{top:0;height:24px;border-top:1px solid #b8c2d0}.tk tr.h2 th{top:24px;height:22px}.tk tr.h3 th{top:46px;height:40px;white-space:normal;line-height:1.15;font-size:10px;min-width:74px;max-width:96px}
+.tk .tk-sl{position:sticky;left:0;z-index:1;width:40px;min-width:40px;background:var(--surface);border-left:1px solid #b8c2d0}
+.tk .tk-d{position:sticky;left:40px;z-index:1;text-align:left;min-width:200px;max-width:280px;overflow:hidden;text-overflow:ellipsis;background:var(--surface);box-shadow:2px 0 0 #b8c2d0}
+.tk thead .tk-sl,.tk thead .tk-d{z-index:4;background:#d9e1f2;top:0;text-align:center}
+.tk .tk-sp{width:5px;min-width:5px;padding:0;background:var(--surface);border-bottom-color:transparent}
+.tk thead .tk-sp{background:var(--surface);border-right:1px solid #b8c2d0}
+.tk tr.tk-g td{background:#d9e1f2;font-weight:700}.tk tr.tk-g td.tk-sp{background:var(--surface)}
+.tk td.tk-c{cursor:cell;min-width:74px}.tk td.tk-c.n{text-align:right}
+.tk td.tk-c:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.tk td.tk-c.ro{color:var(--accent);cursor:pointer}
+.tk td.pd{background:#e3f4e6}.tk td.od{background:#fdf1d9}
+.tk-in{width:100%;min-width:110px;border:0;padding:2px;font:inherit;background:#fff;outline:2px solid var(--accent)}
