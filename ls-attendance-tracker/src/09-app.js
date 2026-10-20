@@ -91,7 +91,7 @@ async function syncApp(quiet) {
     if (lp.status === 200) { for (const x of lp.body.props) { if (!S.locProps[x.id] && x.status === 'pending') stats.locs = (stats.locs || 0) + 1; S.locProps[x.id] = x; } c.lastLocSync = lp.body.now; }
     const td = await cl.call('GET', 'admin/tsdocs', null, { query: { since: c.lastDocSync || 0 } });
     if (td.status === 200) { for (const d of td.body.docs) mergeTsDoc(d); c.lastDocSync = td.body.now; }
-    if (whoAmI()) { const nt = await cl.call('GET', 'me/notices'); if (nt.status === 200) for (const n of nt.body.notices) if (n.to === whoAmI() || !S.notices[n.id]) S.notices[n.id] = { ...(S.notices[n.id] || {}), ...n, read: S.notices[n.id]?.read || n.read }; renderMe(); }
+    if (whoAmI()) { const nt = await cl.call('GET', 'me/notices'); if (nt.status === 200) for (const n of nt.body.notices) if (n.to === whoAmI() || !S.notices[n.id]) S.notices[n.id] = { ...(S.notices[n.id] || {}), ...n, read: S.notices[n.id]?.read || n.read }; renderMe(); await sigFetchPreset(); }
     reindex(); markDirty(); setTimeout(() => faceCheckPunches(quiet), 50);
     if (!quiet || stats.new) { renderAll(); if (!quiet) toast(`Synced · ${stats.new} new punch(es) · ${stats.applied} day(s) marked${stats.marks ? ` · ${stats.marks} supervisor mark(s)` : ''}${stats.conflicts.length ? ` · ${stats.conflicts.length} kept (leave/other code)` : ''}${stats.locked ? ` · ${stats.locked} in locked month` : ''}`, 5000); }
     S.issues ||= {}; if (stats.conflicts.length) S.issues.app = stats.conflicts.slice(0, 500);

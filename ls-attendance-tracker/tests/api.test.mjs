@@ -76,4 +76,12 @@ ok((await call('POST', 'worker/leave', { type: 'SL', from: '2026-07-10', to: '20
 r = await call('GET', 'supervisor/board', null, { principal: { userRoles: ['supervisor'], userDetails: 'sup' } });
 ok(r.status === 200 && r.body.workers.length === 2, 'supervisor board');
 ok((await call('GET', 'supervisor/board', null, {})).status === 403, 'board needs supervisor role');
+// saved signatures: only that email (or an admin) may change them
+const PNG = 'data:image/png;base64,iVBORw0KGgo=', amy = { userRoles: [], userDetails: 'amy@x.com' }, bob = { userRoles: [], userDetails: 'bob@x.com' };
+ok((await call('PUT', 'me/signature', { image: PNG }, { principal: amy })).status === 200, 'own signature saved');
+ok((await call('PUT', 'me/signature', { email: 'amy@x.com', image: PNG }, { principal: bob })).status === 403, 'another email cannot overwrite a saved signature');
+ok((await call('GET', 'me/signature', null, { principal: amy })).body.preset?.image === PNG, 'saved signature read back');
+ok((await call('GET', 'me/signature', null, { query: { email: 'amy@x.com' }, principal: bob })).status === 403, 'another email cannot read it');
+ok((await call('PUT', 'me/signature', { image: 'data:image/jpeg;base64,xx' }, { principal: amy })).status === 400, 'only PNG accepted');
+ok((await call('PUT', 'me/signature', { image: '' }, { principal: amy })).status === 200 && !(await call('GET', 'me/signature', null, { principal: amy })).body.preset, 'saved signature deleted');
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

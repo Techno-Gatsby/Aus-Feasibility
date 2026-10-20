@@ -35,8 +35,15 @@ function renderMe() {
   const mine = myNotices(), unread = mine.filter(n => !n.read).length;
   box.innerHTML = `<button class="me-chip" id="me-chip" title="${ME.verified ? 'Signed in' : ME.email ? 'Your email (not verified until company sign-in is set up) – click to change' : 'Sign in with your email to sign timesheets and get notifications'}">${ME.email ? esc(ME.email) : 'Sign in'}</button>
     <button class="tour-btn ico" id="bell-btn" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 22a2.2 2.2 0 0 0 2.2-2.2H9.8A2.2 2.2 0 0 0 12 22Zm6.5-6.3V11a6.5 6.5 0 0 0-5.1-6.4V4a1.4 1.4 0 0 0-2.8 0v.6A6.5 6.5 0 0 0 5.5 11v4.7L3.6 17.6v1h16.8v-1Z"/></svg>${unread ? `<span class="bell-n">${unread}</span>` : ''}</button>`;
-  $('#me-chip').onclick = () => askMe();
+  $('#me-chip').onclick = e => ME.email ? openMeMenu(e.currentTarget) : askMe();
   $('#bell-btn').onclick = e => openBell(e.currentTarget);
+}
+function openMeMenu(btn) {
+  const dd = $('#dropdown'), pre = sigPreset();
+  dd.innerHTML = `<button data-mm="sig"><span>My signature…<br><span class="muted small">${pre ? 'saved – used when you sign' : 'upload or draw it once'}</span></span>${pre ? `<img class="mm-sig" src="${pre.image}" alt="">` : ''}</button><button data-mm="email"><span>Change email…</span></button>`;
+  const r = btn.getBoundingClientRect(); dd.style.left = Math.max(8, Math.min(r.left, innerWidth - 268)) + 'px'; dd.style.top = r.bottom + 4 + 'px'; dd.style.width = '260px'; dd.hidden = false;
+  dd.querySelector('[data-mm="sig"]').onclick = () => { closeMenu(); dd.style.width = ''; mySignatureDialog(); };
+  dd.querySelector('[data-mm="email"]').onclick = () => { closeMenu(); dd.style.width = ''; askMe(); };
 }
 const myNotices = () => Object.values(S?.notices || {}).filter(n => ME.email && n.to === ME.email).sort((a, b) => b.at < a.at ? -1 : 1);
 function openBell(btn) {
@@ -75,30 +82,33 @@ function tsDropVersion(base) {
   for (const email of new Set((prev.sigs || []).map(g => g.email))) notify(email, `Timesheet ${p?.name || ''} ${tsLabel(base)} you signed was reset to the attendance${ME.email ? ' by ' + ME.email : ''}; your signature was removed.`, key);
   delete S.tsDocs[key]; apiPushTsDoc?.({ projectId: base.projectId, from: base.from, to: base.to, deleted: true, savedAt: new Date().toISOString() }); markDirty(); renderMe();
 }
-/** Sign one box: draw or type, stored on the current version (a version is saved first if the sheet was only generated) */
+/** Sign one box with your saved signature, by drawing, or with an uploaded image (background removed); stored on the current version (a version is saved first if the sheet was only generated) */
 function signTimesheet(base, slot) {
   if (!ME.email) return askMe(() => signTimesheet(base, slot));
   if (!canSign(slot)) return toast(`${ME.email} is not allowed to sign “${S.settings.signatories[slot].label}”. An admin can add it in Settings → Timesheet signatories.`, 6000);
-  const s = S.settings.signatories[slot];
+  const s = S.settings.signatories[slot], pre = sigPreset();
+  PTAB.sign = pre ? 'saved' : PTAB.sign && PTAB.sign !== 'saved' ? PTAB.sign : 'draw';
   const m = openModal(`Sign – ${s.label}`, `<p class="muted small" style="margin-top:0">Signing as <b>${esc(ME.email)}</b>${ME.verified ? '' : ' (not verified until company sign-in is set up)'}.</p>
     <label class="f">Name<input type="text" id="sg-n" value="${esc(s.name || '')}"></label>
-    <div class="muted small" style="margin:8px 0 4px">Signature – draw below (or leave empty to use your typed name)</div>
-    <canvas id="sg-c" width="520" height="150" class="sig-pad"></canvas>
-    <div class="row" style="margin-top:6px"><button class="btn sm" id="sg-clr">Clear</button></div>`,
+    <div data-tab="saved" class="sg-saved">${pre ? `<div class="sig-prev"><img src="${pre.image}" alt="Your saved signature"></div><div class="row"><button type="button" class="btn sm" id="sg-my">Change my saved signature…</button></div>`
+      : `<p class="muted small">No saved signature for ${esc(ME.email)} yet. Upload a photo of it once (the background is removed) or draw it, and it is used every time you sign.</p><button type="button" class="btn sm pri" id="sg-my">Set up my signature…</button>`}</div>
+    <div data-tab="draw">${sigDrawHTML('sg')}<div class="muted small" style="margin-top:4px">Leave empty to sign with your typed name.</div></div>
+    <div data-tab="upload">${sigUploadHTML('su')}<label class="sg-keep"><input type="checkbox" id="sg-keep" checked> Save as my signature for next time</label></div>`,
     [{ label: 'Cancel' }, { label: 'Sign', cls: 'pri', onClick: mm => {
       const name = $('#sg-n', mm).value.trim(); if (!name) { toast('Type your name'); return false; }
+      const tab = PTAB.sign; let image = '';
+      if (tab === 'saved') { image = sigPreset()?.image || ''; if (!image) { toast('No saved signature yet – set it up, or use Draw / Upload'); return false; } }
+      else if (tab === 'upload') { image = up.get(); if (!image) { toast('Choose a photo of your signature first'); return false; } if ($('#sg-keep', mm).checked) sigSavePreset(image); }
+      else image = dr.get();
       let doc = S.tsDocs[tsKey(base)]; if (!doc) doc = tsSaveVersion(base, docRows(base), false);
       doc.sigs = doc.sigs.filter(g => g.slot !== slot);
-      doc.sigs.push({ slot, email: ME.email, name, at: new Date().toISOString(), version: doc.version, image: drawn ? cv.toDataURL('image/png') : '' });
+      doc.sigs.push({ slot, email: ME.email, name, at: new Date().toISOString(), version: doc.version, image });
       apiPushTsDoc?.(doc); markDirty(); renderTimesheets(); toast('Signed');
-    } }]);
-  const cv = $('#sg-c', m), cx = cv.getContext('2d'); let drawn = false, down = false;
-  cx.lineWidth = 2.2; cx.lineCap = 'round'; cx.strokeStyle = '#123';
-  const pt = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
-  cv.onpointerdown = e => { down = true; cv.setPointerCapture(e.pointerId); cx.beginPath(); cx.moveTo(...pt(e)); };
-  cv.onpointermove = e => { if (!down) return; cx.lineTo(...pt(e)); cx.stroke(); drawn = true; };
-  cv.onpointerup = () => { down = false; };
-  $('#sg-clr', m).onclick = () => { cx.clearRect(0, 0, cv.width, cv.height); drawn = false; };
+    } }], { width: '640px' });
+  editorTabs(m, 'sign', [['saved', 'My saved signature'], ['draw', 'Draw'], ['upload', 'Upload image']]);
+  const dr = sigBindDraw(m, 'sg'), up = sigBindUpload(m, 'su');
+  $('#sg-my', m).onclick = () => mySignatureDialog(() => signTimesheet(base, slot));
+  if (!pre) sigFetchPreset().then(() => { if (sigPreset() && m.isConnected && $('#sg-n', m)) { closeModal(); signTimesheet(base, slot); } });
 }
 
 /* ---------- month picker: every <input type="month"> shows "July 2026" and opens a small month grid ----------

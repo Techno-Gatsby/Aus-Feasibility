@@ -159,7 +159,7 @@ function migrate(st) {
   const d = defaultState();
   st.settings = Object.assign({}, d.settings, st.settings || {});
   for (const k of ['codes', 'clients', 'projects', 'sites', 'employees', 'invoices']) if (!Array.isArray(st[k])) st[k] = d[k];
-  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
+  st.blacklist = Object.assign({ agencies: [] }, st.blacklist || {}); st.tsDocs = st.tsDocs || {}; st.notices = st.notices || {}; st.sigPresets = st.sigPresets || {}; st.locGrants = st.locGrants || []; st.locProps = st.locProps || {};
   st.att = st.att || {}; st.locks = st.locks || {}; st.issues = st.issues || {}; st.app = st.app || {}; st.punches = st.punches || {}; st.marks = st.marks || {}; delete st.leaves;
   st.settings.rateCard ||= d.settings.rateCard;
   st.settings.bank = Object.assign({}, d.settings.bank, st.settings.bank || {});
@@ -293,7 +293,8 @@ const LIB = {
   pdflib: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
   pdfjs: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
   pdfjsWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs',
-  html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+  html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+  opencv: 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js'
 };
 function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
 

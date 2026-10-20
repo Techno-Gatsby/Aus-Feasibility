@@ -270,6 +270,15 @@ const LSAPI = (() => {
       },
       'GET me/notices': async req => { const m = me(req); if (!m) return err(401, 'Sign in required'); return J(200, { notices: await store.list('notices', x => x.to === m || isAdmin(req)) }); },
       'POST me/notices/read': async req => { const x = await store.get('notices', String(req.body?.id || '')); if (!x || (x.to !== me(req) && !isAdmin(req))) return err(404, 'Not found'); x.read = true; x.serverTs = now(); await store.put('notices', x); return J(200, { ok: true }); },
+      /* a person's saved signature (transparent PNG), the same on every PC; only that email or an admin changes it */
+      'GET me/signature': async req => { const m = String(req.query?.email || me(req)).toLowerCase(); if (!me(req)) return err(401, 'Sign in required'); if (m !== me(req) && !isAdmin(req)) return err(403, 'Not allowed'); const x = await store.get('sigpresets', m); return J(200, { preset: x ? { email: x.id, image: x.image, updatedAt: x.updatedAt } : null }); },
+      'PUT me/signature': async req => {
+        const m = String(req.body?.email || me(req)).toLowerCase(), image = req.body?.image;
+        if (!me(req)) return err(401, 'Sign in required'); if (m !== me(req) && !isAdmin(req)) return err(403, 'Only that person or an admin can change a saved signature');
+        if (image == null || image === '') { await store.del('sigpresets', m); return J(200, { ok: true, deleted: true }); }
+        if (!/^data:image\/png;base64,/.test(String(image)) || image.length > 400000) return err(400, 'PNG image (under 300 KB) needed');
+        await store.put('sigpresets', { id: m, image, updatedAt: req.body.updatedAt || new Date(now()).toISOString(), serverTs: now() }); return J(200, { ok: true });
+      },
       'PUT admin/roster': async req => {
         if (!isAdmin(req)) return err(403, 'Admin role required');
         const b = req.body || {}; const seen = new Set();
