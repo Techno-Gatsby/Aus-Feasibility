@@ -230,7 +230,7 @@ function tsShowPreview() {
     ? `<b>Editing</b><span class="muted small">Click a cell and type: P, A, ${esc(IX.proj.get(ts.projectId)?.tsOff || 'O')}, R… · names, codes and sites are editable · ✕ deletes a row</span><span class="spacer"></span><button class="btn sm" id="te-cancel">Cancel</button><button class="btn sm pri" id="te-save">Save version</button>`
     : `<button class="btn sm" id="te-edit">✎ Edit sheet</button><button class="btn sm" id="te-xlsx">Download Excel</button><label class="btn sm">Upload edited Excel…<input type="file" id="te-up" accept=".xlsx,.xls" hidden></label>
        ${doc ? `<span class="pill">v${doc.version} · ${esc(fmtDMY(doc.savedAt.slice(0, 10)))}${doc.savedBy ? ' · ' + esc(doc.savedBy) : ''}</span>${doc.edited ? '<span class="pill warn">edited</span>' : ''}` : '<span class="muted small">Generated from attendance</span>'}
-       ${signed ? `<span class="pill pos">${signed} signature(s)</span>` : ''}${!ts.filtered ? '<button class="btn sm pri" id="te-sign">✍ Sign…</button>' : ''}
+       ${signed ? `<span class="pill pos">${signed} signature(s)</span>` : ''}${!ts.filtered ? '<button class="btn sm pri" id="te-sign">✍ Sign…</button>' : ''}<button class="btn sm" id="te-mail" title="Email this timesheet, a reminder or a custom email to the client">✉ Email…</button>
        ${changed ? `<span class="pill warn" title="Attendance was changed after this version was saved">attendance changed</span><button class="btn sm" id="te-upd">Update from attendance</button>` : ''}
        ${ts.filtered ? `<span class="pill">only “${esc(ts.filtered)}”</span>` : ''}
        <span class="spacer"></span>${doc ? '<button class="btn sm bad" id="te-reset">Reset to attendance</button>' : ''}`;
@@ -248,6 +248,7 @@ function tsShowPreview() {
   q('#te-up').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const rows = await readTimesheetXlsx(f, pv.base); tsSaveVersion(pv.base, rows, true); renderTimesheets(); toast(`Read ${rows.length} row(s) from ${f.name} – saved as a new version`); } catch (err) { toast(err.message, 6000); } };
   if (q('#te-upd')) q('#te-upd').onclick = async () => { if (!await confirmBox('Replace the saved version with the current attendance? Your edits on this sheet are replaced, and anyone who signed is notified.', 'Update')) return; tsSaveVersion(pv.base, docRows(pv.base), false); renderTimesheets(); };
   if (q('#te-reset')) q('#te-reset').onclick = async () => { if (!await confirmBox(`Drop the saved version${signed ? ' and its signatures' : ''} and show the sheet from attendance again?`, 'Reset', 'bad')) return; tsDropVersion(pv.base); renderTimesheets(); };
+  if (q('#te-mail')) q('#te-mail').onclick = () => emailClient({ projectId: pv.base.projectId, base: pv.base, type: 'ts' });
   if (q('#te-sign')) q('#te-sign').onclick = () => {
     if (!whoAmI()) return askMe(() => q('#te-sign')?.click());
     const slots = S.settings.signatories.map((sg, i) => [i, sg]).filter(([i]) => canSign(i));

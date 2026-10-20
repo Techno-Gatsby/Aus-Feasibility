@@ -49,9 +49,10 @@ function projectsOverviewHTML() {
 }
 function clientsDialog() {
   openModal('Clients', `<div class="tw"><table><thead><tr><th>Billing entity</th><th>Customer code</th><th>TRN</th><th class="num">Projects</th><th></th></tr></thead><tbody>
-    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
+    ${S.clients.map(c => `<tr><td class="lab">${esc(c.name)}</td><td class="mono">${esc(c.customerCode || '')}</td><td class="mono">${esc(c.trn || '')}</td><td class="num">${S.projects.filter(p => p.clientId === c.id).length}</td><td style="white-space:nowrap"><button class="btn sm" data-ec="${c.id}">Edit</button> <button class="btn sm" data-em="${c.id}" title="Timesheet, reminder or custom email to this client">✉ Email…</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>'}
     </tbody></table></div>`, [{ label: 'Add client', onClick: () => { setTimeout(() => editClient(null), 0); } }, { label: 'Close', cls: 'pri' }]);
   $$('#modal [data-ec]').forEach(b => b.onclick = () => editClient(b.dataset.ec));
+  $$('#modal [data-em]').forEach(b => b.onclick = () => { closeModal(); emailClient({ clientId: b.dataset.em }); });
 }
 function linkSitesDialog() {
   const unmapped = S.sites.filter(s => !s.projectId || !IX.proj.has(s.projectId));
@@ -89,11 +90,11 @@ function bindLocGrants(m, siteId) {
 
 function editClient(id) {
   const c = id ? { ...IX.client.get(id) } : { id: uid('c'), name: '', customerCode: '', trn: '', address: '' };
-  openModal(id ? 'Edit client' : 'Add client', `<div class="form">
+  const m = openModal(id ? 'Edit client' : 'Add client', `<div class="form">
     <label class="f">Client / billing entity name *<input type="text" id="ec-name" value="${esc(c.name)}"></label>
     <label class="f">Customer code (SAP)<input type="text" id="ec-cc" value="${esc(c.customerCode || '')}"></label>
     <label class="f">TRN<input type="text" id="ec-trn" value="${esc(c.trn || '')}"></label>
-    </div><label class="f" style="margin-top:10px">Address<textarea id="ec-addr">${esc(c.address || '')}</textarea></label>`,
+    </div><label class="f" style="margin-top:10px">Address<textarea id="ec-addr">${esc(c.address || '')}</textarea></label>${mailContactsHTML(c)}`,
     [...(id ? [{ label: 'Delete', cls: 'bad', onClick: async () => {
       if (S.projects.some(p => p.clientId === id)) { toast('Move or delete this client\'s projects first'); return; }
       S.clients = S.clients.filter(x => x.id !== id); reindex(); markDirty(); renderAll();
@@ -101,10 +102,12 @@ function editClient(id) {
       label: 'Save', cls: 'pri', onClick: m => {
         c.name = $('#ec-name', m).value.trim(); if (!c.name) { toast('Name required'); return false; }
         c.customerCode = $('#ec-cc', m).value.trim(); c.trn = $('#ec-trn', m).value.trim(); c.address = $('#ec-addr', m).value;
+        const mail = readMailContacts(m); if (!mail) return false; c.mail = mail;
         if (id) S.clients[S.clients.findIndex(x => x.id === id)] = c; else S.clients.push(c);
         reindex(); markDirty(); renderAll();
       }
-    }], { into: PV.panel, onCancel: () => renderProjects() });
+    }], { into: PV.panel, onCancel: () => renderProjects(), width: '820px' });
+  bindMailContacts(m);
 }
 
 function editProject(id, presetName, onCreated) {

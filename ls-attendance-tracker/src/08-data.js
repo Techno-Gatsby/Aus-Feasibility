@@ -46,6 +46,7 @@ function renderData() {
     <div class="tw"><table><thead><tr><th>Label</th><th>Name / code</th><th>Title</th><th>Emails allowed to sign <span class="muted" style="text-transform:none;letter-spacing:0">(comma separated)</span></th></tr></thead><tbody>
       ${st.signatories.map((s, i) => `<tr><td><input type="text" data-sg="${i}" data-sk="label" value="${esc(s.label)}"></td><td><input type="text" data-sg="${i}" data-sk="name" value="${esc(s.name)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="title" value="${esc(s.title)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="emails" value="${esc(s.emails || '')}" placeholder="name@company.com" style="width:100%"></td></tr>`).join('')}
     </tbody></table></div><p class="muted small" style="margin:6px 0 0">Only these emails can sign that box on a client timesheet. If a signed timesheet is changed later, everyone who signed it gets a notification.</p>`)}
+  ${sec('mailtpl', 'Email templates', mailTplHTML())}
   ${sec('black', `Blacklisted subcontractors <span class="cnt">${S.blacklist.agencies.length}</span>`, `
     <div class="tw"><table><thead><tr><th>Subcontractor</th><th>Reason</th><th>Since</th><th class="num">Personnel</th><th></th></tr></thead><tbody>
       ${S.blacklist.agencies.map((a, i) => `<tr><td><b>${esc(a.name)}</b></td><td>${esc(a.reason || '')}</td><td class="mono">${fmtDMY(a.date)}</td><td class="num">${S.employees.filter(e => e.agency === a.name).length}</td><td><button class="btn sm" data-unbl="${i}">Remove</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">None.</td></tr>'}
@@ -55,7 +56,7 @@ function renderData() {
     <p class="muted small" style="margin:6px 0 0">Their personnel are flagged, cannot be allocated or given app access, and adding new personnel from them shows a warning. Past attendance and invoices are kept.</p>`)}
   ${sec('reset', 'Reset', `<div class="row"><button class="btn" id="dv-seed">Reload shipped data…</button><button class="btn bad" id="dv-reset">Delete all data…</button><span class="muted small">Download a backup first.</span></div>`)}
   </div>`;
-  bindSecs(v);
+  bindSecs(v); bindMailTpl(v);
   $('#dv-dl').onclick = downloadBackup;
   v.querySelectorAll('[data-rc]').forEach(i => i.onchange = () => { const r = S.settings.rateCard[+i.dataset.rc]; r[i.dataset.rk] = i.dataset.rk === 'rate' ? +i.value || 0 : i.dataset.rk === 'trade' ? norm(i.value) : i.value.trim(); markDirty(); });
   v.querySelectorAll('[data-rcdel]').forEach(b => b.onclick = () => { S.settings.rateCard.splice(+b.dataset.rcdel, 1); markDirty(); renderData(); });

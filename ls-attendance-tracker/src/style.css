@@ -673,3 +673,14 @@ details.adv[open]>summary{margin-bottom:8px}
 .tk td.tk-c.ro{color:var(--accent);cursor:pointer}
 .tk td.pd{background:#e3f4e6}.tk td.od{background:#fdf1d9}
 .tk-in{width:100%;min-width:110px;border:0;padding:2px;font:inherit;background:#fff;outline:2px solid var(--accent)}
+
+/* client email contacts and compose */
+.mc-box{border:1px solid var(--line2);border-radius:var(--r);padding:6px 8px;margin-bottom:8px}
+.mc-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.mc-row{display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap}
+.mc-row input[type=text],.mc-row input[type=email]{flex:1;min-width:120px}
+.mc-row input[data-mk=email]{flex:1.4}
+.mc-gets{display:inline-flex;gap:8px;font-size:11.5px;color:var(--text2)}.mc-gets label{display:inline-flex;gap:3px;align-items:center}
+.mail-types button{padding:5px 14px}
+.mail-people{max-height:220px;margin-top:8px}.mail-people td.c,.mail-people th.c{text-align:center;width:44px}
+.mtpl{border:1px solid var(--line2);border-radius:var(--r);padding:8px;margin-bottom:8px}
