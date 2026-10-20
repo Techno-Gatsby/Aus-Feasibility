@@ -793,6 +793,7 @@ table.ag.py th.hd{background:#FFF4D6}
 table.ag.py td.tot{font-size:11px;text-align:center}table.ag.py td.rm{text-align:left;font-family:var(--font-body);font-weight:400}
 /* payroll: the workbook's info columns */
 table.ag.py td.pi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;text-align:center}
+table.ag.py thead th{white-space:normal;line-height:1.15}
 
 </style>
 </head>
@@ -6813,8 +6814,8 @@ function renderPayroll() {
   const col = x => x === '' ? '' : typeof x === 'number' ? codeDef('P').color : x === 'HD' ? codeDef('PH').color : IX.code.has(x) ? codeDef(x).color : '#EEF1F6';   // the attendance colours
   const LIM = 150, shown = rows.slice(0, PV_.all ? rows.length : LIM), fmt = x => typeof x === 'number' ? (Number.isInteger(x) ? x : x.toFixed(2)) : esc(x);
   // the workbook's columns (S.No … Cost Code, the days, every total) in the Attendance grid; S.No / code / name stay fixed
-  const W = [40, 76, 210], L = []; W.reduce((a, w, k) => (L[k] = a, a + w), 0);
-  const XW = [80, 140, 170, 58, 130, 46, 96], XH = ['DOJ', 'Designation', 'Department/ Sub-Department', 'Division', 'Business Unit', 'Shift', 'Cost Code'];
+  const W = [40, 84, 210], L = []; W.reduce((a, w, k) => (L[k] = a, a + w), 0);
+  const XW = [80, 140, 170, 58, 130, 58, 96], XH = ['DOJ', 'Designation', 'Department/ Sub-Department', 'Division', 'Business Unit', 'Shift', 'Cost Code'];
   const dw = 34, TW = PAY_TOT_H.map(h => /Remarks/.test(h) ? 150 : /Source/.test(h) ? 64 : 54), width = W.reduce((a, b) => a + b, 0) + XW.reduce((a, b) => a + b, 0) + 46 + days.length * dw + TW.reduce((a, b) => a + b, 0);
   const all = { hours: 0, present: 0, lop: 0, off: 0, leave: 0, not: 0, sot: 0, hot: 0 }, perDay = days.map(() => 0);
   const rowsHTML = rows.map((r, i) => {
