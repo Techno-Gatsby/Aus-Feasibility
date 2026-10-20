@@ -32,7 +32,7 @@ ok(await pg.evaluate(() => document.documentElement.dir) === 'rtl' && /چیک آ
 await pg.click('#b-lang'); await pg.click('.sheet-menu button:has-text("English")');
 // supervisor board + punch on behalf (dev server role = admin)
 await pg.click('#b-menu'); await pg.click('.sheet-menu button:has-text("Supervisor")'); await pg.waitForSelector('#sp-site');
-ok(new RegExp('C7' + RUN).test(await pg.textContent('main')) && /[1-9]\d* in/.test(await pg.textContent('main')), 'supervisor board shows worker on site');
+ok(new RegExp('C7' + RUN).test(await pg.textContent('main')) && +(await pg.textContent('[data-f=in] b')) >= 1, 'supervisor board shows worker on site');
 
 await pg.evaluate(() => { W.sup = false; go('home'); }); await pg.waitForSelector('#b-punch');
 // slow server: after 6 s the check-out is kept on the phone and the worker can go; the request still lands, once

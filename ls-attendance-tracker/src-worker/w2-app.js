@@ -571,16 +571,6 @@ async function sendLocation(body) {
 }
 /* ---------- report scans: supervisors any report for a person, personnel their own medical report ---------- */
 const DOC_T = ['ATT', 'VEH', 'SVR', 'MPR', 'MED'];
-/** choose whose report it is: search by name or ID */
-function pickWorker(list, done) {
-  const box = document.createElement('div'); box.className = 'sheet-bg';
-  box.innerHTML = `<div class="sheet"><b>${t('upWho')}</b><div class="srch">${ic('search')}<input class="f" id="pk-q" placeholder="${t('search')}" autocomplete="off"></div><ul class="menu-list pick" id="pk-l"></ul><button class="btn wide" id="pk-x" style="margin-top:8px">${t('back')}</button></div>`;
-  document.body.appendChild(box);
-  const draw = () => { const q = $('#pk-q', box).value.trim().toUpperCase(); $('#pk-l', box).innerHTML = list.filter(w => !q || w.name.toUpperCase().includes(q) || w.code.toUpperCase().includes(q)).slice(0, 60).map(w => `<li><button data-c="${esc(w.code)}"><span class="grow">${esc(tc(w.name))}</span><span class="val">${esc(w.code)}</span></button></li>`).join(''); };
-  $('#pk-q', box).oninput = draw; draw();
-  $('#pk-l', box).onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; box.remove(); done(list.find(w => w.code === b.dataset.c)); };
-  $('#pk-x', box).onclick = () => box.remove(); box.onclick = e => { if (e.target === box) box.remove(); };
-}
 function scanReport(who, sup) {
   const pages = [], box = document.createElement('div'); box.className = 'sheet-bg';
   const ym = new Date().toISOString().slice(0, 7);
@@ -631,34 +621,40 @@ function renderSup() {
   const state = w => { const ins = w.punches.filter(p => p.type === 'in'), outs = w.punches.filter(p => p.type === 'out'); return ins.length > outs.length ? 'in' : ins.length ? 'done' : w.mark?.mark ? 'marked' : 'none'; };
   const base = B.workers.filter(w => !W.supSite || w.siteId === W.supSite);
   const n = k => base.filter(w => state(w) === k).length;
-  const f = W.supF || 'all', q = (W.supQ || '').trim().toUpperCase();
-  const rows = base.filter(w => (f === 'all' || state(w) === f || (f === 'none' && state(w) === 'marked')) && (!q || w.name.toUpperCase().includes(q) || w.code.toUpperCase().includes(q)));
+  const f = W.supF || 'all';
   const ord = { none: 0, marked: 1, in: 2, done: 3 };
-  shell(`<section class="place"><div class="n">${t('supervisor')}</div><div class="z"><b>${esc(B.sites.find(x => x.id === W.supSite)?.name || t('all'))}</b> · ${esc(B.date || '')}</div></section>
-    <div class="card"><div class="row"><div class="grow"><label class="fl" for="sp-site">${t('site')}</label><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
-      <div><label class="fl" for="sp-date">${t('date')}</label><input class="f" type="date" id="sp-date" value="${esc(B.date)}" max="${esc(B.today)}"></div></div>
-    <div class="chips">${[['all', t('all'), base.length], ['none', t('notIn'), n('none') + n('marked')], ['in', t('inNow'), n('in')], ['done', t('doneLbl'), n('done')]].map(([k, l, c]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${l} <b>${c}</b></button>`).join('')}</div>
-    <p class="note" style="margin:10px 2px 0">${n('in')} in · ${n('done')} ${t('doneLbl').toLowerCase()} · ${n('none')} ${t('noCheckIn')}${n('marked') ? ` · ${n('marked')} ${t('marked')}` : ''}</p>
-    <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div></div>
-    <button class="btn wide pri upall" id="b-upall">${ic('camera')}<span class="grow" style="text-align:start">${t('upRep')}<small>${t('upHint')}</small></span>${ic('arrow')}</button>
-    ${n('none') ? `<div class="q">${ic('info')}<span>${t('markHint')}</span></div>` : ''}
-    <div class="card" style="padding:4px 16px"><ul class="list sup">${rows.sort((a, b) => ord[state(a)] - ord[state(b)]).map(w => { const s = state(w); return `<li><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow"><span class="what">${esc(tc(w.name))}</span><span class="sub mono">${esc(w.code)} · ${esc(w.shift)}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? '↘' : '↗') + hhmm(p.ts)).join(' ') : ''}</span></span>
-      <div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
-      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}<button class="btn upb" data-scan="${esc(w.code)}">${ic('camera')} ${t('upRep')}</button></div></li>`; }).join('') || `<li><div class="empty grow">${ic('inbox')}<span>—</span></div></li>`}</ul></div>
+  const pill = (w, s) => s === 'in' ? `<span class="pill pos">${t('inNow')}</span>` : s === 'done' ? `<span class="pill">${t('doneLbl')}</span>` : s === 'marked' ? `<span class="pill">${esc(w.mark.mark)}</span>` : `<span class="pill warn">${t('notIn')}</span>`;
+  const row = w => { const s = state(w); return `<li class="sp-row"><div class="sp-top"><span class="av">${initials(w.name)}<i class="${s}"></i></span><span class="grow sp-who"><b>${esc(tc(w.name))}</b><small>${esc(w.code)} · ${esc(tc(w.shift))}${w.punches.length ? ' · ' + w.punches.map(p => (p.type === 'in' ? t('in') : t('out')) + ' ' + hhmm(p.ts)).join(', ') : ''}</small></span>${pill(w, s)}</div>
+    <div class="acts">${s === 'none' || s === 'marked' ? `<select class="f" data-mk="${esc(w.code)}"><option value="">${s === 'marked' ? '✕ ' + t('clear') : t('markAs')}</option>${B.codes.map(([c, l]) => `<option value="${c}" ${w.mark?.mark === c ? 'selected' : ''}>${c} – ${esc(l)}</option>`).join('')}</select>` : ''}
+      ${isToday && s !== 'done' ? `<button class="btn ${s === 'in' ? '' : 'pri'}" data-pw="${esc(w.code)}" data-t="${s === 'in' ? 'out' : 'in'}">${ic(s === 'in' ? 'out' : 'in')} ${s === 'in' ? t('checkOut') : t('checkIn')}</button>` : ''}<button class="btn upb" data-scan="${esc(w.code)}">${ic('camera')} ${t('upRep')}</button></div></li>`; };
+  const dateL = B.date ? new Date(B.date + 'T00:00:00').toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  shell(`<section class="place"><div class="pl1"><div class="n">${t('supervisor')}</div><span id="gps"></span></div><div class="z"><b>${esc(B.sites.find(x => x.id === W.supSite)?.name || t('all'))}</b> · ${esc(dateL)}</div></section>
+    <div class="card sp-filt"><div class="sp-two"><label><span>${t('site')}</span><select class="f" id="sp-site"><option value="">${t('all')}</option>${B.sites.map(s => `<option value="${esc(s.id)}" ${s.id === W.supSite ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label><span>${t('date')}</span><input class="f" type="date" id="sp-date" value="${esc(B.date)}" max="${esc(B.today)}"></label></div>
+      <div class="srch">${ic('search')}<input class="f" id="sp-q" placeholder="${t('search')}" value="${esc(W.supQ || '')}" autocomplete="off"></div>
+      <div class="seg sp-seg">${[['all', t('all'), base.length], ['none', t('notIn'), n('none') + n('marked')], ['in', t('inNow'), n('in')], ['done', t('doneLbl'), n('done')]].map(([k, l, c]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${l}<b>${c}</b></button>`).join('')}</div></div>
+    ${n('none') ? `<p class="sp-hint">${ic('info')}<span>${t('markHint')}</span></p>` : ''}
+    <ul class="sp-list" id="sp-list"></ul>
     ${B.sites.some(s => s.canSetLocation) ? `<div class="card"><b>${t('setLocTitle')}</b><p class="note" style="margin:6px 0 10px">${t('setLocHint')}</p>${B.sites.filter(s => s.canSetLocation).map(s => `<button class="btn wide" data-setloc="${esc(s.id)}" style="margin-top:6px">${ic('pin')} ${t('setLocHere')} – ${esc(s.name)}</button>`).join('')}</div>` : ''}
-    <div id="gps"></div><button class="btn wide" id="b-exit" style="margin-top:10px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
-  $$('[data-scan]').forEach(b => b.onclick = () => scanReport(B.workers.find(x => x.code === b.dataset.scan), true));
-  $('#b-upall').onclick = () => pickWorker(base, w => scanReport(w, true));
+    <button class="btn wide" id="b-exit" style="margin-top:4px">${ic('back')} ${t('back')}</button>`, { tabs: false, crumb: t('supervisor') });
+  // the list redraws on its own (filter, search) – the rest of the screen stays put
+  const drawList = () => {
+    const F = W.supF || 'all', Q = (W.supQ || '').trim().toUpperCase();
+    const list = base.filter(w => (F === 'all' || state(w) === F || (F === 'none' && state(w) === 'marked')) && (!Q || w.name.toUpperCase().includes(Q) || w.code.toUpperCase().includes(Q))).sort((a, b) => ord[state(a)] - ord[state(b)]);
+    $('#sp-list').innerHTML = list.map(row).join('') || `<li class="sp-row"><div class="empty">${ic('inbox')}<span>—</span></div></li>`;
+    $$('#sp-list [data-scan]').forEach(b => b.onclick = () => scanReport(B.workers.find(x => x.code === b.dataset.scan), true));
+    $$('#sp-list [data-pw]').forEach(b => b.onclick = () => { const w = B.workers.find(x => x.code === b.dataset.pw); punch(b.dataset.t, w); });
+    $$('#sp-list [data-mk]').forEach(sel => sel.onchange = async () => {
+      const r = await W.api.call('POST', 'supervisor/mark', { code: sel.dataset.mk, date: B.date, mark: sel.value }).catch(() => null);
+      if (r?.status === 200) { haptic(15); toast(sel.value ? `${sel.dataset.mk} → ${sel.value}` : t('clear')); loadBoard(); } else toast(r?.body?.error || 'No connection');
+    });
+  };
+  drawList();
   $$('[data-setloc]').forEach(b => b.onclick = () => setSiteLocation(B.sites.find(s => s.id === b.dataset.setloc)));
   $('#sp-site').onchange = e => { W.supSite = e.target.value; loadBoard(); };
   $('#sp-date').onchange = e => { W.supDate = e.target.value; loadBoard(); };
-  $$('[data-f]').forEach(b => b.onclick = () => { W.supF = b.dataset.f; renderSup(); });
-  $('#sp-q').oninput = e => { W.supQ = e.target.value; const pos = e.target.selectionStart; renderSup(); const i = $('#sp-q'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (x) { } };
-  $$('[data-pw]').forEach(b => b.onclick = () => { const w = B.workers.find(x => x.code === b.dataset.pw); punch(b.dataset.t, w); });
-  $$('[data-mk]').forEach(sel => sel.onchange = async () => {
-    const r = await W.api.call('POST', 'supervisor/mark', { code: sel.dataset.mk, date: B.date, mark: sel.value }).catch(() => null);
-    if (r?.status === 200) { haptic(15); toast(sel.value ? `${sel.dataset.mk} → ${sel.value}` : t('clear')); loadBoard(); } else toast(r?.body?.error || 'No connection');
-  });
+  $$('[data-f]').forEach(b => b.onclick = () => { W.supF = b.dataset.f; $$('[data-f]').forEach(x => x.classList.toggle('on', x === b)); drawList(); });
+  $('#sp-q').oninput = e => { W.supQ = e.target.value; drawList(); };
   $('#b-exit').onclick = () => { W.sup = false; W.api = LSClient.make({ base: API_BASE }); render(); };
   paintGps();
 }

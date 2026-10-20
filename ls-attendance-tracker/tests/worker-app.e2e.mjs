@@ -64,7 +64,7 @@ const third = await A.evaluate(async id => { const e = S.employees.find(x => x.e
 await Wp.evaluate(() => openSupervisor()); await Wp.waitForSelector('#sp-date');
 await Wp.fill('#sp-date', '2026-09-29'); await Wp.dispatchEvent('#sp-date', 'change'); await Wp.waitForTimeout(400);
 await Wp.selectOption('[data-mk="C66585"]', 'SL'); await Wp.waitForTimeout(500);
-ok(/1 marked/.test(await Wp.textContent('main')), 'supervisor marked a no-check-in day on the phone');
+ok(await Wp.$eval('[data-mk="C66585"]', x => x.value) === 'SL' && (await Wp.$$eval('#sp-list .pill', x => x.map(e => e.textContent))).includes('SL'), 'supervisor marked a no-check-in day on the phone');
 
 // 5. admin sync → P + dot; right-click → details with photo and distance
 await A.bringToFront(); await A.evaluate(() => syncApp()); await A.waitForTimeout(600);
