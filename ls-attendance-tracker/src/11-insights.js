@@ -68,12 +68,29 @@ async function renderLive() {
   const n = k => rows.filter(r => r.st === k).length, out = rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone).length;
   const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
   const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
-  v.innerHTML = docHead('Live', `today ${fmtDMY(today)} · from synced punches and shift positions`, `<select id="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`) + `<div class="dc">
+  // site filter in line with the Live map / Review tabs; the figures sit beside the map and open the list of who is behind them
+  $('#subtabs').querySelector('#lv-site')?.remove();
+  $('#subtabs').insertAdjacentHTML('beforeend', `<select id="lv-site" class="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`);
+  const starts = appCfg().starts || {}, nowHM = new Date().toTimeString().slice(0, 5), shiftOf = r => assignOn(r.e, today)?.shift || r.e.shift || 'DAY';
+  const groups = { on: rows.filter(r => r.st === 'on' || r.st === 'pe'), done: rows.filter(r => r.st === 'done'), no: rows.filter(r => r.st === 'no'), out: rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone) };
+  const lateNo = groups.no.filter(r => starts[shiftOf(r)] && nowHM >= starts[shiftOf(r)]).length;
+  const K = [['on', 'On duty now', groups.on.length, 'var(--pos)'], ['done', 'Checked out', groups.done.length, ''], ['no', 'Not checked in', groups.no.length, groups.no.length ? 'var(--neg)' : '', lateNo ? `${lateNo} past shift start` : ''], ['out', 'Outside zone', groups.out.length, groups.out.length ? 'var(--warn)' : '']];
+  const sel = LV.k && groups[LV.k] ? LV.k : null, list = sel ? groups[sel] : [];
+  const personRow = r => { const sh = shiftOf(r), st0 = starts[sh], due = r.st === 'no' && st0 ? (nowHM >= st0 ? `<span class="pill neg">due ${st0}</span>` : `<span class="pill">starts ${st0}</span>`) : '';
+    return `<div class="pr" data-lv="${rows.indexOf(r)}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
+      <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${esc(sh)}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}${r.last && !r.last.inZone && r.st !== 'done' ? ' · outside zone' : ''}</div></div>${due}${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`; };
+  const byShift = sel === 'no' ? Object.entries(list.reduce((a, r) => ((a[shiftOf(r)] ||= []).push(r), a), {})).sort((a, b) => (starts[a[0]] || '').localeCompare(starts[b[0]] || '')) : null;
+  v.innerHTML = `<div class="dc">
     ${guideHTML()}
-    <div class="kpis">${[['On duty now', n('on') + n('pe'), 'var(--pos)'], ['Checked out', n('done')], ['Not checked in', n('no'), n('no') ? 'var(--neg)' : ''], ['Outside zone', out, out ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
     <div class="live"><div class="mapbox" id="lv-map"></div>
-    <div class="ppl">${rows.map((r, i) => `<div class="pr" data-lv="${i}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
-      <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${lbl[r.st]}${r.st === 'code' ? ' ' + esc(r.code) : ''}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}</div></div>${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`).join('') || '<p class="muted">Nobody on the app is rostered today.</p>'}</div></div></div>`;
+    <div class="lv-side"><div class="lv-k">${K.map(([k, l, n, col, sub]) => `<button class="kpi${sel === k ? ' on' : ''}" data-k="${k}" ${col ? `style="--c:${col}"` : ''}><span class="l">${l}</span><span class="v">${n}</span>${sub ? `<span class="s">${sub}</span>` : ''}</button>`).join('')}
+      <button class="kpi sync" id="lv-sync" title="Sync now"><span class="l">Last sync</span><span class="v">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span></button></div>
+    <div class="ppl">${sel ? `<div class="lv-h"><b>${K.find(x => x[0] === sel)[1]}</b><span class="muted small">${list.length}</span><span class="spacer"></span><button class="btn sm" id="lv-all">✕</button></div>`
+      + (byShift ? byShift.map(([sh, rs]) => `<div class="lv-sh">${esc(sh)} shift${starts[sh] ? ' · starts ' + starts[sh] : ''} · ${rs.length}</div>${rs.map(personRow).join('')}`).join('') : list.map(personRow).join('')) + (list.length ? '' : '<p class="muted small" style="padding:8px">Nobody.</p>')
+      : `<p class="muted small" style="padding:8px 4px">Click a figure to see who is behind it – e.g. <b>Not checked in</b> lists who has not started, by shift.</p>${rows.length ? '' : '<p class="muted">Nobody on the app is rostered today.</p>'}`}</div></div></div></div>`;
+  v.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { LV.k = LV.k === b.dataset.k ? null : b.dataset.k; renderLive(); });
+  $('#lv-all', v)?.addEventListener('click', () => { LV.k = null; renderLive(); });
+  $('#lv-sync', v).onclick = () => syncApp();
   bindGuide(v);
   bindSecs(v); $('#lv-site').onchange = e => { LV.site = e.target.value; renderLive(); };
   for (const el of v.querySelectorAll('[data-av]')) { const e = IX.emp.get(el.dataset.av); if (e?.photo) photoURL(e).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; }); }

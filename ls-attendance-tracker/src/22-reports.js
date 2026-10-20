@@ -13,7 +13,7 @@
 const DOC_TYPES = [['ATT', 'Attendance sheet', /\b(att|attendance|log ?sheet)\b/i], ['VEH', 'Vehicle attendance', /\b(veh|vehicle|trip|driver)/i], ['SVR', 'Security violation', /\b(svr|violation|penalty|fine)/i],
   ['MPR', 'Mispunch', /\b(mpr|mis-?s?punch|miss ?punch|biometric)/i], ['MED', 'Medical', /\b(med|medical|discharge|sick|hospital)/i]];
 const docTypeName = k => DOC_TYPES.find(t => t[0] === k)?.[1] || k;
-const RV = { ym: null, type: '', q: '', only: false, order: 'type', checked: new Set() };
+const RV = { ym: null, type: '', q: '', checked: new Set() };
 const empByCode = code => S.employees.find(e => norm(e.empCode) === norm(code)) || null;
 /** what a file name says: person, type, payroll month */
 function docParseName(name) {
@@ -79,41 +79,47 @@ async function splitReports(file) {
   const show = () => { let who = ''; pages.forEach((_, i) => { const v = $(`[data-sp="${i}"]`, m).value.trim(); if (v) { const e = empFromInput(v); who = e ? e.name : '?'; } $(`[data-spn="${i}"]`, m).textContent = who; }); };
   m.querySelectorAll('[data-sp]').forEach(inp => { inp.oninput = show; inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const v = inp.value.trim(), x = empFromInput(v); if (v && x) inp.value = `${x.empCode} – ${x.name}`; show(); m.querySelector(`[data-sp="${+inp.dataset.sp + 1}"]`)?.focus(); } }; });
 }
-/* ---------- the matrix ---------- */
+/* ---------- the list: only people who have reports this month; type chips; one download ---------- */
 function reportDocs() { return Object.values(S.empDocs || {}).filter(d => d.ym === RV.ym && (!RV.type || d.type === RV.type)); }
+const monthLong = ym => `${MONTH_FULL[+ym.slice(5, 7) - 1][0]}${MONTH_FULL[+ym.slice(5, 7) - 1].slice(1).toLowerCase()} ${ym.slice(0, 4)}`;
 function renderReports() {
   const v = $('#v-reports'); RV.ym ||= PV_.ym || AV.ym || cycleOfDate(todayISO());
-  const docs = reportDocs(), by = new Map(); for (const d of docs) { const k = d.empId; (by.get(k) || by.set(k, {}).get(k))[d.type] = [...((by.get(k)[d.type]) || []), d]; }
-  const q = norm(RV.q), types = RV.type ? DOC_TYPES.filter(t => t[0] === RV.type) : DOC_TYPES;
-  const people = payRows(RV.ym).map(r => r.e); for (const id of by.keys()) if (!people.some(e => e.id === id) && IX.emp.get(id)) people.push(IX.emp.get(id));
-  const list = people.filter(e => (!RV.only || by.has(e.id)) && (!q || norm(e.name).includes(q) || norm(e.empCode).includes(q))).sort((a, b) => (by.has(b.id) - by.has(a.id)) || (a.empCode || '').localeCompare(b.empCode || ''));
-  const tot = Object.fromEntries(DOC_TYPES.map(t => [t[0], docs.filter(d => d.type === t[0]).length]));
-  const LIM = 300, shown = list.slice(0, RV.all ? list.length : LIM);
-  v.innerHTML = docHead('Reports', `${docs.length} report(s) for payroll month ${fmtMonYY(RV.ym)} · ${by.size} personnel`, `
-      <label class="small">Payroll month <input type="month" id="rp-ym" value="${RV.ym}"></label>
-      <select id="rp-t">${opts(DOC_TYPES.map(t => [t[0], `${t[1]} (${tot[t[0]]})`]), RV.type, 'All reports')}</select>
-      <input type="search" id="rp-q" placeholder="Find name / code" value="${esc(RV.q)}" style="width:140px">
-      <label class="small"><input type="checkbox" id="rp-only"${RV.only ? ' checked' : ''}> Only with reports</label>
-      <button class="btn sm" id="rp-up">Upload named files…</button><button class="btn sm" id="rp-split">Split a merged PDF…</button>
-      <select id="rp-ord" title="Order of the merged PDF"><option value="type"${RV.order === 'type' ? ' selected' : ''}>Merge by report, then person</option><option value="emp"${RV.order === 'emp' ? ' selected' : ''}>Merge by person, then report</option></select>
-      <button class="btn sm pri" id="rp-merge">Download merged PDF${RV.checked.size ? ` (${RV.checked.size})` : ''}</button>`)
-    + `<div class="dc"><div class="tw tall"><table class="rp"><thead><tr><th><input type="checkbox" id="rp-all"></th><th>Emp ID</th><th>Name</th><th>Site</th>${types.map(t => `<th class="c">${t[1]}</th>`).join('')}</tr></thead><tbody>
-      ${shown.map(e => `<tr><td><input type="checkbox" data-rc="${e.id}"${RV.checked.has(e.id) ? ' checked' : ''}></td><td class="mono">${esc(e.empCode || '')}</td><td>${esc(e.name)}</td><td class="small">${esc(siteName(assignOn(e, payrollCycle(RV.ym).end)?.site || e.assign?.[0]?.site))}</td>
-        ${types.map(t => { const ds = by.get(e.id)?.[t[0]] || []; return `<td class="c">${ds.length ? `<button class="btn sm rp-has" data-rd="${e.id}|${t[0]}" title="${ds.map(d => esc(d.name)).join('\n')}">✓ ${ds.reduce((a, d) => a + d.pages, 0)} p</button>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('') || '<tr><td colspan="9" class="muted" style="padding:16px">Nobody matches.</td></tr>'}
-      </tbody></table></div>${list.length > shown.length ? `<div class="row" style="margin-top:6px"><span class="muted small">Showing ${shown.length} of ${list.length}.</span><button class="btn sm" id="rp-more">Show all</button></div>` : ''}
-      <div class="muted small" style="margin-top:6px">Tick people (none ticked = everyone with reports in this list) and download one PDF. Supervisors can scan reports on the phone, and personnel can send their own medical report – they arrive here with the sync.</div></div>`;
+  const month = Object.values(S.empDocs || {}).filter(d => d.ym === RV.ym), cnt = Object.fromEntries(DOC_TYPES.map(t => [t[0], month.filter(d => d.type === t[0]).length]));
+  const docs = reportDocs(), q = norm(RV.q), by = new Map();
+  for (const d of docs) { const e = IX.emp.get(d.empId); if (!e) continue; const site = assignOn(e, payrollCycle(RV.ym).end)?.site || e.assign?.[0]?.site, p = projOfSite(site);
+    if (SEL.client && p?.clientId !== SEL.client || SEL.project && p?.id !== SEL.project || SEL.site && site !== SEL.site) continue;
+    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q)) continue;
+    (by.get(e.id) || by.set(e.id, { e, site, ds: [] }).get(e.id)).ds.push(d); }
+  const list = [...by.values()].sort((a, b) => (a.e.empCode || '').localeCompare(b.e.empCode || '') || a.e.name.localeCompare(b.e.name));
+  for (const id of [...RV.checked]) if (!by.has(id)) RV.checked.delete(id);
+  const nSel = RV.checked.size, pages = list.filter(x => !nSel || RV.checked.has(x.e.id)).reduce((a, x) => a + x.ds.reduce((b, d) => b + d.pages, 0), 0);
+  v.innerHTML = docHead('Reports', `${monthLong(RV.ym)} payroll month`, `<input type="month" id="rp-ym" value="${RV.ym}" title="Payroll month">
+      <button class="btn sm" id="rp-add">Add reports…</button>
+      <button class="btn sm pri" id="rp-merge"${list.length ? '' : ' disabled'}>Download ${nSel ? nSel + ' selected' : 'all ' + list.length} as one PDF${pages ? ` (${pages} p)` : ''}</button>`)
+    + `<div class="dc"><div class="rp-bar"><span class="seg rp-chips"><button data-rt=""${RV.type ? '' : ' class="on"'}>All <b>${month.length}</b></button>${DOC_TYPES.map(t => `<button data-rt="${t[0]}"${RV.type === t[0] ? ' class="on"' : ''}>${t[1]} <b>${cnt[t[0]]}</b></button>`).join('')}</span>
+      <input type="search" id="rp-q" placeholder="Find name or Emp ID" value="${esc(RV.q)}"></div>
+    ${list.length ? `<div class="tw tall"><table class="rp"><thead><tr><th style="width:28px"><input type="checkbox" id="rp-all"${nSel && nSel === list.length ? ' checked' : ''}></th><th>Emp ID</th><th>Name</th><th>Site</th><th>Reports – click to open</th></tr></thead><tbody>
+      ${list.map(x => { const g = {}; for (const d of x.ds) (g[d.type] ||= []).push(d);
+        return `<tr><td><input type="checkbox" data-rc="${x.e.id}"${RV.checked.has(x.e.id) ? ' checked' : ''}></td><td class="mono">${esc(x.e.empCode || '')}</td><td>${esc(x.e.name)}</td><td class="small">${esc(siteName(x.site))}</td>
+          <td>${DOC_TYPES.filter(t => g[t[0]]).map(t => `<button class="rp-chip" data-rd="${x.e.id}|${t[0]}">${t[1]} · ${g[t[0]].reduce((a, d) => a + d.pages, 0)} p</button>`).join('')}</td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="rp-empty"><b>No ${RV.type ? docTypeName(RV.type).toLowerCase() + ' ' : ''}reports for ${monthLong(RV.ym)}${RV.q ? ' matching “' + esc(RV.q) + '”' : ''}.</b>
+        <p>Reports get here in three ways:</p><ol><li><b>Add reports… → Files</b> – name each file <span class="mono">EmpID_TYPE_YYYY-MM.pdf</span>, e.g. <span class="mono">C14761_MED_2026-09.pdf</span> (TYPE: ${DOC_TYPES.map(t => `<span class="mono">${t[0]}</span> ${t[1].toLowerCase()}`).join(', ')}); they are filed to the right person.</li>
+        <li><b>Add reports… → One scanned PDF with many people</b> – type the Emp ID on each person's first page.</li><li><b>Phone</b> – supervisors scan any report; personnel send their own medical report. They arrive with the sync.</li></ol></div>`}</div>`;
   $('#rp-ym', v).onchange = e => { RV.ym = e.target.value; RV.checked.clear(); renderReports(); };
-  $('#rp-t', v).onchange = e => { RV.type = e.target.value; renderReports(); };
+  v.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { RV.type = b.dataset.rt; RV.checked.clear(); renderReports(); });
   let qt; $('#rp-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { RV.q = e.target.value; renderReports(); const q = $('#rp-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
-  $('#rp-only', v).onchange = e => { RV.only = e.target.checked; renderReports(); };
-  $('#rp-ord', v).onchange = e => { RV.order = e.target.value; };
-  $('#rp-up', v).onclick = () => pickFiles('application/pdf,image/*', true, uploadReports);
-  $('#rp-split', v).onclick = () => pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000)));
-  $('#rp-merge', v).onclick = () => mergeReports(list).catch(e => toast(e.message, 6000));
-  $('#rp-more', v)?.addEventListener('click', () => { RV.all = true; renderReports(); });
-  $('#rp-all', v).onchange = e => { shown.forEach(x => e.target.checked ? RV.checked.add(x.id) : RV.checked.delete(x.id)); renderReports(); };
-  v.querySelectorAll('[data-rc]').forEach(c => c.onchange = () => { c.checked ? RV.checked.add(c.dataset.rc) : RV.checked.delete(c.dataset.rc); $('#rp-merge').textContent = `Download merged PDF${RV.checked.size ? ` (${RV.checked.size})` : ''}`; });
-  v.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => { const [id, t] = b.dataset.rd.split('|'); docsDialog(by.get(id)[t]); });
+  $('#rp-add', v).onclick = e => addReportsMenu(e.currentTarget);
+  $('#rp-merge', v).onclick = () => mergeReports(list.map(x => x.e)).catch(er => toast(er.message, 6000));
+  $('#rp-all', v)?.addEventListener('change', e => { list.forEach(x => e.target.checked ? RV.checked.add(x.e.id) : RV.checked.delete(x.e.id)); renderReports(); });
+  v.querySelectorAll('[data-rc]').forEach(c => c.onchange = () => { c.checked ? RV.checked.add(c.dataset.rc) : RV.checked.delete(c.dataset.rc); renderReports(); });
+  v.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => { const [id, t] = b.dataset.rd.split('|'); docsDialog(by.get(id).ds.filter(d => d.type === t)); });
+}
+function addReportsMenu(btn) {
+  const dd = $('#dropdown');
+  dd.innerHTML = `<button data-ar="files"><span><b>Files</b><br><span class="muted small">PDFs or photos named EmpID_TYPE_YYYY-MM – many at once</span></span></button><button data-ar="split"><span><b>One scanned PDF with many people</b><br><span class="muted small">type the Emp ID on each person's first page</span></span></button>`;
+  const r = btn.getBoundingClientRect(); dd.style.left = Math.max(8, r.right - 320) + 'px'; dd.style.top = r.bottom + 4 + 'px'; dd.style.width = '320px'; dd.hidden = false;
+  dd.querySelector('[data-ar="files"]').onclick = () => { closeMenu(); dd.style.width = ''; pickFiles('application/pdf,image/*', true, uploadReports); };
+  dd.querySelector('[data-ar="split"]').onclick = () => { closeMenu(); dd.style.width = ''; pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000))); };
 }
 /** the reports in one cell: open, move to another person / month, delete */
 function docsDialog(ds) {
@@ -130,7 +136,7 @@ function docsDialog(ds) {
 async function mergeReports(list) {
   const ids = RV.checked.size ? list.filter(e => RV.checked.has(e.id)) : list, rank = new Map(ids.map((e, i) => [e.id, (e.empCode || '') + '|' + i]));
   const ti = Object.fromEntries(DOC_TYPES.map((t, i) => [t[0], i]));
-  const docs = reportDocs().filter(d => rank.has(d.empId)).sort((a, b) => RV.order === 'emp' ? rank.get(a.empId).localeCompare(rank.get(b.empId)) || ti[a.type] - ti[b.type] || a.addedAt.localeCompare(b.addedAt) : ti[a.type] - ti[b.type] || rank.get(a.empId).localeCompare(rank.get(b.empId)) || a.addedAt.localeCompare(b.addedAt));
+  const docs = reportDocs().filter(d => rank.has(d.empId)).sort((a, b) => ti[a.type] - ti[b.type] || rank.get(a.empId).localeCompare(rank.get(b.empId)) || a.addedAt.localeCompare(b.addedAt));
   if (!docs.length) return toast('No reports for the chosen people and filters');
   const parts = []; for (const d of docs) { const b = await Files.get(d.fileId); if (!b) return toast(`${d.name} is missing in this browser`, 6000); parts.push({ pdf: b }); }
   toast('Merging…', 60000);

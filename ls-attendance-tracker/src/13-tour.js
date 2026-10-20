@@ -9,9 +9,9 @@ const TOUR = (() => {
   const STEPS = {
     live: [TABS,
       { sel: '#lv-site', t: 'Pick a site', d: 'Show one site only, or all sites.' },
-      { sel: V('live') + ' .kpis', t: 'Right now', d: 'On duty, checked out, not checked in yet, and anyone outside their zone – from the last sync.' },
+      { sel: '.lv-k', t: 'Right now', d: 'On duty, checked out, not checked in yet, and anyone outside their zone – from the last sync. Click a figure to list who it is; Last sync syncs again.' },
       { sel: '#lv-map', t: 'Map', d: 'Green = on duty, amber = on duty but waiting for review, grey = checked out. Click a dot for name, time and distance from the pin.' },
-      { sel: V('live') + ' .ppl', t: 'Personnel today', d: 'Click a name to zoom to them on the map. Double-click to open their Insights (route, punctuality, face check).' },
+      { sel: V('live') + ' .ppl', t: 'Who', d: 'The people behind the figure you clicked – Not checked in is grouped by shift with its start time. Click a name to zoom to them on the map; double-click opens their Insights.' },
       { sel: '#toolbar', t: 'Sync now', d: 'Fetches the newest check-ins and positions from the phones. It also runs every 5 minutes by itself.' }],
     insights: [TABS,
       { sel: V('insights') + ' .ins-f', t: 'Filters', d: 'Choose dates, project, site, shift or one person. 7 / 30 / 90 days are quick ranges.' },
@@ -111,8 +111,13 @@ const TOUR = (() => {
     const el = $(s.sel);
     if (!visible(el)) { const nx = i + dir; return nx >= 0 && nx < steps.length ? show(nx, dir) : stop(); }      // not on screen (e.g. empty section): skip
     el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    // plays by itself: each step stays long enough to read (4–12 s), with Pause / Play
+    const ms = Math.min(12000, Math.max(4000, (s.t + ' ' + s.d.replace(/<[^>]+>/g, '')).split(/\s+/).length * 330));
     tip.innerHTML = `<button class="tour-x" data-tx aria-label="Close">✕</button><div class="tour-n">${i + 1} of ${steps.length}</div><b>${s.t}</b><p>${s.d}</p>
-      <div class="tour-b"><button class="btn sm" data-tb ${i ? '' : 'style="visibility:hidden"'}>Back</button><span style="flex:1"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
+      <div class="tour-prog"><i style="${playing ? `animation-duration:${ms}ms` : 'animation:none;width:0'}"></i></div>
+      <div class="tour-b"><button class="btn sm" data-tb ${i ? '' : 'style="visibility:hidden"'}>Back</button><button class="btn sm" data-tp>${playing ? 'Pause' : 'Play'}</button><span style="flex:1"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
+    clearTimeout(auto); if (playing) auto = setTimeout(() => { if (my === gen && tip) i < steps.length - 1 ? show(i + 1) : stop(); }, ms);
+    tip.querySelector('[data-tp]').onclick = () => { playing = !playing; show(i); };
     tip.querySelector('[data-tx]').onclick = stop;
     tip.querySelector('[data-tn]').onclick = () => i < steps.length - 1 ? show(i + 1) : stop();
     tip.querySelector('[data-tb]').onclick = () => i && show(i - 1, -1);
@@ -127,7 +132,7 @@ const TOUR = (() => {
     if (!steps.length) return toast('Nothing to show on this page yet');
     hole = document.createElement('div'); hole.className = 'tour-hole';
     tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog');
-    document.body.append(hole, tip);
+    document.body.append(hole, tip); playing = true;
     addEventListener('resize', place); addEventListener('scroll', place, true); document.addEventListener('keydown', key, true);
     show(0);
   }
@@ -141,8 +146,9 @@ const TOUR = (() => {
     pick.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => start(b.dataset.tp === 'full' ? 'full' : curView));
     setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!pick?.contains(e.target)) { pick?.remove(); pick = null; document.removeEventListener('mousedown', off); } }), 0);
   }
+  let playing = true, auto = null;
   function stop() {
-    gen++; pick?.remove(); pick = null;
+    gen++; clearTimeout(auto); pick?.remove(); pick = null;
     hole?.remove(); tip?.remove(); hole = tip = null;
     removeEventListener('resize', place); removeEventListener('scroll', place, true); document.removeEventListener('keydown', key, true);
   }

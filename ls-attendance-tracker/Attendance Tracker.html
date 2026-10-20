@@ -429,8 +429,20 @@ table.ts td.nm{text-align:left;padding:1px 3px;line-height:1.15;overflow:hidden;
 .spark{display:flex;align-items:flex-end;gap:3px;height:60px}
 .spark i{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px;position:relative}
 .spark i b{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font:500 9px var(--font-mono);color:var(--faint);white-space:nowrap}
-.live{display:grid;grid-template-columns:1fr 360px;gap:12px;flex:1;min-height:420px}      /* fills the rest of the page */
-.live .mapbox{height:100%;min-height:420px}
+.live{display:grid;grid-template-columns:1fr 300px;gap:12px;flex:1;min-height:520px}      /* fills the rest of the page */
+.live .mapbox{height:100%;min-height:520px}
+.subtabs .lv-site{float:right;margin-top:-2px;max-width:240px}
+.lv-side{display:flex;flex-direction:column;min-height:0;gap:8px}
+.lv-k{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lv-k .kpi{text-align:left;cursor:pointer;padding:6px 9px;border:1px solid var(--line2);border-radius:var(--r);background:var(--raised);display:flex;flex-direction:column;gap:1px;font:inherit}
+.lv-k .kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600}
+.lv-k .kpi .v{font-size:18px;font-weight:700;color:var(--c,var(--heading));line-height:1.2}
+.lv-k .kpi .s{font-size:10.5px;color:var(--neg)}
+.lv-k .kpi:hover{border-color:var(--accent)}.lv-k .kpi.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft2)}
+.lv-k .kpi.sync .v{font-size:13px}
+.lv-side .ppl{flex:1;border:1px solid var(--line2);border-radius:var(--r);padding:0 6px}
+.lv-h{display:flex;align-items:center;gap:6px;padding:6px 2px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:var(--surface)}
+.lv-sh{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);padding:8px 2px 2px}
 .ppl{height:100%;min-height:0;overflow:auto}
 .ppl .pr{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .ppl .pr:hover{background:var(--surface2)}
@@ -723,6 +735,14 @@ tr.warnrow td{background:#fff8e6}
 .ts-sheet .tl-logo{position:relative;min-height:40px;display:flex;align-items:center;justify-content:center}
 .ts-sheet .tl-tools{position:absolute;inset:auto 0 0 0;display:flex;gap:4px;justify-content:center;opacity:0;transition:opacity .15s}
 .ts-sheet .tl-logo:hover .tl-tools{opacity:1}
+.tour-prog{height:3px;background:var(--line2);border-radius:2px;margin:8px 0 2px;overflow:hidden}
+.tour-prog i{display:block;height:100%;background:var(--accent);width:0;animation:tourprog linear forwards}
+@keyframes tourprog{from{width:0}to{width:100%}}
+
+.rp-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.rp-bar input[type=search]{width:200px}
+.rp-chips button b{margin-left:4px;font-weight:700;opacity:.75}
+.rp-chip{border:1px solid var(--line2);background:var(--accent-soft2);color:var(--heading);border-radius:12px;padding:2px 10px;margin:2px 6px 2px 0;font:inherit;font-size:12px;cursor:pointer}.rp-chip:hover{border-color:var(--accent)}
+.rp-empty{border:1px dashed var(--line2);border-radius:var(--r);padding:16px 20px;max-width:760px;line-height:1.55}.rp-empty ol{margin:6px 0 0;padding-left:20px}
 
 </style>
 </head>
@@ -4352,7 +4372,7 @@ const TOOLBAR = {
   timesheets: () => [{ l: 'Email…', f: () => emailClient({ clientId: SEL.client || IX.proj.get(SEL.project)?.clientId || '', projectId: SEL.project || '' }), t: 'Email timesheets / invoice packs to a client' }, 'sep', { l: 'Export Excel', f: () => tsCmd('xlsx'), t: 'One tab per ticked project (LS/DO/F-026)' }, { l: 'Print / PDF', f: () => tsCmd('print'), strong: true }],
   invoices: () => [{ l: 'New invoice', f: () => ivCmd('new') }, { l: 'Email…', f: () => emailClient({ clientId: IV.draft?.clientId || SEL.client || '', ym: IV.draft?.from }), t: 'Email invoice packs / timesheets to a client' }, 'sep', { l: 'Generate lines', f: () => ivCmd('gen'), t: 'From attendance for the ticked projects and months' }, { l: 'Save', f: () => ivCmd('save') }, { l: 'Print / PDF', f: () => ivCmd('print'), t: 'Generated pages only, through the browser print dialog' }, { l: 'Download pack PDF', f: () => ivCmd('build'), strong: true, t: 'One PDF: SAP page, break-up, timesheets and the project documents' }],
   payroll: () => [{ l: 'Download Excel', f: () => exportPayrollXlsx(PV_.ym).catch(e => toast(e.message, 6000)), strong: true, t: 'The payroll attendance sheet with its formulas and the Abstract sheet' }, { l: 'Open Attendance', f: () => { AV.ym = PV_.ym; AV.mode = 'payroll'; showView('attendance'); }, t: 'Day values are edited in Attendance' }],
-  reports: () => [{ l: 'Upload named files…', f: () => pickFiles('application/pdf,image/*', true, uploadReports) }, { l: 'Split a merged PDF…', f: () => pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000))) }, 'sep', { l: 'Download merged PDF', f: () => $('#rp-merge')?.click(), strong: true }],
+  reports: () => [],
   tracker: () => [{ l: 'Download Excel', f: () => exportTrackerXlsx().catch(e => toast(e.message, 6000)), strong: true, t: 'Tax Invoice Tracker for the year, laid out like the workbook' }],
   employees: () => { const n = EV.checked.size; return [{ l: 'Add personnel', f: () => editEmployee(null) }, { l: 'Upload photos…', f: () => pickFiles('image/*', true, bulkPhotos), t: 'Many photos at once – each file named by Emp ID, e.g. C52392.jpg' }, 'sep', { l: 'Import employee list…', f: () => $('#hdr-import').click(), t: 'The EMPLOYEE LIST / RESIGNATION workbook – details are matched by Emp. Code' }, { l: 'Export directory', f: () => exportDirectoryXlsx().catch(e => toast(e.message)), t: 'EMPLOYEE LIST + RESIGNATION sheets in the LS layout' }, { l: 'Blank template', f: () => exportDirectoryXlsx(true).catch(e => toast(e.message)) }, 'sep', ...(n ? [{ l: 'Assign to site…', f: () => bulkAssign('site') }, { l: 'Change shift…', f: () => bulkAssign('shift') }, { l: 'Mark as resigned…', f: bulkEnd }, EV.status === 'black' ? { l: 'Remove from blacklist', f: () => bulkBlacklist(false) } : { l: 'Blacklist…', f: () => bulkBlacklist(true) }, { l: 'Delete…', f: bulkDelete }, { l: 'App access…', f: () => appAccessBulk([...EV.checked].map(id => IX.emp.get(id)).filter(Boolean)), t: 'Enable the personnel app, give PINs, print slips' }] : []), { l: n ? `${n} ticked` : 'Tick security personnel for more actions', dis: true }]; },
   projects: () => [{ l: 'Add project', f: () => editProject(null) }, { l: 'Add site', f: () => editSite(null, SEL.project || null) }, { l: 'Clients…', f: clientsDialog }, 'sep', { l: 'Upload documents in bulk…', f: () => pickFiles('application/pdf', true, fs => bulkDocs(fs).catch(err => toast(err.message, 6000))), t: 'Work Order Instructions for many projects at once – matched by the WOI / PO number in each PDF' }],
@@ -4968,12 +4988,29 @@ async function renderLive() {
   const n = k => rows.filter(r => r.st === k).length, out = rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone).length;
   const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
   const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
-  v.innerHTML = docHead('Live', `today ${fmtDMY(today)} · from synced punches and shift positions`, `<select id="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`) + `<div class="dc">
+  // site filter in line with the Live map / Review tabs; the figures sit beside the map and open the list of who is behind them
+  $('#subtabs').querySelector('#lv-site')?.remove();
+  $('#subtabs').insertAdjacentHTML('beforeend', `<select id="lv-site" class="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`);
+  const starts = appCfg().starts || {}, nowHM = new Date().toTimeString().slice(0, 5), shiftOf = r => assignOn(r.e, today)?.shift || r.e.shift || 'DAY';
+  const groups = { on: rows.filter(r => r.st === 'on' || r.st === 'pe'), done: rows.filter(r => r.st === 'done'), no: rows.filter(r => r.st === 'no'), out: rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone) };
+  const lateNo = groups.no.filter(r => starts[shiftOf(r)] && nowHM >= starts[shiftOf(r)]).length;
+  const K = [['on', 'On duty now', groups.on.length, 'var(--pos)'], ['done', 'Checked out', groups.done.length, ''], ['no', 'Not checked in', groups.no.length, groups.no.length ? 'var(--neg)' : '', lateNo ? `${lateNo} past shift start` : ''], ['out', 'Outside zone', groups.out.length, groups.out.length ? 'var(--warn)' : '']];
+  const sel = LV.k && groups[LV.k] ? LV.k : null, list = sel ? groups[sel] : [];
+  const personRow = r => { const sh = shiftOf(r), st0 = starts[sh], due = r.st === 'no' && st0 ? (nowHM >= st0 ? `<span class="pill neg">due ${st0}</span>` : `<span class="pill">starts ${st0}</span>`) : '';
+    return `<div class="pr" data-lv="${rows.indexOf(r)}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
+      <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${esc(sh)}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}${r.last && !r.last.inZone && r.st !== 'done' ? ' · outside zone' : ''}</div></div>${due}${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`; };
+  const byShift = sel === 'no' ? Object.entries(list.reduce((a, r) => ((a[shiftOf(r)] ||= []).push(r), a), {})).sort((a, b) => (starts[a[0]] || '').localeCompare(starts[b[0]] || '')) : null;
+  v.innerHTML = `<div class="dc">
     ${guideHTML()}
-    <div class="kpis">${[['On duty now', n('on') + n('pe'), 'var(--pos)'], ['Checked out', n('done')], ['Not checked in', n('no'), n('no') ? 'var(--neg)' : ''], ['Outside zone', out, out ? 'var(--warn)' : ''], ['Last sync', `<span style="font-size:13px">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span>`]].map(([k, x, col]) => `<div class="kpi" ${col ? `style="--c:${col}"` : ''}><div class="l">${k}</div><div class="v">${x}</div></div>`).join('')}</div>
     <div class="live"><div class="mapbox" id="lv-map"></div>
-    <div class="ppl">${rows.map((r, i) => `<div class="pr" data-lv="${i}"><span class="dot ${r.st === 'on' ? 'on' : r.st === 'pe' ? 'pe' : r.st === 'no' ? 'no' : ''}"></span><span class="avatar" data-av="${r.e.id}">${esc(initials(r.e.name))}</span>
-      <div style="min-width:0;flex:1"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.e.name)}</div><div class="muted small">${esc(siteName(r.site) || '—')} · ${lbl[r.st]}${r.st === 'code' ? ' ' + esc(r.code) : ''}${r.pos ? ` · ${r.pos.ping ? 'seen' : r.last.type === 'in' ? 'in' : 'out'} ${tm(r.pos.ts)}` : ''}</div></div>${r.last?.face ? FACE.badge(r.last.face) : ''}</div>`).join('') || '<p class="muted">Nobody on the app is rostered today.</p>'}</div></div></div>`;
+    <div class="lv-side"><div class="lv-k">${K.map(([k, l, n, col, sub]) => `<button class="kpi${sel === k ? ' on' : ''}" data-k="${k}" ${col ? `style="--c:${col}"` : ''}><span class="l">${l}</span><span class="v">${n}</span>${sub ? `<span class="s">${sub}</span>` : ''}</button>`).join('')}
+      <button class="kpi sync" id="lv-sync" title="Sync now"><span class="l">Last sync</span><span class="v">${appCfg().lastSync ? tm(appCfg().lastSync) : 'never'}</span></button></div>
+    <div class="ppl">${sel ? `<div class="lv-h"><b>${K.find(x => x[0] === sel)[1]}</b><span class="muted small">${list.length}</span><span class="spacer"></span><button class="btn sm" id="lv-all">✕</button></div>`
+      + (byShift ? byShift.map(([sh, rs]) => `<div class="lv-sh">${esc(sh)} shift${starts[sh] ? ' · starts ' + starts[sh] : ''} · ${rs.length}</div>${rs.map(personRow).join('')}`).join('') : list.map(personRow).join('')) + (list.length ? '' : '<p class="muted small" style="padding:8px">Nobody.</p>')
+      : `<p class="muted small" style="padding:8px 4px">Click a figure to see who is behind it – e.g. <b>Not checked in</b> lists who has not started, by shift.</p>${rows.length ? '' : '<p class="muted">Nobody on the app is rostered today.</p>'}`}</div></div></div></div>`;
+  v.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { LV.k = LV.k === b.dataset.k ? null : b.dataset.k; renderLive(); });
+  $('#lv-all', v)?.addEventListener('click', () => { LV.k = null; renderLive(); });
+  $('#lv-sync', v).onclick = () => syncApp();
   bindGuide(v);
   bindSecs(v); $('#lv-site').onchange = e => { LV.site = e.target.value; renderLive(); };
   for (const el of v.querySelectorAll('[data-av]')) { const e = IX.emp.get(el.dataset.av); if (e?.photo) photoURL(e).then(u => { if (u) el.innerHTML = `<img src="${u}" alt="">`; }); }
@@ -5304,9 +5341,9 @@ const TOUR = (() => {
   const STEPS = {
     live: [TABS,
       { sel: '#lv-site', t: 'Pick a site', d: 'Show one site only, or all sites.' },
-      { sel: V('live') + ' .kpis', t: 'Right now', d: 'On duty, checked out, not checked in yet, and anyone outside their zone – from the last sync.' },
+      { sel: '.lv-k', t: 'Right now', d: 'On duty, checked out, not checked in yet, and anyone outside their zone – from the last sync. Click a figure to list who it is; Last sync syncs again.' },
       { sel: '#lv-map', t: 'Map', d: 'Green = on duty, amber = on duty but waiting for review, grey = checked out. Click a dot for name, time and distance from the pin.' },
-      { sel: V('live') + ' .ppl', t: 'Personnel today', d: 'Click a name to zoom to them on the map. Double-click to open their Insights (route, punctuality, face check).' },
+      { sel: V('live') + ' .ppl', t: 'Who', d: 'The people behind the figure you clicked – Not checked in is grouped by shift with its start time. Click a name to zoom to them on the map; double-click opens their Insights.' },
       { sel: '#toolbar', t: 'Sync now', d: 'Fetches the newest check-ins and positions from the phones. It also runs every 5 minutes by itself.' }],
     insights: [TABS,
       { sel: V('insights') + ' .ins-f', t: 'Filters', d: 'Choose dates, project, site, shift or one person. 7 / 30 / 90 days are quick ranges.' },
@@ -5406,8 +5443,13 @@ const TOUR = (() => {
     const el = $(s.sel);
     if (!visible(el)) { const nx = i + dir; return nx >= 0 && nx < steps.length ? show(nx, dir) : stop(); }      // not on screen (e.g. empty section): skip
     el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    // plays by itself: each step stays long enough to read (4–12 s), with Pause / Play
+    const ms = Math.min(12000, Math.max(4000, (s.t + ' ' + s.d.replace(/<[^>]+>/g, '')).split(/\s+/).length * 330));
     tip.innerHTML = `<button class="tour-x" data-tx aria-label="Close">✕</button><div class="tour-n">${i + 1} of ${steps.length}</div><b>${s.t}</b><p>${s.d}</p>
-      <div class="tour-b"><button class="btn sm" data-tb ${i ? '' : 'style="visibility:hidden"'}>Back</button><span style="flex:1"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
+      <div class="tour-prog"><i style="${playing ? `animation-duration:${ms}ms` : 'animation:none;width:0'}"></i></div>
+      <div class="tour-b"><button class="btn sm" data-tb ${i ? '' : 'style="visibility:hidden"'}>Back</button><button class="btn sm" data-tp>${playing ? 'Pause' : 'Play'}</button><span style="flex:1"></span><button class="btn sm pri" data-tn>${i < steps.length - 1 ? 'Next' : 'Done'}</button></div>`;
+    clearTimeout(auto); if (playing) auto = setTimeout(() => { if (my === gen && tip) i < steps.length - 1 ? show(i + 1) : stop(); }, ms);
+    tip.querySelector('[data-tp]').onclick = () => { playing = !playing; show(i); };
     tip.querySelector('[data-tx]').onclick = stop;
     tip.querySelector('[data-tn]').onclick = () => i < steps.length - 1 ? show(i + 1) : stop();
     tip.querySelector('[data-tb]').onclick = () => i && show(i - 1, -1);
@@ -5422,7 +5464,7 @@ const TOUR = (() => {
     if (!steps.length) return toast('Nothing to show on this page yet');
     hole = document.createElement('div'); hole.className = 'tour-hole';
     tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog');
-    document.body.append(hole, tip);
+    document.body.append(hole, tip); playing = true;
     addEventListener('resize', place); addEventListener('scroll', place, true); document.addEventListener('keydown', key, true);
     show(0);
   }
@@ -5436,8 +5478,9 @@ const TOUR = (() => {
     pick.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => start(b.dataset.tp === 'full' ? 'full' : curView));
     setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!pick?.contains(e.target)) { pick?.remove(); pick = null; document.removeEventListener('mousedown', off); } }), 0);
   }
+  let playing = true, auto = null;
   function stop() {
-    gen++; pick?.remove(); pick = null;
+    gen++; clearTimeout(auto); pick?.remove(); pick = null;
     hole?.remove(); tip?.remove(); hole = tip = null;
     removeEventListener('resize', place); removeEventListener('scroll', place, true); document.removeEventListener('keydown', key, true);
   }
@@ -6811,7 +6854,7 @@ function bindPaySettings(v) {
 const DOC_TYPES = [['ATT', 'Attendance sheet', /\b(att|attendance|log ?sheet)\b/i], ['VEH', 'Vehicle attendance', /\b(veh|vehicle|trip|driver)/i], ['SVR', 'Security violation', /\b(svr|violation|penalty|fine)/i],
   ['MPR', 'Mispunch', /\b(mpr|mis-?s?punch|miss ?punch|biometric)/i], ['MED', 'Medical', /\b(med|medical|discharge|sick|hospital)/i]];
 const docTypeName = k => DOC_TYPES.find(t => t[0] === k)?.[1] || k;
-const RV = { ym: null, type: '', q: '', only: false, order: 'type', checked: new Set() };
+const RV = { ym: null, type: '', q: '', checked: new Set() };
 const empByCode = code => S.employees.find(e => norm(e.empCode) === norm(code)) || null;
 /** what a file name says: person, type, payroll month */
 function docParseName(name) {
@@ -6877,41 +6920,47 @@ async function splitReports(file) {
   const show = () => { let who = ''; pages.forEach((_, i) => { const v = $(`[data-sp="${i}"]`, m).value.trim(); if (v) { const e = empFromInput(v); who = e ? e.name : '?'; } $(`[data-spn="${i}"]`, m).textContent = who; }); };
   m.querySelectorAll('[data-sp]').forEach(inp => { inp.oninput = show; inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const v = inp.value.trim(), x = empFromInput(v); if (v && x) inp.value = `${x.empCode} – ${x.name}`; show(); m.querySelector(`[data-sp="${+inp.dataset.sp + 1}"]`)?.focus(); } }; });
 }
-/* ---------- the matrix ---------- */
+/* ---------- the list: only people who have reports this month; type chips; one download ---------- */
 function reportDocs() { return Object.values(S.empDocs || {}).filter(d => d.ym === RV.ym && (!RV.type || d.type === RV.type)); }
+const monthLong = ym => `${MONTH_FULL[+ym.slice(5, 7) - 1][0]}${MONTH_FULL[+ym.slice(5, 7) - 1].slice(1).toLowerCase()} ${ym.slice(0, 4)}`;
 function renderReports() {
   const v = $('#v-reports'); RV.ym ||= PV_.ym || AV.ym || cycleOfDate(todayISO());
-  const docs = reportDocs(), by = new Map(); for (const d of docs) { const k = d.empId; (by.get(k) || by.set(k, {}).get(k))[d.type] = [...((by.get(k)[d.type]) || []), d]; }
-  const q = norm(RV.q), types = RV.type ? DOC_TYPES.filter(t => t[0] === RV.type) : DOC_TYPES;
-  const people = payRows(RV.ym).map(r => r.e); for (const id of by.keys()) if (!people.some(e => e.id === id) && IX.emp.get(id)) people.push(IX.emp.get(id));
-  const list = people.filter(e => (!RV.only || by.has(e.id)) && (!q || norm(e.name).includes(q) || norm(e.empCode).includes(q))).sort((a, b) => (by.has(b.id) - by.has(a.id)) || (a.empCode || '').localeCompare(b.empCode || ''));
-  const tot = Object.fromEntries(DOC_TYPES.map(t => [t[0], docs.filter(d => d.type === t[0]).length]));
-  const LIM = 300, shown = list.slice(0, RV.all ? list.length : LIM);
-  v.innerHTML = docHead('Reports', `${docs.length} report(s) for payroll month ${fmtMonYY(RV.ym)} · ${by.size} personnel`, `
-      <label class="small">Payroll month <input type="month" id="rp-ym" value="${RV.ym}"></label>
-      <select id="rp-t">${opts(DOC_TYPES.map(t => [t[0], `${t[1]} (${tot[t[0]]})`]), RV.type, 'All reports')}</select>
-      <input type="search" id="rp-q" placeholder="Find name / code" value="${esc(RV.q)}" style="width:140px">
-      <label class="small"><input type="checkbox" id="rp-only"${RV.only ? ' checked' : ''}> Only with reports</label>
-      <button class="btn sm" id="rp-up">Upload named files…</button><button class="btn sm" id="rp-split">Split a merged PDF…</button>
-      <select id="rp-ord" title="Order of the merged PDF"><option value="type"${RV.order === 'type' ? ' selected' : ''}>Merge by report, then person</option><option value="emp"${RV.order === 'emp' ? ' selected' : ''}>Merge by person, then report</option></select>
-      <button class="btn sm pri" id="rp-merge">Download merged PDF${RV.checked.size ? ` (${RV.checked.size})` : ''}</button>`)
-    + `<div class="dc"><div class="tw tall"><table class="rp"><thead><tr><th><input type="checkbox" id="rp-all"></th><th>Emp ID</th><th>Name</th><th>Site</th>${types.map(t => `<th class="c">${t[1]}</th>`).join('')}</tr></thead><tbody>
-      ${shown.map(e => `<tr><td><input type="checkbox" data-rc="${e.id}"${RV.checked.has(e.id) ? ' checked' : ''}></td><td class="mono">${esc(e.empCode || '')}</td><td>${esc(e.name)}</td><td class="small">${esc(siteName(assignOn(e, payrollCycle(RV.ym).end)?.site || e.assign?.[0]?.site))}</td>
-        ${types.map(t => { const ds = by.get(e.id)?.[t[0]] || []; return `<td class="c">${ds.length ? `<button class="btn sm rp-has" data-rd="${e.id}|${t[0]}" title="${ds.map(d => esc(d.name)).join('\n')}">✓ ${ds.reduce((a, d) => a + d.pages, 0)} p</button>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('') || '<tr><td colspan="9" class="muted" style="padding:16px">Nobody matches.</td></tr>'}
-      </tbody></table></div>${list.length > shown.length ? `<div class="row" style="margin-top:6px"><span class="muted small">Showing ${shown.length} of ${list.length}.</span><button class="btn sm" id="rp-more">Show all</button></div>` : ''}
-      <div class="muted small" style="margin-top:6px">Tick people (none ticked = everyone with reports in this list) and download one PDF. Supervisors can scan reports on the phone, and personnel can send their own medical report – they arrive here with the sync.</div></div>`;
+  const month = Object.values(S.empDocs || {}).filter(d => d.ym === RV.ym), cnt = Object.fromEntries(DOC_TYPES.map(t => [t[0], month.filter(d => d.type === t[0]).length]));
+  const docs = reportDocs(), q = norm(RV.q), by = new Map();
+  for (const d of docs) { const e = IX.emp.get(d.empId); if (!e) continue; const site = assignOn(e, payrollCycle(RV.ym).end)?.site || e.assign?.[0]?.site, p = projOfSite(site);
+    if (SEL.client && p?.clientId !== SEL.client || SEL.project && p?.id !== SEL.project || SEL.site && site !== SEL.site) continue;
+    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q)) continue;
+    (by.get(e.id) || by.set(e.id, { e, site, ds: [] }).get(e.id)).ds.push(d); }
+  const list = [...by.values()].sort((a, b) => (a.e.empCode || '').localeCompare(b.e.empCode || '') || a.e.name.localeCompare(b.e.name));
+  for (const id of [...RV.checked]) if (!by.has(id)) RV.checked.delete(id);
+  const nSel = RV.checked.size, pages = list.filter(x => !nSel || RV.checked.has(x.e.id)).reduce((a, x) => a + x.ds.reduce((b, d) => b + d.pages, 0), 0);
+  v.innerHTML = docHead('Reports', `${monthLong(RV.ym)} payroll month`, `<input type="month" id="rp-ym" value="${RV.ym}" title="Payroll month">
+      <button class="btn sm" id="rp-add">Add reports…</button>
+      <button class="btn sm pri" id="rp-merge"${list.length ? '' : ' disabled'}>Download ${nSel ? nSel + ' selected' : 'all ' + list.length} as one PDF${pages ? ` (${pages} p)` : ''}</button>`)
+    + `<div class="dc"><div class="rp-bar"><span class="seg rp-chips"><button data-rt=""${RV.type ? '' : ' class="on"'}>All <b>${month.length}</b></button>${DOC_TYPES.map(t => `<button data-rt="${t[0]}"${RV.type === t[0] ? ' class="on"' : ''}>${t[1]} <b>${cnt[t[0]]}</b></button>`).join('')}</span>
+      <input type="search" id="rp-q" placeholder="Find name or Emp ID" value="${esc(RV.q)}"></div>
+    ${list.length ? `<div class="tw tall"><table class="rp"><thead><tr><th style="width:28px"><input type="checkbox" id="rp-all"${nSel && nSel === list.length ? ' checked' : ''}></th><th>Emp ID</th><th>Name</th><th>Site</th><th>Reports – click to open</th></tr></thead><tbody>
+      ${list.map(x => { const g = {}; for (const d of x.ds) (g[d.type] ||= []).push(d);
+        return `<tr><td><input type="checkbox" data-rc="${x.e.id}"${RV.checked.has(x.e.id) ? ' checked' : ''}></td><td class="mono">${esc(x.e.empCode || '')}</td><td>${esc(x.e.name)}</td><td class="small">${esc(siteName(x.site))}</td>
+          <td>${DOC_TYPES.filter(t => g[t[0]]).map(t => `<button class="rp-chip" data-rd="${x.e.id}|${t[0]}">${t[1]} · ${g[t[0]].reduce((a, d) => a + d.pages, 0)} p</button>`).join('')}</td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="rp-empty"><b>No ${RV.type ? docTypeName(RV.type).toLowerCase() + ' ' : ''}reports for ${monthLong(RV.ym)}${RV.q ? ' matching “' + esc(RV.q) + '”' : ''}.</b>
+        <p>Reports get here in three ways:</p><ol><li><b>Add reports… → Files</b> – name each file <span class="mono">EmpID_TYPE_YYYY-MM.pdf</span>, e.g. <span class="mono">C14761_MED_2026-09.pdf</span> (TYPE: ${DOC_TYPES.map(t => `<span class="mono">${t[0]}</span> ${t[1].toLowerCase()}`).join(', ')}); they are filed to the right person.</li>
+        <li><b>Add reports… → One scanned PDF with many people</b> – type the Emp ID on each person's first page.</li><li><b>Phone</b> – supervisors scan any report; personnel send their own medical report. They arrive with the sync.</li></ol></div>`}</div>`;
   $('#rp-ym', v).onchange = e => { RV.ym = e.target.value; RV.checked.clear(); renderReports(); };
-  $('#rp-t', v).onchange = e => { RV.type = e.target.value; renderReports(); };
+  v.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { RV.type = b.dataset.rt; RV.checked.clear(); renderReports(); });
   let qt; $('#rp-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { RV.q = e.target.value; renderReports(); const q = $('#rp-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
-  $('#rp-only', v).onchange = e => { RV.only = e.target.checked; renderReports(); };
-  $('#rp-ord', v).onchange = e => { RV.order = e.target.value; };
-  $('#rp-up', v).onclick = () => pickFiles('application/pdf,image/*', true, uploadReports);
-  $('#rp-split', v).onclick = () => pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000)));
-  $('#rp-merge', v).onclick = () => mergeReports(list).catch(e => toast(e.message, 6000));
-  $('#rp-more', v)?.addEventListener('click', () => { RV.all = true; renderReports(); });
-  $('#rp-all', v).onchange = e => { shown.forEach(x => e.target.checked ? RV.checked.add(x.id) : RV.checked.delete(x.id)); renderReports(); };
-  v.querySelectorAll('[data-rc]').forEach(c => c.onchange = () => { c.checked ? RV.checked.add(c.dataset.rc) : RV.checked.delete(c.dataset.rc); $('#rp-merge').textContent = `Download merged PDF${RV.checked.size ? ` (${RV.checked.size})` : ''}`; });
-  v.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => { const [id, t] = b.dataset.rd.split('|'); docsDialog(by.get(id)[t]); });
+  $('#rp-add', v).onclick = e => addReportsMenu(e.currentTarget);
+  $('#rp-merge', v).onclick = () => mergeReports(list.map(x => x.e)).catch(er => toast(er.message, 6000));
+  $('#rp-all', v)?.addEventListener('change', e => { list.forEach(x => e.target.checked ? RV.checked.add(x.e.id) : RV.checked.delete(x.e.id)); renderReports(); });
+  v.querySelectorAll('[data-rc]').forEach(c => c.onchange = () => { c.checked ? RV.checked.add(c.dataset.rc) : RV.checked.delete(c.dataset.rc); renderReports(); });
+  v.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => { const [id, t] = b.dataset.rd.split('|'); docsDialog(by.get(id).ds.filter(d => d.type === t)); });
+}
+function addReportsMenu(btn) {
+  const dd = $('#dropdown');
+  dd.innerHTML = `<button data-ar="files"><span><b>Files</b><br><span class="muted small">PDFs or photos named EmpID_TYPE_YYYY-MM – many at once</span></span></button><button data-ar="split"><span><b>One scanned PDF with many people</b><br><span class="muted small">type the Emp ID on each person's first page</span></span></button>`;
+  const r = btn.getBoundingClientRect(); dd.style.left = Math.max(8, r.right - 320) + 'px'; dd.style.top = r.bottom + 4 + 'px'; dd.style.width = '320px'; dd.hidden = false;
+  dd.querySelector('[data-ar="files"]').onclick = () => { closeMenu(); dd.style.width = ''; pickFiles('application/pdf,image/*', true, uploadReports); };
+  dd.querySelector('[data-ar="split"]').onclick = () => { closeMenu(); dd.style.width = ''; pickFiles('application/pdf', false, fs => splitReports(fs[0]).catch(e => toast(e.message, 6000))); };
 }
 /** the reports in one cell: open, move to another person / month, delete */
 function docsDialog(ds) {
@@ -6928,7 +6977,7 @@ function docsDialog(ds) {
 async function mergeReports(list) {
   const ids = RV.checked.size ? list.filter(e => RV.checked.has(e.id)) : list, rank = new Map(ids.map((e, i) => [e.id, (e.empCode || '') + '|' + i]));
   const ti = Object.fromEntries(DOC_TYPES.map((t, i) => [t[0], i]));
-  const docs = reportDocs().filter(d => rank.has(d.empId)).sort((a, b) => RV.order === 'emp' ? rank.get(a.empId).localeCompare(rank.get(b.empId)) || ti[a.type] - ti[b.type] || a.addedAt.localeCompare(b.addedAt) : ti[a.type] - ti[b.type] || rank.get(a.empId).localeCompare(rank.get(b.empId)) || a.addedAt.localeCompare(b.addedAt));
+  const docs = reportDocs().filter(d => rank.has(d.empId)).sort((a, b) => ti[a.type] - ti[b.type] || rank.get(a.empId).localeCompare(rank.get(b.empId)) || a.addedAt.localeCompare(b.addedAt));
   if (!docs.length) return toast('No reports for the chosen people and filters');
   const parts = []; for (const d of docs) { const b = await Files.get(d.fileId); if (!b) return toast(`${d.name} is missing in this browser`, 6000); parts.push({ pdf: b }); }
   toast('Merging…', 60000);
