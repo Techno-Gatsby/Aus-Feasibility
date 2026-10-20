@@ -6724,7 +6724,7 @@ const PAY_DEF_CODES = { OFF: 'OFF', WO: 'OFF', PH: 'HD' };            // anythin
 const PAY_END = { RESIGNED: 'Resigned', TERMINATED: 'Terminated', ABSCONDED: 'Absconding', TRANSFERRED: 'Transfer Out', 'CONTRACT END': 'Exited', OTHER: 'Exited' };
 const PAY_LWD = ['NVR', 'Terminated', 'Resigned', 'Medical Unfit', 'Absconding', 'Deportation', 'Death Case', 'UPC', 'Exited', 'OSCC', 'Transfer Out'];
 const PAY_MAN = [['prod', 'Productivity\n Hours'], ['norest', 'No Rest/Lunch Hour'], ['arrN', 'Arrears - N OT'], ['arrSH', 'Arrears - S/H OT']];
-const PV_ = { ym: null, q: '', app: false };
+const PV_ = { ym: null, q: '', app: false, proj: '' };
 /** hours a worked day counts for this person: set per person (Hrs/day), else 16 for drivers and the shift hours (12) for others */
 const empHours = e => +e.payHours || (/DRIVER/i.test(`${e.trade || ''} ${e.hr?.designation || ''}`) ? +S.settings.driverHours || 16 : +S.settings.shiftHours || 12);
 /** hours worked that day from the phone app (check-in → check-out), rounded to a quarter hour; null when there are none */
@@ -6751,7 +6751,7 @@ function payWeeks(days) {
   while (w.length < 5) w.push([]);
   return w;
 }
-function payRows(ym) {
+function payRows(ym, all) {
   const { start, end } = payrollCycle(ym), days = payDays(ym), map = payCodeMap(), q = norm(PV_.q), out = [];
   const punchesBy = PV_.app ? new Map() : null; if (punchesBy) for (const p of Object.values(S.punches || {})) if (p.type === 'out' && p.status !== 'rejected' && +p.hours > 0) { const k = p.wid + '|' + p.workDate; punchesBy.set(k, (punchesBy.get(k) || 0) + +p.hours); }
   for (const e of S.employees) {
@@ -6773,7 +6773,8 @@ function payRows(ym) {
     if (SEL.site && last !== SEL.site) continue;
     if (SEL.project && p?.id !== SEL.project) continue;
     if (SEL.client && p?.clientId !== SEL.client) continue;
-    out.push({ e, v, src, H, site: site?.name || '', cost: site?.costCode || p?.orderCode || '', shift: assignOn(e, end)?.shift || e.shift || '' });
+    if (!all && PV_.proj && (p?.id || '-') !== PV_.proj) continue;
+    out.push({ e, v, src, H, pid: p?.id || '-', site: site?.name || '', cost: site?.costCode || p?.orderCode || '', shift: assignOn(e, end)?.shift || e.shift || '' });
   }
   return out.sort((a, b) => (a.e.empCode || 'zz').localeCompare(b.e.empCode || 'zz'));
 }
@@ -6789,12 +6790,23 @@ function payTotals(v, days, man = {}) {
   t.payNot = t.not + (+man.prod || 0) + (+man.norest || 0) + (+man.arrN || 0); t.paySot = t.sot + (+man.arrSH || 0);
   return t;
 }
-const payTitle = ym => { const { start, end } = payrollCycle(ym), f = d => `${+d.slice(8, 10)} ${MONTH_FULL[+d.slice(5, 7) - 1]}`; return `${S.settings.payTitle || 'SCL TECHNICIANS MONTHLY ATTENDANCE SHEET'} - ${f(start)} to ${f(end)} ${end.slice(0, 4)}`; };
+/** whose sheet it is: the chosen project, else the client / project picked in the tree, else the company */
+const payWho = () => PV_.proj ? (PV_.proj === '-' ? 'UNASSIGNED' : IX.proj.get(PV_.proj)?.name || '') : SEL.project ? IX.proj.get(SEL.project)?.name || '' : SEL.client ? IX.client.get(SEL.client)?.name || '' : S.settings.companyShort || 'LATINEM SECURITIES';
+const payTitle = ym => { const { start, end } = payrollCycle(ym), f = d => `${+d.slice(8, 10)} ${MONTH_FULL[+d.slice(5, 7) - 1]}`; return `${payWho().toUpperCase()} ${S.settings.payTitleTail || 'MONTHLY ATTENDANCE SHEET'} - ${f(start)} to ${f(end)} ${end.slice(0, 4)}`; };
+/** projects that have personnel in this payroll month, grouped by client, with the head count */
+function payProjOptions(ym) {
+  const n = new Map(); for (const r of payRows(ym, true)) n.set(r.pid, (n.get(r.pid) || 0) + 1);
+  const by = new Map(); for (const id of n.keys()) { const p = IX.proj.get(id), c = p && IX.client.get(p.clientId)?.name || 'Other'; if (!by.has(c)) by.set(c, []); by.get(c).push([id, p?.name || 'Not on a project']); }
+  let h = `<option value="">All projects (${[...n.values()].reduce((a, b) => a + b, 0)})</option>`;
+  for (const [c, ps] of [...by].sort((a, b) => a[0].localeCompare(b[0]))) h += `<optgroup label="${esc(c)}">` + ps.sort((a, b) => a[1].localeCompare(b[1])).map(([id, nm]) => `<option value="${id}"${id === PV_.proj ? ' selected' : ''}>${esc(nm)} (${n.get(id)})</option>`).join('') + '</optgroup>';
+  return h;
+}
 const PAY_TOT_H = ['TOTAL \nHOURS', 'DAYS \nPRESENT', 'WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', 'WEEK 5', 'Sick Leave', 'Annual Leave', 'Public \nHoilday', 'Sunday', 'LOP', 'Emergency \nLeave', 'Days- Prior to joining', 'Days - Prov. Attendance', 'Days - after LWD', 'TOTAL', 'Normal OT', 'Sunday OT', ...PAY_MAN.map(x => x[1]), 'Total Payable NOT Hours', 'Total Payable\n Sunday OT', 'Holiday OT', 'Remarks', 'Source'];
 const payTotVals = (t, man) => [t.hours, t.present, ...t.weeks, t.sl, t.al, t.ph, t.sun, t.lop, t.el, t.nj, t.pa, t.lwd, t.total, t.not, t.sot, ...PAY_MAN.map(([k]) => man[k] ?? ''), t.payNot, t.paySot, t.hot, man.remarks || '', man.src || 'Tracker'];
 
 function renderPayroll() {
   const v = $('#v-payroll'); PV_.ym ||= AV.ym || cycleOfDate(todayISO());
+  if (PV_.proj && PV_.proj !== '-' && !IX.proj.has(PV_.proj)) PV_.proj = '';
   const ym = PV_.ym, days = payDays(ym), rows = payRows(ym), man = S.payroll[ym] || {}, { start, end } = payrollCycle(ym);
   const col = x => x === '' ? '' : typeof x === 'number' ? codeDef('P').color : x === 'HD' ? codeDef('PH').color : IX.code.has(x) ? codeDef(x).color : '#EEF1F6';   // the attendance colours
   const LIM = 150, shown = rows.slice(0, PV_.all ? rows.length : LIM), fmt = x => typeof x === 'number' ? (Number.isInteger(x) ? x : x.toFixed(2)) : esc(x);
@@ -6813,8 +6825,9 @@ function renderPayroll() {
       + tv.map((x, j) => { const k = j - 19; const ed = k >= 0 && k < 4 ? PAY_MAN[k][0] : j === tv.length - 2 ? 'remarks' : null; return `<td class="tot${ed ? ' ed' : ''}${j === tv.length - 2 ? ' rm' : ''}"${ed ? ` data-pm="${r.e.id}|${ed}"` : ''}>${fmt(x)}</td>`; }).join('') + '</tr>';
   }).join('');
   const k = (lbl, n, c) => `<span class="st"><b style="color:${c}">${Number(Math.round(n * 100) / 100).toLocaleString()}</b> ${lbl}</span>`;
-  v.innerHTML = docHead('Payroll attendance <span class="tk-help" title="Days come from Attendance (change them there). Worked (P) days show each person\'s hours – drivers 16, others 12 by default; click Hrs/day to change a person, or a day to change that day (never 0). Codes and public holidays are in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here. Hover a name for designation, joining date and cost code (all in the Excel).">?</span>', `${fmtDMY(start)} – ${fmtDMY(end)}`, `
+  v.innerHTML = docHead('Payroll attendance <span class="tk-help" title="Days come from Attendance (change them there). Worked (P) days show each person\'s hours – drivers 16, others 12 by default; click Hrs/day to change a person, or a day to change that day (never 0). Pick a project to get its own sheet – the title, totals and Excel follow it. Codes, public holidays and the title wording are in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here. Hover a name for designation, joining date and cost code (all in the Excel).">?</span>', esc(payTitle(ym)), `
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
+      <select id="py-proj" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(ym)}</select>
       <input type="search" id="py-q" placeholder="Name or ID" value="${esc(PV_.q)}" style="width:140px">
       <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
       <button class="btn sm pri" id="py-xl">Download Excel</button>`)
@@ -6829,6 +6842,7 @@ function renderPayroll() {
   $('#py-ym', v).onchange = e => { PV_.ym = e.target.value; renderPayroll(); };
   let qt; $('#py-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { PV_.q = e.target.value; renderPayroll(); const q = $('#py-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
   $('#py-app', v).onchange = e => { PV_.app = e.target.checked; renderPayroll(); };
+  $('#py-proj', v).onchange = e => { PV_.proj = e.target.value; PV_.all = false; renderPayroll(); };
   $('#py-xl', v).onclick = () => exportPayrollXlsx(ym).catch(e => toast(e.message, 6000));
   $('#py-all', v)?.addEventListener('click', () => { PV_.all = true; renderPayroll(); });
   $('.py', v).onclick = e => {
@@ -6869,10 +6883,11 @@ async function exportPayrollXlsx(ym) {
   const L = c => colL(c - 1), D0 = 11, DL = D0 + n - 1, T = DL + 1;               // K = first day; totals from the column after the last day
   const col = Object.fromEntries(['hours', 'present', 'w1', 'w2', 'w3', 'w4', 'w5', 'sl', 'al', 'ph', 'sun', 'lop', 'el', 'nj', 'pa', 'lwd', 'total', 'not', 'sot', 'prod', 'norest', 'arrN', 'arrSH', 'payNot', 'paySot', 'hot', 'remarks', 'src'].map((k, i) => [k, T + i]));
   const head = { font: { name: 'Calibri', size: 10, bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }, border: thin, alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } };
-  ws.getCell(1, 1).value = payTitle(ym); ws.getCell(1, 1).font = { bold: true, size: 10.5 };
+  ws.mergeCells(1, 1, 1, D0 - 1); ws.getCell(1, 1).value = payTitle(ym); ws.getCell(1, 1).font = { bold: true, size: 10.5 };
+  ws.getCell(1, 1).alignment = { vertical: 'middle', wrapText: true }; ws.getRow(1).height = 30;   // wraps within A–J instead of running over the day names
   days.forEach((x, i) => { const c = ws.getCell(1, D0 + i); c.value = x.dn; Object.assign(c, { font: head.font, alignment: head.alignment }); });
   const H2 = ['S.No', 'Employee Code', 'Employee Name', 'DOJ', 'Designation', 'Department/Sub-Department', 'Division', 'Business Unit', 'Shift', 'COST CODE', ...days.map(x => ' ' + x.d), ...PAY_TOT_H];
-  H2.forEach((h, i) => { const c = ws.getCell(2, i + 1); c.value = h; Object.assign(c, head); });
+  H2.forEach((h, i) => { const c = ws.getCell(2, i + 1); Object.assign(c, head); if (i >= D0 - 1 && i < DL) { c.value = new Date(days[i - D0 + 1].d + 'T00:00:00Z'); c.numFmt = 'dd/mm'; } else c.value = h; });
   ws.getRow(2).height = 45;
   [6, 12, 28, 11, 16, 22, 8, 20, 7, 13].forEach((w, i) => ws.getColumn(i + 1).width = w);
   for (let i = 0; i < n; i++) ws.getColumn(D0 + i).width = 5.5;
@@ -6900,26 +6915,26 @@ async function exportPayrollXlsx(ym) {
   });
   // Abstract (hidden), as in the workbook
   const ab = wb.addWorksheet('Abstract', { state: 'hidden', views: [{ state: 'frozen', xSplit: 5, ySplit: 2 }] }), q = `'${name}'!`;
-  ab.getCell('A1').value = `SCL Technicians Monthly Payroll Abstract Summary - ${+start.slice(8, 10)} ${MON[+start.slice(5, 7) - 1].toUpperCase()} to ${+end.slice(8, 10)} ${MON[+end.slice(5, 7) - 1].toUpperCase()} ${end.slice(0, 4)}`;
+  ab.getCell('A1').value = `${payWho()} Monthly Payroll Abstract Summary - ${+start.slice(8, 10)} ${MON[+start.slice(5, 7) - 1].toUpperCase()} to ${+end.slice(8, 10)} ${MON[+end.slice(5, 7) - 1].toUpperCase()} ${end.slice(0, 4)}`;
   const AH = ['S.No', 'EMP. NO', 'NAME', 'Date of Joining', 'Trade', 'Project', 'Division', 'Present Days', 'Weekly Off', 'Public Holiday', 'Paid Leave', 'Sick Leave', 'Days- Prior to joining', 'Days - after LWD', 'Annual Leave', 'Emergency Leave', 'LOP', 'Total', 'Current Month Normal OT', 'Current Month Sunday OT', 'Productivity Hrs(OT)', 'Previous Month NOT Arrears', 'Previous Month HOT/SOT Arrears', 'Total Normal OT', 'Total Sunday OT', 'Holiday OT', 'Remarks'];
   const AS = ['A', 'B', 'C', 'D', 'E', 'G', 'F', L(col.present), L(col.sun), L(col.ph), null, L(col.sl), L(col.nj), L(col.lwd), L(col.al), L(col.el), L(col.lop), L(col.total), L(col.not), L(col.sot), L(col.prod), null, null, L(col.payNot), L(col.paySot), L(col.hot), null];
   AH.forEach((h, i) => { const c = ab.getCell(2, i + 1); c.value = h; Object.assign(c, head); });
   rows.forEach((x, i) => AS.forEach((s, j) => { if (s) ab.getCell(i + 3, j + 1).value = { formula: `${q}${s}${i + 3}` }; }));
   const buf = await wb.xlsx.writeBuffer();
-  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Latinem Securities Monthly Payroll Attendance - ${MONTH_FULL[+end.slice(5, 7) - 1][0]}${MONTH_FULL[+end.slice(5, 7) - 1].slice(1).toLowerCase()} ${end.slice(0, 4)} ${+start.slice(8, 10)} to ${+end.slice(8, 10)}.xlsx`);
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${PV_.proj || SEL.project || SEL.client ? payWho() + ' – ' : ''}Latinem Securities Monthly Payroll Attendance - ${MONTH_FULL[+end.slice(5, 7) - 1][0]}${MONTH_FULL[+end.slice(5, 7) - 1].slice(1).toLowerCase()} ${end.slice(0, 4)} ${+start.slice(8, 10)} to ${+end.slice(8, 10)}.xlsx`);
   toast(`Payroll sheet downloaded · ${rows.length} personnel`);
 }
 /** Settings → Payroll */
 function paySettingsHTML() {
   const m = payCodeMap(), st = S.settings;
-  return `<div class="form"><label class="f wide">Sheet title<input type="text" id="ps-title" value="${esc(st.payTitle || 'SCL TECHNICIANS MONTHLY ATTENDANCE SHEET')}"></label>
+  return `<div class="form"><label class="f wide">Sheet title after the project name <span class="muted small">(e.g. ${esc(payTitle(PV_.ym || cycleOfDate(todayISO())))})</span><input type="text" id="ps-title" value="${esc(st.payTitleTail || 'MONTHLY ATTENDANCE SHEET')}"></label>
     <label class="f">Hours for drivers (P day)<input type="number" id="ps-drv" min="1" max="24" value="${+st.driverHours || 16}"></label>
     <label class="f wide">Public holidays <span class="muted small">(dates, comma separated – e.g. 28.08.2026, 02.12.2026)</span><input type="text" id="ps-hol" value="${esc(String(st.holidays || '').split(/[\s,;]+/).filter(Boolean).map(trkDate).join(', '))}"></label></div>
     <div class="muted small" style="margin:8px 0 4px">What each attendance code puts in the payroll sheet – <b>H</b> = the shift hours of the person (Hrs/day: drivers ${+st.driverHours || 16}, others ${+st.shiftHours || 12}), or a number of hours, or text such as OFF.</div>
     <div class="pc-grid">${S.codes.map(c => `<label><span class="pill" style="background:${c.color}">${esc(c.code)}</span><input type="text" data-pc="${esc(c.code)}" value="${esc(m[c.code])}"></label>`).join('')}</div>`;
 }
 function bindPaySettings(v) {
-  $('#ps-title', v).onchange = e => { S.settings.payTitle = e.target.value.trim(); markDirty(); };
+  $('#ps-title', v).onchange = e => { S.settings.payTitleTail = e.target.value.trim(); markDirty(); };
   $('#ps-drv', v).onchange = e => { S.settings.driverHours = +e.target.value || 16; markDirty(); };
   $('#ps-hol', v).onchange = e => { const ds = e.target.value.split(/[\s,;]+/).filter(Boolean).map(trkParseDate); if (ds.includes(null)) return toast('Type dates as 28.08.2026'); S.settings.holidays = ds.join(','); markDirty(); };
   v.querySelectorAll('[data-pc]').forEach(i => i.onchange = () => { (S.settings.payCodes ||= {})[i.dataset.pc] = i.value.trim().toUpperCase() === 'H' ? 'H' : i.value.trim(); markDirty(); });
