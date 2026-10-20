@@ -775,3 +775,12 @@ tr.warnrow td{background:#fff8e6}
 .tk-full .tk .tk-sl,.tk-full .tk.py .py-n{border-left:0}
 .tk-more{padding:8px 12px;gap:8px}
 .tk-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line3,#9aa5b5);color:var(--text2);font-size:10.5px;font-weight:700;cursor:help;margin-left:6px;vertical-align:2px}
+
+/* Payroll grid = the Attendance grid */
+#v-payroll .pywrap{flex:1;min-height:0;overflow:auto;background:var(--surface)}
+table.ag.py td.py-hd{text-align:center;font:700 11px var(--font-mono);color:var(--accent);cursor:pointer}
+table.ag.py td.ed{cursor:pointer}table.ag.py td.ed:hover{box-shadow:inset 0 0 0 2px var(--accent)}
+table.ag.py td.so{color:var(--accent)}table.ag.py td.sa{color:#11753d}
+table.ag.py th.pt{white-space:normal;line-height:1.15;font-size:8.5px;letter-spacing:.03em}
+table.ag.py th.hd{background:#FFF4D6}
+table.ag.py td.tot{font-size:11px;text-align:center}table.ag.py td.rm{text-align:left;font-family:var(--font-body);font-weight:400}
