@@ -468,7 +468,8 @@ table.dir td.p1{font-family:var(--font-mono)}
 .ai-h{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .ai-h b{font-size:13.5px;color:var(--heading)}
 .ai-settings{padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface2);display:grid;gap:8px}
-.ai-log{flex:1;overflow:auto;padding:12px;display:grid;align-content:start;gap:14px}
+.ai-log{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:14px}
+.ai-turn,.ai-a{min-width:0}
 .ai-hello p{margin:0 0 10px;color:var(--text2)}
 .ai-chips{display:flex;flex-wrap:wrap;gap:6px}
 .ai-chips .chip{border:1px solid var(--line2);background:var(--surface);border-radius:14px;padding:5px 10px;font-size:12px;cursor:pointer;text-align:left;color:var(--text)}
@@ -477,8 +478,8 @@ table.dir td.p1{font-family:var(--font-mono)}
 .ai-a{font-size:12.5px;line-height:1.5;color:var(--text)}
 .ai-a p{margin:0 0 8px}.ai-a h4{margin:8px 0 4px;font-size:13px;color:var(--heading)}.ai-a ul,.ai-a ol{margin:0 0 8px;padding-left:18px}
 .ai-a code{font:11.5px var(--font-mono);background:var(--surface2);padding:0 3px;border-radius:3px}
-.ai-a pre{font:11px/1.4 var(--font-mono);background:var(--surface2);padding:8px;border-radius:6px;overflow:auto;max-height:220px;white-space:pre-wrap}
-.ai-tw{overflow:auto;margin:0 0 8px;border:1px solid var(--line);border-radius:6px}
+.ai-a pre{font:11px/1.4 var(--font-mono);background:var(--surface2);padding:8px;border-radius:6px;overflow:auto;max-height:220px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai-tw{overflow-x:auto;max-width:100%;margin:0 0 8px;border:1px solid var(--line);border-radius:6px}
 .ai-tw table{border-collapse:collapse;font-size:11.5px;width:100%}.ai-tw th{background:var(--raised);text-align:left;padding:5px 7px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute)}.ai-tw td{padding:4px 7px;border-top:1px solid var(--line);white-space:nowrap}
 .ai-step{margin:0 0 6px;font-size:11.5px;color:var(--mute)}.ai-step summary{cursor:pointer}.ai-step pre.res{color:var(--text2)}
 .ai-dots{color:var(--faint);animation:aiPulse 1.2s ease-in-out infinite}@keyframes aiPulse{50%{opacity:.4}}
@@ -508,6 +509,10 @@ table.dir td.p1{font-family:var(--font-mono)}
 /* one text size for the whole sheet (set from the longest entry) */
 .ts-sheet table.ts td,.ts-sheet table.ts th{font-size:var(--tsf,8.5px)}
 .ts-sheet table.ts th.d{font-size:calc(var(--tsf,8.5px) - .5px)}
+.ai-tw th{white-space:normal;overflow-wrap:normal}.ai-tw td{white-space:normal;overflow-wrap:anywhere}.ai-tw td.n{white-space:nowrap;text-align:right}
+.ai-a p,.ai-a li{overflow-wrap:anywhere}
+.ai-grip{position:absolute;left:0;top:0;width:16px;height:16px;cursor:nwse-resize;z-index:2;touch-action:none;border-top-left-radius:12px;background:linear-gradient(135deg,var(--line2) 0 2px,transparent 2px 5px,var(--line2) 5px 7px,transparent 7px)}
+.ai-panel{max-width:calc(100vw - 40px)}
 
 </style>
 </head>
@@ -4701,7 +4706,7 @@ async function exportDirectoryXlsx(blank = false) {
    ===================================================================== */
 const AI = {
   MODELS: [['claude-sonnet-5-5', 'Balanced (fast)'], ['claude-opus-5-5', 'Most capable'], ['claude-haiku-5-5', 'Fastest']],
-  chat: '', asked: 0, busy: false, prep: null, open: false,
+  chat: '', asked: 0, busy: false, prep: null, open: false, big: false,
   get bridge() { try { return localStorage.getItem('ls.claudeBridge') || 'http://localhost:8787'; } catch (e) { return 'http://localhost:8787'; } },
   set bridge(v) { try { v ? localStorage.setItem('ls.claudeBridge', v) : localStorage.removeItem('ls.claudeBridge'); } catch (e) { } },
   get model() { try { return localStorage.getItem('ls.claudeModel') || 'claude-sonnet-5-5'; } catch (e) { return 'claude-sonnet-5-5'; } },
@@ -4878,7 +4883,7 @@ function aiMarkdown(md) {
     if (/^\s*\|.*\|\s*$/.test(l) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || '')) {
       const row = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
       const h = row(l); i += 2; const rows = []; while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(row(lines[i++]));
-      out.push(`<div class="ai-tw"><table><thead><tr>${h.map(c => `<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`); continue;
+      out.push(`<div class="ai-tw"><table><thead><tr>${h.map(c => `<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td${/^[-+]?[\d,.]+%?$/.test(c) ? ' class="n"' : ''}>${inl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`); continue;
     }
     if (/^#{1,4}\s/.test(l)) { out.push(`<h4>${inl(l.replace(/^#+\s*/, ''))}</h4>`); i++; continue; }
     if (/^\s*([-*]|\d+\.)\s+/.test(l)) { const ol = /^\s*\d+\./.test(l), it = []; while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) it.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, '')); out.push(`<${ol ? 'ol' : 'ul'}>${it.map(x => `<li>${inl(x)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`); continue; }
@@ -4894,9 +4899,9 @@ const AI_SUGGEST = ['Whose visa expires next month?', 'Who is not completing the
 function aiToggle(force) {
   AI.open = force ?? !AI.open; let p = $('#ai-panel');
   if (!AI.open) { p?.remove(); return; }
-  if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); }
+  if (!p) { p = document.createElement('aside'); p.id = 'ai-panel'; p.className = 'ai-panel'; document.body.appendChild(p); aiSize(p); }
   p.innerHTML = `<div class="ai-h"><b>Assistant</b><span class="pill">beta</span><span class="spacer"></span>
-      <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
+      <button class="btn sm" id="ai-new" title="Start a new conversation">New chat</button><button class="btn sm" id="ai-big" title="Larger / smaller">${AI.big ? '⤡' : '⤢'}</button><button class="btn sm" id="ai-set" title="Settings">⚙</button><button class="btn sm" id="ai-x" title="Close">✕</button></div>
     <div class="ai-settings" id="ai-settings" hidden>
       <label class="f">Assistant engine address <span class="muted">(on this PC run <code>tools/Start Assistant.cmd</code>)</span><input type="text" id="ai-bridge" value="${esc(AI.bridge)}" placeholder="http://localhost:8787" autocomplete="off"></label>
       <label class="f">Model<select id="ai-model">${opts(AI.MODELS, AI.model)}</select></label>
@@ -4905,8 +4910,15 @@ function aiToggle(force) {
       <button class="btn sm pri" id="ai-save">Save</button></div>
     <div class="ai-log" id="ai-log">${AI.asked ? '' : `<div class="ai-hello"><p>Ask about personnel, documents, attendance, check-ins, routes and zones. The assistant works out the answer from the data in this tracker.</p>
       <div class="ai-chips">${AI_SUGGEST.map(q => `<button class="chip" data-aq="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
-    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="1" placeholder="e.g. How many people have their visa expiring next month?"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
+    <form class="ai-in" id="ai-form"><textarea id="ai-q" rows="1" placeholder="Ask about visas, attendance, sites…"></textarea><button class="btn pri" id="ai-send">Ask</button></form>`;
   $('#ai-x').onclick = () => aiToggle(false);
+  $('#ai-big').onclick = () => { AI.big = !AI.big; aiSize(p); $('#ai-big').textContent = AI.big ? '⤡' : '⤢'; };
+  p.insertAdjacentHTML('afterbegin', '<div class="ai-grip" title="Drag to resize"></div>');
+  p.querySelector('.ai-grip').onpointerdown = e => {
+    e.preventDefault(); const g = e.currentTarget, x0 = e.clientX, y0 = e.clientY, r = p.getBoundingClientRect(); g.setPointerCapture(e.pointerId); AI.big = false; $('#ai-big').textContent = '⤢';
+    g.onpointermove = m => aiSize(p, { w: r.width + x0 - m.clientX, h: r.height + y0 - m.clientY });
+    g.onpointerup = () => { g.onpointermove = g.onpointerup = null; try { localStorage.setItem('ls.aiSize', JSON.stringify({ w: Math.round(p.offsetWidth), h: Math.round(p.offsetHeight) })); } catch (x) { } };
+  };
   $('#ai-set').onclick = () => { $('#ai-settings').hidden = !$('#ai-settings').hidden; };
   $('#ai-save').onclick = () => { AI.bridge = $('#ai-bridge').value.trim(); AI.model = $('#ai-model').value; AI.personal = $('#ai-personal').checked; $('#ai-settings').hidden = true; toast('Saved'); };
   $('#ai-new').onclick = () => { AI.chat = ''; AI.asked = 0; AI.prep = null; aiToggle(true); };
@@ -4917,6 +4929,16 @@ function aiToggle(force) {
   $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
   aiPaint(); $('#ai-q').focus();
 }
+/** Panel size: dragged with the top-left grip (remembered), or the large size from the ⤢ button; always inside the window */
+function aiSize(p, want) {
+  if (!p) return;
+  let sz = want; if (!sz) { try { sz = JSON.parse(localStorage.getItem('ls.aiSize') || 'null'); } catch (e) { } }
+  if (AI.big) sz = { w: 760, h: innerHeight * .85 };
+  if (!sz) { p.style.width = p.style.height = ''; return; }
+  p.style.width = Math.round(Math.max(340, Math.min(sz.w, innerWidth - 40))) + 'px';
+  p.style.height = Math.round(Math.max(360, Math.min(sz.h, innerHeight - 120))) + 'px';
+}
+addEventListener('resize', () => aiSize($('#ai-panel')));
 function aiPaint() { const b = $('#ai-send'); if (b) { b.disabled = AI.busy; b.textContent = AI.busy ? '…' : 'Ask'; } }
 // data changed (sync, import, edits): the next analysis uses a fresh snapshot
 function aiDataChanged() { AI.prep = null; }
