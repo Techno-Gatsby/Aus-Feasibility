@@ -312,10 +312,11 @@ function tour() {
 function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', dock = '' } = {}) {
   try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
   clearInterval(W.tick); W.tick = null;
-  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock);
+  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock); document.body.classList.remove('tight');
+  const scr = `${tab}|${crumb}`, fresh = scr !== shell.last; shell.last = scr;   // the entrance animation only when the screen changes
   $('#app').innerHTML = `<header class="top"><span class="mark">LS</span><p class="crumb"><span>Latinem</span><b>${esc(crumb || t('title'))}</b></p><span class="sp"></span>
     <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${tab === 'home' && W.prof && !W.sup ? `<button id="b-tour" class="ib" aria-label="${t('tourT')}" title="${t('tourT')}"><b style="font-size:15px">?</b></button>` : ''}${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
-    ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main>${body}</main>
+    ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main class="${fresh ? 'enter' : ''}">${body}</main>
     ${dock ? `<div class="dock"><div class="in">${dock}</div></div>` : ''}
     ${tabs ? `<nav class="tabs-b"><div class="in">${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
   $('#b-lang').onclick = () => menu(LANGS.map(([k, n]) => [n, () => { setLang(k); render(); }, k === LANG]));
@@ -363,7 +364,7 @@ function renderLogin() {
   async function key(k) {
     if (W.busy) return;
     haptic(6); if (k === 'c') W.pin = ''; else if (k === 'b') W.pin = W.pin.slice(0, -1); else if (W.pin.length < 4) W.pin += k;
-    W.err = ''; render();
+    W.err = ''; $$('.dots i').forEach((x, i) => x.classList.toggle('on', i < W.pin.length)); if ($('#err')) $('#err').textContent = '';   // only the dots change – no redraw
     if (W.pin.length === 4) {
       W.busy = true;
       try {
@@ -432,9 +433,11 @@ function renderHome() {
 /** Today fits one screen: the map takes whatever height is left above the medical button and the check-in dock */
 function fitMap() {
   const m = $('#map'), card = $('#mapcard'); if (!m || card.classList.contains('full')) return;
-  const dock = $('.dock'), bottom = dock ? dock.getBoundingClientRect().top : innerHeight, med = $('#b-med');
-  const h = Math.floor(bottom - m.getBoundingClientRect().top - (med ? med.offsetHeight + 10 : 0) - 10);
-  m.style.height = Math.max(170, h) + 'px'; W.map?.invalidateSize();
+  const dock = $('.dock'), med = $('#b-med');
+  const avail = () => Math.floor((dock ? dock.getBoundingClientRect().top : innerHeight) - m.getBoundingClientRect().top - (med ? med.offsetHeight + 10 : 0) - 10);
+  document.body.classList.remove('tight'); let h = avail();
+  if (h < innerHeight * 0.45) { document.body.classList.add('tight'); h = avail(); }   // short screen: slimmer header and clock so the map keeps its room
+  m.style.height = Math.max(240, h) + 'px'; W.map?.invalidateSize();
 }
 addEventListener('resize', () => { clearTimeout(fitMap.t); fitMap.t = setTimeout(fitMap, 120); });
 async function drawMap() {
