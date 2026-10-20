@@ -736,3 +736,4 @@ body main:has(.tview){max-width:none;padding:0!important}
 .sp-row .empty{padding:8px}
 .sp-row .acts:not(:has([data-pw])) select.f{flex:1 1 0;min-width:0}
 .sp-row .acts:not(:has([data-pw])):has(select) .btn.upb{flex:0 0 auto}
+.tabs-b button{color:var(--mute)}

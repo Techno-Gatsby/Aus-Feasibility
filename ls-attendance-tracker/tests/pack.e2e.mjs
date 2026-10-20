@@ -37,15 +37,15 @@ const fresh = await A.evaluate(() => { const d = newInvoiceDraft(); d.projectIds
 ok(JSON.stringify(fresh) === '["project:3"]', 'next invoice of the project gets the WOI automatically');
 // bulk upload: the same pack as one file → one WOI matched by PO
 await A.evaluate(() => { const p = IX.proj.get(IV.draft.projectIds[0]); p.docs = []; showView('projects'); });
-await A.setInputFiles('#pv-bulkdocs', PDF); await A.waitForSelector('[data-bp]', { timeout: 60000 });
-const bulk = await A.evaluate(() => [...document.querySelectorAll('#modal tbody tr')].map(tr => ({ pages: tr.children[1].textContent, po: tr.children[2].textContent, proj: tr.querySelector('[data-bp]').selectedOptions[0].textContent, how: tr.children[5].textContent })));
+await A.evaluate(b => { bulkDocs([new File([new Uint8Array(b)], 'pack.pdf', { type: 'application/pdf' })]); }, [...fs.readFileSync(PDF)]);  /* toolbar: Upload documents in bulk */ await A.waitForSelector('[data-bp]', { timeout: 60000 });
+const bulk = await A.evaluate(() => [...document.querySelector('[data-bp]').closest('tbody').querySelectorAll('tr')].map(tr => ({ pages: tr.children[1].textContent, po: tr.children[2].textContent, proj: tr.querySelector('[data-bp]').selectedOptions[0].textContent, how: tr.children[5].textContent })));
 ok(bulk.length === 1 && bulk[0].pages === '3' && bulk[0].po === 'INS-104N135-26-0002' && bulk[0].proj === 'SCL - ELWOOD - INFRA' && bulk[0].how === 'WOI no', 'bulk upload matched the project by WOI number ' + JSON.stringify(bulk));
 await A.click('#modal .mf button.pri'); await A.waitForSelector('[data-bp]', { state: 'detached', timeout: 60000 }); await A.waitForTimeout(300);
 const bulkDoc = await A.evaluate(() => IX.proj.get(IV.draft.projectIds[0]).docs.map(d => d.kind + ':' + d.pages));
 ok(JSON.stringify(bulkDoc) === '["woi:3"]', 'bulk-uploaded WOI saved on the project ' + JSON.stringify(bulkDoc));
 // project card badge + persistence across reload
 await A.evaluate(() => { saveInvoice(IV.draft); showView('projects'); });
-ok(/📄 WOI 3 p/.test(await A.textContent('#v-projects')), 'project card shows the document');
+ok(await A.evaluate(() => { const n = IX.proj.get(IV.draft.projectIds[0]).name; const tr = [...document.querySelectorAll('#v-projects tr')].find(r => r.textContent.includes(n)); return !!tr?.querySelector('.dot.ok[title="Work order / documents"]'); }), 'projects list ticks the document');
 await A.waitForTimeout(800); await A.reload(); await A.waitForSelector('body[data-ready]');
 const kept = await A.evaluate(async () => { const p = S.projects.find(x => x.docs?.length); const b = p && await Files.get(p.docs[0].id); return { doc: !!p, bytes: b ? b.size : 0 }; });
 ok(kept.doc && kept.bytes > 1000, 'document survives a reload ' + JSON.stringify(kept));

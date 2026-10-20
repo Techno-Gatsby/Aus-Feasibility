@@ -3,7 +3,7 @@
   color-scheme:light;
   --canvas:#F4F6FA; --surface:#FFFFFF; --raised:#FBFCFE; --surface2:#F4F6FA; --surface3:#EDF1F7;
   --line:#E4E9F1; --line2:#C9D2E1; --line3:#A9B6CC;
-  --ink:#16202F; --navy:#12305E; --heading:#12305E; --text:#16202F; --text2:#42506B; --mute:#6B7A94; --faint:#93A0B5;
+  --ink:#16202F; --navy:#12305E; --heading:#12305E; --text:#16202F; --text2:#42506B; --mute:#56647E; --faint:#66748B;
   --accent:#1766CB; --accent-soft:#EDF1F7; --accent-soft2:#EAF2FD; --accent-line:#9DBDE8;
   --pos:#2B6A52; --pos-bg:#ECF5EF; --neg:#8F3C3C; --neg-bg:#FAEEEE; --warn:#7A6740; --warn-bg:#F8F1E6;
   --sh1:0 1px 2px rgba(15,30,61,.05); --sh2:0 1px 3px rgba(15,30,61,.06),0 4px 12px rgba(15,30,61,.05);
@@ -62,8 +62,9 @@ a:hover{text-decoration:underline}
 .body.notree{grid-template-columns:1fr}
 .body.notree .rail{display:none}
 .rail{background:var(--surface);border-right:1px solid var(--line2);overflow:auto;padding:8px 8px 20px}
-.railhead{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:650;padding:6px 8px}
-.railhead .muted{text-transform:none;letter-spacing:0;font-weight:500}
+.railhead{display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:650;padding:6px 8px}
+.railhead>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.railhead .muted{flex:none;text-transform:none;letter-spacing:0;font-weight:700;font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--surface2,#eef1f6);color:var(--text2)}
 .rail input[type=search]{width:100%;margin:2px 0 6px}
 .workspace{display:grid;grid-template-rows:auto auto 1fr;min-height:0;background:var(--canvas)}
 .statusbar{display:flex;gap:18px;align-items:center;background:var(--surface);border-top:1px solid var(--line2);padding:4px 12px;font-size:11.5px;color:var(--mute)}
@@ -787,3 +788,11 @@ table.ag.py td.tot{font-size:11px;text-align:center}table.ag.py td.rm{text-align
 /* payroll: the workbook's info columns */
 table.ag.py td.pi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;text-align:center}
 table.ag.py thead th{white-space:normal;line-height:1.15}
+/* QA pass: grid columns may shrink below their content (long project names), narrow screens wrap the attendance bar instead of hiding it */
+.split>*,.tv-split>*{min-width:0}
+@media (max-width:1280px){.dh.slim{flex-wrap:wrap;overflow-x:visible;row-gap:6px}}
+.railhead{letter-spacing:.04em}
+/* code chips: fixed height, letters centred both ways on every system font */
+.codes button{justify-content:center;font-family:var(--font-body);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:.02em}
+.dh.slim .codes button{height:22px;min-width:26px;padding:0 7px;font-size:11.5px}
+.codes button>*{line-height:1}

@@ -23,21 +23,21 @@
   <div class="toolbar" id="toolbar"></div>
   <div class="body" id="body">
     <nav class="rail" id="rail">
-      <div class="railhead"><span>Clients · Projects · Sites</span><span class="muted" id="railcount"></span></div>
+      <div class="railhead"><span title="Clients · Projects · Sites">Projects &amp; sites</span><span class="muted" id="railcount"></span></div>
       <input type="search" id="tree-q" placeholder="Find project or site">
       <ul class="tree" id="tree"></ul>
     </nav>
     <main class="workspace">
       <div class="doctabs" id="tabs" role="tablist">
-        <button class="doctab fo" data-view="live" data-group="live app">Today <span class="n" id="app-badge"></span></button>
-        <button class="doctab fo" data-view="insights">Insights</button>
-        <span class="gap"></span>
-        <button class="doctab" data-view="employees">Security Personnel</button>
-        <button class="doctab" data-view="projects">Projects &amp; sites</button>
+        <button role="tab" class="doctab fo" data-view="live" data-group="live app">Today <span class="n" id="app-badge"></span></button>
+        <button role="tab" class="doctab fo" data-view="insights">Insights</button>
+        <span class="gap" role="presentation"></span>
+        <button role="tab" class="doctab" data-view="employees">Security Personnel</button>
+        <button role="tab" class="doctab" data-view="projects">Projects &amp; sites</button>
         <span class="gsep"></span>
-        <button class="doctab" data-view="attendance">Attendance</button>
-        <button class="doctab" data-view="timesheets" data-group="timesheets invoices tracker">Billing</button>
-        <button class="doctab" data-view="payroll" data-group="payroll reports">Payroll</button>
+        <button role="tab" class="doctab" data-view="attendance">Attendance</button>
+        <button role="tab" class="doctab" data-view="timesheets" data-group="timesheets invoices tracker">Billing</button>
+        <button role="tab" class="doctab" data-view="payroll" data-group="payroll reports">Payroll</button>
       </div>
       <div class="subtabs" id="subtabs"></div>
       <div class="docarea">

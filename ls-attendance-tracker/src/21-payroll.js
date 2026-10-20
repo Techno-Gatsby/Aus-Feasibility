@@ -43,7 +43,7 @@ function payRows(ym, all) {
   const punchesBy = PV_.app ? new Map() : null; if (punchesBy) for (const p of Object.values(S.punches || {})) if (p.type === 'out' && p.status !== 'rejected' && +p.hours > 0) { const k = p.wid + '|' + p.workDate; punchesBy.set(k, (punchesBy.get(k) || 0) + +p.hours); }
   for (const e of S.employees) {
     if (!((!e.doj || e.doj <= end) && (!e.end || e.end >= start))) continue;
-    if (q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q)) continue;
+    if (!all && q && !norm(e.name).includes(q) && !norm(e.empCode).includes(q)) continue;
     const H = empHours(e), ov = S.payroll[ym]?.[e.id]?.h || {}, src = [];
     let last = null; const v = days.map(({ d }, i) => {
       if (e.doj && d < e.doj) return 'New Joinee';
@@ -81,8 +81,8 @@ function payTotals(v, days, man = {}) {
 const payWho = () => PV_.proj ? (PV_.proj === '-' ? 'UNASSIGNED' : IX.proj.get(PV_.proj)?.name || '') : SEL.project ? IX.proj.get(SEL.project)?.name || '' : SEL.client ? IX.client.get(SEL.client)?.name || '' : S.settings.companyShort || 'LATINEM SECURITIES';
 const payTitle = ym => { const { start, end } = payrollCycle(ym), f = d => `${+d.slice(8, 10)} ${MONTH_FULL[+d.slice(5, 7) - 1]}`; return `${payWho().toUpperCase()} ${S.settings.payTitleTail || 'MONTHLY ATTENDANCE SHEET'} - ${f(start)} to ${f(end)} ${end.slice(0, 4)}`; };
 /** projects that have personnel in this payroll month, grouped by client, with the head count */
-function payProjOptions(ym) {
-  const n = new Map(); for (const r of payRows(ym, true)) n.set(r.pid, (n.get(r.pid) || 0) + 1);
+function payProjOptions(base) {
+  const n = new Map(); for (const r of base) n.set(r.pid, (n.get(r.pid) || 0) + 1);
   const by = new Map(); for (const id of n.keys()) { const p = IX.proj.get(id), c = p && IX.client.get(p.clientId)?.name || 'Other'; if (!by.has(c)) by.set(c, []); by.get(c).push([id, p?.name || 'Not on a project']); }
   let h = `<option value="">All projects (${[...n.values()].reduce((a, b) => a + b, 0)})</option>`;
   for (const [c, ps] of [...by].sort((a, b) => a[0].localeCompare(b[0]))) h += `<optgroup label="${esc(c)}">` + ps.sort((a, b) => a[1].localeCompare(b[1])).map(([id, nm]) => `<option value="${id}"${id === PV_.proj ? ' selected' : ''}>${esc(nm)} (${n.get(id)})</option>`).join('') + '</optgroup>';
@@ -94,7 +94,7 @@ const payTotVals = (t, man) => [t.hours, t.present, ...t.weeks, t.sl, t.al, t.ph
 function renderPayroll() {
   const v = $('#v-payroll'); PV_.ym ||= AV.ym || cycleOfDate(todayISO());
   if (PV_.proj && PV_.proj !== '-' && !IX.proj.has(PV_.proj)) PV_.proj = '';
-  const ym = PV_.ym, days = payDays(ym), rows = payRows(ym), man = S.payroll[ym] || {}, { start, end } = payrollCycle(ym);
+  const ym = PV_.ym, days = payDays(ym), base = payRows(ym, true), q = norm(PV_.q), rows = base.filter(r => (!PV_.proj || r.pid === PV_.proj) && (!q || norm(r.e.name).includes(q) || norm(r.e.empCode).includes(q))), man = S.payroll[ym] || {}, { start, end } = payrollCycle(ym);
   const col = x => x === '' ? '' : typeof x === 'number' ? codeDef('P').color : x === 'HD' ? codeDef('PH').color : IX.code.has(x) ? codeDef(x).color : '#EEF1F6';   // the attendance colours
   const LIM = 150, shown = rows.slice(0, PV_.all ? rows.length : LIM), fmt = x => typeof x === 'number' ? (Number.isInteger(x) ? x : x.toFixed(2)) : esc(x);
   // the workbook's columns (S.No … Cost Code, the days, every total) in the Attendance grid; S.No / code / name stay fixed
@@ -116,7 +116,7 @@ function renderPayroll() {
   const k = (lbl, n, c) => `<span class="st"><b style="color:${c}">${Number(Math.round(n * 100) / 100).toLocaleString()}</b> ${lbl}</span>`;
   v.innerHTML = docHead('Payroll attendance <span class="tk-help" title="Days come from Attendance (change them there). Worked (P) days show each person\'s hours – drivers 16, others 12 by default; click Hrs/day to change a person, or a day to change that day (never 0). Pick a project to get its own sheet – the title, totals and Excel follow it. Codes, public holidays and the title wording are in Settings → Payroll. Productivity, no-rest, arrears and remarks are typed here. The columns are those of the payroll workbook; Hrs/day is only on screen.">?</span>', esc(payTitle(ym)), `
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
-      <select id="py-proj" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(ym)}</select>
+      <select id="py-proj" aria-label="Project" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(base)}</select>
       <input type="search" id="py-q" placeholder="Name or ID" value="${esc(PV_.q)}" style="width:140px">
       <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
       <button class="btn sm pri" id="py-xl">Download Excel</button>`)

@@ -418,17 +418,19 @@ async function readTimesheetXlsx(file, base) {
   await loadScript(LIB.xlsx);
   const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
   const want = norm(IX.proj.get(base.projectId)?.name || '');
+  const lk = tsLook(IX.proj.get(base.projectId)), C = k => norm(lk.cols?.[k] || ''), grand = norm(lk.grand || 'GRAND TOTAL');   // headings may be renamed per client
   const names = wb.SheetNames.slice().sort((a, b) => (want.includes(norm(b).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0) - (want.includes(norm(a).replace(/^SCL\s*(TR)?\s*-\s*/i, '')) ? 1 : 0));
   for (const sn of names) {
     const g = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
-    const hr = g.findIndex(r => r && r.some(v => norm(v) === 'NAME') && r.some(v => /EMP/.test(norm(v)))); if (hr < 0) continue;
-    const h = g[hr].map(norm), ci = k => h.findIndex(v => v.replace(/\s+/g, ' ').startsWith(k));
-    const cSite = ci('SITE'), cShift = ci('SHIFT'), cName = h.indexOf('NAME'), cCode = h.findIndex(v => /EMP/.test(v));
+    const isName = v => v === 'NAME' || (C('name') && v === C('name')), isCode = v => /EMP/.test(v) || (C('code') && v === C('code'));
+    const hr = g.findIndex(r => r && r.some(v => isName(norm(v))) && r.some(v => isCode(norm(v)))); if (hr < 0) continue;
+    const h = g[hr].map(norm), ci = (k, own) => { const i = own ? h.indexOf(own) : -1; return i >= 0 ? i : h.findIndex(v => v.replace(/\s+/g, ' ').startsWith(k)); };
+    const cSite = ci('SITE', C('site')), cShift = ci('SHIFT', C('shift')), cName = h.findIndex(isName), cCode = h.findIndex(isCode);
     const dayCols = h.map((v, i) => [v, i]).filter(([v, i]) => i > cCode && /^\d{1,2}$/.test(v)).map(([, i]) => i);
     if (dayCols.length !== base.days) throw new Error(`The sheet “${sn}” has ${dayCols.length} day columns, this period has ${base.days}. Download the Excel for the same period, edit it, and upload that file.`);
     const rows = []; let site = '';
     for (let r = hr + 1; r < g.length; r++) {
-      const row = g[r] || []; if (row.some(v => /GRAND TOTAL/.test(norm(v)))) break;
+      const row = g[r] || []; if (row.some(v => /GRAND TOTAL/.test(norm(v)) || (grand && norm(v) === grand))) break;
       if (row[cSite] != null && String(row[cSite]).trim()) site = norm(row[cSite]);
       const name = norm(row[cName]); if (!name) continue;
       const cells = {}; dayCols.forEach((c, k) => { let v = norm(row[c]); if (v === 'O') v = 'OFF'; if (v) cells[k + 1] = v; });

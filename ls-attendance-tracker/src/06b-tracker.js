@@ -23,8 +23,9 @@ const TR = { y: +todayISO().slice(0, 4), m0: 0, m1: 11, q: '', inact: false, hin
 const trkDate = x => /^\d{4}-\d\d-\d\d$/.test(x || '') ? `${x.slice(8, 10)}.${x.slice(5, 7)}.${x.slice(0, 4)}` : String(x ?? '');
 function trkParseDate(s) {
   s = String(s ?? '').trim(); if (!s) return '';
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/); if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
-  m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/); if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
+  const real = d => { const x = new Date(d + 'T00:00:00Z'); return !isNaN(x) && x.toISOString().slice(0, 10) === d ? d : null; };   // 31/04 or 30/02 are refused
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/); if (m) return real(`${m[1]}-${pad(+m[2])}-${pad(+m[3])}`);
+  m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/); if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return real(`${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(+m[2])}-${pad(+m[1])}`);
   return null;
 }
 const trkLetter = i => colL(i);
@@ -83,8 +84,10 @@ function trackCell(pid, ym) {
   if (inv) {
     const t = inv.track || {};
     for (const k of ['tsSent', 'tsApproved', 'invSent', 'invProcessed', 'spcNo', 'paidOn']) if (t[k]) v[k] = t[k];
-    if (inv.no) v.invNo = inv.no;
-    const a = invShare(inv, pid, ym); if (a != null) v.amount = a;
+    // a month billed in parts (e.g. 1–15 and 16–30): every invoice's number and the sum of their amounts
+    const all = S.invoices.filter(x => x.projectIds?.includes(pid) && x.from <= ym && ym <= x.to).sort((a, b) => (a.d1 || a.from).localeCompare(b.d1 || b.from));
+    const nos = all.map(x => x.no).filter(Boolean); if (nos.length) v.invNo = nos.join(' / ');
+    const sh = all.map(x => invShare(x, pid, ym)).filter(a => a != null); if (sh.length) v.amount = round2(sh.reduce((a, b) => a + b, 0));
   }
   return { v, inv };
 }
@@ -149,8 +152,7 @@ function renderTracker() {
       <label class="small"><input type="checkbox" id="tk-in"${TR.inact ? ' checked' : ''}> Inactive</label>
       <label class="small"><input type="checkbox" id="tk-hd"${TR.hidden ? ' checked' : ''}> Hidden</label>
       <label class="small" title="Green: payment received · amber: invoice sent more than ${terms} days ago and not paid"><input type="checkbox" id="tk-hint"${TR.hint ? ' checked' : ''}> Colours</label>
-      <button class="btn sm" id="tk-imp" title="Load rows, groups and entries from a Trackers workbook (sheet “Tax Invoice Tracker”)">Import tracker Excel…</button>
-      <button class="btn sm pri" id="tk-xl">Download Excel</button>`)
+      <button class="btn sm" id="tk-imp" title="Load rows, groups and entries from a Trackers workbook (sheet “Tax Invoice Tracker”)">Import tracker Excel…</button>`)
     + `<div class="tk-full"><table class="tk"><thead>
       <tr class="h1"><th class="tk-sl">Sl.No</th><th class="tk-d">Description</th>${months.map(ym => `<th class="tk-sp" rowspan="3"></th><th colspan="8">${fmtMonYY(ym)}</th>`).join('')}</tr>
       <tr class="h2"><th class="tk-sl tk-ga" rowspan="2">${g0 ? g0.letter : ''}</th><th class="tk-d tk-ga" rowspan="2"${g0 ? ` data-tgrp="${g0.id}"` : ''}>${g0 ? esc(g0.name) : ''}</th>${months.map(() => TRK_SECT.map(([l, c]) => `<th colspan="${c}">${l}</th>`).join('')).join('')}</tr>
@@ -165,7 +167,6 @@ function renderTracker() {
   $('#tk-hd', v).onchange = e => { TR.hidden = e.target.checked; renderTracker(); };
   $('#tk-hint', v).onchange = e => { TR.hint = e.target.checked; renderTracker(); };
   $('#tk-imp', v).onclick = () => pickFiles('.xlsx,.xls', false, fs => importTrackerXlsx(fs[0]).catch(e => toast(e.message, 6000)));
-  $('#tk-xl', v).onclick = () => exportTrackerXlsx().catch(e => toast(e.message, 6000));
   $('.tk', v).onclick = e => {
     const td = e.target.closest('td[data-tk]'); if (td && !td.querySelector('input')) return trackEdit(td);
     const d = e.target.closest('[data-trow],[data-tgrp]'); if (d) trkMenu(d, groups);

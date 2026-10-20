@@ -81,11 +81,12 @@ function sapWords(n) {
 const sapMonth = ym => { const f = MONTH_FULL[+ym.slice(5) - 1]; return f.length <= 5 ? f[0] + f.slice(1).toLowerCase() : MON[+ym.slice(5) - 1]; };
 /** Lines on the SAP invoice: one per month and rate, "Security Services - Jan'26", Qty = persons (amount ÷ rate) */
 function sapLines(dr) {
-  const out = [], by = new Map();
+  const out = [], by = new Map(), seg = new Map(invSegs(dr).map(x => [x.m, x]));   // part of a month → its dates
+  const lab = m => { const x = seg.get(m); return x && !x.full ? `${+x.a.slice(8)}-${+x.b.slice(8)} ${sapMonth(m)}'${m.slice(2, 4)}` : `${sapMonth(m)}'${m.slice(2, 4)}`; };
   for (const l of dr.lines) {
     if (!l.src?.m) { out.push({ desc: l.desc, qty: l.rate ? round2(l.amount / l.rate) : 1, rate: +l.rate || +l.amount, amount: +l.amount || 0, vat: +l.vat || 0 }); continue; }
     const k = l.src.m + '|' + l.rate + '|' + (l.vat || 0);
-    const g = by.get(k) || by.set(k, { desc: `Security Services - ${sapMonth(l.src.m)}'${l.src.m.slice(2, 4)}`, qty: 0, rate: +l.rate, amount: 0, vat: +l.vat || 0 }).get(k);
+    const g = by.get(k) || by.set(k, { desc: `Security Services - ${lab(l.src.m)}`, qty: 0, rate: +l.rate, amount: 0, vat: +l.vat || 0 }).get(k);
     g.amount = round2(g.amount + (+l.amount || 0));
   }
   for (const g of by.values()) { g.qty = g.rate ? round2(g.amount / g.rate) : 1; out.push(g); }

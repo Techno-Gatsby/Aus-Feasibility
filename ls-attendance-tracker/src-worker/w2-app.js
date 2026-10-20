@@ -159,8 +159,6 @@ function paintGps() {
   else if (z?.inZone && g.acc > max) el.innerHTML = chip('warn', t('inZone'), `${esc(z.site.name)} · ${t('poorGps')} ±${g.acc} m · ${t('willReview')}`);
   else if (z?.inZone) el.innerHTML = chip('ok', t('inZone'), `${z.d} m ${t('from')} ${esc(z.site.name)} · ±${g.acc} m${z.own ? '' : ` · ${t('reliever')} ${esc(z.site.name)}`}`);
   else el.innerHTML = chip('bad', `${t('outZone')}${z ? ` · ${z.d} m` : ''}`, `${z ? `${z.d} m ${t('from')} ${esc(z.site.name)} · ` : ''}±${g.acc} m · ${t('willReview')}`);
-  const set = (id, v) => { const x = $('#' + id); if (x) x.innerHTML = v; };
-  set('r-d', g && z ? `${z.d}` : '—'); set('r-a', g ? `${g.acc}` : '—');
   if (W.map && W.layers && g) {
     const L = window.L; W.layers.me?.remove(); W.layers.acc?.remove();
     W.layers.acc = L.circle([g.lat, g.lng], { radius: g.acc, color: cssv('--cyan'), weight: 1, fillOpacity: .08, dashArray: '3 4' }).addTo(W.map);
@@ -312,7 +310,7 @@ function tour() {
 function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', dock = '' } = {}) {
   try { W.map?.remove(); } catch (e) { } W.map = null; W.layers = null;                 // the old map's element is about to go
   clearInterval(W.tick); W.tick = null;
-  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock); document.body.classList.remove('tight');
+  document.body.classList.toggle('notabs', !tabs); document.body.classList.toggle('nodock', !dock);
   const scr = `${tab}|${crumb}`, fresh = scr !== shell.last; shell.last = scr;   // the entrance animation only when the screen changes
   $('#app').innerHTML = `<header class="top"><span class="mark">LS</span><p class="crumb"><span>Latinem</span><b>${esc(crumb || t('title'))}</b></p><span class="sp"></span>
     <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${tab === 'home' && W.prof && !W.sup ? `<button id="b-tour" class="ib" aria-label="${t('tourT')}" title="${t('tourT')}"><b style="font-size:15px">?</b></button>` : ''}${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
@@ -383,7 +381,7 @@ async function refresh(redraw = true) {
   if (!W.token) return;
   try { const r = await W.api.call('GET', 'worker/me', null, { token: W.token }); if (r.status === 401) return signOut(true); if (r.status === 200) { W.prof = r.body; ss.set('ls.prof', JSON.stringify(r.body)); setTimeout(pingTick, 0); if (redraw && !W.sup && !$('.cam') && !W.busy) render(); } } catch (e) { }
 }
-async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; }
+async function updateQueueBar() { const el = $('#qbar'); if (!el) return; const n = (await qAll()).length; el.hidden = !n; el.innerHTML = `${ic('wifi')}<span>${n} ${t('waiting')}</span>`; fitMap(); }
 
 function renderHome() {
   const P = W.prof, w = P.worker, open = P.open, S0 = P.settings || {};
@@ -446,13 +444,12 @@ async function drawMap() {
     if (!el.isConnected) { map.remove(); return; }                       // screen changed while the map loaded
     W.map = map; if (W.sheetH) map.panBy([0, Math.round(W.sheetH / 2) - 28], { animate: false });
     $$('#basechip [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === LSMap.base(map)));
-    if ($('#b-exp')) $('#b-exp').hidden = false;
     const loc = $('#b-loc'); if (loc) { loc.hidden = false; loc.onclick = () => { if (W.gps) { map.setView([W.gps.lat, W.gps.lng], Math.max(map.getZoom(), 17), { animate: false }); if (W.sheetH) map.panBy([0, Math.round(W.sheetH / 2) - 28], { animate: false }); } else toast(W.gpsErr || t('locating')); }; }
     W.layers = {};
     const own = cssv('--bronze') || '#B08D57', oth = cssv('--mute') || '#8C908A';
     for (const s of W.prof.sites || []) for (const p of s.pins) LSMap.zone(W.map, p, { color: s.id === W.prof.site?.id ? own : oth, label: s.name, fill: s.id === W.prof.site?.id ? .14 : .05 });
     paintGps();
-  } catch (e) { el.closest('.mapcard').hidden = true; }
+  } catch (e) { el.hidden = true; $('#basechip')?.setAttribute('hidden', ''); }   // no map: the zone chip and the sheet stay
 }
 async function punch(type, forWorker) {
   if (W.busy) return; W.busy = true;

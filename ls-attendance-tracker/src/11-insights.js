@@ -69,8 +69,9 @@ async function renderLive() {
   const lbl = { on: 'On duty', pe: 'On duty · review', done: 'Checked out', no: 'Not checked in', code: 'Day marked' };
   const sitesWith = [...new Set([...people.values()].map(x => x.site).filter(Boolean))].map(id => [id, siteName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
   // site filter in line with the Live map / Review tabs; the figures sit beside the map and open the list of who is behind them
+  if (!$('#v-live')?.classList.contains('on')) return;               // another view was opened while the pings loaded
   $('#subtabs').querySelector('#lv-site')?.remove();
-  $('#subtabs').insertAdjacentHTML('beforeend', `<select id="lv-site" class="lv-site">${opts(sitesWith, LV.site, 'All sites')}</select>`);
+  $('#subtabs').insertAdjacentHTML('beforeend', `<select id="lv-site" class="lv-site" aria-label="Site">${opts(sitesWith, LV.site, 'All sites')}</select>`);
   const starts = appCfg().starts || {}, nowHM = new Date().toTimeString().slice(0, 5), shiftOf = r => assignOn(r.e, today)?.shift || r.e.shift || 'DAY';
   const groups = { on: rows.filter(r => r.st === 'on' || r.st === 'pe'), done: rows.filter(r => r.st === 'done'), no: rows.filter(r => r.st === 'no'), out: rows.filter(r => r.st !== 'done' && r.last && !r.last.inZone) };
   const lateNo = groups.no.filter(r => starts[shiftOf(r)] && nowHM >= starts[shiftOf(r)]).length;

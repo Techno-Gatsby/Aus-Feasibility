@@ -15,18 +15,18 @@ function renderData() {
     </div>`)}
   ${sec('rates', 'Rate card <span class="cnt">AED per person per month · pro-rata on calendar days</span>', `
     <div class="tw"><table><thead><tr><th>Trade (as on personnel)</th><th>Word on invoice</th><th class="num">Rate</th><th>Source</th><th></th></tr></thead><tbody>
-    ${st.rateCard.map((r, i) => `<tr><td><input type="text" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
-      <td class="num"><input type="number" step="0.01" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
+    ${st.rateCard.map((r, i) => `<tr><td><input type="text" aria-label="Trade" data-rc="${i}" data-rk="trade" value="${esc(r.trade)}" list="dv-trades"></td><td><input type="text" aria-label="Word on invoice" data-rc="${i}" data-rk="unit" value="${esc(r.unit)}"></td>
+      <td class="num"><input type="number" step="0.01" aria-label="Rate" data-rc="${i}" data-rk="rate" value="${r.rate || ''}" style="width:110px"></td><td><input type="text" aria-label="Source" data-rc="${i}" data-rk="src" value="${esc(r.src || '')}" style="width:100%"></td>
       <td><button class="btn sm bad" data-rcdel="${i}">✕</button></td></tr>`).join('')}
     </tbody></table></div><datalist id="dv-trades">${st.trades.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="row" style="margin-top:8px"><button class="btn sm" id="dv-rcadd">Add trade</button><span class="muted small">Trades without a rate bill at 0 until you enter one.</span></div>`)}
   ${sec('codes', 'Attendance codes', `
     <div class="tw"><table id="dv-codes"><thead><tr><th>Code</th><th>Meaning</th><th>Colour</th><th>Key</th><th>Billable</th><th>On client sheet</th><th class="num">Used</th><th></th></tr></thead><tbody>
-    ${S.codes.map((c, i) => `<tr><td><b>${esc(c.code)}</b></td><td><input type="text" data-ci="${i}" data-ck="label" value="${esc(c.label)}"></td>
-      <td><input type="color" data-ci="${i}" data-ck="color" value="${esc(c.color)}" style="width:44px;padding:1px"></td>
-      <td><input type="text" maxlength="1" data-ci="${i}" data-ck="key" value="${esc(c.key || '')}" style="width:40px"></td>
-      <td><input type="checkbox" data-ci="${i}" data-ck="billable" ${c.billable ? 'checked' : ''}></td>
-      <td><input type="checkbox" data-ci="${i}" data-ck="client" ${c.client ? 'checked' : ''}></td>
+    ${S.codes.map((c, i) => `<tr><td><b>${esc(c.code)}</b></td><td><input type="text" aria-label="${esc(c.code)} Meaning" data-ci="${i}" data-ck="label" value="${esc(c.label)}"></td>
+      <td><input type="color" aria-label="${esc(c.code)} Colour" data-ci="${i}" data-ck="color" value="${esc(c.color)}" style="width:44px;padding:1px"></td>
+      <td><input type="text" maxlength="1" aria-label="${esc(c.code)} Key" data-ci="${i}" data-ck="key" value="${esc(c.key || '')}" style="width:40px"></td>
+      <td><input type="checkbox" aria-label="Billable" data-ci="${i}" data-ck="billable" ${c.billable ? 'checked' : ''}></td>
+      <td><input type="checkbox" aria-label="On client sheet" data-ci="${i}" data-ck="client" ${c.client ? 'checked' : ''}></td>
       <td class="num">${codeUsage(c.code)}</td>
       <td>${['P', 'R'].includes(c.code) ? '' : `<button class="btn sm bad" data-cdel="${i}">✕</button>`}</td></tr>`).join('')}
     </tbody></table></div>
@@ -44,7 +44,7 @@ function renderData() {
     </div>`)}
   ${sec('sign', 'Timesheet signatories', `
     <div class="tw"><table><thead><tr><th>Label</th><th>Name / code</th><th>Title</th><th>Emails allowed to sign <span class="muted" style="text-transform:none;letter-spacing:0">(comma separated)</span></th></tr></thead><tbody>
-      ${st.signatories.map((s, i) => `<tr><td><input type="text" data-sg="${i}" data-sk="label" value="${esc(s.label)}"></td><td><input type="text" data-sg="${i}" data-sk="name" value="${esc(s.name)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="title" value="${esc(s.title)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="emails" value="${esc(s.emails || '')}" placeholder="name@company.com" style="width:100%"></td></tr>`).join('')}
+      ${st.signatories.map((s, i) => `<tr><td><input type="text" aria-label="Signatory label" data-sg="${i}" data-sk="label" value="${esc(s.label)}"></td><td><input type="text" aria-label="Signatory name" data-sg="${i}" data-sk="name" value="${esc(s.name)}" style="width:100%"></td><td><input type="text" aria-label="Signatory title" data-sg="${i}" data-sk="title" value="${esc(s.title)}" style="width:100%"></td><td><input type="text" data-sg="${i}" data-sk="emails" value="${esc(s.emails || '')}" placeholder="name@company.com" style="width:100%"></td></tr>`).join('')}
     </tbody></table></div><p class="muted small" style="margin:6px 0 0">Only these emails can sign that box on a client timesheet. If a signed timesheet is changed later, everyone who signed it gets a notification.</p>`)}
   ${sec('payset', 'Payroll', paySettingsHTML())}
   ${sec('black', `Blacklisted subcontractors <span class="cnt">${S.blacklist.agencies.length}</span>`, `
@@ -116,7 +116,7 @@ let curView = 'attendance';
 const SEL = { client: '', project: '', site: '' };          // tree selection, applied to the open document
 function showView(v) {
   TOUR.stop(); curView = v;
-  $$('#tabs .doctab').forEach(b => b.classList.toggle('on', (b.dataset.group || b.dataset.view).split(' ').includes(v)));
+  $$('#tabs .doctab').forEach(b => { const on = (b.dataset.group || b.dataset.view).split(' ').includes(v); b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   $$('.doc').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   renderSubtabs();
   VIEWS[v](); renderToolbar(); renderStatus();
@@ -187,7 +187,7 @@ function openMenu(btn) {
   const r = btn.getBoundingClientRect(); dd.style.left = r.left + 'px'; dd.style.top = r.bottom + 2 + 'px'; dd.hidden = false;
   $$('.menu').forEach(m => m.classList.toggle('open', m === btn));
 }
-function closeMenu() { $('#dropdown').hidden = true; $$('.menu.open').forEach(m => m.classList.remove('open')); }
+function closeMenu() { const dd = $('#dropdown'); dd.hidden = true; dd.style.width = ''; $$('.menu.open').forEach(m => m.classList.remove('open')); }
 function helpKeys() {
   openModal('Keys & codes', `<div class="form two"><div><h3>Attendance grid</h3><table><tbody>
     ${[['Click / drag', 'select days'], ['Shift + click', 'extend selection'], ['Arrows', 'move'], ['Code key', 'mark selected days'], ['Del', 'clear'], ['Enter', 'reliever site / shift'], ['Ctrl+Z', 'undo'], ['Click a name', 'edit personnel']].map(([a, b]) => `<tr><td class="lab">${a}</td><td>${b}</td></tr>`).join('')}</tbody></table></div>
@@ -220,7 +220,7 @@ function renderTree() {
   const noClient = S.projects.filter(p => !p.clientId).sort((a, b) => a.name.localeCompare(b.name)).map(projLi).join('');
   const unl = S.sites.filter(s => !s.projectId).filter(s => !q || norm(s.name).includes(q)).sort((a, b) => a.name.localeCompare(b.name));
   ul.innerHTML = groups.join('') + (noClient ? node('grp', '__noclient', 'No client', '', noClient, true, '<span class="pill neg">fix</span>') : '') + (unl.length ? node('grp', '__unlinked', 'Unlinked sites', unl.length, unl.map(siteLi).join(''), TREE.open.has('__unlinked'), '<span class="pill neg">fix</span>') : '');
-  $('#railcount').textContent = `${S.projects.length} projects`;
+  $('#railcount').textContent = S.projects.length; $('#railcount').title = `${S.projects.length} projects`;
   ul.querySelectorAll('.node').forEach(n => {
     n.onclick = e => {
       const li = n.parentElement, id = n.dataset.id, k = n.dataset.k;

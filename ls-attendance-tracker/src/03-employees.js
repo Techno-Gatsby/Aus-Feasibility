@@ -30,15 +30,15 @@ function renderEmployees() {
       ${scope ? `<span class="pill">${esc(scope)} <button class="btn sm" id="ev-unscope" style="min-height:18px;padding:0 5px;border:0;box-shadow:none">✕</button></span>` : ''}
       <input type="search" id="ev-q" placeholder="Name / ID / agency" value="${esc(EV.q)}" style="width:200px">
       <span class="seg" id="ev-status">${EV_TABS.map(([k, l, f]) => `<button data-st="${k}" class="${EV.status === k ? 'on' : ''}">${l} <b>${S.employees.filter(f).length}</b></button>`).join('')}</span>
-      <select id="ev-type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>
+      <select id="ev-type" aria-label="Staff type">${opts([['ls', 'LS staff'], ['sub', 'Subcontractors']], EV.type, 'LS + subcon')}</select>
       <span class="seg" id="ev-view"><button data-vw="list" class="${EV.view === 'list' ? 'on' : ''}">List</button><button data-vw="dir" class="${EV.view === 'dir' ? 'on' : ''}">Directory</button></span>`)
   + (EV.view === 'dir' ? `<div class="dc"><div class="tw fill dirwrap">${EV.status !== 'left' ? directoryHTML(list.filter(e => !hasLeft(e)), false) : ''}${EV.status !== 'active' ? directoryHTML(list.filter(hasLeft), true) : ''}</div></div>` : '')
   + (EV.view === 'dir' ? '' : `<div class="dc"><div class="tw fill"><table><thead><tr>
-    <th><input type="checkbox" id="ev-all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>${EV.status === 'left' ? 'Last working day · reason' : EV.status === 'black' ? 'Blacklisted' : 'End date'}</th><th></th></tr></thead>
+    <th><input type="checkbox" id="ev-all" aria-label="Select all"></th><th>Emp ID</th><th>Name</th><th>Agency</th><th>Trade</th><th>Shift</th><th>Current site</th><th>Project</th><th>D.O.J</th><th>${EV.status === 'left' ? 'Last working day · reason' : EV.status === 'black' ? 'Blacklisted' : 'End date'}</th><th></th></tr></thead>
     <tbody>${list.map(e => {
       const cur = assignOn(e, today) || e.assign?.[e.assign.length - 1];
       const p = projOfSite(cur?.site);
-      return `<tr><td><input type="checkbox" data-chk="${e.id}" ${EV.checked.has(e.id) ? 'checked' : ''}></td>
+      return `<tr><td><input type="checkbox" aria-label="Select ${esc(e.name)}" data-chk="${e.id}" ${EV.checked.has(e.id) ? 'checked' : ''}></td>
         <td class="mono">${esc(e.empCode)}</td><td><a href="#" data-edit="${e.id}">${esc(e.name)}</a>${blackBadge(e)}</td><td>${esc(e.agency || '')}</td><td>${esc(e.trade || '')}</td>
         <td>${esc(cur?.shift || e.shift || '')}</td><td>${esc(siteName(cur?.site))}</td><td class="muted">${esc(p?.name || '')}</td>
         <td class="mono">${fmtDMY(e.doj)}</td><td>${EV.status === 'black' ? (e.blacklist ? `<span class="mono">${fmtDMY(e.blacklist.date)}</span> <span class="muted small">${esc(e.blacklist.reason || '')}</span>` : `<span class="muted small">via subcontractor ${esc(e.agency)}</span>`) : e.end ? `<span class="mono">${fmtDMY(e.end)}</span> <span class="pill ${e.end < today ? 'neg' : 'warn'}">${esc(e.endReason || 'end')}</span>` : hasLeft(e) ? `<span class="pill neg">${esc(hrStatus(e))} – no date</span>` : ''}${EV.status === 'left' && e.hr?.remarks ? ` <span class="muted small">${esc(e.hr.remarks)}</span>` : ''}</td>

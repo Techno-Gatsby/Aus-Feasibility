@@ -204,14 +204,14 @@ function renderTimesheets() {
   const key = per.join('|') + '|' + (TV.client || '') + '|' + TV.q, keep = TV._key === key; TV._key = key;
   const sTop = keep ? $('#v-timesheets .tw')?.scrollTop || 0 : 0;
   v.innerHTML = docHead('Client timesheets', `one LS/DO/F-026 sheet per project · ${chosen.length} ticked for print / export`, `
-      <input type="search" id="tv-q" placeholder="Name or Emp ID" value="${esc(TV.q)}" style="width:170px" title="Show only this person's rows">
-      <select id="tv-client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
+      <input type="search" id="tv-q" aria-label="Find a person" placeholder="Name or Emp ID" value="${esc(TV.q)}" style="width:170px" title="Show only this person's rows">
+      <select id="tv-client" aria-label="Client">${opts(S.clients.map(c => [c.id, c.name]), TV.client, 'All clients')}</select>
       <span class="seg"><button data-tm="month" class="${TV.mode !== 'range' ? 'on' : ''}">Month</button><button data-tm="range" class="${TV.mode === 'range' ? 'on' : ''}">Custom period</button></span>
       ${TV.mode === 'range' ? `<input type="date" id="tv-from" value="${TV.from || ''}"><span class="muted">–</span><input type="date" id="tv-to" value="${TV.to || ''}">`
         : `<button class="btn sm" id="tv-prev">◀</button><input type="month" id="tv-ym" value="${TV.ym}"><button class="btn sm" id="tv-next">▶</button>`}`)
   + `<div class="dc"><div class="split tv-split">
-    <div class="tw tv-list"><table><thead><tr><th><input type="checkbox" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
-    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td class="tvn" title="${esc(p.name)} · ${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}${ts.doc ? ' <span class="pill" title="Edited / signed version">v' + ts.doc.version + '</span>' : ''}</td>
+    <div class="tw tv-list"><table><thead><tr><th><input type="checkbox" aria-label="Select all" id="tv-all" ${chosen.length === all.length && all.length ? 'checked' : ''}></th><th>Project</th><th class="num">Rows</th><th class="num">Days</th><th class="num" title="billable days ÷ ${D}">Guards</th></tr></thead><tbody>
+    ${all.map(({ p, ts }) => `<tr class="${p.id === pv?.p.id ? 'on' : ''}" data-pv="${p.id}" style="cursor:pointer"><td><input type="checkbox" aria-label="Select ${esc(p.name)}" data-tp="${p.id}" ${TV.picked.has(p.id) ? 'checked' : ''}></td><td class="tvn" title="${esc(p.name)} · ${esc(IX.client.get(p.clientId)?.name || '')}">${esc(p.name)}${ts.doc ? ' <span class="pill" title="Edited / signed version">v' + ts.doc.version + '</span>' : ''}</td>
       <td class="num">${ts.rows.length || ''}</td><td class="num">${ts.total || ''}</td><td class="num">${ts.total ? qtyFmt(ts.total / D) : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${TV.q ? `Nobody matching “${esc(TV.q)}” in this period.` : 'No projects yet.'}</td></tr>`}
     </tbody><tfoot><tr class="total"><td></td><td>${all.length} projects</td><td></td><td class="num">${sumDays}</td><td class="num">${qtyFmt(sumDays / D)}</td></tr></tfoot></table></div>
     <div class="tv-right"><div id="tv-bar" class="tv-bar"></div><div id="tv-sheets">${pv ? '' : `<div class="empty"><b>No attendance in this period</b>Pick another period, or import / enter attendance first.</div>`}</div></div>
@@ -247,6 +247,7 @@ function renderTimesheets() {
 function tsShowPreview() {
   const box = $('#tv-sheets'), bar = $('#tv-bar'), pv = TV.pv; if (!box || !bar || !pv) { if (bar) bar.innerHTML = ''; return; }
   const ts = tsView(pv.base), doc = ts.doc, ed = TV.edit;
+  if (TV.lay && TV.lay.p?.id !== ts.projectId) TV.lay = null;            // another project was picked: leave layout mode
   if (TV.lay) return tsShowLayout(box, bar, ts);
   const changed = doc && doc.basis && doc.basis !== tsBasis(pv.base);
   const signed = (doc?.sigs || []).length;
@@ -268,7 +269,7 @@ function tsShowPreview() {
     return;
   }
   q('#te-edit').onclick = () => { if (ts.filtered) return toast('Clear the Name / Emp ID filter to edit the whole sheet'); TV.edit = { key: tsKey(pv.base), rows: JSON.parse(JSON.stringify(doc ? doc.rows : docRows(pv.base))) }; tsShowPreview(); };
-  q('#te-lay').onclick = () => { const p = IX.proj.get(ts.projectId); TV.lay = { look: JSON.parse(JSON.stringify(tsLook(p))), scope: p?.clientId ? 'client' : 'def', p }; tsShowPreview(); };
+  q('#te-lay').onclick = () => { const p = IX.proj.get(ts.projectId); TV.lay = { look: JSON.parse(JSON.stringify(tsLook(p))), orig: JSON.parse(JSON.stringify(tsLook(p))), scope: p?.clientId ? 'client' : 'def', p }; tsShowPreview(); };
   q('#te-xlsx').onclick = () => exportTimesheetsXlsx([ts]).catch(e => toast(e.message));
   q('#te-up').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const rows = await readTimesheetXlsx(f, pv.base); tsSaveVersion(pv.base, rows, true); renderTimesheets(); toast(`Read ${rows.length} row(s) from ${f.name} – saved as a new version`); } catch (err) { toast(err.message, 6000); } };
   if (q('#te-upd')) q('#te-upd').onclick = async () => { if (!await confirmBox('Replace the saved version with the current attendance? Your edits on this sheet are replaced, and anyone who signed is notified.', 'Update')) return; tsSaveVersion(pv.base, docRows(pv.base), false); renderTimesheets(); };
@@ -305,7 +306,10 @@ function tsShowLayout(box, bar, ts) {
   q('#tl-save').onclick = () => {
     read(); const T = S.tsLayout ||= { def: {}, clients: {} };
     if (L.scope === 'client' && p?.clientId) { const d = tsLookDiff(L.look, tsLook(p, { noClient: true }), p); if (Object.keys(d).length) T.clients[p.clientId] = d; else delete T.clients[p.clientId]; }
-    else T.def = tsLookDiff(L.look, tsLook(p, { noClient: true, noDef: true }), p);
+    else {   // only what was changed now goes to the default – the client's own overrides stay with the client
+      const ch = tsLookDiff(L.look, L.orig, p), D = T.def ||= {};
+      for (const [k, x] of Object.entries(ch)) if (k === 'cols') D.cols = { ...(D.cols || {}), ...x }; else if (k === 'sig') D.sig = x.map((y, i) => ({ ...(D.sig?.[i] || {}), ...y })); else D[k] = x;
+    }
     TV.lay = null; markDirty(); tsShowPreview(); toast(L.scope === 'client' ? `Layout saved for ${c?.name}` : 'Layout saved for all clients');
   };
   q('#tl-reset')?.addEventListener('click', async () => { if (!await confirmBox(`Use the default layout for ${c.name} again?`, 'Reset', 'bad')) return; delete S.tsLayout.clients[p.clientId]; TV.lay = null; markDirty(); tsShowPreview(); });
