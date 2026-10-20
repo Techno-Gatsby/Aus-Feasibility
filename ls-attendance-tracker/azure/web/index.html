@@ -2425,12 +2425,13 @@ function renderTimesheets() {
   });
   v.querySelectorAll('[data-tp]').forEach(c => c.onchange = () => { TV.all = false; c.checked ? TV.picked.add(c.dataset.tp) : TV.picked.delete(c.dataset.tp); renderTimesheets(); });
 }
-/** The preview shows the whole A4 sheet, scaled down to the pane (same layout as the print) */
+/** The preview shows the whole A4 sheet scaled to the pane width (same layout as the print) */
 function tsScale() {
   const box = $('#tv-sheets'), sh = box?.querySelector('.ts-sheet'); if (!sh) return;
-  sh.style.zoom = Math.min(1, (box.clientWidth - 2) / 1120).toFixed(3);
+  if (box.dataset.fit !== '1') { box.dataset.fit = '1'; tsFit.disconnect(); tsFit.observe(box); }
+  sh.style.zoom = Math.min(2, (box.clientWidth - 2) / 1120).toFixed(3);      // fills the pane width, larger on wide screens
 }
-addEventListener('resize', () => curView === 'timesheets' && tsScale());
+const tsFit = new ResizeObserver(() => tsScale());                 // pane resized (window, tree shown / hidden): re-fit
 /** Toolbar / menu commands for the ticked projects */
 function tsCmd(cmd) {
   if (curView !== 'timesheets') showView('timesheets');
