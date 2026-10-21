@@ -753,3 +753,73 @@ body main:has(.tview){max-width:none;padding:0!important}
 .big.out{box-shadow:0 4px 12px rgba(16,24,40,.14)}
 :root[data-theme=light] .btn.pri{box-shadow:0 1px 2px rgba(16,24,40,.14)}
 :root[data-theme=light] .top .mark{box-shadow:none}
+
+/* =========================================================================
+   Liquid glass chrome (iOS 26 look): floating tab bar, glass map chips,
+   glass bottom sheet, menus and keypad. Content (calendar, cards, forms)
+   stays crisp. Blur + highlights only; solid fallbacks where blur is off.
+   ========================================================================= */
+:root{--g-blur:22px;--g-sat:1.35;--g-spring:cubic-bezier(.175,.885,.32,1.3);
+  --g-fill:rgba(255,255,255,.6);--g-fill-sheet:rgba(255,255,255,.74);--g-fill-strong:rgba(255,255,255,.92);
+  --g-stroke:rgba(255,255,255,.72);--g-stroke-dark:rgba(20,24,31,.12);--g-hl:rgba(255,255,255,.8);
+  --g-shadow:0 12px 32px rgba(18,23,34,.16),0 1px 2px rgba(18,23,34,.06);
+  --g-sheen:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,0) 45%)}
+:root[data-theme=dark]{--g-fill:rgba(24,28,36,.55);--g-fill-sheet:rgba(18,22,28,.72);--g-fill-strong:rgba(24,28,36,.96);
+  --g-stroke:rgba(255,255,255,.16);--g-stroke-dark:rgba(0,0,0,.4);--g-hl:rgba(255,255,255,.18);
+  --g-shadow:0 12px 32px rgba(0,0,0,.45);--g-sheen:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,0) 45%)}
+.gl{background:var(--g-sheen),var(--g-fill);border:1px solid var(--g-stroke);border-bottom-color:var(--g-stroke-dark);box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-hl),inset 0 0 0 .5px rgba(255,255,255,.3)}
+.top,.tabs-b,.tmap .modechip,.tmap .zchip,.tmap .tools button,.tsheet,.sheet-menu .in,.sheet-bg .sheet,.toast,.tour-tip,.seg,.modechip,.pad button{background:var(--g-sheen),var(--g-fill);border:1px solid var(--g-stroke);border-bottom-color:var(--g-stroke-dark);box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-hl)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .top,.tabs-b,.tmap .modechip,.tmap .zchip,.tmap .tools button,.tsheet,.sheet-menu .in,.sheet-bg .sheet,.toast,.tour-tip,.seg,.modechip{-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat))}}
+/* top bar */
+.top{border:0;border-bottom:1px solid var(--g-stroke-dark);box-shadow:inset 0 1px 0 var(--g-hl)}
+/* the tab bar floats as a capsule */
+:root{--tab:58px}
+.tabs-b{left:14px;right:14px;bottom:calc(10px + env(safe-area-inset-bottom,0));padding:0;border-radius:999px;border:1px solid var(--g-stroke);border-bottom-color:var(--g-stroke-dark)}
+.tabs-b .in{position:relative;padding:4px}
+.tabs-b .tb-pill{position:absolute;top:5px;bottom:5px;left:0;width:0;border-radius:999px;background:var(--g-sheen),rgba(255,255,255,.95);box-shadow:0 1px 2px rgba(16,24,40,.1),0 3px 8px rgba(16,24,40,.1),inset 0 1px 0 #fff;transition:left .3s var(--g-spring),width .3s var(--g-spring);pointer-events:none}
+:root[data-theme=dark] .tabs-b .tb-pill{background:rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.tabs-b button{position:relative;z-index:1;height:calc(var(--tab) - 8px);gap:2px}
+.tabs-b button svg.i{background:none!important;padding:0}
+.tabs-b button.on{color:var(--bronze)}
+main{padding-bottom:calc(var(--tab) + var(--dock) + 28px + env(safe-area-inset-bottom,0))}
+body.nodock main{padding-bottom:calc(var(--tab) + 32px + env(safe-area-inset-bottom,0))}
+/* map: chips and buttons are glass over the map */
+.tmap .modechip{border-radius:12px;padding:3px}
+.tmap .modechip button{border-radius:9px}
+.tmap .zchip{border-radius:999px;padding:7px 12px;font-weight:650}
+.tmap .zchip.ok{color:var(--sage)}.tmap .zchip.bad{color:var(--red)}.tmap .zchip.warn{color:var(--gold)}
+.tmap .tools button{border-radius:14px;background:var(--g-sheen),var(--g-fill-sheet)}
+/* bottom sheet: glass over the map; the tab bar floats over its foot */
+.tsheet{background:var(--g-sheen),var(--g-fill-sheet);border:1px solid var(--g-stroke);border-bottom:0;border-radius:26px 26px 0 0;box-shadow:0 -12px 36px rgba(16,24,40,.14),inset 0 1px 0 var(--g-hl);padding-bottom:calc(var(--tab) + 26px + env(safe-area-inset-bottom,0))}
+@media (min-width:600px){.tsheet{bottom:0;border-radius:26px 26px 0 0}}
+.tsheet .grab{background:rgba(20,24,31,.18)}
+.tsheet .big{box-shadow:0 6px 16px rgba(16,24,40,.16),inset 0 1px 0 rgba(255,255,255,.35)}
+/* segmented controls: glass track, sliding white pill */
+.seg,.modechip{position:relative;padding:3px;border-radius:12px;background:var(--g-sheen),rgba(255,255,255,.45)}
+:root[data-theme=dark] .seg,:root[data-theme=dark] .modechip{background:rgba(255,255,255,.06)}
+.seg .seg-pill,.modechip .seg-pill{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;background:rgba(255,255,255,.95);box-shadow:0 1px 2px rgba(16,24,40,.1),0 2px 6px rgba(16,24,40,.08),inset 0 1px 0 #fff;transition:left .28s var(--g-spring),width .28s var(--g-spring);pointer-events:none}
+:root[data-theme=dark] .seg .seg-pill,:root[data-theme=dark] .modechip .seg-pill{background:rgba(255,255,255,.16);box-shadow:none}
+.seg button,.modechip button{position:relative;z-index:1}
+.seg:has(.seg-pill) button.on,.modechip:has(.seg-pill) button.on{background:transparent;box-shadow:none;color:var(--ink)}
+/* sheets, menus, toast, tour */
+.sheet-menu .in,.sheet-bg .sheet{background:var(--g-sheen),var(--g-fill-sheet);border-radius:26px 26px 0 0;border-bottom:0}
+.sheet-menu{background:rgba(16,24,40,.3);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.sheet-bg{background:rgba(16,24,40,.3);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.toast{border-radius:999px;border-left:1px solid var(--g-stroke);background:var(--g-sheen),var(--g-fill-strong);color:var(--ink)}
+.tour-tip{border-radius:18px}
+/* keypad */
+.pad button{border-radius:16px;background:var(--g-sheen),rgba(255,255,255,.7);box-shadow:0 1px 2px rgba(16,24,40,.06),inset 0 1px 0 var(--g-hl);transition:transform .25s var(--g-spring),background .15s}
+.pad button:active{transform:scale(.94);background:rgba(255,255,255,.95)}
+.pad button.fn{background:transparent;border-color:transparent;box-shadow:none}
+:root[data-theme=dark] .pad button{background:rgba(255,255,255,.06)}
+/* press feedback */
+.btn,.big,.tabs-b button,.medlink,.sp-row .btn{transition:transform .25s var(--g-spring),background .15s,box-shadow .2s,color .15s}
+.big:active{transform:scale(.97)}
+/* fallbacks */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.top,.tabs-b,.tsheet,.sheet-menu .in,.sheet-bg .sheet,.tmap .modechip,.tmap .zchip,.tmap .tools button,.seg,.modechip{background:var(--g-fill-strong)}}
+@media (prefers-reduced-transparency:reduce),(prefers-contrast:more){.top,.tabs-b,.tsheet,.sheet-menu .in,.sheet-bg .sheet,.tmap .modechip,.tmap .zchip,.tmap .tools button,.seg,.modechip,.toast,.pad button{background:var(--s1);-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media (forced-colors:active){.top,.tabs-b,.tsheet,.sheet-menu .in,.sheet-bg .sheet{background:Canvas;border:1px solid ButtonText;box-shadow:none;backdrop-filter:none}}
+@media (prefers-reduced-motion:reduce){.tabs-b .tb-pill,.seg .seg-pill,.modechip .seg-pill{transition:none}}
+:root[data-theme=light] .toast{border-left:1px solid var(--g-stroke)}
+.sheet-menu .in,.sheet-bg .sheet{background:var(--g-sheen),var(--g-fill-strong)}

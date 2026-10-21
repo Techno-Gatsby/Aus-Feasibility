@@ -923,3 +923,66 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
 .selchip button{border:0;background:#fff;border-radius:50%;width:20px;height:20px;padding:0;cursor:pointer;color:var(--text2);display:grid;place-items:center}
 .selchip button:hover{color:var(--neg)}
 .menubar .brand .mark{line-height:1;font-family:var(--font-body);padding:0;text-align:center}
+
+/* =========================================================================
+   Liquid glass chrome – after Apple's Liquid Glass guidance and the
+   apple-liquid-glass-ui skill: translucent, blurred, highlighted surfaces
+   on the *chrome* only (bars, tabs, menus, popovers, toasts); content stays
+   crisp. Blur + highlights, no refraction (Safari/iPhone never shows it).
+   ========================================================================= */
+:root{--g-blur:18px;--g-blur-f:22px;--g-sat:1.35;
+  --g-fill:rgba(255,255,255,.62);--g-fill-pill:rgba(255,255,255,.58);--g-fill-strong:rgba(255,255,255,.86);
+  --g-stroke:rgba(255,255,255,.7);--g-stroke-dark:rgba(20,24,31,.12);--g-hl:rgba(255,255,255,.75);
+  --g-shadow:0 14px 36px rgba(18,23,34,.14),0 1px 2px rgba(18,23,34,.06);
+  --g-sheen:linear-gradient(135deg,rgba(255,255,255,.42),rgba(255,255,255,0) 45%);
+  --g-spring:cubic-bezier(.175,.885,.32,1.3);
+  --ambient:#F5F7FB radial-gradient(900px 500px at 8% 0%,rgba(42,90,150,.09),transparent 60%) no-repeat,radial-gradient(700px 500px at 100% 100%,rgba(154,138,110,.07),transparent 60%) no-repeat}
+/* the material */
+.glass,.menubar,.toolbar,.rail,.doctabs,.subtabs:not(:empty),.doc>.dh,.dropdown,.tour-tip,.toast,.ai-fab,.lv-side .kpi,#modal .mh,#modal .mf{
+  background:var(--g-sheen),var(--g-fill);border-color:var(--g-stroke);box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-hl),inset 0 0 0 .5px rgba(255,255,255,.35)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass,.toolbar,.rail,.doctabs,.subtabs:not(:empty),.doc>.dh,#modal .mh,#modal .mf{-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat))}
+  .dropdown,.tour-tip,.toast,.ai-fab,.lv-side .kpi,.menubar,.tw thead th{-webkit-backdrop-filter:blur(var(--g-blur-f)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur-f)) saturate(var(--g-sat))}}
+/* something to see through: a soft ambient backdrop behind the shell */
+.app{background:var(--ambient);background-attachment:fixed}
+.workspace{background:transparent}
+/* bars: one continuous band, hairline edges instead of hard borders */
+.menubar{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,0) 55%),rgba(18,48,94,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 1px 0 rgba(0,0,0,.18);border:0}
+.toolbar{border:0;box-shadow:inset 0 -1px 0 var(--g-stroke-dark),inset 0 1px 0 var(--g-hl)}
+.rail{border-right:1px solid var(--g-stroke-dark);box-shadow:none;background:var(--g-sheen),rgba(255,255,255,.5)}
+.doctabs{border-bottom:1px solid var(--g-stroke-dark);box-shadow:inset 0 1px 0 var(--g-hl)}
+.subtabs:not(:empty){box-shadow:none;background:rgba(255,255,255,.4);border-bottom:1px solid rgba(20,24,31,.06)}
+.doc>.dh{border-bottom:1px solid var(--g-stroke-dark);box-shadow:inset 0 1px 0 var(--g-hl)}
+.docarea{background:var(--surface)}
+/* table headers glide over the rows */
+.tw thead th{background:rgba(248,250,252,.78)}
+/* floating pieces: concentric radii, lifted shadow */
+.dropdown{border-radius:14px;border:1px solid var(--g-stroke);padding:6px}
+.dropdown button{border-radius:9px}
+.dropdown button:hover{background:rgba(42,90,150,.1)}
+.tour-tip{border-radius:16px;border:1px solid var(--g-stroke)}
+.toast{border-radius:999px;border:1px solid var(--g-stroke);border-left:1px solid var(--g-stroke);padding:9px 18px 9px 14px;background:var(--g-sheen),var(--g-fill-strong)}
+.toast::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:9px;vertical-align:1px}
+.ai-fab{background:var(--g-sheen),rgba(18,48,94,.86);border:1px solid rgba(255,255,255,.35);box-shadow:var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.25)}
+.lv-side .kpi{border:1px solid var(--g-stroke);background:var(--g-sheen),var(--g-fill-pill)}
+.lv-side .kpi.on{background:var(--g-sheen),rgba(42,90,150,.12)}
+#modal{border:1px solid var(--g-stroke);overflow:hidden}
+#modal .mh,#modal .mf{box-shadow:none;border-color:var(--g-stroke-dark)}
+#modal .mb{background:var(--surface)}
+#modal-bg{background:rgba(16,24,40,.32);-webkit-backdrop-filter:blur(6px) saturate(1.2);backdrop-filter:blur(6px) saturate(1.2)}
+/* segmented controls: glass track, a white pill that slides to the choice */
+.seg{position:relative;background:rgba(20,24,31,.06);box-shadow:inset 0 0 0 1px rgba(20,24,31,.05)}
+.seg .seg-pill{position:absolute;top:2px;bottom:2px;left:0;width:0;border-radius:7px;background:var(--g-sheen),rgba(255,255,255,.92);box-shadow:0 1px 2px rgba(16,24,40,.1),0 2px 6px rgba(16,24,40,.08),inset 0 1px 0 rgba(255,255,255,.9);transition:left .25s var(--g-spring),width .25s var(--g-spring);pointer-events:none}
+.seg button{position:relative;z-index:1}
+.seg:has(.seg-pill) button.on{background:transparent;box-shadow:none}
+/* press feedback: a small spring */
+.btn,.toolbar button,.doctab,.seg button,.tree .node,.lv-k .kpi,.ai-fab{transition:transform .25s var(--g-spring),background .15s,color .15s,box-shadow .2s}
+.btn:active,.toolbar button:active,.seg button:active,.ai-fab:active{transform:scale(.96)}
+.btn.pri{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 50%),var(--accent);box-shadow:0 1px 2px rgba(16,24,40,.16),inset 0 1px 0 rgba(255,255,255,.28)}
+.toolbar button.strong{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 50%),var(--accent);box-shadow:0 1px 2px rgba(16,24,40,.16),inset 0 1px 0 rgba(255,255,255,.28)}
+/* when glass can't be shown, show solid */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.toolbar,.rail,.doctabs,.subtabs:not(:empty),.doc>.dh,.dropdown,.tour-tip,.toast,.lv-side .kpi,#modal .mh,#modal .mf{background:var(--g-fill-strong)}}
+@media (prefers-reduced-transparency:reduce),(prefers-contrast:more){.toolbar,.rail,.doctabs,.subtabs:not(:empty),.doc>.dh,.dropdown,.tour-tip,.toast,.lv-side .kpi,#modal .mh,#modal .mf,.tw thead th{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none}.menubar,.ai-fab{background:var(--navy);backdrop-filter:none}.app{background:#F5F7FB}}
+@media (forced-colors:active){.toolbar,.rail,.doctabs,.dropdown,.tour-tip,.toast,.doc>.dh{background:Canvas;border:1px solid ButtonText;box-shadow:none;backdrop-filter:none}}
+@media (prefers-reduced-motion:reduce){.seg .seg-pill,.btn,.toolbar button,.doctab,.seg button,.ai-fab{transition:none}}
+@media print{.menubar,.toolbar,.rail,.doctabs,.subtabs,.doc>.dh,.dropdown,.toast{background:#fff!important;backdrop-filter:none!important;box-shadow:none!important}}

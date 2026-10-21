@@ -316,7 +316,8 @@ function shell(body, { tabs = !!(W.prof && !W.sup), tab = SCREEN, crumb = '', do
     <button id="b-lang" class="ib" aria-label="${t('lang')}">${ic('globe')}<span>${esc(LANG.toUpperCase())}</span></button>${tab === 'home' && W.prof && !W.sup ? `<button id="b-tour" class="ib" aria-label="${t('tourT')}" title="${t('tourT')}"><b style="font-size:15px">?</b></button>` : ''}${W.prof || W.sup ? `<button id="b-menu" class="ib" aria-label="${t('more')}">${ic('more')}</button>` : ''}</header>
     ${W.api.demo ? `<div class="synthetic"><span class="d"></span><span>${t('demo')}</span></div>` : ''}<main class="${fresh ? 'enter' : ''}">${body}</main>
     ${dock ? `<div class="dock"><div class="in">${dock}</div></div>` : ''}
-    ${tabs ? `<nav class="tabs-b"><div class="in">${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
+    ${tabs ? `<nav class="tabs-b"><div class="in"><i class="tb-pill" aria-hidden="true"></i>${[['home', 'home', t('today')], ['month', 'cal', t('month')], ['more', 'more', t('more')]].map(([k, i, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div></nav>` : ''}`;
+  glassPills();
   $('#b-lang').onclick = () => menu(LANGS.map(([k, n]) => [n, () => { setLang(k); render(); }, k === LANG]));
   if ($('#b-menu')) $('#b-menu').onclick = () => menu([
     ...(W.prof ? [[t('today'), () => go('home'), SCREEN === 'home'], [t('month'), () => go('month'), SCREEN === 'month']] : []),
@@ -431,7 +432,7 @@ function renderHome() {
 /** Today fills the screen between the header and the tabs; the map tools sit just above the sheet */
 function fitMap() {
   const v = $('#tview'); if (!v) return;
-  const tabs = $('.tabs-b'), bottom = tabs ? tabs.getBoundingClientRect().top : innerHeight;
+  const bottom = innerHeight;                                           // the map runs under the floating tab bar; the sheet keeps clear of it
   v.style.height = Math.max(360, Math.floor(bottom - v.getBoundingClientRect().top)) + 'px';
   W.sheetH = $('#tsheet').offsetHeight; $('#maptools').style.bottom = W.sheetH + 14 + 'px';
   W.map?.invalidateSize();
@@ -681,3 +682,11 @@ LSMap.load().catch(() => { });                 // fetch the map library while th
   render(); document.body.dataset.ready = '1';
 })();
 setInterval(() => { if (W.prof && !W.sup && SCREEN === 'home' && !$('.cam') && !W.busy && !$('.mapcard.full')) refresh(); }, 120000);
+
+/* liquid glass: the white pill behind the chosen tab / segment slides into place */
+function glassPills() {
+  const bar = $('.tabs-b .in'); if (bar) { const on = bar.querySelector('button.on'), pill = bar.querySelector('.tb-pill'); if (on && pill) { pill.style.left = on.offsetLeft + 6 + 'px'; pill.style.width = on.offsetWidth - 12 + 'px'; } }
+  $$('.seg,.modechip').forEach(seg => { let pill = seg.querySelector(':scope>.seg-pill'); if (!pill) { pill = document.createElement('i'); pill.className = 'seg-pill'; seg.prepend(pill); } const on = seg.querySelector(':scope>button.on'); if (!on) { pill.style.width = '0'; return; } pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px'; });
+}
+new MutationObserver(() => glassPills()).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+addEventListener('resize', glassPills);

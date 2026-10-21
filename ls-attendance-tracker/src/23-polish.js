@@ -90,3 +90,13 @@ function decorateChrome() {
   document.querySelectorAll('.tree .grp>.node:not([data-hi])').forEach(n => { n.dataset.hi = '1'; const nm = n.querySelector('.nm'); if (!nm) return; const w = nm.textContent.trim().split(/\s+/).filter(x => /^[A-Za-z]/.test(x)); nm.insertAdjacentHTML('beforebegin', `<span class="ini">${esc((w[0]?.[0] || '?') + (w[1]?.[0] || ''))}</span>`); });
 }
 new MutationObserver(decorateChrome).observe(document.body, { childList: true, subtree: true });
+/* segmented controls: a white pill that slides to the chosen option (the control itself is unchanged) */
+function segPills(root = document) {
+  root.querySelectorAll('.seg').forEach(seg => {
+    let pill = seg.querySelector(':scope>.seg-pill'); if (!pill) { pill = document.createElement('i'); pill.className = 'seg-pill'; seg.prepend(pill); }
+    const on = seg.querySelector(':scope>button.on'); if (!on) { pill.style.width = '0'; return; }
+    pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px';
+  });
+}
+new MutationObserver(() => segPills()).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+addEventListener('resize', () => segPills()); segPills();
