@@ -918,6 +918,18 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
 #tree-q:focus{background:var(--surface);border-color:var(--accent)}
 /* status bar */
 .statusbar{background:var(--surface);color:var(--mute)}
+/* simpler Attendance bar: the codes appear once days are selected; a short hint otherwise */
+.dh.slim .av-mark{display:none;align-items:center;gap:6px}
+.dh.slim.has-sel .av-mark{display:inline-flex}
+.dh.slim.has-sel .av-hint{display:none}
+.chkbtn{border-radius:999px;font-weight:600}
+/* toolbar: More menu and the active-filter chip */
+.toolbar .tb-more{color:var(--text2)}
+.selchip{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--accent-soft2);color:var(--text2);font-size:12px;margin-right:6px;max-width:320px}
+.selchip b{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selchip button{border:0;background:#fff;border-radius:50%;width:20px;height:20px;padding:0;cursor:pointer;color:var(--text2);display:grid;place-items:center}
+.selchip button:hover{color:var(--neg)}
+.menubar .brand .mark{line-height:1;font-family:var(--font-body);padding:0;text-align:center}
 
 </style>
 </head>
@@ -1914,7 +1926,8 @@ function renderAttendance() {
       <button class="btn sm" id="av-prev" title="Previous month">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next" title="Next month">▶</button>
       <span class="sub mono">${fmtDMY(start)} – ${fmtDMY(end)}</span>${locked ? '<span class="pill neg">locked</span>' : ''}
       <span class="sep"></span>
-      <span class="codes">${S.codes.filter(c => c.key || codeUsed(c.code)).map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' · key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}<button data-code="" title="Clear · Del">✕</button></span>
+      <span class="av-hint muted small">Select days in the grid to mark them</span>
+      <span class="av-mark"><span class="small muted">Mark as</span><span class="codes">${S.codes.filter(c => c.key || codeUsed(c.code)).map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' · key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}<button data-code="" title="Clear · Del">✕</button></span></span>
       <span id="av-selinfo" class="muted small"></span>
       <span class="spacer"></span>
       ${scope ? `<span class="pill">${esc(scope)} <button class="x" id="av-unscope" title="Show everyone">✕</button></span>` : ''}
@@ -2133,8 +2146,9 @@ function renderFooter() {
   for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
   const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
   const k = (lbl, v, col) => `<span class="st"><b style="color:${col}">${Number(v).toLocaleString()}</b> ${lbl}</span>`;
-  $('#av-kpis').innerHTML = k('workers', AV.rows.length, 'var(--heading)') + k('billable (P+R)', all, 'var(--pos)') + k('absent', cnt.A || 0, 'var(--neg)') + k('off', cnt.OFF || 0, 'var(--text2)')
-    + k('leave / other', leave, 'var(--warn)') + k('not marked', blank, blank ? 'var(--warn)' : 'var(--text2)') + '<span class="spacer"></span>' + setupSteps();
+  // four plain numbers; the rest of the breakdown is in the tooltip
+  $('#av-kpis').innerHTML = k('people', AV.rows.length, 'var(--heading)') + `<span class="st" title="Present (P) and reliever (R) days – these are billed. Also: ${(cnt.OFF || 0).toLocaleString()} off, ${leave.toLocaleString()} leave / other">${'<b style="color:var(--pos)">' + Number(all).toLocaleString() + '</b>'} days present</span>`
+    + k('absent', cnt.A || 0, 'var(--neg)') + k('not marked yet', blank, blank ? 'var(--warn)' : 'var(--text2)') + '<span class="spacer"></span>' + setupSteps();
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
@@ -2142,6 +2156,7 @@ function paintSel() {
   wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
   const s = AV.sel, si = $('#av-selinfo');
   if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} selected</b>` : '';
+  $('#v-attendance .dh.slim')?.classList.toggle('has-sel', !!s);          // the codes show once days are selected
   if (!s) return;
   const trs = wrap.querySelectorAll('tbody tr');
   for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
@@ -2262,7 +2277,7 @@ function setupSteps() {
   if (!S.employees.length) return '';
   const ch = dataChecks(); if (!ch.length) return '<span class="pill pos">All checks passed</span>';
   const txt = ch.map(c => `${c.items.length} ${c.short}`).join(' · ');
-  return `<button class="chkbtn" onclick="openChecks()" title="${esc(txt)}"><b>${ch.reduce((a, c) => a + c.items.length, 0)} to check</b> · ${esc(txt)} ›</button>`;
+  return `<button class="chkbtn" onclick="openChecks()" title="${esc(txt)}">${ch.reduce((a, c) => a + c.items.length, 0)} things to check ›</button>`;
 }
 function openChecks() {
   const ch = dataChecks();
@@ -4579,12 +4594,24 @@ const TOOLBAR = {
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
   app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send security personnel, PINs, site locations and settings to the personnel app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick security personnel, then App access…'); } }]
 };
+/** Toolbar: the main actions (up to 3, plus the highlighted one); everything else under More; the active filter as a chip */
 function renderToolbar() {
-  const tb = $('#toolbar'); const items = TOOLBAR[curView]?.() || [];
-  tb.innerHTML = items.map((x, i) => x === 'sep' ? '<span class="sep"></span>' : `<button data-tb="${i}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('')
-    + `<span class="spacer"></span><button data-cmd="tree" title="Show / hide the tree">◧ Tree</button>`;
-  tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => items[+b.dataset.tb].f?.());
+  const tb = $('#toolbar'), items = (TOOLBAR[curView]?.() || []);
+  const first = items.indexOf('sep') < 0 ? items.length : items.indexOf('sep'), acts = items.filter(x => x !== 'sep');
+  const main = acts.filter((x, i) => x.strong || items.indexOf(x) < first).slice(0, 3), more = acts.filter(x => !main.includes(x));
+  const btn = x => `<button data-tb="${acts.indexOf(x)}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`;
+  const selName = SEL.site ? IX.site.get(SEL.site)?.name : SEL.project ? IX.proj.get(SEL.project)?.name : SEL.client ? IX.client.get(SEL.client)?.name : '';
+  tb.innerHTML = main.map(btn).join('') + (more.length ? `<button data-cmd="more" class="tb-more" title="More actions">More ▾</button>` : '')
+    + `<span class="spacer"></span>${selName ? `<span class="selchip" title="The open page shows only this">Showing: <b>${esc(selName)}</b><button data-cmd="clrsel" aria-label="Show everything">✕</button></span>` : ''}<button data-cmd="tree" title="Show / hide the projects & sites list">Projects & sites</button>`;
+  tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => acts[+b.dataset.tb].f?.());
   tb.querySelector('[data-cmd=tree]').onclick = toggleTree;
+  tb.querySelector('[data-cmd=clrsel]')?.addEventListener('click', () => { clearSel(); renderToolbar(); });
+  tb.querySelector('[data-cmd=more]')?.addEventListener('click', e => {
+    e.stopPropagation(); const dd = $('#dropdown'), r = e.currentTarget.getBoundingClientRect();
+    dd.innerHTML = more.map(x => `<button data-mi="${acts.indexOf(x)}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('');
+    dd.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { closeMenu(); acts[+b.dataset.mi].f?.(); });
+    dd.style.left = r.left + 'px'; dd.style.top = r.bottom + 2 + 'px'; dd.hidden = false;
+  });
 }
 function renderStatus() {
   const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
@@ -4600,7 +4627,9 @@ const uiDefault = () => Math.min(screen.width, innerWidth) < 1000 ? 1 : 0.75;   
 function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : uiDefault(); } catch (e) { return uiDefault(); } }
 /** the Clients · Projects · Sites tree: a column on wide screens, a slide-over panel on tablets and phones */
 const narrow = () => innerWidth <= 900;
-function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else b.classList.toggle('notree'); }
+function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else { b.classList.toggle('notree'); try { localStorage.setItem('ls.tree', b.classList.contains('notree') ? '0' : '1'); } catch (e) { } } }
+/* the projects & sites list starts hidden (less to take in); it stays as the user last left it */
+try { if (localStorage.getItem('ls.tree') !== '1') document.getElementById('body')?.classList.add('notree'); } catch (e) { document.getElementById('body')?.classList.add('notree'); }
 function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
 document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
@@ -4679,6 +4708,7 @@ function selectNode(k, id) {
   applySel();
 }
 function applySel() {
+  if (typeof renderToolbar === 'function' && $('#toolbar')) setTimeout(renderToolbar);
   if (curView === 'attendance') { Object.assign(AV.f, { client: SEL.client, project: SEL.project, site: SEL.site }); AV.sel = null; renderAttendance(); }
   else if (curView === 'timesheets') { TV.client = SEL.client; if (SEL.project) TV.preview = SEL.project; TV.all = true; renderTimesheets(); }
   else if (curView === 'invoices') { const dr = IV.draft ||= newInvoiceDraft(); if (SEL.project) { if (!dr.projectIds.includes(SEL.project)) dr.projectIds.push(SEL.project); const p = IX.proj.get(SEL.project); if (!dr.clientId) dr.clientId = p.clientId || ''; } else dr.clientId = SEL.client; renderInvoices(); }
@@ -6971,7 +7001,7 @@ function renderPayroll() {
       <select id="py-proj" aria-label="Project" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(base)}</select>
       <input type="search" id="py-q" placeholder="Name or ID" value="${esc(PV_.q)}" style="width:140px">
       <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>`)
-    + `<div class="statline">${k('personnel', rows.length, 'var(--heading)')}${k('hours', all.hours, 'var(--pos)')}${k('days present', all.present, 'var(--heading)')}${k('LOP (A)', all.lop, 'var(--neg)')}${k('off', all.off, 'var(--text2)')}${k('leave', all.leave, 'var(--warn)')}${k('normal OT', all.not, 'var(--accent)')}${k('Sunday OT', all.sot, 'var(--accent)')}${k('holiday OT', all.hot, 'var(--accent)')}</div>
+    + `<div class="statline">${k('people', rows.length, 'var(--heading)')}${k('hours', all.hours, 'var(--pos)')}${k('days present', all.present, 'var(--heading)')}${k('LOP (A)', all.lop, 'var(--neg)')}<span class="st" title="Off ${all.off} · leave ${all.leave} · normal OT ${Math.round(all.not)} · Sunday OT ${Math.round(all.sot)} · holiday OT ${Math.round(all.hot)}"><b style="color:var(--accent)">${Math.round(all.not + all.sot + all.hot).toLocaleString()}</b> OT hours</span></div>
     <div class="pywrap"><table class="ag py" style="width:${width}px;--dw:${dw}px"><colgroup>${[...W, ...XW].map(w => `<col style="width:${w}px">`).join('')}<col style="width:46px">${days.map(() => `<col style="width:${dw}px">`).join('')}${TW.map(w => `<col style="width:${w}px">`).join('')}</colgroup><thead>
       <tr>${['S.No', 'Employee Code', 'Employee Name'].map((h, i) => `<th class="fix${i === 2 ? ' edge' : ''}" rowspan="2" style="left:${L[i]}px${i === 2 ? ';text-align:left' : ''}">${h}</th>`).join('')}${XH.map(h => `<th rowspan="2" class="pt">${h}</th>`).join('')}<th rowspan="2" title="Hours a worked (P) day counts for each person (not in the Excel – it sets the day values)">Hrs/ day</th>
         ${days.map(x => `<th class="${x.dn === 'HD' ? 'hd' : x.dn === 'SUN' ? 'we' : ''}">${x.dn === 'HD' ? 'HD' : x.dn.slice(0, 2)}</th>`).join('')}${PAY_TOT_H.map(h => `<th rowspan="2" class="pt" title="${esc(h.replace(/\s+/g, ' '))}">${esc(h.replace('Hoilday', 'Holiday'))}</th>`).join('')}</tr>
@@ -7323,7 +7353,7 @@ for (const [v, k] of [['live', 'grid'], ['insights', 'trend'], ['employees', 'us
 const TB_IC = [[/sync|refresh/i, 'sync'], [/download|export|backup$/i, 'download'], [/upload|import|restore/i, 'upload'], [/^add|^new/i, 'plus'], [/print|pdf/i, 'print'], [/email/i, 'mail'], [/publish/i, 'send'],
   [/pin/i, 'key'], [/undo/i, 'undo'], [/lock/i, 'lock'], [/save/i, 'save'], [/generate/i, 'sparkle'], [/face/i, 'face'], [/sign/i, 'sign'], [/client|template|directory/i, 'file'], [/site|link/i, 'link'], [/report/i, 'file']];
 { const rt = renderToolbar; window.renderToolbar = function () { const r = rt.apply(this, arguments);
-  document.querySelectorAll('#toolbar button').forEach(b => { if (b.querySelector('.pi-ic')) return; if (b.dataset.cmd === 'tree') { b.innerHTML = pic('tree', 14) + 'Tree'; return; } const m = TB_IC.find(([re]) => re.test(b.textContent.trim())); if (m) b.insertAdjacentHTML('afterbegin', pic(m[1], 14)); });
+  document.querySelectorAll('#toolbar button').forEach(b => { if (b.querySelector('.pi-ic')) return; if (b.dataset.cmd === 'tree') { b.innerHTML = pic('tree', 14) + 'Projects &amp; sites'; return; } const m = TB_IC.find(([re]) => re.test(b.textContent.trim())); if (m) b.insertAdjacentHTML('afterbegin', pic(m[1], 14)); });
   return r; }; }
 /* page titles carry the icon of their tab; clients in the tree get an initials badge */
 const VIEW_IC = { live: 'grid', app: 'phone', insights: 'trend', employees: 'users', projects: 'building', attendance: 'cal', timesheets: 'file', invoices: 'receipt', tracker: 'cal', payroll: 'wallet', reports: 'file', data: 'grid' };

@@ -149,12 +149,24 @@ const TOOLBAR = {
   data: () => [{ l: 'Import Excel…', f: () => $('#hdr-import').click(), strong: true }, { l: 'Backup', f: downloadBackup }],
   app: () => [{ l: 'Sync now', f: () => syncApp(), strong: true, t: 'Fetch new punches and supervisor day marks' }, { l: 'Publish roster', f: async () => { if (await publishRoster()) renderAll(); }, t: 'Send security personnel, PINs, site locations and settings to the personnel app' }, 'sep', { l: 'Give PINs…', f: () => { showView('employees'); toast('Tick security personnel, then App access…'); } }]
 };
+/** Toolbar: the main actions (up to 3, plus the highlighted one); everything else under More; the active filter as a chip */
 function renderToolbar() {
-  const tb = $('#toolbar'); const items = TOOLBAR[curView]?.() || [];
-  tb.innerHTML = items.map((x, i) => x === 'sep' ? '<span class="sep"></span>' : `<button data-tb="${i}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('')
-    + `<span class="spacer"></span><button data-cmd="tree" title="Show / hide the tree">◧ Tree</button>`;
-  tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => items[+b.dataset.tb].f?.());
+  const tb = $('#toolbar'), items = (TOOLBAR[curView]?.() || []);
+  const first = items.indexOf('sep') < 0 ? items.length : items.indexOf('sep'), acts = items.filter(x => x !== 'sep');
+  const main = acts.filter((x, i) => x.strong || items.indexOf(x) < first).slice(0, 3), more = acts.filter(x => !main.includes(x));
+  const btn = x => `<button data-tb="${acts.indexOf(x)}" class="${x.strong ? 'strong' : ''}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`;
+  const selName = SEL.site ? IX.site.get(SEL.site)?.name : SEL.project ? IX.proj.get(SEL.project)?.name : SEL.client ? IX.client.get(SEL.client)?.name : '';
+  tb.innerHTML = main.map(btn).join('') + (more.length ? `<button data-cmd="more" class="tb-more" title="More actions">More ▾</button>` : '')
+    + `<span class="spacer"></span>${selName ? `<span class="selchip" title="The open page shows only this">Showing: <b>${esc(selName)}</b><button data-cmd="clrsel" aria-label="Show everything">✕</button></span>` : ''}<button data-cmd="tree" title="Show / hide the projects & sites list">Projects & sites</button>`;
+  tb.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => acts[+b.dataset.tb].f?.());
   tb.querySelector('[data-cmd=tree]').onclick = toggleTree;
+  tb.querySelector('[data-cmd=clrsel]')?.addEventListener('click', () => { clearSel(); renderToolbar(); });
+  tb.querySelector('[data-cmd=more]')?.addEventListener('click', e => {
+    e.stopPropagation(); const dd = $('#dropdown'), r = e.currentTarget.getBoundingClientRect();
+    dd.innerHTML = more.map(x => `<button data-mi="${acts.indexOf(x)}" ${x.dis ? 'disabled' : ''} title="${esc(x.t || '')}">${esc(x.l)}</button>`).join('');
+    dd.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { closeMenu(); acts[+b.dataset.mi].f?.(); });
+    dd.style.left = r.left + 'px'; dd.style.top = r.bottom + 2 + 'px'; dd.hidden = false;
+  });
 }
 function renderStatus() {
   const nb = pendingPunches().length + noCheckInToday(), bd = $('#app-badge'); if (bd) { bd.textContent = nb || ''; bd.style.color = nb ? 'var(--warn)' : ''; } const sb = $('#sub-badge'); if (sb) { sb.textContent = nb || ''; sb.style.color = curView === 'app' ? '' : nb ? 'var(--warn)' : ''; }
@@ -170,7 +182,9 @@ const uiDefault = () => Math.min(screen.width, innerWidth) < 1000 ? 1 : 0.75;   
 function uiSize() { try { const v = +localStorage.getItem('ls.ui'); return UI_SIZES.includes(v) ? v : uiDefault(); } catch (e) { return uiDefault(); } }
 /** the Clients · Projects · Sites tree: a column on wide screens, a slide-over panel on tablets and phones */
 const narrow = () => innerWidth <= 900;
-function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else b.classList.toggle('notree'); }
+function toggleTree() { const b = $('#body'); if (narrow()) b.classList.toggle('treeopen'); else { b.classList.toggle('notree'); try { localStorage.setItem('ls.tree', b.classList.contains('notree') ? '0' : '1'); } catch (e) { } } }
+/* the projects & sites list starts hidden (less to take in); it stays as the user last left it */
+try { if (localStorage.getItem('ls.tree') !== '1') document.getElementById('body')?.classList.add('notree'); } catch (e) { document.getElementById('body')?.classList.add('notree'); }
 function setUiSize(z) { try { localStorage.setItem('ls.ui', z); } catch (e) { } document.documentElement.style.setProperty('--ui', uiSize()); if (curView === 'attendance') renderGrid(); }
 document.documentElement.style.setProperty('--ui', uiSize());
 /* menus */
@@ -249,6 +263,7 @@ function selectNode(k, id) {
   applySel();
 }
 function applySel() {
+  if (typeof renderToolbar === 'function' && $('#toolbar')) setTimeout(renderToolbar);
   if (curView === 'attendance') { Object.assign(AV.f, { client: SEL.client, project: SEL.project, site: SEL.site }); AV.sel = null; renderAttendance(); }
   else if (curView === 'timesheets') { TV.client = SEL.client; if (SEL.project) TV.preview = SEL.project; TV.all = true; renderTimesheets(); }
   else if (curView === 'invoices') { const dr = IV.draft ||= newInvoiceDraft(); if (SEL.project) { if (!dr.projectIds.includes(SEL.project)) dr.projectIds.push(SEL.project); const p = IX.proj.get(SEL.project); if (!dr.clientId) dr.clientId = p.clientId || ''; } else dr.clientId = SEL.client; renderInvoices(); }

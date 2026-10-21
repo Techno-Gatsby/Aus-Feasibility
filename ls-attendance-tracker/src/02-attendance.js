@@ -25,7 +25,8 @@ function renderAttendance() {
       <button class="btn sm" id="av-prev" title="Previous month">◀</button><input type="month" id="av-ym" value="${AV.ym}"><button class="btn sm" id="av-next" title="Next month">▶</button>
       <span class="sub mono">${fmtDMY(start)} – ${fmtDMY(end)}</span>${locked ? '<span class="pill neg">locked</span>' : ''}
       <span class="sep"></span>
-      <span class="codes">${S.codes.filter(c => c.key || codeUsed(c.code)).map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' · key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}<button data-code="" title="Clear · Del">✕</button></span>
+      <span class="av-hint muted small">Select days in the grid to mark them</span>
+      <span class="av-mark"><span class="small muted">Mark as</span><span class="codes">${S.codes.filter(c => c.key || codeUsed(c.code)).map(c => `<button data-code="${esc(c.code)}" style="background:${c.color}" title="${esc(c.label)}${c.key ? ' · key ' + c.key.toUpperCase() : ''}">${esc(c.code)}</button>`).join('')}<button data-code="" title="Clear · Del">✕</button></span></span>
       <span id="av-selinfo" class="muted small"></span>
       <span class="spacer"></span>
       ${scope ? `<span class="pill">${esc(scope)} <button class="x" id="av-unscope" title="Show everyone">✕</button></span>` : ''}
@@ -244,8 +245,9 @@ function renderFooter() {
   for (const { emp } of AV.rows) for (const d of AV.dates) { if (!employedOn(emp, d)) continue; const c = getCell(emp.id, d); if (!c) { if (d <= todayISO()) blank++; continue; } cnt[c.c] = (cnt[c.c] || 0) + 1; }
   const leave = S.codes.filter(c => !c.billable && !['A', 'OFF'].includes(c.code)).reduce((a, c) => a + (cnt[c.code] || 0), 0);
   const k = (lbl, v, col) => `<span class="st"><b style="color:${col}">${Number(v).toLocaleString()}</b> ${lbl}</span>`;
-  $('#av-kpis').innerHTML = k('workers', AV.rows.length, 'var(--heading)') + k('billable (P+R)', all, 'var(--pos)') + k('absent', cnt.A || 0, 'var(--neg)') + k('off', cnt.OFF || 0, 'var(--text2)')
-    + k('leave / other', leave, 'var(--warn)') + k('not marked', blank, blank ? 'var(--warn)' : 'var(--text2)') + '<span class="spacer"></span>' + setupSteps();
+  // four plain numbers; the rest of the breakdown is in the tooltip
+  $('#av-kpis').innerHTML = k('people', AV.rows.length, 'var(--heading)') + `<span class="st" title="Present (P) and reliever (R) days – these are billed. Also: ${(cnt.OFF || 0).toLocaleString()} off, ${leave.toLocaleString()} leave / other">${'<b style="color:var(--pos)">' + Number(all).toLocaleString() + '</b>'} days present</span>`
+    + k('absent', cnt.A || 0, 'var(--neg)') + k('not marked yet', blank, blank ? 'var(--warn)' : 'var(--text2)') + '<span class="spacer"></span>' + setupSteps();
 }
 function setSel(a, b) { AV.sel = { r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) }; paintSel(); }
 function paintSel() {
@@ -253,6 +255,7 @@ function paintSel() {
   wrap.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
   const s = AV.sel, si = $('#av-selinfo');
   if (si) si.innerHTML = s ? `<b style="color:var(--accent)">${(s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1)} selected</b>` : '';
+  $('#v-attendance .dh.slim')?.classList.toggle('has-sel', !!s);          // the codes show once days are selected
   if (!s) return;
   const trs = wrap.querySelectorAll('tbody tr');
   for (let r = s.r0; r <= s.r1; r++) { const tr = trs[r]; if (!tr) continue; const tds = tr.querySelectorAll('td.d'); for (let c = s.c0; c <= s.c1; c++) tds[c]?.classList.add('sel'); }
@@ -373,7 +376,7 @@ function setupSteps() {
   if (!S.employees.length) return '';
   const ch = dataChecks(); if (!ch.length) return '<span class="pill pos">All checks passed</span>';
   const txt = ch.map(c => `${c.items.length} ${c.short}`).join(' · ');
-  return `<button class="chkbtn" onclick="openChecks()" title="${esc(txt)}"><b>${ch.reduce((a, c) => a + c.items.length, 0)} to check</b> · ${esc(txt)} ›</button>`;
+  return `<button class="chkbtn" onclick="openChecks()" title="${esc(txt)}">${ch.reduce((a, c) => a + c.items.length, 0)} things to check ›</button>`;
 }
 function openChecks() {
   const ch = dataChecks();

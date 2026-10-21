@@ -81,7 +81,7 @@ for (const [v, k] of [['live', 'grid'], ['insights', 'trend'], ['employees', 'us
 const TB_IC = [[/sync|refresh/i, 'sync'], [/download|export|backup$/i, 'download'], [/upload|import|restore/i, 'upload'], [/^add|^new/i, 'plus'], [/print|pdf/i, 'print'], [/email/i, 'mail'], [/publish/i, 'send'],
   [/pin/i, 'key'], [/undo/i, 'undo'], [/lock/i, 'lock'], [/save/i, 'save'], [/generate/i, 'sparkle'], [/face/i, 'face'], [/sign/i, 'sign'], [/client|template|directory/i, 'file'], [/site|link/i, 'link'], [/report/i, 'file']];
 { const rt = renderToolbar; window.renderToolbar = function () { const r = rt.apply(this, arguments);
-  document.querySelectorAll('#toolbar button').forEach(b => { if (b.querySelector('.pi-ic')) return; if (b.dataset.cmd === 'tree') { b.innerHTML = pic('tree', 14) + 'Tree'; return; } const m = TB_IC.find(([re]) => re.test(b.textContent.trim())); if (m) b.insertAdjacentHTML('afterbegin', pic(m[1], 14)); });
+  document.querySelectorAll('#toolbar button').forEach(b => { if (b.querySelector('.pi-ic')) return; if (b.dataset.cmd === 'tree') { b.innerHTML = pic('tree', 14) + 'Projects &amp; sites'; return; } const m = TB_IC.find(([re]) => re.test(b.textContent.trim())); if (m) b.insertAdjacentHTML('afterbegin', pic(m[1], 14)); });
   return r; }; }
 /* page titles carry the icon of their tab; clients in the tree get an initials badge */
 const VIEW_IC = { live: 'grid', app: 'phone', insights: 'trend', employees: 'users', projects: 'building', attendance: 'cal', timesheets: 'file', invoices: 'receipt', tracker: 'cal', payroll: 'wallet', reports: 'file', data: 'grid' };

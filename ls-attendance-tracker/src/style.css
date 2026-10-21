@@ -911,3 +911,15 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
 #tree-q:focus{background:var(--surface);border-color:var(--accent)}
 /* status bar */
 .statusbar{background:var(--surface);color:var(--mute)}
+/* simpler Attendance bar: the codes appear once days are selected; a short hint otherwise */
+.dh.slim .av-mark{display:none;align-items:center;gap:6px}
+.dh.slim.has-sel .av-mark{display:inline-flex}
+.dh.slim.has-sel .av-hint{display:none}
+.chkbtn{border-radius:999px;font-weight:600}
+/* toolbar: More menu and the active-filter chip */
+.toolbar .tb-more{color:var(--text2)}
+.selchip{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--accent-soft2);color:var(--text2);font-size:12px;margin-right:6px;max-width:320px}
+.selchip b{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selchip button{border:0;background:#fff;border-radius:50%;width:20px;height:20px;padding:0;cursor:pointer;color:var(--text2);display:grid;place-items:center}
+.selchip button:hover{color:var(--neg)}
+.menubar .brand .mark{line-height:1;font-family:var(--font-body);padding:0;text-align:center}
