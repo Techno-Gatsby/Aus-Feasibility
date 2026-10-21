@@ -746,3 +746,10 @@ body main:has(.tview){max-width:none;padding:0!important}
 .sp-row,.card,.tile{transition:box-shadow .2s,transform .15s var(--ease)}
 .big:active,.btn:active{transform:scale(.985)}
 .zchip{transition:background .2s,color .2s}
+
+/* calmer palette (matches the tracker): deep steel blue, softer check-in green and check-out red */
+:root[data-theme=light]{--bronze:#2A5A96;--bronze2:#3768A8;--bronze-bg:rgba(42,90,150,.10);--go:#2E7D4F;--stop:#B23A30}
+.big{box-shadow:0 4px 12px rgba(16,24,40,.14)}
+.big.out{box-shadow:0 4px 12px rgba(16,24,40,.14)}
+:root[data-theme=light] .btn.pri{box-shadow:0 1px 2px rgba(16,24,40,.14)}
+:root[data-theme=light] .top .mark{box-shadow:none}

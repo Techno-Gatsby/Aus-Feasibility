@@ -881,3 +881,33 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
 .doc.enter .dc>*:nth-child(2){animation-delay:.04s}.doc.enter .dc>*:nth-child(3){animation-delay:.08s}.doc.enter .dc>*:nth-child(n+4){animation-delay:.12s}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 @media (prefers-reduced-motion:reduce){.doc.enter .dc>*,.doc.enter>.dh,#topload::before{animation:none}}
+
+/* calmer palette: deep steel blue instead of the bright blue; quieter shadows on buttons */
+:root{--accent:#2A5A96;--accent-h:#214A7D;--accent-soft2:#EDF2F8;--accent-line:#AFC3DD}
+.btn.pri,.toolbar button.strong{background:var(--accent);border-color:var(--accent);box-shadow:0 1px 2px rgba(16,24,40,.12)}
+.btn.pri:hover,.toolbar button.strong:hover{background:var(--accent-h);border-color:var(--accent-h)}
+/* toolbar: icon + label */
+.toolbar{gap:4px;padding:6px 10px;min-height:42px}
+.toolbar button{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;font-weight:550}
+.toolbar button .pi-ic,.dh-ic .pi-ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.toolbar button:not(.strong) .pi-ic{color:var(--accent)}
+.toolbar button:disabled .pi-ic{color:var(--faint)}
+/* page header: icon badge, bigger title */
+.dh{padding:10px 16px;min-height:52px;background:var(--surface);gap:10px}
+.dh h2{font-size:16px;font-weight:700;letter-spacing:-.015em;color:var(--heading)}
+.dh .sub{font-size:12px}
+.dh-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft2);color:var(--accent);flex:none}
+.dh.slim .dh-ic{display:none}
+/* sidebar: white, client initials, counts as badges */
+.rail{background:var(--surface)}
+.tree .ini{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex:none;background:var(--accent-soft2);color:var(--accent);font:700 9px var(--font-body);letter-spacing:.02em}
+.tree .grp>.node{min-height:30px;font-weight:650;color:var(--heading)}
+.tree .grp>.node .tw{display:none}
+.tree .node .val{background:var(--surface3);border-radius:999px;padding:0 7px;font:600 10.5px var(--font-body);color:var(--text2);min-width:22px;text-align:center}
+.tree .node.sel .val{background:#fff;color:var(--accent)}
+.tree .proj>.node .nm,.tree .site>.node .nm{font-weight:500}
+.railhead{padding:10px 10px 6px}
+#tree-q{border-radius:var(--rc);background:var(--surface2);border-color:transparent}
+#tree-q:focus{background:var(--surface);border-color:var(--accent)}
+/* status bar */
+.statusbar{background:var(--surface);color:var(--mute)}
