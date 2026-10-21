@@ -118,8 +118,7 @@ function renderPayroll() {
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
       <select id="py-proj" aria-label="Project" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(base)}</select>
       <input type="search" id="py-q" placeholder="Name or ID" value="${esc(PV_.q)}" style="width:140px">
-      <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
-      <button class="btn sm pri" id="py-xl">Download Excel</button>`)
+      <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>`)
     + `<div class="statline">${k('personnel', rows.length, 'var(--heading)')}${k('hours', all.hours, 'var(--pos)')}${k('days present', all.present, 'var(--heading)')}${k('LOP (A)', all.lop, 'var(--neg)')}${k('off', all.off, 'var(--text2)')}${k('leave', all.leave, 'var(--warn)')}${k('normal OT', all.not, 'var(--accent)')}${k('Sunday OT', all.sot, 'var(--accent)')}${k('holiday OT', all.hot, 'var(--accent)')}</div>
     <div class="pywrap"><table class="ag py" style="width:${width}px;--dw:${dw}px"><colgroup>${[...W, ...XW].map(w => `<col style="width:${w}px">`).join('')}<col style="width:46px">${days.map(() => `<col style="width:${dw}px">`).join('')}${TW.map(w => `<col style="width:${w}px">`).join('')}</colgroup><thead>
       <tr>${['S.No', 'Employee Code', 'Employee Name'].map((h, i) => `<th class="fix${i === 2 ? ' edge' : ''}" rowspan="2" style="left:${L[i]}px${i === 2 ? ';text-align:left' : ''}">${h}</th>`).join('')}${XH.map(h => `<th rowspan="2" class="pt">${h}</th>`).join('')}<th rowspan="2" title="Hours a worked (P) day counts for each person (not in the Excel – it sets the day values)">Hrs/ day</th>
@@ -132,7 +131,6 @@ function renderPayroll() {
   let qt; $('#py-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { PV_.q = e.target.value; renderPayroll(); const q = $('#py-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
   $('#py-app', v).onchange = e => { PV_.app = e.target.checked; renderPayroll(); };
   $('#py-proj', v).onchange = e => { PV_.proj = e.target.value; PV_.all = false; renderPayroll(); };
-  $('#py-xl', v).onclick = () => exportPayrollXlsx(ym).catch(e => toast(e.message, 6000));
   $('#py-all', v)?.addEventListener('click', () => { PV_.all = true; renderPayroll(); });
   $('.py', v).onclick = e => {
     const hd = e.target.closest('td[data-ph],td[data-hd]');

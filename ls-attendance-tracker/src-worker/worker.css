@@ -737,3 +737,12 @@ body main:has(.tview){max-width:none;padding:0!important}
 .sp-row .acts:not(:has([data-pw])) select.f{flex:1 1 0;min-width:0}
 .sp-row .acts:not(:has([data-pw])):has(select) .btn.upb{flex:0 0 auto}
 .tabs-b button{color:var(--mute)}
+
+/* polish to match the admin tracker: rounded chips, card toasts, focus rings, soft press feedback */
+.chip,.pill,.tsheet .ts-st .k-last .chip{border-radius:999px}
+:root[data-theme=light] .toast{background:#fff;color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--bronze);box-shadow:var(--sh3);font-weight:500}
+.btn:focus-visible,.big:focus-visible,.medlink:focus-visible,.tabs-b button:focus-visible,.seg button:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--bronze) 30%,transparent)}
+@media (hover:hover){.btn:hover{border-color:var(--line3)} .btn.pri:hover{background:color-mix(in srgb,var(--bronze) 85%,#000)} .sp-row:hover{box-shadow:var(--sh2)}}
+.sp-row,.card,.tile{transition:box-shadow .2s,transform .15s var(--ease)}
+.big:active,.btn:active{transform:scale(.985)}
+.zchip{transition:background .2s,color .2s}

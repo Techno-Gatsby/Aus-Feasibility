@@ -804,6 +804,91 @@ table.ag.py thead th{white-space:normal;line-height:1.15}
 .dh.slim .codes button{height:22px;min-width:26px;padding:0 7px;font-size:11.5px}
 .codes button>*{line-height:1}
 
+/* =========================================================================
+   Visual polish (after the Sobha dashboards) – same layout, calmer surfaces:
+   one blue accent, rounded cards with soft shadows, figure tiles with an
+   icon chip, segmented filters, icons on the tabs, gentle motion.
+   ========================================================================= */
+:root{--accent:#0C68E9;--accent-h:color-mix(in srgb,#0C68E9 82%,#000);--accent-soft2:#EAF2FE;--accent-line:#9CC2F7;--canvas:#F5F7FB;
+  --sh1:0 1px 2px rgba(16,24,40,.05);--sh2:0 1px 2px rgba(16,24,40,.04),0 2px 8px rgba(16,24,40,.06);--sh3:0 10px 28px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06);
+  --rc:8px;--rk:12px;--ease:cubic-bezier(.16,1,.3,1)}
+/* controls */
+.btn{border-radius:var(--rc);min-height:30px;padding:5px 13px;font-weight:600;border-color:var(--line2);transition:background .15s,border-color .15s,box-shadow .15s,transform .1s}
+.btn:hover{background:#F8FAFD;border-color:var(--line3)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible,.toolbar button:focus-visible,.doctab:focus-visible,.seg button:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);box-shadow:0 1px 2px rgba(12,104,233,.25),0 4px 10px rgba(12,104,233,.18)}
+.btn.pri:hover{background:var(--accent-h);border-color:var(--accent-h);filter:none}
+.btn.sm{min-height:26px;padding:2px 10px;border-radius:7px}
+.toolbar button{border-radius:var(--rc);transition:background .15s,color .15s}
+.toolbar button:hover{background:var(--accent-soft2);border-color:transparent;color:var(--accent)}
+.toolbar button.strong{background:var(--accent);border-color:var(--accent);box-shadow:0 1px 2px rgba(12,104,233,.25),0 3px 8px rgba(12,104,233,.16)}
+.toolbar button.strong:hover{background:var(--accent-h);color:#fff;filter:none}
+input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{border-radius:var(--rc);transition:border-color .15s,box-shadow .15s}
+input[type=text]:hover,input[type=number]:hover,input[type=search]:hover,select:hover,textarea:hover{border-color:var(--line3)}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+/* segmented filters and sub-pages: grey track, white raised choice */
+.seg{border:0;background:var(--surface3);padding:2px;border-radius:9px;gap:2px}
+.seg button{background:transparent;border-radius:7px;font-weight:600;color:var(--text2);transition:background .15s,color .15s,box-shadow .15s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.06)}
+/* tabs: icon + label, the open one underlined in blue */
+.doctabs{background:var(--surface);gap:4px;padding:0 10px;align-items:stretch;min-height:40px}
+.doctab{border:0;border-radius:0;background:none;padding:0 11px;gap:7px;color:var(--text2);font-weight:550;position:relative;margin-bottom:0;transition:color .15s}
+.doctab:hover{color:var(--ink);background:none}
+.doctab .pi-ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
+.doctab.on{background:none;color:var(--accent);font-weight:650;box-shadow:none}
+.doctab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:var(--accent)}
+.doctab.on .pi-ic{opacity:1}
+/* sidebar tree */
+.tree .node{border-radius:7px;transition:background .12s}
+.tree .node.sel{background:var(--accent-soft2);box-shadow:inset 3px 0 0 var(--accent);color:var(--accent)}
+/* cards */
+.sec,.tw,.kpi,.comp,.empty{border-radius:var(--rk)}
+.sec{border-color:var(--line);box-shadow:var(--sh2)}
+.sec>.sh{border-radius:var(--rk) var(--rk) 0 0;background:var(--surface);text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:650;color:var(--heading);padding:10px 14px;border-bottom:1px solid var(--line)}
+.sec.closed>.sh{border-radius:var(--rk);border-bottom:0}
+.sec>.sb{padding:14px}
+.tw{border-color:var(--line);box-shadow:var(--sh1)}
+th{background:#F8FAFC}
+.tw tbody tr{transition:background .1s}
+.tw tbody tr:hover td{background:#F7FAFF}
+/* figure tiles: label, big value, icon chip in the corner */
+.kpi{position:relative;border-color:var(--line);box-shadow:var(--sh2);padding:12px 44px 12px 14px;transition:transform .15s var(--ease),box-shadow .15s}
+.kpi .l,.kpi .k{letter-spacing:.04em;font-size:10.5px}
+.kpi .v{font-family:var(--font-body);font-size:21px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
+.kpi .v small{font-size:12px;font-weight:600;color:var(--mute);margin-left:2px}
+.kpi .kic{position:absolute;top:11px;right:11px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft2);color:var(--accent)}
+.kpi .kic svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.kpi .kic.pos{background:var(--pos-bg);color:var(--pos)}.kpi .kic.neg{background:var(--neg-bg);color:var(--neg)}.kpi .kic.warn{background:var(--warn-bg);color:var(--warn)}
+button.kpi,.kpi[data-k]{cursor:pointer}
+button.kpi:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
+.lv-k .kpi{border-radius:10px;padding:8px 10px;background:var(--surface);box-shadow:var(--sh1)}
+.lv-k .kpi .v{font-size:19px;margin-top:1px}
+.lv-k .kpi.on{background:var(--accent-soft2);box-shadow:inset 0 0 0 1.5px var(--accent)}
+/* chips */
+.pill,.tag{border-color:transparent;padding:1px 9px;font-weight:650}
+.pill.pos,.tag.ok{background:#E8F5EE}.pill.neg,.tag.bad{background:#FCEBEA}.pill.warn,.tag.warn{background:#FDF3E3}
+/* dialogs and messages */
+#modal{border-radius:14px;border-color:var(--line);box-shadow:var(--sh3)}
+#modal .mh{border-radius:14px 14px 0 0;background:var(--surface);padding:12px 16px}
+#modal .mf{border-radius:0 0 14px 14px}
+#modal-bg{background:rgba(16,24,40,.45);backdrop-filter:blur(2px)}
+.toast{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;box-shadow:var(--sh3);padding:10px 16px;font-size:12.5px;font-weight:500;transform:translate(-50%,8px);transition:opacity .2s,transform .25s var(--ease)}
+.toast.show{transform:translate(-50%,0)}
+.empty{border-style:dashed;background:var(--surface)}
+.dropdown{border-radius:10px;box-shadow:var(--sh3)}
+/* progress bar during long work */
+#topload{position:fixed;top:0;left:0;right:0;height:2px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .3s;overflow:hidden}
+#topload.go{opacity:1}
+#topload::before{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:tl 1.1s ease-in-out infinite}
+@keyframes tl{to{left:100%}}
+/* a page that has just been opened rises in */
+.doc.enter .dc>*,.doc.enter>.dh{animation:rise .35s var(--ease) both}
+.doc.enter .dc>*:nth-child(2){animation-delay:.04s}.doc.enter .dc>*:nth-child(3){animation-delay:.08s}.doc.enter .dc>*:nth-child(n+4){animation-delay:.12s}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion:reduce){.doc.enter .dc>*,.doc.enter>.dh,#topload::before{animation:none}}
+
 </style>
 </head>
 <body>
@@ -860,6 +945,7 @@ table.ag.py thead th{white-space:normal;line-height:1.15}
 <div class="dropdown" id="dropdown" hidden></div>
 <div id="modal-bg"><div id="modal"></div></div>
 <div class="toast" id="toast" role="status"></div>
+<div id="topload" aria-hidden="true"></div>
 <button class="ai-fab" id="ai-fab" title="Assistant" aria-label="Assistant"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.9 3 3 6.5 3 10.8c0 2.3 1.1 4.3 2.9 5.8L5 21l4.3-2.4c.9.2 1.8.3 2.7.3 5.1 0 9-3.5 9-7.9S17.1 3 12 3Zm-4 9.2a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Zm4 0a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Zm4 0a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Z"/></svg></button>
 <div id="print-root"></div>
 <script>
@@ -6854,8 +6940,7 @@ function renderPayroll() {
       <label class="small">Payroll month <input type="month" id="py-ym" value="${ym}"></label>
       <select id="py-proj" aria-label="Project" style="max-width:260px" title="Project – people count on the project of the site they last worked that month">${payProjOptions(base)}</select>
       <input type="search" id="py-q" placeholder="Name or ID" value="${esc(PV_.q)}" style="width:140px">
-      <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>
-      <button class="btn sm pri" id="py-xl">Download Excel</button>`)
+      <label class="small" title="Worked days show the hours between check-in and check-out in the phone app, where there are punches"><input type="checkbox" id="py-app"${PV_.app ? ' checked' : ''}> Hours from app punches</label>`)
     + `<div class="statline">${k('personnel', rows.length, 'var(--heading)')}${k('hours', all.hours, 'var(--pos)')}${k('days present', all.present, 'var(--heading)')}${k('LOP (A)', all.lop, 'var(--neg)')}${k('off', all.off, 'var(--text2)')}${k('leave', all.leave, 'var(--warn)')}${k('normal OT', all.not, 'var(--accent)')}${k('Sunday OT', all.sot, 'var(--accent)')}${k('holiday OT', all.hot, 'var(--accent)')}</div>
     <div class="pywrap"><table class="ag py" style="width:${width}px;--dw:${dw}px"><colgroup>${[...W, ...XW].map(w => `<col style="width:${w}px">`).join('')}<col style="width:46px">${days.map(() => `<col style="width:${dw}px">`).join('')}${TW.map(w => `<col style="width:${w}px">`).join('')}</colgroup><thead>
       <tr>${['S.No', 'Employee Code', 'Employee Name'].map((h, i) => `<th class="fix${i === 2 ? ' edge' : ''}" rowspan="2" style="left:${L[i]}px${i === 2 ? ';text-align:left' : ''}">${h}</th>`).join('')}${XH.map(h => `<th rowspan="2" class="pt">${h}</th>`).join('')}<th rowspan="2" title="Hours a worked (P) day counts for each person (not in the Excel – it sets the day values)">Hrs/ day</th>
@@ -6868,7 +6953,6 @@ function renderPayroll() {
   let qt; $('#py-q', v).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { PV_.q = e.target.value; renderPayroll(); const q = $('#py-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
   $('#py-app', v).onchange = e => { PV_.app = e.target.checked; renderPayroll(); };
   $('#py-proj', v).onchange = e => { PV_.proj = e.target.value; PV_.all = false; renderPayroll(); };
-  $('#py-xl', v).onclick = () => exportPayrollXlsx(ym).catch(e => toast(e.message, 6000));
   $('#py-all', v)?.addEventListener('click', () => { PV_.all = true; renderPayroll(); });
   $('.py', v).onclick = e => {
     const hd = e.target.closest('td[data-ph],td[data-hd]');
@@ -7125,6 +7209,69 @@ async function pullPhoneDocs(cl, since) {
   }
   return { now: r.body.now, n };
 }
+
+/* =====================================================================
+   Visual polish (after the Sobha dashboards): an icon chip on every
+   figure tile, figures that count up when a page opens, a thin progress
+   bar at the top while long work runs (Excel, PDF, sync, libraries).
+   ===================================================================== */
+const PIC = {
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  building: '<path d="M3 21h18M5 21V5l7-3 7 3v16"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/>',
+  pin: '<path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  sync: '<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/>',
+  out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+  wallet: '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><circle cx="16" cy="14" r="1"/>',
+  trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
+};
+const pic = (k, s = 15) => `<svg class="pi-ic" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true">${PIC[k] || PIC.grid}</svg>`;
+/** which icon and tint a figure gets, from its label */
+const KPI_IC = [[/unusual|outside|absent|lop|missing/i, 'alert', 'neg'], [/not checked|no check|review|pending/i, 'clock', 'warn'], [/on duty|checked in|on time|coverage|accepted/i, 'check', 'pos'],
+  [/checked out|left/i, 'out', ''], [/zone|location/i, 'target', ''], [/sync|roster/i, 'sync', ''], [/personnel|people|worker|added/i, 'users', ''], [/project/i, 'building', ''], [/site/i, 'pin', ''],
+  [/day|attendance|month/i, 'cal', ''], [/invoice|paid|outstanding|amount/i, 'receipt', ''], [/app|phone/i, 'phone', ''], [/hour|ot\b/i, 'clock', ''], [/./, 'trend', '']];
+const NOANIM = () => navigator.webdriver || matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** a figure counts up from 0 (numbers only; text, dates and "—" stay as they are) */
+function countUp(el) {
+  const tn = [...el.childNodes].find(n => n.nodeType === 3 && /\d/.test(n.textContent)); if (!tn || NOANIM()) return;
+  const raw = tn.textContent, m = raw.match(/^(\s*)([\d,]+(?:\.\d+)?)(\s*%?\s*)$/); if (!m) return;
+  const to = +m[2].replace(/,/g, ''), dec = (m[2].split('.')[1] || '').length, comma = m[2].includes(','); if (!(to > 0)) return;
+  const t0 = performance.now(), D = 600, fmt = x => { const s = x.toFixed(dec); return comma ? (+s).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : s; };
+  const step = t => { const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3); tn.textContent = m[1] + fmt(to * e) + m[3]; if (k < 1 && tn.isConnected) requestAnimationFrame(step); else tn.textContent = raw; };
+  requestAnimationFrame(step);
+}
+/** give figure tiles their icon chip once; count up when the page has just been opened */
+function decorateKpis(root = document) {
+  const fresh = Date.now() - (decorateKpis.opened || 0) < 1200;
+  root.querySelectorAll('.kpi:not([data-kd])').forEach(k => {
+    k.dataset.kd = '1'; const lab = k.querySelector('.l,.k')?.textContent || '';
+    const [, ic, tint] = KPI_IC.find(([re]) => re.test(lab));
+    if (!k.closest('.lv-k')) k.insertAdjacentHTML('beforeend', `<span class="kic${tint ? ' ' + tint : ''}">${pic(ic, 14)}</span>`);
+    if (fresh) { const v = k.querySelector('.v'); if (v) countUp(v); }
+  });
+}
+new MutationObserver(() => decorateKpis()).observe(document.getElementById('body') || document.body, { childList: true, subtree: true });
+/** thin progress bar while long work runs */
+function busy(p) {
+  const bar = document.getElementById('topload'); busy.n = (busy.n || 0) + 1; bar?.classList.add('go');
+  const done = () => { if (--busy.n <= 0) { busy.n = 0; bar?.classList.remove('go'); } };
+  return Promise.resolve(p).finally(done);
+}
+for (const k of ['loadScript', 'exportPayrollXlsx', 'exportTrackerXlsx', 'exportTimesheetsXlsx', 'syncApp', 'mergeReports'])
+  if (typeof window[k] === 'function') { const f = window[k]; window[k] = function (...a) { return busy(f.apply(this, a)); }; }
+if (typeof PDFX !== 'undefined' && PDFX.build) { const b = PDFX.build; PDFX.build = (...a) => busy(b.apply(PDFX, a)); }
+/* a page that has just been opened rises in and its figures count up */
+{ const sv = showView; window.showView = function (v) { const was = curView; decorateKpis.opened = Date.now(); const r = sv.call(this, v); const d = $('#v-' + v); if (d && was !== v && !NOANIM()) { d.classList.remove('enter'); void d.offsetWidth; d.classList.add('enter'); setTimeout(() => d.classList.remove('enter'), 700); } return r; }; }
+/* icons on the main tabs */
+for (const [v, k] of [['live', 'grid'], ['insights', 'trend'], ['employees', 'users'], ['projects', 'building'], ['attendance', 'cal'], ['timesheets', 'receipt'], ['payroll', 'wallet']]) { const b = document.querySelector(`#tabs .doctab[data-view="${v}"]`); if (b && !b.querySelector('.pi-ic')) b.insertAdjacentHTML('afterbegin', pic(k, 14)); }
 
 </script>
 </body>
