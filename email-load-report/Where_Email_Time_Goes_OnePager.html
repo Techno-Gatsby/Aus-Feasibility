@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Where Email Time Goes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: compact executive brief — one-line thesis, KPI strip, 2×2 evidence/action grid, caveat footer */
+:root{
+  --bg:#fcfcfb; --panel:#f3f2ef; --fg:#0b0b0b; --fg2:#52514e; --line:#dddbd4;
+  --accent:#2a78d6; --accent2:#eb6834; --track:#e6e4dd;
+  --disp:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Source Sans 3",Georgia,serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1a19; --panel:#232322; --fg:#f0efec; --fg2:#c3c2b7; --line:#3a3936;
+    --accent:#3987e5; --accent2:#d95926; --track:#33322f; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1a1a19; --panel:#232322; --fg:#f0efec; --fg2:#c3c2b7; --line:#3a3936;
+  --accent:#3987e5; --accent2:#d95926; --track:#33322f; color-scheme:dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.page{max-width:920px;margin-inline:auto;padding-block:28px 40px;display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-family:var(--disp);font-weight:600;font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;color:var(--fg2)}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(1.5rem,4vw,2rem);line-height:1.1;margin:.2rem 0 .25rem;text-wrap:balance}
+.meta{font-size:.8rem;color:var(--fg2)}
+.thesis{font-size:1.05rem;margin:0;max-width:75ch}
+.thesis b{font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,120px),1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.kpi{background:var(--bg);padding:10px 12px 9px;min-width:0}
+.kpi .n{font-family:var(--disp);font-weight:600;font-size:1.25rem;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:.73rem;color:var(--fg2);margin-top:1px;line-height:1.3}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:12px}
+.panel{border:1px solid var(--line);padding:13px 15px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.panel h2{font-family:var(--disp);font-weight:600;font-size:.95rem;margin:0;text-wrap:balance}
+.panel p{margin:0;font-size:.88rem;max-width:62ch}
+.so{color:var(--fg2);font-style:italic;font-size:.84rem}
+.bars{display:flex;flex-direction:column;gap:5px;margin:2px 0}
+.brow{display:grid;grid-template-columns:7.4rem 1fr 2.6rem;gap:8px;align-items:center;font-size:.76rem}
+.brow .bl{color:var(--fg2);text-align:right;line-height:1.15}
+.brow .bt{height:10px;background:var(--track);border-radius:0 3px 3px 0;position:relative}
+.brow .bf{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:0 3px 3px 0;min-width:2px}
+.brow .bf.alt{background:var(--accent2)}
+.brow .bv{font-variant-numeric:tabular-nums;white-space:nowrap}
+.legend{font-size:.73rem;color:var(--fg2)}
+.legend i{display:inline-block;width:.55rem;height:.55rem;border-radius:2px;margin-right:.3rem;vertical-align:-1px;background:var(--accent)}
+.legend i.alt{background:var(--accent2)}
+.mult{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-weight:600;font-size:1rem;margin:2px 0}
+.mult .big{font-size:1.6rem}
+.mult svg{flex:0 0 auto}
+.panel.act{background:var(--panel)}
+.panel.act ol{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:5px;font-size:.86rem}
+.panel.act b{font-weight:600}
+.target{border-top:1px solid var(--line);padding-top:7px;font-size:.84rem}
+.cavs{font-size:.76rem;color:var(--fg2);border-top:1px solid var(--line);padding-top:10px}
+@media (max-width:460px){.brow{grid-template-columns:5.6rem 1fr 2.6rem}}
+</style>
+
+
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">Sobha Group · Workplace analytics · One-pager for leadership</div>
+    <h1>Where email time goes — and where it doesn't</h1>
+    <div class="meta">Active employees · 13–19 Oct 2026 · Microsoft 365 reports × HR roster (12,085 employees, 10,046 mailboxes)</div>
+  </header>
+
+  <p class="thesis"><b>Email is not an everyone problem.</b> It is a few senders, a few workflows and a ×23 copy habit — fix those, not 12,000 people.</p>
+
+  <div class="kpis" aria-label="Headline figures">
+    <div class="kpi"><div class="n">167,914</div><div class="l">emails sent in 7 days</div></div>
+    <div class="kpi"><div class="n">6 / wk</div><div class="l">median per person — ~1 per working day</div></div>
+    <div class="kpi"><div class="n">50%</div><div class="l">of all email from the top 10% of senders</div></div>
+    <div class="kpi"><div class="n">×23</div><div class="l">inboxes reached per email (incl. external &amp; system)</div></div>
+    <div class="kpi"><div class="n">8.4–14K h</div><div class="l">est. weekly writing ≈ 210–350 FTE @ 3–5 min/email</div></div>
+    <div class="kpi"><div class="n">74%</div><div class="l">of written messages already on Teams</div></div>
+  </div>
+
+  <div class="duo">
+    <section class="panel">
+      <h2>Concentrated, not cultural</h2>
+      <div class="bars" role="img" aria-label="Share of all email sent by weekly sending band: 0 emails 0 percent, 1 to 10 emails 8 percent, 11 to 25 emails 19 percent, 26 to 50 emails 26 percent, 51 to 100 emails 26 percent, over 100 emails 20 percent">
+        <div class="brow"><span class="bl">0 / wk · 28% of staff</span><span class="bt"></span><span class="bv">0%</span></div>
+        <div class="brow"><span class="bl">1–10 · 32%</span><span class="bt"><span class="bf" style="width:32%"></span></span><span class="bv">8%</span></div>
+        <div class="brow"><span class="bl">11–25 · 19%</span><span class="bt"><span class="bf" style="width:73%"></span></span><span class="bv">19%</span></div>
+        <div class="brow"><span class="bl">26–50 · 12%</span><span class="bt"><span class="bf" style="width:100%"></span></span><span class="bv">26%</span></div>
+        <div class="brow"><span class="bl">51–100 · 6%</span><span class="bt"><span class="bf" style="width:98%"></span></span><span class="bv">26%</span></div>
+        <div class="brow"><span class="bl">100+ · 2%</span><span class="bt"><span class="bf alt" style="width:78%"></span></span><span class="bv">20%</span></div>
+      </div>
+      <div class="legend"><i></i>Share of all email sent, by sending band (% of staff beside each band)</div>
+      <p class="so">228 people write a fifth of everything — "send less email" messaging misses 9 in 10 staff.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Process functions drive it</h2>
+      <div class="bars" role="img" aria-label="Emails sent per person per week by function: HR 44, Procurement 44, Administration 30, Sales Marketing and PR 26, Finance 26, Engineering and Projects 11">
+        <div class="brow"><span class="bl">HR</span><span class="bt"><span class="bf" style="width:100%"></span></span><span class="bv">44</span></div>
+        <div class="brow"><span class="bl">Procurement</span><span class="bt"><span class="bf" style="width:100%"></span></span><span class="bv">44</span></div>
+        <div class="brow"><span class="bl">Administration</span><span class="bt"><span class="bf" style="width:68%"></span></span><span class="bv">30</span></div>
+        <div class="brow"><span class="bl">Sales, Mktg &amp; PR</span><span class="bt"><span class="bf" style="width:59%"></span></span><span class="bv">26</span></div>
+        <div class="brow"><span class="bl">Finance</span><span class="bt"><span class="bf" style="width:59%"></span></span><span class="bv">26</span></div>
+        <div class="brow"><span class="bl">Engineering &amp; Projects</span><span class="bt"><span class="bf alt" style="width:26%"></span></span><span class="bv">11</span></div>
+      </div>
+      <div class="legend"><i></i>Emails / person / wk by function · <i class="alt"></i>Engineering = 66% of mailboxes</div>
+      <p class="so">4× gap = approvals, timesheets and POs living in inboxes, not chatty individuals.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Multiplied ×23 — and the alternative already works</h2>
+      <div class="mult" aria-label="1 email sent reaches about 23 inboxes">
+        <span>1 sent</span>
+        <svg width="54" height="16" viewBox="0 0 54 16" aria-hidden="true"><line x1="2" y1="8" x2="46" y2="8" stroke="var(--accent)" stroke-width="2"/><path d="M44 3l8 5-8 5z" fill="var(--accent)"/></svg>
+        <span class="big">~23</span><span>inboxes</span>
+      </div>
+      <p>3.8M received vs 168K sent: reading dwarfs writing, so CC lists and reply-all are the cheapest attack. Teams already carries 74% of written messages — but 2,134 people email without ever chatting, and construction entities stay email-first.</p>
+      <p class="so">"Chat first internally; email for external &amp; formal" pushes on an open door.</p>
+    </section>
+
+    <section class="panel act">
+      <h2>Do this</h2>
+      <ol>
+        <li><b>Move the top 3–5 email-run workflows into systems</b> — approvals, timesheets, POs, HR requests.</li>
+        <li><b>Channel rule:</b> internal → Teams; external, formal, record → email. Leadership models it.</li>
+        <li><b>Cut the ×23:</b> prune distribution lists, fewer CCs, no reply-all.</li>
+        <li><b>Measure first:</b> 4–8 weeks of this report; Viva Insights for actual hours.</li>
+      </ol>
+      <div class="target"><b>Target:</b> −20% internal email in the five heaviest units within 8 weeks, no drop in turnaround.</div>
+    </section>
+  </div>
+
+  <footer class="cavs">
+    <b>Caveats:</b> 1-week snapshot · writing time estimated (3–5 min/email), not measured · received includes external &amp; system mail · some bulk/automated senders · 2,039 employees (17%) have no M365 account · unit-level by design, no individual rankings.
+  </footer>
+</div>
+
+</body>
+</html>
